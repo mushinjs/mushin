@@ -13,11 +13,10 @@ settings:
 
 extends:
   - standard
-  - 'plugin:promise:recommended'
+  - "plugin:promise/recommended"
 
 plugins:
   - '@typescript-eslint'
-  - 'promise'
 
 rules:
   array-callback-return: off
@@ -105,6 +104,9 @@ rules:
       format: null
     - selector: [typeMethod]
       format: null
+
+  # https://github.com/typescript-eslint/typescript-eslint/blob/master/packages/eslint-plugin/docs/rules/no-redeclare.md
+  no-redeclare: off
 
   # https://typescript-eslint.io/docs/linting/troubleshooting/#i-get-errors-from-the-no-undef-rule-about-global-variables-not-being-defined-even-though-there-are-no-typescript-errors
   no-undef: off

@@ -2,7 +2,9 @@
   "private": true,
   "version": "0.0.1",
   "description": "",
-  "scripts": {},
+  "scripts": {
+    "lint": "eslint packages plugins --ext=ts --cache"
+  },
   "keywords": [],
   "author": "Setobox <setoboxes@gmail.com>",
   "license": "AGPL-3.0",
