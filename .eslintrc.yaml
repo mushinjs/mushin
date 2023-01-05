@@ -3,7 +3,7 @@ root: true
 parser: '@typescript-eslint/parser'
 
 env:
-  es2020: true
+  esnest: true
   browser: true
   node: true
 
@@ -76,7 +76,14 @@ rules:
   '@typescript-eslint/func-call-spacing': error
 
   keyword-spacing: off
-  '@typescript-eslint/keyword-spacing': error
+  '@typescript-eslint/keyword-spacing': [
+    'error',
+     {
+        "before": true,
+        "after": true,
+        "overrides": {}
+     }
+  ]
 
   camelcase: off
   '@typescript-eslint/naming-convention':
@@ -119,8 +126,10 @@ rules:
 
   no-unused-vars: off
   '@typescript-eslint/no-unused-vars':
-    - error
+    - warn
     - args: none
+
+  no-use-before-define: off
 
   no-dupe-class-members: error
   '@typescript-eslint/no-dupe-class-members': error
