@@ -3,7 +3,7 @@ root: true
 parser: '@typescript-eslint/parser'
 
 env:
-  esnest: true
+  es2022: true
   browser: true
   node: true
 

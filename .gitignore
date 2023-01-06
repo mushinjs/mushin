@@ -26,8 +26,11 @@ pnpm-lock.yaml
 # Others
 node_modules
 dist
-build
+lib
+.cache
+tsconfig.tsbuildinfo
+coverage
 
-
+# Test
 temp
 example

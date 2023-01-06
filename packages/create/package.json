@@ -1,0 +1,16 @@
+{
+  "name": "create-mushin",
+  "version": "0.0.1",
+  "description": "",
+  "main": "dist/index.js",
+  "files": ["dist"],
+  "scripts": {
+    "type": "tsc --declarationDir temp --declaration --emitDeclarationOnly",
+    "build": "pnpm type && tsup",
+    "dev": "pnpm type && tsup --watch --sourcemap",
+    "test": "vitest"
+  },
+  "keywords": [],
+  "author": "Setobox <setoboxes@gmail.com>",
+  "license": "AGPL-3.0"
+}

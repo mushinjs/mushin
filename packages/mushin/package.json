@@ -1,0 +1,32 @@
+{
+  "name": "mushin",
+  "version": "0.0.1-alpha",
+  "description": "",
+  "bin": {
+    "mushin": "bin/mushin.js"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "scripts": {
+    "type": "tsc --declarationDir temp --declaration --emitDeclarationOnly",
+    "build": "pnpm type && tsup",
+    "dev": "pnpm type && tsup --watch --sourcemap",
+    "test": "vitest"
+  },
+  "keywords": [],
+  "author": "Setobox <setoboxes@gmail.com>",
+  "license": "AGPL-3.0"
+}
