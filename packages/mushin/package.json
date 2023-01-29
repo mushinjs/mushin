@@ -3,10 +3,10 @@
   "version": "0.0.1-alpha",
   "description": "",
   "bin": {
-    "mushin": "bin/mushin.js"
+    "mushin": "bin/mushin.mjs"
   },
   "main": "./dist/index.js",
-  "module": "./dist/index.js",
+  "module": "es6",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
@@ -24,9 +24,13 @@
     "type": "tsc --declarationDir temp --declaration --emitDeclarationOnly",
     "build": "pnpm type && tsup",
     "dev": "pnpm type && tsup --watch --sourcemap",
+    "start": "node dist/bin/mushin.mjs",
     "test": "vitest"
   },
   "keywords": [],
   "author": "Setobox <setoboxes@gmail.com>",
-  "license": "AGPL-3.0"
+  "license": "AGPL-3.0",
+  "dependencies": {
+    "execa": "^6.1.0"
+  }
 }
