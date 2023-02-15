@@ -1,18 +1,21 @@
 {
   "name": "@mushinjs/core",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "",
+  "author": "Setobox <setoboxes@gmail.com>",
+  "license": "AGPL-3.0",
+  "keywords": [],
   "main": "dist/index.js",
+  "module": "dist/index.mjs",
   "files": [
     "dist"
   ],
   "scripts": {
-    "type": "tsc --declarationDir temp --declaration --emitDeclarationOnly",
-    "build": "pnpm type && tsup",
-    "dev": "pnpm type && tsup --watch --sourcemap",
+    "build": "tsup --config ../../tsup.config.ts --onSuccess 'tsc --project ./tsconfig.json'",
+    "dev": "tsup --watch --sourcemap",
     "test": "vitest"
   },
-  "keywords": [],
-  "author": "Setobox <setoboxes@gmail.com>",
-  "license": "AGPL-3.0"
+  "dependencies": {
+    "@mushinjs/shared": "workspace:*"
+  }
 }

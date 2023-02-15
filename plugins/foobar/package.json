@@ -1,18 +1,21 @@
 {
-  "name": "@mushinjs/foobar",
+  "name": "@mushinjs/plugin-foobar",
   "version": "0.1.0",
   "description": "",
+  "author": "",
+  "license": "AGPL-3.0",
+  "keywords": [],
   "main": "dist/index.js",
   "files": [
     "dist"
   ],
   "scripts": {
-    "type": "tsc --declarationDir temp --declaration --emitDeclarationOnly",
-    "build": "pnpm type && tsup",
-    "dev": "pnpm type && tsup --watch --sourcemap",
-    "test": "vitest"
+    "build": "tsup src/index.ts --format esm,cjs --target esnext --onSuccess 'tsc --project ./tsconfig.json'",
+    "dev": "pnpm build --watch --sourcemap",
+    "test": "vitest",
+    "mushin": "mushin"
   },
-  "keywords": [],
-  "author": "",
-  "license": "AGPL-3.0"
+  "peerDependencies": {
+    "mushin": "^0.1.0"
+  }
 }

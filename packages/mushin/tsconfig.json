@@ -2,8 +2,8 @@
   "extends": "../../tsconfig.base",
   "compilerOptions": {
     "baseUrl": ".",
-    "outDir": "dist",
-    "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
+    "outFile": "dist/index.d.ts",
+    "resolveJsonModule": true
   },
-  "include": ["src/**/*.ts", "bin/**/*.ts"]
+  "include": ["src", "cli"]
 }

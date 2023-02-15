@@ -1,16 +1,15 @@
 import { defineConfig } from 'tsup'
-import defaultConfig, { dts } from '../../tsup.default'
+import { defaultConfig } from '../../tsup.config'
+
+const entry = {
+  'index': 'src/index.ts',
+  'cli/index': 'cli/index.ts',
+}
 
 export default defineConfig({
-  entry: {
-    index: 'src/index.ts',
-    'bin/mushin': 'bin/mushin.ts',
-  },
+  entry,
+  outDir: 'dist',
+  format: ['cjs', 'esm'],
+  target: 'esnext',
   ...defaultConfig,
-  dts: !dts ? false : {
-    entry: {
-      index: 'src/index.ts',
-      'bin/mushin': 'bin/mushin.ts',
-    },
-  },
 })

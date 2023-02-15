@@ -2,15 +2,18 @@
   "name": "@mushinjs/shared",
   "version": "0.1.0",
   "description": "",
-  "main": "dist/index.js",
-  "files": ["dist"],
-  "scripts": {
-    "type": "tsc --declarationDir temp --declaration --emitDeclarationOnly",
-    "build": "pnpm type && tsup",
-    "dev": "pnpm type && tsup --watch --sourcemap",
-    "test": "vitest"
-  },
   "keywords": [],
+  "license": "AGPL-3.0",
   "author": "Setobox <setoboxes@gmail.com>",
-  "license": "AGPL-3.0"
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.ts --onSuccess 'tsc --project ./tsconfig.json'",
+    "dev": "pnpm tsup --watch --sourcemap",
+    "test": "vitest"
+  }
 }

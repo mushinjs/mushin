@@ -1,9 +1,9 @@
 {
   "extends": "../../tsconfig.base",
   "compilerOptions": {
-    "baseUrl": ".",
-    "outDir": "dist",
-    "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
+    "rootDir": "src",
+    "outFile": "dist/index.d.ts"
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src"],
+  "exclude": ["test/**/*.spec.ts"]
 }

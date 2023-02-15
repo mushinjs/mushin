@@ -7,8 +7,8 @@
     "moduleResolution": "node",
     "emitDeclarationOnly": true,
     "declaration": true,
-    "composite": true,
-    "incremental": true,
+    // "composite": true,
+    "incremental": false,
     "skipLibCheck": true,
     "strictBindCallApply": true,
     "esModuleInterop": true
