@@ -1,6 +1,4 @@
 packages:
   - 'packages/**'
   - 'plugins/**'
-  - scripts
   - '!**/test/**'
-  - test

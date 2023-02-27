@@ -1,0 +1,9 @@
+{
+  "private": "true",
+  "description": "test files",
+  "author": "Setobox <setoboxes@gmail.com>",
+  "license": "MIT",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}

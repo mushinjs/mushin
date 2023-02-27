@@ -1,12 +1,12 @@
 {
   "name": "@mushinjs/shared",
+  "type": "module",
   "version": "0.1.0",
   "description": "",
-  "keywords": [],
-  "license": "AGPL-3.0",
   "author": "Setobox <setoboxes@gmail.com>",
-  "main": "dist/index.js",
-  "module": "dist/index.mjs",
+  "license": "AGPL-3.0",
+  "keywords": [],
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist"

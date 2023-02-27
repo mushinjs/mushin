@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "outDir": "dist",
+    "resolveJsonModule": true
+  },
+  "include": ["src", "test", "bin/index.ts"]
+}

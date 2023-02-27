@@ -1,23 +1,21 @@
 {
   "name": "mushin",
+  "type": "module",
   "version": "0.1.0",
   "description": "",
-  "keywords": [],
-  "license": "AGPL-3.0",
   "author": "Setobox <setoboxes@gmail.com>",
+  "license": "AGPL-3.0",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "require": "./dist/index.js",
       "import": "./dist/index.js"
     },
     "./package.json": "./package.json"
   },
-  "main": "dist/index.js",
-  "module": "dist/index.mjs",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "mushin": "dist/cli/index.js"
+    "mushin": "dist/bin/index.js"
   },
   "files": [
     "dist"
@@ -25,7 +23,7 @@
   "scripts": {
     "build": "tsup --config ./tsup.config.ts --onSuccess 'tsc --project ./tsconfig.json'",
     "dev": "pnpm build --watch --sourcemap",
-    "start": "node dist/cli/index.js",
+    "start": "node dist/bin/index.js",
     "test": "vitest"
   },
   "dependencies": {

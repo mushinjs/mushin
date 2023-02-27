@@ -1,11 +1,12 @@
 {
   "name": "@mushinjs/plugin-foobar",
+  "type": "module",
   "version": "0.1.0",
   "description": "",
   "author": "",
   "license": "AGPL-3.0",
   "keywords": [],
-  "main": "dist/index.js",
+  "module": "dist/index.js",
   "files": [
     "dist"
   ],

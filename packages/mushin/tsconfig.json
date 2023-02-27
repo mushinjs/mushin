@@ -1,9 +1,9 @@
 {
-  "extends": "../../tsconfig.base",
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "baseUrl": ".",
     "outFile": "dist/index.d.ts",
     "resolveJsonModule": true
   },
-  "include": ["src", "cli"]
+  "include": ["src", "bin"]
 }
