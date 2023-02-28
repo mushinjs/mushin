@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "target": "ESNext",
+    "module": "ESNext",
+    "outFile": "./dist/index.d.ts",
+    "declaration": true,
+    "emitDeclarationOnly":true,
+    "moduleResolution":"node"
+  }
+}

@@ -1,8 +1,9 @@
-import path from 'path'
+import path, { resolve } from 'path'
 import { assertType, describe, expect, it } from 'vitest'
 import type { Repo } from '../src'
 import { bundle } from '../bin/action/build'
 import { createRepo, findPaths } from '../src'
+// import { clean } from '../bin/action/clean'
 
 describe('build', async () => {
   const fixture = (name: string) => path.join(__dirname, 'fixtures', name)
@@ -16,14 +17,16 @@ describe('build', async () => {
 
   it('find packages', async () => {
     const patterns = ['packages/**', 'plugins/**', '!**/test/**']
-    const workspaces = await findPaths(rootDir, patterns)
+    const workspacesPath = await findPaths(rootDir, patterns)
 
-    expect(workspaces.length).toBe(4)
-    expect(workspaces).toEqual(
-      ['packages/package-1',
+    expect(workspacesPath.length).toBe(4)
+    expect(workspacesPath).toEqual(
+      [
+        'packages/package-1',
         'packages/package-2',
         'plugins/plugin-1',
-        'plugins/plugin-2'])
+        'plugins/plugin-2',
+      ])
 
     // expect(workspaces[0][1].name).toBeDefined()
     // expect(workspaces[1][1].name).toBeDefined()
@@ -56,5 +59,25 @@ describe('build', async () => {
     catch (error) {
       expect(error).toBeUndefined()
     }
+  })
+})
+
+describe('clean', async () => {
+  const fixture = (name: string) => path.join(__dirname, 'fixtures', name)
+  const rootDir = fixture('.')
+
+  it('monorepo types', async () => {
+    const repo = await createRepo(rootDir)
+    console.log(repo)
+    assertType<Repo>(repo)
+  })
+
+  it('clean', async () => {
+    const repo: Repo = await createRepo(rootDir)
+    const { workspaces } = repo
+    // 获取当前workspace的绝对路径
+    const distDirs = workspaces.map(item => resolve(rootDir, item[0], 'dist'))
+    // console.log(distDirs)
+    // await clean(distDirs)
   })
 })
