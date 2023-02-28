@@ -1,16 +1,19 @@
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/cli.ts'],
+  entry: {
+    index: 'src/index.ts',
+    bin: 'src/bin/index.ts',
+  },
   outDir: 'dist',
   platform: 'node',
   format: ['esm'],
   clean: true,
   bundle: true,
   splitting: false,
-  banner: {
-    js: 'import { createRequire } from \'module\';const require = createRequire(import.meta.url);',
-  },
+  // banner: {
+  //   js: 'import { createRequire } from \'module\';const require = createRequire(import.meta.url);',
+  // },
   dts: {
     resolve: true,
     // build types for `src/index.ts` only

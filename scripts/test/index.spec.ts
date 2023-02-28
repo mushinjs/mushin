@@ -1,9 +1,8 @@
 import path, { resolve } from 'path'
 import { assertType, describe, expect, it } from 'vitest'
 import type { Repo } from '../src'
-import { bundle } from '../bin/action/build'
+import { bundle } from '../src/tasks/build'
 import { createRepo, findPaths } from '../src'
-// import { clean } from '../bin/action/clean'
 
 describe('build', async () => {
   const fixture = (name: string) => path.join(__dirname, 'fixtures', name)

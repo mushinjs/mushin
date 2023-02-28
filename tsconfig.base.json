@@ -12,6 +12,7 @@
     "incremental": false,
     "skipLibCheck": true,
     "strictBindCallApply": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true
   }
 }

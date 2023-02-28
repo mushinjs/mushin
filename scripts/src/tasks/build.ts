@@ -1,12 +1,10 @@
 import { resolve } from 'path'
-import type { CAC } from 'cac'
 import { build } from 'esbuild'
-import { slash } from '../../src/utils'
-import { type Repo, createRepo } from '../../src'
+import { type Repo } from '../../src'
 
 type EntryPoints = string[] | Record<string, string> | { in: string; out: string }[]
 
-export const getEntryPoints = (workspaceDir: string, packageJson: any): EntryPoints => {
+export const getEntry = (workspaceDir: string, packageJson: any): EntryPoints => {
   // TODO: support more entry points
   const entry = [resolve(workspaceDir, 'src/index.ts')]
   const { bin } = packageJson
@@ -19,10 +17,8 @@ export const bundle = async (repo: Repo) => {
   const { rootDir, workspaces } = repo
   return Promise.allSettled(
     workspaces.map(async ([path, packageJson]) => {
-      // 获取当前workspace的绝对路径
       const workspaceDir = resolve(rootDir, path)
-      // 获取入口文件
-      const entryPoints = getEntryPoints(workspaceDir, packageJson)
+      const entryPoints = getEntry(workspaceDir, packageJson)
 
       console.log('entryPoints', packageJson.name, entryPoints)
 

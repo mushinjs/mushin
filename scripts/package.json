@@ -7,7 +7,9 @@
   "license": "MIT",
   "keywords": [
     "monorepo",
-    "build"
+    "build",
+    "mushin",
+    "scripts"
   ],
   "exports": "./dist/index.js",
   "module": "dist/index.js",
@@ -16,16 +18,15 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup && pnpm mushin",
+    "build": "tsup",
     "build-fast": "pnpm build --no-dts",
     "build-dts": "tsc -d --emitDeclarationOnly",
     "dev": "pnpm build-fast --watch",
-    "mushin": "node dist/cli.js build '../'",
-    "mushin-cli": "node dist/cli.js",
+    "mushin": "node dist/bin.js",
     "prepublishOnly": "pnpm build",
     "test": "pnpm build && pnpm test-only",
     "test-only": "vitest run",
-    "test-build": "node dist/cli.js build './test/fixture/'"
+    "test-build": "node dist/bin.js build './test/fixture/'"
   },
   "peerDependencies": {
     "typescript": "*"

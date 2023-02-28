@@ -5,5 +5,5 @@
     "outDir": "dist",
     "resolveJsonModule": true
   },
-  "include": ["src", "test", "bin/index.ts"]
+  "include": ["src", "src/bin"]
 }
