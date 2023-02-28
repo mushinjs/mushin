@@ -6,31 +6,29 @@ import { type Repo, createRepo } from '../../src'
 
 type EntryPoints = string[] | Record<string, string> | { in: string; out: string }[]
 
-export const getEntryPoints = (packageJson: any): EntryPoints => {
+export const getEntryPoints = (workspaceDir: string, packageJson: any): EntryPoints => {
   // TODO: support more entry points
-  const entry = ['src/index.ts']
+  const entry = [resolve(workspaceDir, 'src/index.ts')]
   const { bin } = packageJson
   if (bin)
-    entry.push('bin/index.ts')
+    entry.push(resolve(workspaceDir, 'bin/index.ts'))
   return entry
 }
 
 export const bundle = async (repo: Repo) => {
-  const { workspaces } = repo
+  const { rootDir, workspaces } = repo
   await Promise.all(
     workspaces.map(async ([path, packageJson]) => {
-      const { private: _private } = packageJson
-      if (_private)
-        return
-
+      // 获取当前workspace的绝对路径
+      const workspaceDir = resolve(rootDir, path)
       // 获取入口文件
-      const entryPoints = getEntryPoints(packageJson)
+      const entryPoints = getEntryPoints(workspaceDir, packageJson)
 
       console.log('entryPoints', packageJson.name, entryPoints)
 
       return build({
         entryPoints,
-        outdir: resolve(repo.rootDir, path, 'dist'),
+        outdir: resolve(workspaceDir, 'dist'),
         format: 'esm',
         bundle: true,
         splitting: true,

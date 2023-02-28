@@ -31,11 +31,11 @@ export const findPackageJson = async (rootDir: string, paths: string[]): Promise
   paths = paths.map(path => join(path, 'package.json'))
   return paths.map((path) => {
     const packageJson = requireSafe(resolve(rootDir, path))
-    return [path.split('\/package.json')[0], packageJson]
+    return [path.split('package.json')[0], packageJson]
   })
 }
 
-export const createRepo = async (rootDir: string, options: any): Promise<Repo> => {
+export const createRepo = async (rootDir: string, options?: any): Promise<Repo> => {
   const content = await readFileSync(join(rootDir, 'pnpm-workspace.yaml'), 'utf-8')
   const { packages } = await yaml.load(content) as { packages: string[] }
   const patterns = packages.map(slash)
