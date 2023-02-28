@@ -28,21 +28,20 @@ export const findPaths = (rootDir: string, patterns: string[]) => {
 }
 
 export const findPackageJson = async (rootDir: string, paths: string[]): Promise<Workspace[]> => {
-  paths = paths.map(path => join(path, 'package.json'))
   return paths.map((path) => {
-    const packageJson = requireSafe(resolve(rootDir, path))
-    return [path.split('package.json')[0], packageJson]
+    const json = requireSafe(resolve(rootDir, path, 'package.json'))
+    return [path.replace('package.json', ''), json]
   })
 }
 
 export const createRepo = async (rootDir: string, options?: any): Promise<Repo> => {
   const content = await readFileSync(join(rootDir, 'pnpm-workspace.yaml'), 'utf-8')
   const { packages } = await yaml.load(content) as { packages: string[] }
-  const patterns = packages.map(slash)
 
+  const patterns = packages.map(slash)
   const paths = await findPaths(rootDir, patterns)
   const workspaces = await findPackageJson(rootDir, paths)
-  // console.log('workspaces', workspaces)
+
   console.log(`\nFound ${workspaces.length} workspaces.`)
   return {
     rootDir,
