@@ -1,6 +1,10 @@
 {
-  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outFile": "./dist/index.d.ts"
-  }
+    "outDir": "./dist",
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "typeRoots": ["./src"],
+    "types":["package-1"]
+   },
+  "include": ["./src/index.ts","./src/index.d.ts"]
 }
