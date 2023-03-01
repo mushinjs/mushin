@@ -1,7 +1,11 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outFile": "./dist/index.d.ts"
+    "outFile": "./dist/index.d.ts",
+    "paths": {
+      "package-*": ["../../packages/package-*/src"],
+      "plugin-*": ["../plugin-*/src"]
+    }
   },
   "exclude": ["node_modules"]
 }

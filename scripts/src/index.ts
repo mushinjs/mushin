@@ -16,22 +16,11 @@ export const requireSafe = (path: string) => {
   }
 }
 
-export const findPaths = (rootDir: string, patterns: string[]) => {
-  return globby(patterns,
-    {
-      cwd: rootDir,
-      onlyDirectories: true,
-      expandDirectories: false,
-      deep: 1,
-      ignore: ['**/node_modules/**'],
-    })
-}
-
-export const findPackageJson = async (rootDir: string, paths: string[]): Promise<Workspace[]> => {
-  return paths.map((path) => {
+export const findPackageJson = async (rootDir: string, paths: string[]): Promise<Workspace> => {
+  return Object.fromEntries(paths.map((path) => {
     const json = requireSafe(resolve(rootDir, path, 'package.json'))
     return [path.replace('package.json', ''), json]
-  })
+  }).filter(Boolean))
 }
 
 export const createRepo = async (rootDir: string, options?: any): Promise<Repo> => {
@@ -39,10 +28,17 @@ export const createRepo = async (rootDir: string, options?: any): Promise<Repo> 
   const { packages } = await yaml.load(content) as { packages: string[] }
 
   const patterns = packages.map(slash)
-  const paths = await findPaths(rootDir, patterns)
+  const paths = await globby(patterns,
+    {
+      cwd: rootDir,
+      onlyDirectories: true,
+      expandDirectories: false,
+      deep: 1,
+      ignore: ['**/node_modules/**'],
+    })
   const workspaces = await findPackageJson(rootDir, paths)
 
-  console.log(`\nFound ${workspaces.length} workspaces.`)
+  console.log(`\nFound ${Object.keys(workspaces).length} workspaces.`)
   return {
     rootDir,
     workspaces,
@@ -67,11 +63,13 @@ export interface PackageJson {
   // optionalDependencies?: Record<string, string>
 }
 
-export type Workspace = [string, PackageJson]
+export interface Workspace {
+  [path: string]: PackageJson
+}
 
 export interface Repo {
   rootDir: string
-  workspaces: Workspace[]
+  workspaces: Workspace
   targets?: any[]
   options: any
 }

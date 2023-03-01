@@ -1,10 +1,16 @@
+import { Context } from './context'
+import type { Plugin } from './plugin'
+export * from './plugin'
+export * from './types'
+// export * from 'package-2'
+
 export const hello = () => console.log('Hello, package-1!')
 
-export type Foo<T> = T extends string ? string : T
+export function definePlugin<C extends Context = any>(plugin: Plugin<C>) {
+  // plugin.install()
+  console.log('definePlugin', plugin)
+}
 
-export class Person {
-  name: string
-  constructor() {
-    this.name = '小明Person'
-  }
+export {
+  Context,
 }

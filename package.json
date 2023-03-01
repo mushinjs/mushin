@@ -6,8 +6,8 @@
   "scripts": {
     "build": "pnpm -r --no-bail build",
     "dev": "pnpm -r --no-bail dev",
-    "clean": "pnpm rimraf pnpm-lock.yaml node_modules {packages,plugins}/**/{dist,tsconfig.tsbuildinfo,temp,node_modules}",
-    "lint": "eslint ./packages/**/src ./plugins/**/src --cache",
+    "clean": "pnpm rimraf pnpm-lock.yaml node_modules {packages,plugins,scripts}/**/{dist,tsconfig.tsbuildinfo,temp,node_modules}",
+    "lint": "eslint . --fix --cache",
     "prepublish": "pnpm build",
     "publish": "pnpm -r publish",
     "start": "pnpm --filter mushin start",

@@ -12,6 +12,11 @@
     "skipLibCheck": true,
     "strictBindCallApply": true,
     "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "@mushinjs/plugin-*": ["./plugins/*/src"],
+      "@mushinjs/*": ["./packages/*/src"],
+      "mushin-*": ["./packages/*/src"]
+    }
   }
 }
