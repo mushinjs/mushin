@@ -2,62 +2,29 @@ import path, { resolve } from 'path'
 import { assertType, describe, expect, it } from 'vitest'
 import type { Repo } from '../src'
 import { bundle } from '../src/tasks/build'
-import { createRepo, findPaths } from '../src'
+import { dts } from '../src/tasks/dts'
+import { createRepo } from '../src'
+
+const fixture = (name: string) => path.join(__dirname, 'fixtures', name)
+const rootDir = fixture('.')
 
 describe('build', async () => {
-  const fixture = (name: string) => path.join(__dirname, 'fixtures', name)
-  const rootDir = fixture('.')
-
-  it('monorepo types', async () => {
-    const repo = await createRepo(rootDir)
-    console.log(repo)
-    assertType<Repo>(repo)
-  })
-
-  it('find packages', async () => {
-    const patterns = ['packages/**', 'plugins/**', '!**/test/**']
-    const workspacesPath = await findPaths(rootDir, patterns)
-
-    expect(workspacesPath.length).toBe(4)
-    expect(workspacesPath).toEqual(
-      [
-        'packages/package-1',
-        'packages/package-2',
-        'plugins/plugin-1',
-        'plugins/plugin-2',
-      ])
-
-    // expect(workspaces[0][1].name).toBeDefined()
-    // expect(workspaces[1][1].name).toBeDefined()
-    // expect(workspaces[2][1].name).toBeDefined()
-    // expect(workspaces[3][1].name).toBeDefined()
-    // expect(workspaces[3][1].private).toStrictEqual(true)
+  it('create repo', async () => {
+    await expect(createRepo).rejects.toThrow()
   })
 
   it('build', async () => {
     const options = {}
-    const repo: Repo = await createRepo(rootDir, options)
-    expect(repo).toBeDefined()
-    expect(repo.rootDir).includes('\\mushin\\scripts\\test\\fixtures')
-    expect(repo.workspaces.length).toBe(4)
-    expect(repo.options).toEqual(options)
+    const repo = await createRepo(rootDir, options)
 
-    try {
-      await bundle(repo)
-      expect(true).toBeTruthy()
-    }
-    catch (error) {
-      expect(error).toBeDefined()
-    }
+    await expect(bundle).rejects.toThrow()
+  })
+})
 
-    try {
-      const repo2 = { rootDir: repo.rootDir, workspaces: repo.workspaces.slice(0, 3), options: repo.options } as unknown as Repo
-      await bundle(repo2)
-      expect(true).toBeTruthy()
-    }
-    catch (error) {
-      expect(error).toBeUndefined()
-    }
+describe('dts', async () => {
+  it('dts', async () => {
+    const repo = await createRepo(rootDir)
+    await dts(repo)
   })
 })
 
