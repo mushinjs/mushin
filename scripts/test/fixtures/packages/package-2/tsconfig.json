@@ -2,8 +2,9 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "declaration": true,
-    "emitDeclarationOnly": true
+    "paths": {
+      "package-*": ["../package-*/src"]
+    }
   },
   "include": ["./src/index.ts"]
 }

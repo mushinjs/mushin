@@ -1,16 +1,11 @@
-import type { Foo } from 'package-2'
-import { Person, hello, world } from 'package-2'
+import type { Plugin } from 'package-1'
+export const name = 'plugin-1'
 
-hello() as unknown as Foo<string>
-world()
+export const install = () => {
 
-declare module 'package-2' {
-  namespace Person{
-    export function sayBye(): void
-  }
 }
 
-const p = new Person()
-p.name = '123'
-Person.sayHi()
-Person.sayBye()
+// import { definePlugin } from 'package-1'
+// definePlugin(<Plugin>{
+//   name: 'plugin-1',
+// })

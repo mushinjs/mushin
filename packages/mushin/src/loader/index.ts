@@ -1,5 +1,4 @@
 import { resolve } from 'path'
-// @ts-expect-error TODO: i can't figure out how to make this work
 import { Application } from '@mushinjs/core'
 
 export interface Loader {
@@ -27,6 +26,7 @@ export class Loader {
 
   async loadConfig() {
     const config = await import(resolve(this.baseDir, 'mushin.config.yml'))
+    return config
   }
 
   async createApp() {

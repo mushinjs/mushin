@@ -2,7 +2,10 @@
   "name": "plugin-1",
   "type": "module",
   "version": "1.0.0",
-  "dependencies": {
-    "package-2": "workspace:*"
+  "peerDependencies": {
+    "package-1": "workspace:*"
+  },
+  "devDependencies": {
+    "package-1": "workspace:*"
   }
 }

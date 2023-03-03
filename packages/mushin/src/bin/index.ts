@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import cac from 'cac'
-import { version } from '../package.json'
-import registerStartCommand from './start'
+import { version } from '../../package.json'
 
 export const cli = cac('mushin').help().version(version)
 
-registerStartCommand(cli)
+cli.command('start', 'Start the development server').action(() => {
+  console.log('start')
+})
 
 cli.parse()
 

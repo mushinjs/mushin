@@ -20,7 +20,7 @@ export const findPackageJson = async (rootDir: string, paths: string[]): Promise
   return Object.fromEntries(paths.map((path) => {
     const json = requireSafe(resolve(rootDir, path, 'package.json'))
     return [path.replace('package.json', ''), json]
-  })).filters(Boolean)
+  }).filter(Boolean))
 }
 
 export const createRepo = async (rootDir: string, options?: any): Promise<Repo> => {

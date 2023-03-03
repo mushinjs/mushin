@@ -1,7 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
     "outFile": "dist/index.d.ts"
     // "traceResolution": true
   },

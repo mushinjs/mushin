@@ -2,6 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "declaration": true
-  }
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "paths": {
+      "package-2": ["../package-2/src"]
+    }
+  },
+  "include": ["./src/index.ts", "./src/bin/index.ts"]
 }

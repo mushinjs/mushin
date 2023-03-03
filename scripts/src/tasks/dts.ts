@@ -1,7 +1,7 @@
 import { join, resolve } from 'path'
 import { loadTsConfig } from 'load-tsconfig'
 import type { Loaded } from 'load-tsconfig'
-import type { Repo } from 'src'
+import type { Repo } from '../'
 // import rollup from 'rollup'
 
 export const dts = async (repo: Repo) => {
@@ -24,5 +24,7 @@ export const dts = async (repo: Repo) => {
     else if (outDir) {
       // 输出多个文件的outputOptions
     }
+    return {}
   })
+  return outputOptions
 }
