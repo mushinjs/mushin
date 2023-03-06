@@ -4,5 +4,5 @@
     "outFile": "dist/index.d.ts",
     "resolveJsonModule": true
   },
-  "include": ["src", "src/bin"]
+  "include": ["src"]
 }

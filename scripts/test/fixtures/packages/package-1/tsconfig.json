@@ -1,12 +1,13 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "./dist",
+    "outFile": "./dist/index.d.ts",
     "declaration": true,
     "emitDeclarationOnly": true,
+    "noEmitHelpers": true,
     "paths": {
       "package-2": ["../package-2/src"]
     }
   },
-  "include": ["./src/index.ts", "./src/bin/index.ts"]
+  "include": ["./src/index.ts"]
 }

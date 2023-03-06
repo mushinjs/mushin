@@ -1,30 +1,32 @@
 import { join, resolve } from 'path'
 import { loadTsConfig } from 'load-tsconfig'
 import type { Loaded } from 'load-tsconfig'
+import { rollup } from 'rollup'
+import dtsPlugin from 'rollup-plugin-dts'
 import type { Repo } from '../'
-// import rollup from 'rollup'
 
 export const dts = async (repo: Repo) => {
   // 1. 获取根目录和工作区
-  // 2. 读取各工作区的tsconfig.json, 其中include字段中的 ts文件为入口文件，分别打包为出口文件
-  //    即当outFile存在时，输出单一文件。当outDir存在时，根据include字段的ts文件分别输出出口文件
+  // 2. 读取各工作区的tsconfig.json,
   // 3. Loaded的data为tsconfig.json文件
-  // 4. 先使用tsc命令编译，再使用rollup打包，将声明文件中的 declare module 中的内容展开
+  // 4. 使用rollup和rollup-plugin-dts打包声明文件，且只打包声明文件
   const { rootDir, workspaces } = repo
-  const outputOptions = Object.keys(workspaces).map((path) => {
+  Object.keys(workspaces).map(async (path) => {
     const workspaceDir = resolve(rootDir, path)
     const tsconfig = loadTsConfig(join(workspaceDir, 'tsconfig.json'))
+    if (!tsconfig)
+      return
     const { data } = tsconfig as Loaded
+    if (!data)
+      return
     const { compilerOptions } = data
-    const { outFile, outDir } = compilerOptions
-    if (outFile) {
-      // 输出单一文件的outputOptions
+    const { outFile } = compilerOptions
+    // TODO: if `outDir` is exists
+    const input = join(workspaceDir, 'dist', 'index.d.ts')
+    const output = join(workspaceDir, 'dist', outFile)
 
-    }
-    else if (outDir) {
-      // 输出多个文件的outputOptions
-    }
-    return {}
+    await rollup({ input, plugins: [dtsPlugin()] })
+      .then(bundle =>
+        bundle.write({ file: output, format: 'esm' }))
   })
-  return outputOptions
 }

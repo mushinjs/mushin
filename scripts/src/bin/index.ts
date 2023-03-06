@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { resolve } from 'path'
 import cac from 'cac'
-import { createRepo } from 'src'
-import { removeFiles, slash } from 'src/utils'
-import { bundle } from 'src/tasks/build'
-import { dts } from 'src/tasks/dts'
+import { removeFiles, slash } from '../utils'
+import { bundle } from '../tasks/build'
+import { dts } from '../tasks/dts'
+import { createRepo } from '../'
 
 import { version } from '../../package.json'
 

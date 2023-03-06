@@ -1,15 +1,15 @@
 import { Context } from './context'
 
-export interface Plugin {
+export interface Bot {
   name: string
 }
-export class Plugin {
+export class Bot {
   constructor(name: string) {
     this.name = name
   }
 }
 declare module './context'{
   export interface Context {
-    plugins: Plugin[]
+    bots: Bot[]
   }
 }

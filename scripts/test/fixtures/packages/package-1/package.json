@@ -4,5 +4,8 @@
   "version": "1.0.0",
   "exports": "./dist/index.js",
   "types": "dist/index.d.ts",
-  "bin": "./dist/bin.js"
+  "bin": "./dist/bin.js",
+  "devDependencies": {
+    "tsup": "^6.6.3"
+  }
 }

@@ -4,7 +4,7 @@ export interface Plugin<C extends Context = any> {
   name: string
   version?: string
   description?: string
-  install: (ctx: C) => void
+  install?: (ctx: C) => void
 }
 
 export class Plugin {
