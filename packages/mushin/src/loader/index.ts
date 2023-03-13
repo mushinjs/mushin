@@ -25,8 +25,7 @@ export class Loader {
   }
 
   async loadConfig() {
-    const config = await import(resolve(this.baseDir, 'mushin.config.yml'))
-    return config
+    const config = await import(resolve(this.baseDir, 'mushin.config.ts'))
   }
 
   async createApp() {

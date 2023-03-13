@@ -11,12 +11,13 @@
     "incremental": false,
     "skipLibCheck": true,
     "strictBindCallApply": true,
+    "resolveJsonModule": true,
     "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
     "paths": {
       "@mushinjs/plugin-*": ["./plugins/*/src"],
       "@mushinjs/*": ["./packages/*/src"],
-      "mushin-*": ["./packages/*/src"]
+      "mushin-*": ["./packages/*/src"],
+      "mushin": ["./packages/mushin/src"]
     }
   }
 }

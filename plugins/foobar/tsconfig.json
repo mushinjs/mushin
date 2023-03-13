@@ -1,9 +1,7 @@
 {
   "extends": "../../tsconfig.base",
   "compilerOptions": {
-    "rootDir": "src",
     "outFile": "dist/index.d.ts"
   },
-  "include": ["src"],
   "exclude": ["test/**/*.spec.ts"]
 }

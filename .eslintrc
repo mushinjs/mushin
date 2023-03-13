@@ -2,6 +2,6 @@
   "extends": "@antfu",
   "rules": {
     "no-console": "off",
-    "unused-imports/no-unused-imports": "off"
+    "@typescript-eslint/no-var-requires": "off"
   }
 }
