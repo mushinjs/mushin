@@ -1,3 +1,7 @@
+<script>
+import '@unocss/reset/tailwind.css'
+</script>
+
 <template>
   <div>
     <NuxtLayout>
@@ -9,5 +13,8 @@
 <style>
 .dark {
   color-scheme: dark;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 </style>
