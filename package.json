@@ -11,8 +11,12 @@
     "lint": "eslint .",
     "lint:fix": "eslint --fix ."
   },
+  "dependencies": {
+    "floating-vue": "2.0.0-beta.24"
+  },
   "devDependencies": {
     "@antfu/eslint-config": "^2.1.0",
+    "@iconify/json": "^2.2.145",
     "@nuxt/devtools": "latest",
     "@nuxtjs/color-mode": "^3.3.2",
     "@unocss/nuxt": "^0.57.7",
