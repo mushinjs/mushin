@@ -1,0 +1,31 @@
+{
+  "name": "@mushin/plugin-adapter-onebot",
+  "version": "0.1.0",
+  "description": "OneBot v11 adapter (NapCat)",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "displayName": {
+      "en": "OneBot v11 adapter",
+      "zh-CN": "OneBot v11 适配器"
+    },
+    "description": {
+      "en": "Connects bots to NapCat and other OneBot v11 implementations",
+      "zh-CN": "将机器人连接到 NapCat 等 OneBot v11 实现"
+    }
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-bots": "workspace:*",
+    "@cordisjs/plugin-server": "catalog:",
+    "ws": "catalog:"
+  }
+}

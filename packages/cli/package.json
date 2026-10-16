@@ -1,0 +1,36 @@
+{
+  "name": "@mushin/cli",
+  "version": "0.1.0",
+  "description": "Mushin.js launcher",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "mushin": "./bin/mushin.js"
+  },
+  "scripts": {
+    "dev": "node bin/mushin.js start --dir ../../instance",
+    "demo": "tsx tests/helpers/demo.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@cordisjs/plugin-server": "catalog:",
+    "tsx": "catalog:",
+    "@mushin/plugin-storage": "workspace:*",
+    "@mushin/plugin-providers": "workspace:*",
+    "@mushin/plugin-provider-openai": "workspace:*",
+    "@mushin/plugin-provider-anthropic": "workspace:*",
+    "@mushin/plugin-bots": "workspace:*",
+    "@mushin/plugin-adapter-onebot": "workspace:*",
+    "@mushin/plugin-agent": "workspace:*",
+    "@mushin/plugin-console": "workspace:*",
+    "@mushin/bot-plugin-echo": "workspace:*",
+    "@mushin/bot-plugin-llm-chat": "workspace:*"
+  },
+  "devDependencies": {
+    "ws": "catalog:"
+  }
+}

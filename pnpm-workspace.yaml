@@ -1,0 +1,32 @@
+packages:
+  - packages/*
+
+allowBuilds:
+  esbuild: true
+
+catalog:
+  # Cordis 4 is a release candidate; pin exact versions until it is stable.
+  cordis: 4.0.0-rc.11
+  '@cordisjs/plugin-server': 1.7.0
+  zod: ^4.6.7
+  openai: ^7.34.0
+  '@anthropic-ai/sdk': ^0.134.0
+  ws: ^8.22.0
+  tsx: ^4.23.15
+  typescript: 6.0.3
+  vitest: ^5.0.4
+  '@types/node': ^24.0.0
+  '@types/ws': ^8.18.2
+  vue: ^3.5.44
+  vite: ^8.3.4
+  '@vitejs/plugin-vue': ^6.0.10
+  vue-tsc: ^3.3.13
+  naive-ui: ^2.45.3
+  pinia: ^4.1.0
+  vue-router: ^5.4.0
+  vue-i18n: ^11.4.14
+  '@vicons/ionicons5': ^0.13.0
+
+minimumReleaseAgeExclude:
+  - '@anthropic-ai/sdk@0.134.0'
+  - openai@7.34.0

@@ -1,0 +1,36 @@
+{
+  "name": "@mushin/plugin-console",
+  "version": "0.1.0",
+  "description": "HTTP API, WebSocket and dashboard hosting",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "essential": true,
+    "displayName": {
+      "en": "Console",
+      "zh-CN": "控制台"
+    },
+    "description": {
+      "en": "Serves the dashboard and its API",
+      "zh-CN": "提供控制台页面及其 API"
+    }
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-storage": "workspace:*",
+    "@mushin/plugin-bots": "workspace:*",
+    "@mushin/plugin-agent": "workspace:*",
+    "@cordisjs/plugin-server": "catalog:",
+    "ws": "catalog:",
+    "@mushin/dashboard": "workspace:*",
+    "@mushin/plugin-providers": "workspace:*"
+  }
+}

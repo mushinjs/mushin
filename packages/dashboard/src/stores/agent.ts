@@ -1,0 +1,207 @@
+import { defineStore } from 'pinia'
+import { ref, watch } from 'vue'
+import { call, on } from '../api'
+import type { AgentEvent, AgentMessage, AgentSessionSummary, Risk } from '../types'
+
+export type ToolState = 'running' | 'confirm' | 'ok' | 'error' | 'declined'
+
+export type ChatItem =
+  | { kind: 'user'; text: string }
+  | { kind: 'assistant'; text: string }
+  | { kind: 'tool'; id: string; action: string; input: unknown; risk?: Risk; state: ToolState; result?: unknown; error?: string }
+  | { kind: 'error'; text: string }
+
+function parseArgs(json: string) {
+  try {
+    return JSON.parse(json)
+  } catch {
+    return json
+  }
+}
+
+/** Turns a stored conversation into chat items: user and assistant text, and one row per tool call. */
+function toItems(messages: AgentMessage[]): ChatItem[] {
+  const items: ChatItem[] = []
+  const tools = new Map<string, Extract<ChatItem, { kind: 'tool' }>>()
+  for (const message of messages) {
+    if (message.role === 'user') {
+      const text = message.display ?? (typeof message.content === 'string' ? message.content : '')
+      if (text) items.push({ kind: 'user', text })
+    } else if (message.role === 'assistant') {
+      if (message.content) items.push({ kind: 'assistant', text: message.content })
+      for (const call of message.toolCalls ?? []) {
+        const item = { kind: 'tool' as const, id: call.id, action: call.name.replaceAll('__', '.'), input: parseArgs(call.arguments), state: 'running' as ToolState }
+        tools.set(call.id, item)
+        items.push(item)
+      }
+    } else if (message.role === 'tool' && message.toolCallId) {
+      const item = tools.get(message.toolCallId)
+      if (!item) continue
+      if (message.isError) {
+        item.state = /declined/i.test(message.content) ? 'declined' : 'error'
+        item.error = message.content
+      } else {
+        item.state = 'ok'
+        item.result = parseArgs(message.content)
+      }
+    }
+  }
+  for (const item of tools.values()) {
+    if (item.state === 'running') item.state = 'error'
+  }
+  return items
+}
+
+const SESSION_KEY = 'mushin.agent.session'
+
+function readSession() {
+  try {
+    return localStorage.getItem(SESSION_KEY) ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
+export const useAgentStore = defineStore('agent', () => {
+  const open = ref(true)
+  const sessions = ref<AgentSessionSummary[]>([])
+  const current = ref<string | undefined>(readSession())
+
+  // Reopen the same conversation after a reload.
+  watch(current, (id) => {
+    try {
+      if (id) localStorage.setItem(SESSION_KEY, id)
+      else localStorage.removeItem(SESSION_KEY)
+    } catch {}
+  })
+  const items = ref<ChatItem[]>([])
+  const streaming = ref('')
+  const running = ref(false)
+  let adopting = false
+
+  async function refreshSessions() {
+    sessions.value = await call<AgentSessionSummary[]>('agent.sessions')
+  }
+
+  async function load(id: string) {
+    const session = await call<{ id: string; messages: AgentMessage[]; running: boolean }>('agent.session', { id })
+    current.value = session.id
+    items.value = toItems(session.messages)
+    running.value = session.running
+    streaming.value = ''
+  }
+
+  function newChat() {
+    current.value = undefined
+    items.value = []
+    streaming.value = ''
+    running.value = false
+  }
+
+  function flush() {
+    if (streaming.value.trim()) items.value.push({ kind: 'assistant', text: streaming.value })
+    streaming.value = ''
+  }
+
+  function tool(id: string) {
+    return items.value.find((item): item is Extract<ChatItem, { kind: 'tool' }> => item.kind === 'tool' && item.id === id)
+  }
+
+  function handle(event: AgentEvent) {
+    if (adopting && event.type === 'start' && event.session !== current.value) {
+      current.value = event.session
+      adopting = false
+    }
+    if (event.session !== current.value) return
+    switch (event.type) {
+      case 'start':
+        running.value = true
+        streaming.value = ''
+        break
+      case 'delta':
+        streaming.value += event.text
+        break
+      case 'tool-call':
+        flush()
+        items.value.push({ kind: 'tool', id: event.id, action: event.action, input: event.input, risk: event.risk, state: 'running' })
+        break
+      case 'confirm': {
+        const item = tool(event.id)
+        if (item) item.state = 'confirm'
+        break
+      }
+      case 'tool-result': {
+        const item = tool(event.id)
+        if (!item) break
+        if (event.ok) {
+          item.state = 'ok'
+          item.result = event.result
+        } else {
+          item.state = event.error === 'Declined by the user' ? 'declined' : 'error'
+          item.error = event.error
+        }
+        break
+      }
+      case 'done':
+        if (!streaming.value && event.text) streaming.value = event.text
+        flush()
+        running.value = false
+        refreshSessions().catch(() => {})
+        break
+      case 'error':
+        flush()
+        items.value.push({ kind: 'error', text: event.error })
+        running.value = false
+        refreshSessions().catch(() => {})
+        break
+    }
+  }
+
+  async function send(text: string) {
+    if (running.value || !text.trim()) return
+    items.value.push({ kind: 'user', text })
+    running.value = true
+    adopting = !current.value
+    try {
+      const result = await call<{ session: string }>('agent.send', { session: current.value, text })
+      current.value ??= result.session
+    } catch (error) {
+      items.value.push({ kind: 'error', text: (error as Error).message })
+      running.value = false
+      adopting = false
+    }
+  }
+
+  async function confirm(id: string, approved: boolean) {
+    if (!current.value) return
+    const item = tool(id)
+    if (item) item.state = approved ? 'running' : 'declined'
+    await call('agent.confirm', { session: current.value, id, approved })
+  }
+
+  async function cancel() {
+    if (current.value) await call('agent.cancel', { session: current.value })
+  }
+
+  async function remove(id: string) {
+    await call('agent.deleteSession', { id })
+    if (current.value === id) newChat()
+    await refreshSessions()
+  }
+
+  let bound = false
+  function bind() {
+    if (bound) return
+    bound = true
+    on('agent/event', handle)
+    on('connected', () => {
+      refreshSessions().catch(() => {})
+      if (current.value && !items.value.length) load(current.value).catch(() => newChat())
+    })
+  }
+
+  return {
+    open, sessions, current, items, streaming, running,
+    refreshSessions, load, newChat, send, confirm, cancel, remove, bind,
+  }
+})
