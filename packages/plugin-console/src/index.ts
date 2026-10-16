@@ -53,7 +53,7 @@ const CLIENT_CALL_TIMEOUT = 15_000
 /** Events forwarded to every signed-in dashboard. */
 const FORWARDED_EVENTS = [
   'actions/changed', 'manager/changed', 'providers/changed',
-  'bots/changed', 'bots/status', 'bots/message', 'agent/event',
+  'bots/changed', 'bots/status', 'bots/message', 'bots/log', 'agent/event',
 ] as const
 
 const plainExporter: Exporter = { colors: false, export() {} }
@@ -159,7 +159,10 @@ export class Console extends Service {
     this.home.logger('console').info('dashboard at %s', server.baseUrl)
     yield this.home.logger.exporter({
       colors: false,
-      export: (message) => this.broadcast('log', formatLog(message)),
+      // Lines written inside a bot go to that bot's own log (`bots/log`), not the global one.
+      export: (message) => {
+        if (!this.isBotLog(message)) this.broadcast('log', formatLog(message))
+      },
     })
     yield () => {
       for (const client of this.clients.values()) client.socket.close(1001, 'console stopped')
@@ -205,6 +208,10 @@ export class Console extends Service {
     res.status = 401
     res.json({ ok: false, error: { code: 'unauthorized', message: 'Sign in with the admin token' } })
     return false
+  }
+
+  private isBotLog(message: Message) {
+    return this.home.get('bots')?.isBotLog(message) ?? false
   }
 
   broadcast(name: string, data: unknown) {
@@ -333,10 +340,13 @@ export class Console extends Service {
 
     yield actions.define({
       name: 'logs.recent',
-      description: 'Recent log lines, oldest first.',
+      description: 'Recent log lines of Mushin.js itself, oldest first. Lines written inside a bot are in bots.logs instead.',
       risk: 'read',
       input: z.object({ limit: z.number().int().min(1).max(1000).optional() }),
-      handler: ({ limit }) => this.home.logger.buffer.slice(-(limit ?? 200)).map(formatLog),
+      handler: ({ limit }) => this.home.logger.buffer
+        .filter((message) => !this.isBotLog(message))
+        .slice(-(limit ?? 200))
+        .map(formatLog),
     })
   }
 }

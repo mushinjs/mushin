@@ -98,6 +98,9 @@ describe('llm-chat guardrails', () => {
     expect(await llmCalls(() => say('too soon', { user: '43' }))).toBe(0)
     await sleep(800)
     expect(await llmCalls(() => say('after the cooldown', { user: '43' }))).toBe(1)
+    // The bot's own log says why the second message got no reply.
+    const lines = await app.call<any[]>('bots.logs', { id: botId })
+    expect(lines.some((line) => line.type === 'debug' && line.text === 'no reply in group:500: cooldown')).toBe(true)
   })
 
   it('answers one message at a time per chat', async () => {
