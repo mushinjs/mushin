@@ -46,6 +46,7 @@ export class OneBotConnection {
   private watchdog?: NodeJS.Timeout
   private warnedStringFormat = false
   private disposed = false
+  private loginTask?: Promise<void>
   private logger
 
   constructor(private ctx: Context, private socket: WebSocket, private onDead: () => void) {
@@ -110,10 +111,22 @@ export class OneBotConnection {
     return { messageId: data?.message_id !== undefined ? String(data.message_id) : undefined }
   }
 
-  /** Reads the account behind the connection and marks the bot online. */
-  async login() {
+  /**
+   * Reads the account behind the connection and marks the bot online. Both the socket opening and
+   * NapCat's lifecycle event ask for this, so it runs once per connection (again only after a failure).
+   */
+  login() {
+    this.loginTask ??= this.fetchLogin().catch((error) => {
+      this.loginTask = undefined
+      throw error
+    })
+    return this.loginTask
+  }
+
+  private async fetchLogin() {
     const info = await this.call('get_login_info')
     this.ctx.bot.setSelf(String(info.user_id), info.nickname)
+    this.logger.info('logged in as %s (%s)', info.nickname ?? 'unknown', info.user_id)
     this.ctx.bot.setStatus('online')
   }
 

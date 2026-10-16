@@ -198,6 +198,55 @@ describe('bots over OneBot', () => {
     await waitFor(async () => (await app.call('bots.get', { id: botB })).status === 'online')
   })
 
+  it('stays online when an extra client connects with a wrong token, and logs why it was rejected', async () => {
+    const url = `ws://127.0.0.1:${app.port}/onebot/${botB}`
+    await expect(napcat.connectTo(url, 'wrong-token')).rejects.toThrow()
+    await expect(napcat.connectTo(url)).rejects.toThrow()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect((await app.call('bots.get', { id: botB })).status).toBe('online')
+
+    const lines = await app.call<any[]>('bots.logs', { id: botB })
+    const texts = lines.map((line) => `${line.type} ${line.name}: ${line.text}`)
+    expect(texts.some((t) => /^info onebot: NapCat connected from 127\.0\.0\.1.*self id 10001, role Universal/.test(t))).toBe(true)
+    // NapCat's lifecycle event and the accepted socket both ask for a login; it must run once.
+    expect(texts.filter((t) => t.includes('logged in as MockBot (10001)'))).toHaveLength(1)
+    expect(texts.some((t) => /^warn onebot: rejected an extra connection .*Authorization header \(11 characters\) does not match the bot's token \(9 characters\)\. The current connection stays up\./.test(t))).toBe(true)
+    expect(texts.some((t) => t.includes('NapCat sent no token'))).toBe(true)
+    expect(JSON.stringify(lines)).not.toContain('rev-token')
+    // Lines are attributed to the bot that wrote them.
+    expect(lines.every((line) => line.botId === botB)).toBe(true)
+    expect((await app.call<any[]>('bots.logs', { id: botA })).some((line) => line.text.includes('extra connection'))).toBe(false)
+  })
+
+  it('keeps bot lines out of the global log, in history and live', async () => {
+    const dashboard = await app.connect()
+    const url = `ws://127.0.0.1:${app.port}/onebot/${botB}`
+    await expect(napcat.connectTo(url, 'still-wrong')).rejects.toThrow()
+    // The rejection reaches the dashboard as a bot log line...
+    await waitFor(() => dashboard.events.some((event) => event.name === 'bots/log' && event.data.text.includes('rejected an extra connection')))
+
+    // ...but never as a global one, neither in history nor live.
+    const global = await app.call<any[]>('logs.recent', { limit: 1000 })
+    expect(global.some((line) => /logged in as|rejected an extra connection|status: /.test(line.text))).toBe(false)
+    expect(global.some((line) => line.text.includes('dashboard at'))).toBe(true)
+    expect(dashboard.events.some((event) => event.name === 'log' && event.data.text.includes('rejected'))).toBe(false)
+    dashboard.close()
+  })
+
+  it('explains a rejected token in the status when no connection is live', async () => {
+    const bot = await app.call('bots.create', {
+      name: 'Delta',
+      adapter: { type: 'onebot', config: { mode: 'reverse', token: 'delta-token' } },
+    })
+    await expect(napcat.connectTo(`ws://127.0.0.1:${app.port}/onebot/${bot.id}`)).rejects.toThrow()
+    const status = await waitFor(async () => {
+      const current = await app.call('bots.get', { id: bot.id })
+      return current.status === 'error' && current
+    })
+    expect(status.error).toContain('NapCat sent no token')
+    await app.call('bots.delete', { id: bot.id })
+  })
+
   it('stops one bot without touching the other', async () => {
     await app.call('bots.stop', { id: botA })
     expect((await app.call('bots.get', { id: botA })).status).toBe('offline')
