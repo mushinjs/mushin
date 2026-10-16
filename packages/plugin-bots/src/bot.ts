@@ -108,6 +108,12 @@ export class Bot extends Service {
   }
 
   setStatus(status: BotStatus, error?: string) {
+    const nextError = status === 'error' ? error : undefined
+    if (status !== this.status || nextError !== this.error) {
+      const logger = this.ctx.logger('bot')
+      if (status === 'error') logger.warn('status: error (%s)', error ?? 'no details')
+      else logger.info('status: %s', status)
+    }
     this.status = status
     this.error = status === 'error' ? error : undefined
     this.hooks.status(this)

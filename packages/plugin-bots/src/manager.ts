@@ -1,6 +1,7 @@
 import {
-  type ChannelInfo, Context, type Fiber, fiberError, fiberStatus, isMasked, mask, type MessageRecord, messageType,
-  MushinError, type Plugin, pluginSchema, randomId, type Segment, Service, toJsonSchema, validatePluginConfig, z,
+  type ChannelInfo, Context, type Exporter, type Fiber, fiberError, fiberStatus, isMasked, Logger, mask, type Message,
+  type MessageRecord, messageType, MushinError, type Plugin, pluginSchema, randomId, type Segment, Service, toJsonSchema,
+  validatePluginConfig, z,
 } from '@mushin/core'
 import type {} from '@mushin/plugin-storage'
 import { Bot, type BotHooks } from './bot'
@@ -16,7 +17,18 @@ declare module '@mushin/core' {
     'bots/changed'(): void
     'bots/status'(status: BotStatusInfo): void
     'bots/message'(record: MessageRecord): void
+    'bots/log'(line: BotLogLine): void
   }
+}
+
+/** One log line written inside a bot's context: its adapter, its plugins, or the bot service itself. */
+export interface BotLogLine {
+  botId: string
+  sn: number
+  ts: number
+  type: string
+  name: string
+  text: string
 }
 
 export interface BotStatusInfo {
@@ -37,6 +49,10 @@ interface Runtime {
 
 const STORAGE_KEY = 'bots'
 const BUFFER_SIZE = 500
+const LOG_BUFFER_SIZE = 500
+// Bot logs include debug lines (e.g. why llm-chat skipped a message); the main log stream does not.
+const LOG_LEVEL_DEBUG = 3
+const plainExporter: Exporter = { colors: false, export() {} }
 
 const adapterInput = z.object({
   type: z.string().describe('Adapter type id from bots.adapters, e.g. "onebot"'),
@@ -59,6 +75,11 @@ export class BotManager extends Service {
   private runtimes = new Map<string, Runtime>()
   private startErrors = new Map<string, string>()
   private buffers = new Map<string, MessageRecord[]>()
+  /** Runtime fiber of each running bot, to attribute log lines to the bot that wrote them. */
+  private runtimeFibers = new Map<Fiber, string>()
+  private logs = new Map<string, BotLogLine[]>()
+  /** Sequence numbers of recent bot log lines; still recognized after the bot that wrote them stops. */
+  private botLogSns = new Set<number>()
 
   constructor(ctx: Context) {
     super(ctx, 'bots')
@@ -68,6 +89,11 @@ export class BotManager extends Service {
   async *[Service.init]() {
     const stored = await this.home.storage.get<{ bots: BotRecord[] }>(STORAGE_KEY)
     this.records = stored?.bots ?? []
+    yield this.home.logger.exporter({
+      colors: false,
+      levels: { default: LOG_LEVEL_DEBUG },
+      export: (message) => this.captureLog(message),
+    })
     yield* this.defineActions()
     for (const record of this.records) {
       if (record.enabled && this.adapterStore.has(record.adapter.type)) this.startSafely(record.id)
@@ -218,6 +244,7 @@ export class BotManager extends Service {
     await this.stopRuntime(id)
     this.records = this.records.filter((item) => item !== record)
     this.buffers.delete(id)
+    this.logs.delete(id)
     this.startErrors.delete(id)
     await this.save()
     return { deleted: id }
@@ -264,6 +291,11 @@ export class BotManager extends Service {
       name: `bot:${record.name}`,
       apply: (ctx: Context) => {
         runtime.ctx = ctx
+        this.runtimeFibers.set(ctx.fiber, id)
+        ctx.effect(() => () => this.runtimeFibers.delete(ctx.fiber), 'bot log attribution')
+        const enabled = loaded.map(({ entry }) => entry.package.replace(/^@mushin\/bot-plugin-/, ''))
+        ctx.logger('bot').info('starting with the %s adapter; plugins: %s', record.adapter.type, enabled.join(', ') || 'none')
+        for (const [name, error] of runtime.pluginErrors) ctx.logger('bot').warn('plugin %s did not load: %s', name, error)
         ctx.plugin(Bot, { record, hooks })
         ctx.plugin(adapter.plugin, record.adapter.config)
         for (const { entry, plugin } of loaded) runtime.plugins.set(entry.package, ctx.plugin(plugin, entry.config))
@@ -373,6 +405,59 @@ export class BotManager extends Service {
     runtime.plugins.get(entry.package)?.dispose()
     runtime.pluginErrors.delete(entry.package)
     runtime.plugins.set(entry.package, runtime.ctx.plugin(plugin, entry.config))
+  }
+
+  // ---- logs ----
+
+  /** Finds the bot whose context wrote a log message, by walking up from the writing fiber. */
+  private botOf(message: Message) {
+    let fiber = message.fiber?.deref()
+    while (fiber) {
+      const id = this.runtimeFibers.get(fiber)
+      if (id) return id
+      const parent = fiber.parent?.fiber
+      if (!parent || parent === fiber) return
+      fiber = parent
+    }
+  }
+
+  /** True when a log line was written inside a bot; it belongs in that bot's log, not the global one. */
+  isBotLog(message: Message) {
+    return this.botLogSns.has(message.sn) || !!this.botOf(message)
+  }
+
+  private captureLog(message: Message) {
+    const botId = this.botOf(message)
+    if (!botId) return
+    this.botLogSns.add(message.sn)
+    // The global log buffer holds 1000 lines; remember a little more than that.
+    if (this.botLogSns.size > 2000) this.botLogSns.delete(this.botLogSns.values().next().value!)
+    const line: BotLogLine = {
+      botId,
+      sn: message.sn,
+      ts: message.ts,
+      type: message.type,
+      name: message.name,
+      text: Logger.format(plainExporter, message),
+    }
+    let buffer = this.logs.get(botId)
+    if (!buffer) this.logs.set(botId, buffer = [])
+    buffer.push(line)
+    if (buffer.length > LOG_BUFFER_SIZE) buffer.splice(0, buffer.length - LOG_BUFFER_SIZE)
+    this.home.emit('bots/log', line)
+    const day = new Date(line.ts).toISOString().slice(0, 10)
+    this.home.storage.append(`logs/${botId}/${day}`, line).catch(() => {})
+  }
+
+  async logLines(id: string, limit = 200) {
+    this.get(id)
+    let buffer = this.logs.get(id)
+    if (!buffer) {
+      const day = new Date().toISOString().slice(0, 10)
+      buffer = await this.home.storage.tail<BotLogLine>(`logs/${id}/${day}`, LOG_BUFFER_SIZE)
+      this.logs.set(id, buffer)
+    }
+    return buffer.slice(-limit)
   }
 
   // ---- messages ----
@@ -547,6 +632,14 @@ export class BotManager extends Service {
         channel: z.string().optional().describe('Group or user id to filter by'),
       }),
       handler: ({ id, ...options }) => this.messages(id, options),
+    })
+
+    yield actions.define({
+      name: 'bots.logs',
+      description: 'Recent log lines of one bot, oldest first: connection events, adapter errors, plugin warnings, and why LLM chat skipped messages. Read this first when a bot misbehaves.',
+      risk: 'read',
+      input: idInput.extend({ limit: z.number().int().min(1).max(LOG_BUFFER_SIZE).optional() }),
+      handler: ({ id, limit }) => this.logLines(id, limit),
     })
 
     yield actions.define({
