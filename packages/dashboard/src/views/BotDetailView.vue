@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { call } from '../api'
 import BotConnection from '../components/BotConnection.vue'
+import BotLogs from '../components/BotLogs.vue'
 import BotPlugins from '../components/BotPlugins.vue'
 import LiveConversation from '../components/LiveConversation.vue'
 import StatusBadge from '../components/StatusBadge.vue'
@@ -62,7 +63,10 @@ function remove() {
           <h1>{{ bot.name }} <StatusBadge :status="bot.status" :error="bot.error" /></h1>
           <p class="page-lead">
             {{ bot.selfName ? `${bot.selfName} · ${bot.selfId}` : bot.selfId ?? t('bots.notLoggedIn') }}
-            <template v-if="bot.status === 'error' && bot.error"> · <span class="error">{{ bot.error }}</span></template>
+            <template v-if="bot.status === 'error' && bot.error">
+              · <span class="error">{{ bot.error }}</span>
+              · <RouterLink :to="`/bots/${id}/logs`">{{ t('bot.viewLogs') }}</RouterLink>
+            </template>
           </p>
         </div>
       </div>
@@ -83,6 +87,9 @@ function remove() {
       </NTabPane>
       <NTabPane name="live" :tab="t('bot.live')" data-agent-target="bot.live">
         <LiveConversation :bot-id="bot.id" />
+      </NTabPane>
+      <NTabPane name="logs" :tab="t('bot.logs')" data-agent-target="bot.logs">
+        <BotLogs :bot-id="bot.id" />
       </NTabPane>
     </NTabs>
 

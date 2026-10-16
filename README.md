@@ -71,6 +71,8 @@ Set NapCat's message format to `array` and use the same access token on both sid
 
 If Mushin.js and NapCat run on different machines, bind Mushin.js to a reachable address (`host` in the server entry) and keep the admin token private.
 
+When a bot misbehaves, open its **Logs** tab. It lists what happened inside that bot only: every connection attempt (address, NapCat self id, client role, and why a token was rejected), logins, status changes, plugin warnings, and why LLM chat skipped a message. The same lines are saved in `instance/data/logs/<bot id>/` and the Agent can read them.
+
 ## Keeping LLM chat in check
 
 The LLM chat bot plugin checks these limits before every model call. Change them on the bot's **Plugins** tab, or ask the Agent.
