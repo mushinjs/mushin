@@ -71,6 +71,23 @@ Set NapCat's message format to `array` and use the same access token on both sid
 
 If Mushin.js and NapCat run on different machines, bind Mushin.js to a reachable address (`host` in the server entry) and keep the admin token private.
 
+## Keeping LLM chat in check
+
+The LLM chat bot plugin checks these limits before every model call. Change them on the bot's **Plugins** tab, or ask the Agent.
+
+| Setting | Default | Effect |
+| --- | --- | --- |
+| Reply in private chats | on | Turn off to answer only in groups |
+| Only these groups | all groups | Group ids the bot may answer in |
+| Ignore users | none | User ids never answered, such as other bots |
+| Chat cooldown | 3 s | Least time between two replies in one chat |
+| Replies per user | 5 per 60 s | Per-user rate limit, with an optional one-time notice |
+| Daily reply limit | 300 | LLM replies per bot per day; resets at local midnight and survives restarts |
+| Daily token budget | off | Tokens per bot per day, as reported by the provider |
+| Message length | 1000 characters | Longer messages are cut before they reach the model |
+
+A chat also gets only one model call at a time; messages that arrive while a reply is being written are not answered. When a daily limit is reached, the Logs page says so once.
+
 ## Development
 
 ```sh

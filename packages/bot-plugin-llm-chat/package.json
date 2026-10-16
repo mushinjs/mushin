@@ -29,6 +29,7 @@
   "dependencies": {
     "@mushin/core": "workspace:*",
     "@mushin/plugin-bots": "workspace:*",
-    "@mushin/plugin-providers": "workspace:*"
+    "@mushin/plugin-providers": "workspace:*",
+    "@mushin/plugin-storage": "workspace:*"
   }
 }

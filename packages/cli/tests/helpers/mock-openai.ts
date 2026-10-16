@@ -4,6 +4,8 @@ import type { AddressInfo } from 'node:net'
 export interface MockReply {
   text?: string
   toolCalls?: { name: string; arguments: Record<string, unknown> }[]
+  /** Wait this long before answering, to simulate a slow model. */
+  delayMs?: number
 }
 
 /** A minimal OpenAI-compatible server: chat completions (plain and streamed) and the model list. */
@@ -39,6 +41,7 @@ export async function createMockOpenAI() {
     const body = JSON.parse(await readBody(req))
     requests.push(body)
     const reply = queue.shift() ?? fallback
+    if (reply.delayMs) await new Promise((resolve) => setTimeout(resolve, reply.delayMs))
     const id = `chatcmpl-${++counter}`
     const toolCalls = (reply.toolCalls ?? []).map((call, index) => ({
       index,
