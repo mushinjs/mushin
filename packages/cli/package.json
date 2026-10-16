@@ -8,7 +8,7 @@
     "mushin": "./bin/mushin.js"
   },
   "scripts": {
-    "dev": "node bin/mushin.js start --dir ../../instance",
+    "dev": "tsx watch --clear-screen=false src/cli.ts start --dir ../../instance",
     "demo": "tsx tests/helpers/demo.ts"
   },
   "exports": {
