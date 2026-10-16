@@ -54,12 +54,6 @@ pre.json {
   word-break: break-word;
 }
 
-/* Field descriptions wrap onto several lines; keep them clear of the next label. */
-.n-form-item .n-form-item-feedback-wrapper {
-  padding-bottom: 8px;
-  line-height: 1.5;
-}
-
 /* The indigo logo needs more light on dark backgrounds. */
 html[data-theme='dark'] img[src='/logo.png'] {
   filter: brightness(1.9) saturate(0.85);

@@ -22,7 +22,14 @@ watch(themeMode, (mode) => {
   } catch {}
 })
 
+// Field descriptions wrap onto several lines; keep them clear of the next field's label.
+const form: GlobalThemeOverrides['Form'] = {
+  feedbackPadding: '4px 0 14px 2px',
+  feedbackFontSizeMedium: '13px',
+}
+
 const lightOverrides: GlobalThemeOverrides = {
+  Form: form,
   common: {
     primaryColor: '#3B4A8C',
     primaryColorHover: '#4D5DA6',
@@ -33,6 +40,7 @@ const lightOverrides: GlobalThemeOverrides = {
 }
 
 const darkOverrides: GlobalThemeOverrides = {
+  Form: form,
   common: {
     primaryColor: '#8D9BE6',
     primaryColorHover: '#A3AFEE',

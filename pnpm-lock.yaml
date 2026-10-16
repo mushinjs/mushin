@@ -111,6 +111,9 @@ importers:
       '@mushin/plugin-providers':
         specifier: workspace:*
         version: link:../plugin-providers
+      '@mushin/plugin-storage':
+        specifier: workspace:*
+        version: link:../plugin-storage
 
   packages/cli:
     dependencies:
