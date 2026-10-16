@@ -211,6 +211,8 @@ export type AgentEvent = { session: string } & (
 )
 
 export interface LogLine {
+  /** Set on lines from a bot's own log. */
+  botId?: string
   sn: number
   ts: number
   type: string

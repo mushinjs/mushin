@@ -316,7 +316,7 @@ export class Console extends Service {
 
     yield actions.define({
       name: 'ui.highlight',
-      description: 'Point at a control on the current dashboard page. Targets: providers.add, bots.add, bot.connection, bot.plugins, bot.live, agent.input.',
+      description: 'Point at a control on the current dashboard page. Targets: providers.add, bots.add, bot.connection, bot.plugins, bot.live, bot.logs, agent.input.',
       risk: 'read',
       client: true,
       input: z.object({

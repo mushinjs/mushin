@@ -10,7 +10,7 @@ export const router = createRouter({
     { path: '/providers', component: () => import('./views/ProvidersView.vue') },
     { path: '/bots', component: () => import('./views/BotsView.vue') },
     { path: '/bots/:id', redirect: (to) => `/bots/${to.params.id}/connection` },
-    { path: '/bots/:id/:tab(connection|plugins|live)', component: () => import('./views/BotDetailView.vue') },
+    { path: '/bots/:id/:tab(connection|plugins|live|logs)', component: () => import('./views/BotDetailView.vue') },
     { path: '/plugins', component: () => import('./views/PluginsView.vue') },
     { path: '/logs', component: () => import('./views/LogsView.vue') },
     { path: '/:pathMatch(.*)*', redirect: '/bots' },
