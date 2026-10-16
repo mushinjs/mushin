@@ -1,0 +1,30 @@
+{
+  "name": "@mushin/plugin-provider-anthropic",
+  "version": "0.1.0",
+  "description": "Anthropic provider type",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "displayName": {
+      "en": "Anthropic provider",
+      "zh-CN": "Anthropic 提供商"
+    },
+    "description": {
+      "en": "Claude models through the Anthropic Messages API",
+      "zh-CN": "通过 Anthropic Messages API 使用 Claude 模型"
+    }
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-providers": "workspace:*",
+    "@anthropic-ai/sdk": "catalog:"
+  }
+}

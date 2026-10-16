@@ -1,0 +1,34 @@
+{
+  "name": "@mushin/bot-plugin-llm-chat",
+  "version": "0.1.0",
+  "description": "LLM chat bot plugin",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "bot",
+    "platforms": [
+      "onebot"
+    ],
+    "category": "ai",
+    "displayName": {
+      "en": "LLM chat",
+      "zh-CN": "大模型对话"
+    },
+    "description": {
+      "en": "Replies with an LLM when mentioned or in private chat",
+      "zh-CN": "被 @ 或私聊时使用大模型回复"
+    }
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-bots": "workspace:*",
+    "@mushin/plugin-providers": "workspace:*"
+  }
+}

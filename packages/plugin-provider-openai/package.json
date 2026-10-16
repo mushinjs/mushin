@@ -1,0 +1,30 @@
+{
+  "name": "@mushin/plugin-provider-openai",
+  "version": "0.1.0",
+  "description": "OpenAI-compatible provider type",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "displayName": {
+      "en": "OpenAI-compatible provider",
+      "zh-CN": "OpenAI 兼容提供商"
+    },
+    "description": {
+      "en": "OpenAI, DeepSeek, Moonshot, Qwen, SiliconFlow, OpenRouter, Ollama",
+      "zh-CN": "支持 OpenAI、DeepSeek、Moonshot、通义千问、硅基流动、OpenRouter、Ollama"
+    }
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-providers": "workspace:*",
+    "openai": "catalog:"
+  }
+}

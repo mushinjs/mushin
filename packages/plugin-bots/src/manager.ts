@@ -1,0 +1,571 @@
+import {
+  type ChannelInfo, Context, type Fiber, fiberError, fiberStatus, isMasked, mask, type MessageRecord, messageType,
+  MushinError, type Plugin, pluginSchema, randomId, type Segment, Service, toJsonSchema, validatePluginConfig, z,
+} from '@mushin/core'
+import type {} from '@mushin/plugin-storage'
+import { Bot, type BotHooks } from './bot'
+import type { AdapterType, BotPluginEntry, BotRecord, BotStatus } from './types'
+
+declare module '@mushin/core' {
+  interface Context {
+    bots: BotManager
+    bot: Bot
+  }
+
+  interface Events {
+    'bots/changed'(): void
+    'bots/status'(status: BotStatusInfo): void
+    'bots/message'(record: MessageRecord): void
+  }
+}
+
+export interface BotStatusInfo {
+  id: string
+  status: BotStatus
+  error?: string
+  selfId?: string
+  selfName?: string
+}
+
+interface Runtime {
+  fiber?: Fiber
+  ctx?: Context
+  bot?: Bot
+  plugins: Map<string, Fiber>
+  pluginErrors: Map<string, string>
+}
+
+const STORAGE_KEY = 'bots'
+const BUFFER_SIZE = 500
+
+const adapterInput = z.object({
+  type: z.string().describe('Adapter type id from bots.adapters, e.g. "onebot"'),
+  config: z.record(z.string(), z.any()).describe('Adapter config matching the schema from bots.adapters'),
+})
+
+const idInput = z.object({ id: z.string().describe('Bot id from bots.list') })
+const pluginInput = idInput.extend({ package: z.string().describe('Bot plugin package name from bots.plugins.list') })
+
+/**
+ * Owns bot records and runs each enabled bot in its own isolated context:
+ * the `bot` service, the adapter connection and the bot's plugins live there.
+ */
+export class BotManager extends Service {
+  static inject = ['storage', 'actions', 'manager']
+
+  private home: Context
+  private records: BotRecord[] = []
+  private adapterStore = new Map<string, AdapterType>()
+  private runtimes = new Map<string, Runtime>()
+  private startErrors = new Map<string, string>()
+  private buffers = new Map<string, MessageRecord[]>()
+
+  constructor(ctx: Context) {
+    super(ctx, 'bots')
+    this.home = ctx
+  }
+
+  async *[Service.init]() {
+    const stored = await this.home.storage.get<{ bots: BotRecord[] }>(STORAGE_KEY)
+    this.records = stored?.bots ?? []
+    yield* this.defineActions()
+    for (const record of this.records) {
+      if (record.enabled && this.adapterStore.has(record.adapter.type)) this.startSafely(record.id)
+    }
+  }
+
+  // ---- adapters ----
+
+  /** Registers an adapter type. Bots using it start when it loads and stop when it unloads. */
+  defineAdapter<C>(adapter: AdapterType<C>) {
+    const ctx = this.ctx
+    return ctx.effect(() => {
+      if (this.adapterStore.has(adapter.id)) throw new Error(`adapter "${adapter.id}" is already defined`)
+      this.adapterStore.set(adapter.id, adapter)
+      for (const record of this.records) {
+        if (record.enabled && record.adapter.type === adapter.id && !this.runtimes.has(record.id)) {
+          this.startSafely(record.id)
+        }
+      }
+      ctx.emit('bots/changed')
+      return async () => {
+        this.adapterStore.delete(adapter.id)
+        for (const record of this.records) {
+          if (record.adapter.type !== adapter.id || !this.runtimes.has(record.id)) continue
+          await this.stopRuntime(record.id)
+          this.startErrors.set(record.id, `Adapter "${adapter.id}" was unloaded`)
+          this.emitStatus(record.id)
+        }
+        ctx.emit('bots/changed')
+      }
+    }, `bots.defineAdapter(${adapter.id})`)
+  }
+
+  adapters() {
+    return [...this.adapterStore.values()].map((adapter) => ({
+      id: adapter.id,
+      displayName: adapter.displayName,
+      configSchema: toJsonSchema(adapter.config),
+      secrets: adapter.secrets ?? [],
+      segments: adapter.segments,
+    }))
+  }
+
+  /** Adapters that can send every segment in a message. */
+  platformsFor(segments: Segment[]) {
+    return [...this.adapterStore.values()]
+      .filter((adapter) => segments.every((s) => adapter.segments.includes(s.type)))
+      .map((adapter) => adapter.id)
+  }
+
+  // ---- records ----
+
+  get(id: string) {
+    const record = this.records.find((item) => item.id === id)
+    if (!record) throw new MushinError('not_found', `No bot with id "${id}"`)
+    return record
+  }
+
+  bot(id: string) {
+    return this.runtimes.get(id)?.bot
+  }
+
+  status(id: string): BotStatusInfo {
+    const bot = this.bot(id)
+    if (bot) return { id, status: bot.status, error: bot.error, selfId: bot.selfId, selfName: bot.selfName }
+    const error = this.startErrors.get(id)
+    return { id, status: error ? 'error' : 'offline', error }
+  }
+
+  private emitStatus(id: string) {
+    this.home.emit('bots/status', this.status(id))
+  }
+
+  private redact(record: BotRecord) {
+    const secrets = this.adapterStore.get(record.adapter.type)?.secrets ?? []
+    const config = { ...record.adapter.config }
+    for (const key of secrets) {
+      if (typeof config[key] === 'string' && config[key]) config[key] = mask(config[key])
+    }
+    return { ...record, adapter: { ...record.adapter, config } }
+  }
+
+  describe(record: BotRecord) {
+    return { ...this.redact(record), ...this.status(record.id) }
+  }
+
+  list() {
+    return this.records.map((record) => this.describe(record))
+  }
+
+  private async save() {
+    await this.home.storage.set(STORAGE_KEY, { bots: this.records })
+    this.home.emit('bots/changed')
+  }
+
+  private validateAdapter(type: string, config: unknown) {
+    const adapter = this.adapterStore.get(type)
+    if (!adapter) {
+      const known = [...this.adapterStore.keys()].join(', ') || 'none'
+      throw new MushinError('invalid_input', `Unknown adapter "${type}". Loaded adapters: ${known}`)
+    }
+    const result = adapter.config.safeParse(config)
+    if (!result.success) throw new MushinError('invalid_input', z.prettifyError(result.error), result.error.issues)
+    return result.data as Record<string, any>
+  }
+
+  async create(input: { name: string; adapter: { type: string; config: Record<string, any> }; plugins?: { package: string; config?: Record<string, any> }[]; enabled?: boolean; provider?: string }) {
+    const id = randomId()
+    const record: BotRecord = {
+      id,
+      name: input.name,
+      enabled: input.enabled ?? true,
+      adapter: { type: input.adapter.type, config: this.validateAdapter(input.adapter.type, input.adapter.config) },
+      plugins: [],
+      provider: input.provider,
+      createdAt: Date.now(),
+    }
+    for (const item of input.plugins ?? []) {
+      const plugin = await this.loadBotPlugin(item.package)
+      validatePluginConfig(plugin, item.config ?? {})
+      record.plugins.push({ package: item.package, enabled: true, config: item.config ?? {} })
+    }
+    this.records.push(record)
+    await this.save()
+    if (record.enabled) await this.start(id).catch(() => {})
+    return this.describe(record)
+  }
+
+  async update(id: string, patch: { name?: string; adapter?: { type: string; config: Record<string, any> }; provider?: string | null }) {
+    const record = this.get(id)
+    if (patch.name !== undefined) record.name = patch.name
+    if (patch.provider !== undefined) record.provider = patch.provider ?? undefined
+    if (patch.adapter) {
+      const secrets = this.adapterStore.get(patch.adapter.type)?.secrets ?? []
+      const config = { ...patch.adapter.config }
+      for (const key of secrets) {
+        if (isMasked(config[key])) config[key] = record.adapter.config[key]
+      }
+      record.adapter = { type: patch.adapter.type, config: this.validateAdapter(patch.adapter.type, config) }
+    }
+    await this.save()
+    if (record.enabled) await this.start(id).catch(() => {})
+    return this.describe(record)
+  }
+
+  async remove(id: string) {
+    const record = this.get(id)
+    await this.stopRuntime(id)
+    this.records = this.records.filter((item) => item !== record)
+    this.buffers.delete(id)
+    this.startErrors.delete(id)
+    await this.save()
+    return { deleted: id }
+  }
+
+  // ---- runtimes ----
+
+  private startSafely(id: string) {
+    this.start(id).catch((error) => this.home.logger('bots').warn('failed to start bot %s: %s', id, error))
+  }
+
+  async start(id: string) {
+    const record = this.get(id)
+    await this.stopRuntime(id)
+    this.startErrors.delete(id)
+    const adapter = this.adapterStore.get(record.adapter.type)
+    if (!adapter) {
+      const message = `Adapter "${record.adapter.type}" is not loaded; enable its plugin`
+      this.startErrors.set(id, message)
+      this.emitStatus(id)
+      throw new MushinError('unavailable', message)
+    }
+
+    const runtime: Runtime = { plugins: new Map(), pluginErrors: new Map() }
+    const loaded: { entry: BotPluginEntry; plugin: Plugin }[] = []
+    for (const entry of record.plugins) {
+      if (!entry.enabled) continue
+      try {
+        loaded.push({ entry, plugin: await this.loadBotPlugin(entry.package) })
+      } catch (error) {
+        runtime.pluginErrors.set(entry.package, error instanceof Error ? error.message : String(error))
+      }
+    }
+
+    const hooks: BotHooks = {
+      record: (partial) => this.record(partial),
+      status: (bot) => {
+        runtime.bot = bot
+        this.emitStatus(id)
+      },
+    }
+    this.runtimes.set(id, runtime)
+    runtime.fiber = this.home.isolate('bot').plugin({
+      name: `bot:${record.name}`,
+      apply: (ctx: Context) => {
+        runtime.ctx = ctx
+        ctx.plugin(Bot, { record, hooks })
+        ctx.plugin(adapter.plugin, record.adapter.config)
+        for (const { entry, plugin } of loaded) runtime.plugins.set(entry.package, ctx.plugin(plugin, entry.config))
+      },
+    })
+    await runtime.fiber
+    runtime.bot = runtime.ctx?.get('bot') ?? runtime.bot
+    this.emitStatus(id)
+    return this.status(id)
+  }
+
+  private async stopRuntime(id: string) {
+    const runtime = this.runtimes.get(id)
+    if (!runtime) return
+    this.runtimes.delete(id)
+    await runtime.fiber?.dispose()
+    this.emitStatus(id)
+  }
+
+  async setEnabled(id: string, enabled: boolean) {
+    const record = this.get(id)
+    record.enabled = enabled
+    await this.save()
+    if (enabled) return this.start(id)
+    await this.stopRuntime(id)
+    return this.status(id)
+  }
+
+  // ---- bot plugins ----
+
+  async loadBotPlugin(name: string) {
+    const entry = await this.home.manager.findPackage(name)
+    if (!entry) throw new MushinError('not_found', `Bot plugin "${name}" is not installed`)
+    if (entry.manifest.kind !== 'bot') throw new MushinError('invalid_input', `"${name}" is an app plugin, not a bot plugin`)
+    return this.home.manager.loadPlugin(name)
+  }
+
+  async plugins(id: string) {
+    const record = this.get(id)
+    const runtime = this.runtimes.get(id)
+    const catalog = (await this.home.manager.catalog()).filter((entry) => entry.manifest.kind === 'bot')
+    return Promise.all(catalog.map(async (entry) => {
+      const configured = record.plugins.find((item) => item.package === entry.package)
+      let configSchema
+      try {
+        configSchema = pluginSchema(await this.home.manager.loadPlugin(entry.package))
+      } catch {}
+      const fiber = runtime?.plugins.get(entry.package)
+      return {
+        package: entry.package,
+        version: entry.version,
+        manifest: entry.manifest,
+        enabled: !!configured?.enabled,
+        config: configured?.config ?? {},
+        configSchema,
+        status: configured?.enabled ? (runtime ? fiberStatus(fiber) : 'disabled') : 'disabled',
+        error: runtime?.pluginErrors.get(entry.package) ?? fiberError(fiber),
+      }
+    }))
+  }
+
+  async enablePlugin(id: string, name: string, config?: Record<string, any>) {
+    const record = this.get(id)
+    const plugin = await this.loadBotPlugin(name)
+    let entry = record.plugins.find((item) => item.package === name)
+    const nextConfig = config ?? entry?.config ?? {}
+    validatePluginConfig(plugin, nextConfig)
+    if (!entry) {
+      entry = { package: name, enabled: true, config: nextConfig }
+      record.plugins.push(entry)
+    }
+    entry.enabled = true
+    entry.config = nextConfig
+    await this.save()
+    this.reloadPlugin(id, entry, plugin)
+    return this.plugins(id).then((list) => list.find((item) => item.package === name))
+  }
+
+  async disablePlugin(id: string, name: string) {
+    const record = this.get(id)
+    const entry = record.plugins.find((item) => item.package === name)
+    if (!entry) throw new MushinError('not_found', `${name} is not configured on this bot`)
+    entry.enabled = false
+    await this.save()
+    const runtime = this.runtimes.get(id)
+    const fiber = runtime?.plugins.get(name)
+    runtime?.plugins.delete(name)
+    await fiber?.dispose()
+    return this.plugins(id).then((list) => list.find((item) => item.package === name))
+  }
+
+  async configurePlugin(id: string, name: string, config: Record<string, any>) {
+    const record = this.get(id)
+    const entry = record.plugins.find((item) => item.package === name)
+    if (!entry) return this.enablePlugin(id, name, config)
+    const plugin = await this.loadBotPlugin(name)
+    validatePluginConfig(plugin, config)
+    entry.config = config
+    await this.save()
+    if (entry.enabled) this.reloadPlugin(id, entry, plugin)
+    return this.plugins(id).then((list) => list.find((item) => item.package === name))
+  }
+
+  private reloadPlugin(id: string, entry: BotPluginEntry, plugin: Plugin) {
+    const runtime = this.runtimes.get(id)
+    if (!runtime?.ctx) return
+    runtime.plugins.get(entry.package)?.dispose()
+    runtime.pluginErrors.delete(entry.package)
+    runtime.plugins.set(entry.package, runtime.ctx.plugin(plugin, entry.config))
+  }
+
+  // ---- messages ----
+
+  private record(partial: Omit<MessageRecord, 'id' | 'type' | 'platforms'>): MessageRecord {
+    const record: MessageRecord = {
+      ...partial,
+      id: randomId(8),
+      type: messageType(partial.segments),
+      platforms: this.platformsFor(partial.segments),
+    }
+    let buffer = this.buffers.get(record.botId)
+    if (!buffer) this.buffers.set(record.botId, buffer = [])
+    buffer.push(record)
+    if (buffer.length > BUFFER_SIZE) buffer.splice(0, buffer.length - BUFFER_SIZE)
+    const day = new Date(record.timestamp).toISOString().slice(0, 10)
+    this.home.storage.append(`messages/${record.botId}/${day}`, record).catch((error) => {
+      this.home.logger('bots').warn('failed to write message log: %s', error)
+    })
+    this.home.emit('bots/message', record)
+    return record
+  }
+
+  async messages(id: string, options: { limit?: number; channel?: string } = {}) {
+    this.get(id)
+    const limit = options.limit ?? 100
+    let buffer = this.buffers.get(id)
+    if (!buffer) {
+      const day = new Date().toISOString().slice(0, 10)
+      buffer = await this.home.storage.tail<MessageRecord>(`messages/${id}/${day}`, BUFFER_SIZE)
+      this.buffers.set(id, buffer)
+    }
+    const list = options.channel ? buffer.filter((record) => record.channel.id === options.channel) : buffer
+    return list.slice(-limit)
+  }
+
+  /** Channels seen recently, newest first, for the live view's channel list. */
+  async channels(id: string) {
+    const seen = new Map<string, ChannelInfo & { lastAt: number; lastText: string }>()
+    for (const record of await this.messages(id, { limit: BUFFER_SIZE })) {
+      const key = `${record.channel.type}:${record.channel.id}`
+      const text = record.segments.map((s) => (s.type === 'text' ? s.data.text : `[${s.type}]`)).join('')
+      seen.set(key, { ...record.channel, name: record.channel.name ?? seen.get(key)?.name, lastAt: record.timestamp, lastText: text.slice(0, 80) })
+    }
+    return [...seen.values()].sort((a, b) => b.lastAt - a.lastAt)
+  }
+
+  async sendManual(id: string, channel: ChannelInfo, text: string) {
+    const bot = this.bot(id)
+    if (!bot) throw new MushinError('unavailable', 'The bot is not running')
+    return bot.deliver(channel, text, { source: { kind: 'manual' } })
+  }
+
+  // ---- actions ----
+
+  private *defineActions() {
+    const actions = this.home.actions
+
+    yield actions.define({
+      name: 'bots.adapters',
+      description: 'List loaded adapter types (e.g. "onebot") with their config JSON Schemas.',
+      risk: 'read',
+      input: z.object({}),
+      handler: () => this.adapters(),
+    })
+
+    yield actions.define({
+      name: 'bots.list',
+      description: 'List bots with their connection status, adapter and enabled plugins. Secrets are masked.',
+      risk: 'read',
+      input: z.object({}),
+      handler: () => this.list(),
+    })
+
+    yield actions.define({
+      name: 'bots.get',
+      description: 'Get one bot with its status.',
+      risk: 'read',
+      input: idInput,
+      handler: ({ id }) => this.describe(this.get(id)),
+    })
+
+    yield actions.define({
+      name: 'bots.create',
+      description: 'Create a bot and start it. For NapCat use adapter type "onebot" with mode "forward" (url of NapCat\'s WebSocket server, e.g. ws://127.0.0.1:3001) or mode "reverse" (NapCat connects to Mushin). Returns the bot with its id.',
+      risk: 'write',
+      input: z.object({
+        name: z.string().min(1),
+        adapter: adapterInput,
+        plugins: z.array(z.object({ package: z.string(), config: z.record(z.string(), z.any()).optional() })).optional()
+          .describe('Bot plugins to enable right away, e.g. @mushin/bot-plugin-llm-chat'),
+        enabled: z.boolean().optional(),
+        provider: z.string().optional().describe('Default provider id for this bot\'s LLM plugins'),
+      }),
+      handler: (input) => this.create(input),
+    })
+
+    yield actions.define({
+      name: 'bots.update',
+      description: 'Rename a bot, change its adapter connection or default provider. Restarts the bot if it is enabled.',
+      risk: 'write',
+      input: idInput.extend({
+        name: z.string().min(1).optional(),
+        adapter: adapterInput.optional(),
+        provider: z.string().nullable().optional(),
+      }),
+      handler: ({ id, ...patch }) => this.update(id, patch),
+    })
+
+    yield actions.define({
+      name: 'bots.delete',
+      description: 'Delete a bot and its settings. Message logs on disk are kept.',
+      risk: 'dangerous',
+      input: idInput,
+      handler: ({ id }) => this.remove(id),
+    })
+
+    yield actions.define({
+      name: 'bots.start',
+      description: 'Enable and start (or restart) a bot.',
+      risk: 'write',
+      input: idInput,
+      handler: ({ id }) => this.setEnabled(id, true),
+    })
+
+    yield actions.define({
+      name: 'bots.stop',
+      description: 'Stop and disable a bot.',
+      risk: 'write',
+      input: idInput,
+      handler: ({ id }) => this.setEnabled(id, false),
+    })
+
+    yield actions.define({
+      name: 'bots.plugins.list',
+      description: 'List every installed bot plugin with whether it is enabled on this bot, its config and status.',
+      risk: 'read',
+      input: idInput,
+      handler: ({ id }) => this.plugins(id),
+    })
+
+    yield actions.define({
+      name: 'bots.plugins.enable',
+      description: 'Enable a bot plugin on one bot, optionally with config.',
+      risk: 'write',
+      input: pluginInput.extend({ config: z.record(z.string(), z.any()).optional() }),
+      handler: ({ id, package: name, config }) => this.enablePlugin(id, name, config),
+    })
+
+    yield actions.define({
+      name: 'bots.plugins.disable',
+      description: 'Disable a bot plugin on one bot. Its config is kept.',
+      risk: 'write',
+      input: pluginInput,
+      handler: ({ id, package: name }) => this.disablePlugin(id, name),
+    })
+
+    yield actions.define({
+      name: 'bots.plugins.configure',
+      description: 'Replace a bot plugin\'s config on one bot and reload it.',
+      risk: 'write',
+      input: pluginInput.extend({ config: z.record(z.string(), z.any()) }),
+      handler: ({ id, package: name, config }) => this.configurePlugin(id, name, config),
+    })
+
+    yield actions.define({
+      name: 'bots.messages',
+      description: 'Recent messages of a bot, oldest first, with type, supported platforms and source.',
+      risk: 'read',
+      input: idInput.extend({
+        limit: z.number().int().min(1).max(BUFFER_SIZE).optional(),
+        channel: z.string().optional().describe('Group or user id to filter by'),
+      }),
+      handler: ({ id, ...options }) => this.messages(id, options),
+    })
+
+    yield actions.define({
+      name: 'bots.channels',
+      description: 'Channels (groups and private chats) a bot has seen recently.',
+      risk: 'read',
+      input: idInput,
+      handler: ({ id }) => this.channels(id),
+    })
+
+    yield actions.define({
+      name: 'bots.send',
+      description: 'Send a text message from a bot to a group or private chat.',
+      risk: 'write',
+      input: idInput.extend({
+        channel: z.object({ type: z.enum(['group', 'private']), id: z.string() }),
+        text: z.string().min(1),
+      }),
+      handler: ({ id, channel, text }) => this.sendManual(id, channel, text),
+    })
+  }
+}

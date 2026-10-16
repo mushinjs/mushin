@@ -1,0 +1,15 @@
+{
+  "name": "@mushin/core",
+  "version": "0.1.0",
+  "description": "Core types, action registry and plugin manager for Mushin.js",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "cordis": "catalog:",
+    "zod": "catalog:"
+  }
+}

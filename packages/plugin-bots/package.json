@@ -1,0 +1,30 @@
+{
+  "name": "@mushin/plugin-bots",
+  "version": "0.1.0",
+  "description": "Bot manager and per-bot runtimes",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "essential": true,
+    "displayName": {
+      "en": "Bots",
+      "zh-CN": "机器人"
+    },
+    "description": {
+      "en": "Creates bots and runs each in its own isolated context",
+      "zh-CN": "创建机器人，并为每个机器人运行独立的上下文"
+    }
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-storage": "workspace:*"
+  }
+}

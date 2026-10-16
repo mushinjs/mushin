@@ -1,0 +1,27 @@
+{
+  "name": "mushin-workspace",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.23.0",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "start": "mushin start --dir instance",
+    "dev": "pnpm --parallel --filter @mushin/cli --filter @mushin/dashboard run dev",
+    "demo": "pnpm --filter @mushin/cli demo",
+    "build": "pnpm --filter @mushin/dashboard build",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json && pnpm --filter @mushin/dashboard typecheck"
+  },
+  "dependencies": {
+    "@mushin/cli": "workspace:*",
+    "@mushin/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/ws": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "name": "@mushin/bot-plugin-echo",
+  "version": "0.1.0",
+  "description": "Echo bot plugin: the minimal example",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "bot",
+    "platforms": [
+      "onebot"
+    ],
+    "category": "example",
+    "displayName": {
+      "en": "Echo",
+      "zh-CN": "复读"
+    },
+    "description": {
+      "en": "Replies to \"echo <text>\" with the text",
+      "zh-CN": "收到「echo 内容」时原样回复内容"
+    }
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-bots": "workspace:*"
+  }
+}

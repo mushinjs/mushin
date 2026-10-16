@@ -1,0 +1,30 @@
+{
+  "name": "@mushin/plugin-agent",
+  "version": "0.1.0",
+  "description": "The Mushin.js Agent",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "displayName": {
+      "en": "Agent",
+      "zh-CN": "智能体"
+    },
+    "description": {
+      "en": "Operate Mushin.js through natural-language conversation",
+      "zh-CN": "通过自然语言对话操作 Mushin.js"
+    }
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-storage": "workspace:*",
+    "@mushin/plugin-providers": "workspace:*"
+  }
+}

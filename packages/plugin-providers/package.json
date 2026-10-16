@@ -1,0 +1,30 @@
+{
+  "name": "@mushin/plugin-providers",
+  "version": "0.1.0",
+  "description": "LLM provider management and the llm service",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "essential": true,
+    "displayName": {
+      "en": "Providers",
+      "zh-CN": "模型提供商"
+    },
+    "description": {
+      "en": "Manages LLM providers and exposes ctx.llm",
+      "zh-CN": "管理大模型提供商并提供 ctx.llm 服务"
+    }
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-storage": "workspace:*"
+  }
+}

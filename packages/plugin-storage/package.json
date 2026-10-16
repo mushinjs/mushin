@@ -1,0 +1,29 @@
+{
+  "name": "@mushin/plugin-storage",
+  "version": "0.1.0",
+  "description": "JSON document storage",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "essential": true,
+    "displayName": {
+      "en": "Storage",
+      "zh-CN": "存储"
+    },
+    "description": {
+      "en": "Stores providers, bots and sessions as JSON files",
+      "zh-CN": "以 JSON 文件保存提供商、机器人与会话"
+    }
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*"
+  }
+}
