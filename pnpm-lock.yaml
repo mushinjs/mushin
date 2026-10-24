@@ -168,6 +168,9 @@ importers:
       '@mushin/plugin-console':
         specifier: workspace:*
         version: link:../plugin-console
+      '@mushin/plugin-demo':
+        specifier: workspace:*
+        version: link:../plugin-demo
       '@mushin/plugin-flows':
         specifier: workspace:*
         version: link:../plugin-flows
@@ -311,6 +314,24 @@ importers:
       ws:
         specifier: 'catalog:'
         version: 8.22.0
+
+  packages/plugin-demo:
+    dependencies:
+      '@mushin/core':
+        specifier: workspace:*
+        version: link:../core
+      '@mushin/plugin-bots':
+        specifier: workspace:*
+        version: link:../plugin-bots
+      '@mushin/plugin-flows':
+        specifier: workspace:*
+        version: link:../plugin-flows
+      '@mushin/plugin-providers':
+        specifier: workspace:*
+        version: link:../plugin-providers
+      '@mushin/plugin-storage':
+        specifier: workspace:*
+        version: link:../plugin-storage
 
   packages/plugin-flows:
     dependencies:

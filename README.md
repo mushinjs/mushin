@@ -54,6 +54,14 @@ pnpm demo
 
 This starts an instance wired to a mock NapCat and a mock LLM, with a provider, two bots, some chat traffic and an Agent conversation already in place. Sign in with the token `demo`.
 
+To try things inside your own instance instead, enable **Demo** (`@mushin/plugin-demo`) on the **Plugins** page. It adds a *Demo (offline)* provider type that answers without an API key, a *Demo sandbox* bot adapter that is always online, and a *Wait for reply* flow node. Nothing is created until you tick it in the plugin's settings:
+
+- **Create the demo provider**: a provider of the offline type.
+- **Create the demo bot**: a sandbox bot. In its live conversation view you play the test user: what you send is received by the bot as the test user's message (start with `@` to mention the bot). The Agent can do the same with the `demo.say` action.
+- **Sample flows**: command menu (`/help`), command reply (`/ping`, `/echo`), keyword trigger, condition branch (`/score 85`), cooldown and counter (`/checkin`), wait for a reply with a timeout (`/quiz`), LLM reply (`/ai`) and intent classification (`/客服`). They run on the demo bot when it exists.
+
+Unticking an item deletes it, and disabling the plugin deletes everything it created. Edit a sample flow freely, but untick it before you disable the plugin if you want to keep a copy.
+
 ## Connecting NapCat
 
 Set NapCat's message format to `array` and use the same access token on both sides.
@@ -131,6 +139,7 @@ pnpm typecheck    # TypeScript for all packages, vue-tsc for the dashboard
 | `@mushin/plugin-console` | HTTP API, WebSocket, admin token, dashboard hosting |
 | `@mushin/plugin-flows` | Flow documents, node types, validation and the execution engine |
 | `@mushin/bot-plugin-echo`, `@mushin/bot-plugin-llm-chat`, `@mushin/bot-plugin-flows` | Bot plugins |
+| `@mushin/plugin-demo` | Offline demo provider, sandbox bot adapter and sample flows (opt-in) |
 | `@mushin/dashboard` | The Vue 3 dashboard |
 
 To write your own plugin, see [docs/plugin-guide.md](docs/plugin-guide.md).

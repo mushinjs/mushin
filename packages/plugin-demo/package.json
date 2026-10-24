@@ -1,0 +1,33 @@
+{
+  "name": "@mushin/plugin-demo",
+  "version": "0.1.0",
+  "description": "Demo content: an offline test provider, a sandbox bot and sample flows",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "category": "example",
+    "displayName": {
+      "en": "Demo",
+      "zh-CN": "演示"
+    },
+    "description": {
+      "en": "Adds an offline test provider and a sandbox bot adapter; pick a demo provider, bot and sample flows to create in its settings",
+      "zh-CN": "提供离线测试模型和沙盒机器人适配器；可在设置中勾选创建演示提供商、演示机器人和示例流程"
+    }
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-bots": "workspace:*",
+    "@mushin/plugin-flows": "workspace:*",
+    "@mushin/plugin-providers": "workspace:*",
+    "@mushin/plugin-storage": "workspace:*"
+  }
+}
