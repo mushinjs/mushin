@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { NButton, NCard, NInput, NList, NListItem, NModal, NSpace, NSpin, NSwitch, NTag, NThing, NTooltip, useMessage } from 'naive-ui'
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call, on } from '../api'
 import SchemaForm from '../components/SchemaForm.vue'
@@ -12,6 +12,7 @@ const { t, locale } = useI18n()
 const message = useMessage()
 
 const plugins = ref<AppPlugin[]>([])
+const appCatalog = ref<CatalogEntry[]>([])
 const botPlugins = ref<CatalogEntry[]>([])
 const loading = ref(true)
 const busy = ref<string>()
@@ -24,10 +25,11 @@ async function refresh(rescan = false) {
   try {
     const [list, catalog] = await Promise.all([
       call<AppPlugin[]>('plugins.list'),
-      call<CatalogEntry[]>('plugins.catalog', { kind: 'bot', refresh: rescan }),
+      call<CatalogEntry[]>('plugins.catalog', { refresh: rescan }),
     ])
     plugins.value = list
-    botPlugins.value = catalog
+    appCatalog.value = catalog.filter((entry) => entry.manifest.kind === 'app')
+    botPlugins.value = catalog.filter((entry) => entry.manifest.kind === 'bot')
   } catch (error) {
     message.error((error as Error).message)
   } finally {
@@ -36,6 +38,16 @@ async function refresh(rescan = false) {
 }
 
 onMounted(() => refresh())
+
+/** Configured entries, then installed app plugins that were never enabled (they have no entry id yet). */
+const appPlugins = computed<AppPlugin[]>(() => [
+  ...plugins.value,
+  ...appCatalog.value
+    .filter((entry) => !plugins.value.some((plugin) => plugin.package === entry.package))
+    .map((entry) => ({ id: '', package: entry.package, enabled: false, config: {}, manifest: entry.manifest, version: entry.version, status: 'disabled' as const })),
+])
+
+const keyOf = (plugin: AppPlugin) => plugin.id || plugin.package
 
 async function rescan() {
   loading.value = true
@@ -50,9 +62,9 @@ const off = on('manager/changed', () => {
 onBeforeUnmount(off)
 
 async function toggle(plugin: AppPlugin, enabled: boolean) {
-  busy.value = plugin.id
+  busy.value = keyOf(plugin)
   try {
-    if (enabled) await call('plugins.enable', { package: plugin.package, id: plugin.id })
+    if (enabled) await call('plugins.enable', { package: plugin.package, id: plugin.id || undefined })
     else await call('plugins.disable', { id: plugin.id })
     await refresh()
   } catch (error) {
@@ -110,7 +122,7 @@ async function save() {
     <NSpin :show="loading">
       <NCard :title="t('plugins.appPlugins')" class="section">
         <NList hoverable>
-          <NListItem v-for="plugin in plugins" :key="plugin.id">
+          <NListItem v-for="plugin in appPlugins" :key="keyOf(plugin)">
             <NThing>
               <template #header>
                 <NSpace align="center" :size="8">
@@ -130,11 +142,11 @@ async function save() {
             <template #suffix>
               <NSpace :wrap="false" align="center">
                 <NButton size="small" quaternary :disabled="!plugin.enabled" @click="reload(plugin)">{{ t('common.reload') }}</NButton>
-                <NButton size="small" quaternary @click="configure(plugin)">{{ t('common.configure') }}</NButton>
+                <NButton size="small" quaternary :disabled="!plugin.id" @click="configure(plugin)">{{ t('common.configure') }}</NButton>
                 <NSwitch
                   :value="plugin.enabled"
                   :disabled="plugin.manifest?.essential && plugin.enabled"
-                  :loading="busy === plugin.id"
+                  :loading="busy === keyOf(plugin)"
                   @update:value="(value: boolean) => toggle(plugin, value)"
                 />
               </NSpace>
