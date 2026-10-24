@@ -11,6 +11,12 @@ export type Middleware = (session: Session, next: () => Promise<void>) => Promis
 interface MiddlewareEntry {
   plugin: string
   callback: Middleware
+  priority: number
+}
+
+export interface MiddlewareOptions {
+  /** Higher runs earlier; plugins with the same priority run in registration order. Default 0. */
+  priority?: number
 }
 
 /** Supplied by the bot manager: `record` stores and broadcasts a message, `status` reports changes. */
@@ -138,11 +144,14 @@ export class Bot extends Service {
   }
 
   /** Registers middleware for incoming messages; runs in registration order. */
-  middleware(callback: Middleware) {
+  middleware(callback: Middleware, options: MiddlewareOptions = {}) {
     const ctx = this.ctx
-    const entry = { plugin: ctx.fiber.name, callback }
+    const entry: MiddlewareEntry = { plugin: ctx.fiber.name, callback, priority: options.priority ?? 0 }
     return ctx.effect(() => {
-      this.middlewares.push(entry)
+      // Insert after every entry with the same or higher priority, keeping registration order within a priority.
+      const index = this.middlewares.findIndex((item) => item.priority < entry.priority)
+      if (index < 0) this.middlewares.push(entry)
+      else this.middlewares.splice(index, 0, entry)
       return () => {
         const index = this.middlewares.indexOf(entry)
         if (index >= 0) this.middlewares.splice(index, 1)
