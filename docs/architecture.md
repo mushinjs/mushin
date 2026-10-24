@@ -1,6 +1,6 @@
 # Architecture (as built)
 
-The full design, including the plugin marketplace and the flow editor, lives in the design document *Mushin.js — Architecture & MVP Design*. This page records how the MVP implements it.
+The full design, including the plugin marketplace, lives in the design document *Mushin.js — Architecture & MVP Design*. This page records how the MVP implements it.
 
 ## Startup
 
@@ -17,7 +17,8 @@ root context
 │   └── ctx.isolate('bot') per bot
 │       ├── bot          the bot service
 │       ├── adapter connection
-│       └── enabled bot plugins
+│       └── enabled bot plugins (the flows runner among them)
+├── flows                @mushin/plugin-flows       node types, flow documents, engine
 ├── agent                @mushin/plugin-agent
 └── console              @mushin/plugin-console     REST, WebSocket, dashboard
 ```
@@ -36,9 +37,26 @@ Each bot runs in `ctx.isolate('bot')`, so `ctx.bot` in a bot plugin is always th
 
 - `session.send()` from middleware is attributed to the plugin that registered the middleware.
 - Sending an `LlmResult` (from `ctx.llm.chat()`) records provider, model, latency and tokens.
-- Any sender can pass an explicit `source`, which is how flows will report their node.
+- Any sender can pass an explicit `source`, which is how flows report the flow and node that replied (plus the provider and model when an LLM node wrote the text).
 
 Records go to a 500-entry memory buffer per bot, a daily JSONL log in `data/messages/<bot>/`, and the `bots/message` event that the console forwards to dashboards.
+
+## Flows
+
+A flow is a JSON document (`flows/<id>` in storage) with nodes, edges and the bots that run it. Every node has a type from the registry that `@mushin/plugin-flows` keeps (`ctx.flows.defineNode()`); the built-in types live in `packages/plugin-flows/src/nodes.ts`. A type is one of two kinds:
+
+| Kind | Ports | Runs |
+| --- | --- | --- |
+| `trigger` | One exec output, outputs | `match()` on every incoming message; a match starts a run |
+| `action` | One exec input, named exec outputs, inputs and outputs | When execution reaches it; returns which exec output to follow |
+
+Edges are control flow only: from an exec output `exec:<name>` to a node's exec input `exec`. Values move by reference (`src/refs.ts`): a node's `inputs` map each input to a string such as `{{n1.rest}}`, and strings in its config may contain references too. `{{<node id>.<output>}}` reads a node that already ran in this run, `{{sys.<name>}}` the incoming message, and `{{chat|user|flow|run.<name>}}` a stored variable. A string that is exactly one reference keeps the value's type; otherwise references are filled in as text. Inputs are then converted to their declared type (`text`, `number`, `boolean`, `message` or `any`). Documents saved with the older `out:<port>` → `in:<port>` data edges are converted when loaded or saved: each edge becomes a reference, and nodes that only fed data are spliced into the execution path before their first reader.
+
+`compile()` (`src/graph.ts`) checks a document whenever it is saved or run and reports issues: unknown types, config that fails the type's schema, edges to missing nodes or ports, references to missing nodes or outputs, missing triggers, and nodes no trigger reaches. A flow with errors is saved but does not run. `classify`-style nodes get their exec outputs from config (`execOutFrom`), and the dashboard computes ports the same way.
+
+At run time `@mushin/bot-plugin-flows` registers middleware with priority 10, ahead of plugins such as LLM chat. It hands each message to `ctx.flows.dispatch()`, which runs every flow attached to the bot whose trigger matches. A matching trigger consumes the message unless its `passThrough` option is on; only unconsumed messages reach the next middleware. A run is stopped after 200 steps or 60 seconds. Each run produces a trace (nodes visited with timings, inputs and outputs, edges taken, replies, error), kept in memory for the last 20 runs per flow and sent as the `flows/run` event, which the editor uses to highlight live paths. `flows.test` runs a made-up message through the same engine with a session whose `send` only records the text; with `nodeId` it stops after that node, which is how the editor executes one step.
+
+Variables have four scopes: `run` (this message), `chat`, `user` and `flow` (all three per bot). They are kept in memory.
 
 ## Agent
 
@@ -61,4 +79,4 @@ Dangerous actions pause the loop until the user approves or declines in the dash
 
 ## Tests
 
-`pnpm test` runs unit tests and an end-to-end suite that boots a real instance against a mock NapCat (forward and reverse WebSocket) and a mock OpenAI-compatible server. It covers plugin loading, provider masking and tests, bot lifecycle and isolation, plugin provenance, LLM replies, local plugins, and Agent tool calls with navigation relay and approval.
+`pnpm test` runs unit tests and an end-to-end suite that boots a real instance against a mock NapCat (forward and reverse WebSocket) and a mock OpenAI-compatible server. It covers plugin loading, provider masking and tests, bot lifecycle and isolation, plugin provenance, LLM replies, local plugins, Agent tool calls with navigation relay and approval, and flows running on a bot end to end. The flow engine and validator have their own unit tests in `packages/plugin-flows/tests`.

@@ -28,7 +28,9 @@
     "@mushin/plugin-agent": "workspace:*",
     "@mushin/plugin-console": "workspace:*",
     "@mushin/bot-plugin-echo": "workspace:*",
-    "@mushin/bot-plugin-llm-chat": "workspace:*"
+    "@mushin/bot-plugin-llm-chat": "workspace:*",
+    "@mushin/plugin-flows": "workspace:*",
+    "@mushin/bot-plugin-flows": "workspace:*"
   },
   "devDependencies": {
     "ws": "catalog:"

@@ -16,6 +16,7 @@ export function defaultConfig(): InstanceConfig {
       { id: 'provider-anthropic', package: '@mushin/plugin-provider-anthropic', config: {} },
       { id: 'bots', package: '@mushin/plugin-bots', config: {} },
       { id: 'adapter-onebot', package: '@mushin/plugin-adapter-onebot', config: {} },
+      { id: 'flows', package: '@mushin/plugin-flows', config: {} },
       { id: 'agent', package: '@mushin/plugin-agent', config: {} },
       { id: 'console', package: '@mushin/plugin-console', config: {} },
     ],
@@ -64,6 +65,13 @@ export async function start(options: StartOptions) {
   if (!config) {
     config = defaultConfig()
     await writeJsonAtomic(configPath, config)
+  } else {
+    // Built-in plugins added in newer versions join existing instances; entries the user disabled stay disabled.
+    const missing = defaultConfig().plugins.filter((entry) => !config!.plugins.some((item) => item.package === entry.package))
+    if (missing.length) {
+      config.plugins.push(...missing)
+      await writeJsonAtomic(configPath, config)
+    }
   }
   if (options.port !== undefined) {
     const server = config.plugins.find((entry) => entry.package === '@cordisjs/plugin-server')

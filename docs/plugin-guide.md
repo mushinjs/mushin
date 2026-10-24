@@ -130,6 +130,53 @@ Write descriptions for the Agent: say what the action does and what it returns. 
 
 Its manifest uses `"kind": "app"`. Enable it from the Plugins page or with the `plugins.enable` action; Mushin.js adds it to `mushin.config.json`.
 
+## Flow nodes
+
+An app plugin can add node types to the flow editor. Inject `flows` and call `ctx.flows.defineNode()`; the node appears in the editor's palette and in `flows.nodeTypes` for the Agent, and goes away when the plugin unloads.
+
+```ts
+import { type Context, z } from '@mushin/core'
+import type {} from '@mushin/plugin-flows'
+
+export const name = 'weather-nodes'
+export const inject = ['flows']
+
+export function apply(ctx: Context) {
+  ctx.flows.defineNode({
+    kind: 'action',
+    type: 'weather.lookup',
+    category: 'data',
+    title: { en: 'Weather', 'zh-CN': '天气' },
+    description: { en: 'Looks up the weather for a city' },
+    config: z.object({
+      units: z.enum(['metric', 'imperial']).default('metric'),
+    }),
+    inputs: [{ name: 'city', type: 'text', title: { en: 'City', 'zh-CN': '城市' } }],
+    outputs: [{ name: 'summary', type: 'text', title: { en: 'Summary', 'zh-CN': '概况' } }],
+    execOut: ['found', 'unknown'],
+    async run({ config, inputs, signal }) {
+      const response = await fetch(`https://example.com/weather?city=${encodeURIComponent(inputs.city ?? '')}&units=${config.units}`, { signal })
+      if (!response.ok) return { exec: 'unknown' }
+      const data = await response.json()
+      return { exec: 'found', outputs: { summary: data.summary } }
+    },
+  })
+}
+```
+
+Pick the kind by how the node runs:
+
+| Kind | Implement | Use for |
+| --- | --- | --- |
+| `trigger` | `match({ config, session, vars })` returns outputs when the message should start a run, or `undefined` | New ways to start a flow |
+| `action` | `run(context)` returns `{ exec, outputs }`; `exec` picks one of `execOut` (the first when omitted) | Every step: computing a value, calling an API, sending, waiting, branching |
+
+`run` gets the node's parsed `config`, its resolved `inputs`, the incoming `session` (`text`, `user`, `channel`, `send`, `reply`), `vars` for variables, `llm`, a `logger`, and a `signal` that aborts when the run is stopped. Users bind each input to a reference such as `{{n1.rest}}` in the editor; inputs arrive already converted to the port's type, and references in config strings are filled in before `run`. Later nodes read your outputs as `{{<node id>.<output>}}`. Port types are `text`, `number`, `boolean`, `message` and `any`.
+
+Reply through `session.send()` or `session.reply()` with a `source` of `{ kind: 'flow', flow: flow.name, node: node.label }` so the dashboard shows which node answered; see `action.reply` in `packages/plugin-flows/src/nodes.ts`. During a test run the session only records what would be sent, so nodes behave the same in tests. A node whose exec outputs depend on its settings, like Classify intent with one branch per label, sets `execOutFrom: { key: 'labels', extra: ['other'] }` instead of `execOut`.
+
+Write `title`, `description` and config field descriptions for both the user and the Agent: they are what the palette, the inspector and `flows.nodeTypes` show.
+
 ## Provider types and adapters
 
 - A provider type calls `ctx.llm.defineType({ id, displayName, config, secrets, presets, create })`. `create` returns a client with `chat()` and, optionally, `stream()` and `listModels()`. See `packages/plugin-provider-openai`.

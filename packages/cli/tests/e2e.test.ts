@@ -60,7 +60,7 @@ describe('plugin tree', () => {
 
   it('lists bot plugins in the catalog', async () => {
     const catalog = await app.call<any[]>('plugins.catalog', { kind: 'bot' })
-    expect(catalog.map((entry) => entry.package).sort()).toEqual(['@mushin/bot-plugin-echo', '@mushin/bot-plugin-llm-chat'])
+    expect(catalog.map((entry) => entry.package).sort()).toEqual(['@mushin/bot-plugin-echo', '@mushin/bot-plugin-flows', '@mushin/bot-plugin-llm-chat'])
     const server = (await app.call<any[]>('plugins.list')).find((p) => p.id === 'server')
     expect(server.manifest).toMatchObject({ essential: true })
   })

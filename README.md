@@ -13,10 +13,11 @@ Mushin.js is built on [Cordis](https://github.com/cordiverse/cordis). The MVP sh
 | Providers | OpenAI-compatible endpoints (OpenAI, DeepSeek, Moonshot, Qwen, SiliconFlow, OpenRouter, Ollama) and Anthropic. Keys are masked everywhere. |
 | Bots | Create, start, stop and configure bots; enable bot plugins per bot. |
 | OneBot adapter | OneBot v11 over WebSocket, in forward mode (Mushin dials NapCat) or reverse mode (NapCat dials Mushin). |
+| Conversation flows | A visual editor for bot behavior: wire triggers, conditions, variables, LLM calls and replies into a graph, test it with a made-up message, and watch live runs light up the path. The Agent can build flows too. |
 | Live conversation view | Messages appear as they arrive. Hover a message to see its type, supported platforms and what generated it (an LLM with provider and model, a plugin, or a flow). |
 | Dashboard | Vue 3 + Naive UI, English and Simplified Chinese, light and dark themes, works on phones. |
 
-The plugin marketplace and the visual flow editor are designed but not built yet; see [docs/architecture.md](docs/architecture.md).
+The plugin marketplace is designed but not built yet; see [docs/architecture.md](docs/architecture.md).
 
 ## Quick start
 
@@ -90,6 +91,25 @@ The LLM chat bot plugin checks these limits before every model call. Change them
 
 A chat also gets only one model call at a time; messages that arrive while a reply is being written are not answered. When a daily limit is reached, the Logs page says so once.
 
+## Conversation flows
+
+Open **Flows** in the dashboard and create a flow from a template, or ask the Agent ("when someone says hello, greet them and count visitors"). A flow is a graph of nodes:
+
+- **Connections** only say what runs next. Branching nodes have one output per outcome, listed on the right edge of the node, such as `true`/`false` or one per intent label.
+- **Values** move by reference, as in Dify: a node's input, or any text in its settings, can read `{{<node id>.<output>}}` from a node that ran earlier (for example `{{n1.rest}}` or `{{llm.reply}}`), `{{sys.text}}` / `{{sys.user}}` for the incoming message, and `{{chat.<name>}}`, `{{user.<name>}}`, `{{flow.<name>}}` for stored variables. Press **(x)** next to an input to pick one. Flows saved with the older data connections are converted on load.
+
+| Category | Nodes |
+| --- | --- |
+| Triggers | On message (any, mentions, private, group), Keyword, Pattern (regular expression) |
+| Logic | If, Compare (branches on true / false), Random chance, Cooldown, Wait |
+| Data | Text (with `{a}` `{b}` `{c}` `{user}` `{message}`), Message info, Get variable, Set variable, Add to number |
+| AI | Ask the LLM, Classify intent (one branch per label) |
+| Actions | Reply |
+
+Pick the bots that run a flow at the top of the editor; Mushin.js turns on the flows bot plugin for them. When a flow's trigger matches, the message stops there, so the bot's other plugins, such as LLM chat, don't answer it too. Turn on **Let other plugins answer too** on the trigger to change that. The **Logs** bar under the canvas sends a made-up message through the saved flow without sending anything to a chat (AI nodes do call the LLM) and lists every step with its input and output, as a table or JSON. **Execute step** on a node, or ▶ on its card, runs the same test but stops after that node. Recent live runs appear there too; pick one to highlight its path on the canvas.
+
+Variables live in memory and reset when Mushin.js restarts.
+
 ## Development
 
 ```sh
@@ -109,7 +129,8 @@ pnpm typecheck    # TypeScript for all packages, vue-tsc for the dashboard
 | `@mushin/plugin-adapter-onebot` | OneBot v11 adapter |
 | `@mushin/plugin-agent` | The Agent's tool loop |
 | `@mushin/plugin-console` | HTTP API, WebSocket, admin token, dashboard hosting |
-| `@mushin/bot-plugin-echo`, `@mushin/bot-plugin-llm-chat` | Bot plugins |
+| `@mushin/plugin-flows` | Flow documents, node types, validation and the execution engine |
+| `@mushin/bot-plugin-echo`, `@mushin/bot-plugin-llm-chat`, `@mushin/bot-plugin-flows` | Bot plugins |
 | `@mushin/dashboard` | The Vue 3 dashboard |
 
 To write your own plugin, see [docs/plugin-guide.md](docs/plugin-guide.md).
