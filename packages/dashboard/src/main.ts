@@ -20,5 +20,7 @@ on('logout', (reason: string) => {
   router.push({ path: '/login', query: { expired: '1', next: router.currentRoute.value.fullPath } })
 })
 
-createApp(App).use(createPinia()).use(router).use(i18n).mount('#app')
+const app = createApp(App).use(createPinia()).use(router).use(i18n)
+// Before the first route resolves, App cannot tell public pages from signed-in ones.
+router.isReady().then(() => app.mount('#app'))
 connect()
