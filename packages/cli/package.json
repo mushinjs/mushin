@@ -30,7 +30,8 @@
     "@mushin/bot-plugin-echo": "workspace:*",
     "@mushin/bot-plugin-llm-chat": "workspace:*",
     "@mushin/plugin-flows": "workspace:*",
-    "@mushin/bot-plugin-flows": "workspace:*"
+    "@mushin/bot-plugin-flows": "workspace:*",
+    "@mushin/plugin-demo": "workspace:*"
   },
   "devDependencies": {
     "ws": "catalog:"
