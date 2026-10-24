@@ -5,6 +5,7 @@ import {
 import type {} from '@cordisjs/plugin-server'
 import type {} from '@mushin/plugin-agent'
 import type {} from '@mushin/plugin-bots'
+import type {} from '@mushin/plugin-flows'
 import type {} from '@mushin/plugin-providers'
 import type {} from '@mushin/plugin-storage'
 import { AUTH_KEY, type AuthRecord, generateToken, isAuthRecord, tokensEqual } from './auth'
@@ -54,6 +55,7 @@ const CLIENT_CALL_TIMEOUT = 15_000
 const FORWARDED_EVENTS = [
   'actions/changed', 'manager/changed', 'providers/changed',
   'bots/changed', 'bots/status', 'bots/message', 'bots/log', 'agent/event',
+  'flows/changed', 'flows/run',
 ] as const
 
 const plainExporter: Exporter = { colors: false, export() {} }
@@ -308,7 +310,7 @@ export class Console extends Service {
 
     yield actions.define({
       name: 'ui.navigate',
-      description: 'Open a dashboard page in the user\'s browser, e.g. /bots/<bot id> or /providers.',
+      description: 'Open a dashboard page in the user\'s browser, e.g. /bots/<bot id>, /flows/<flow id> or /providers.',
       risk: 'read',
       client: true,
       input: z.object({ path: z.string().regex(/^\//).describe('Dashboard path starting with /') }),
@@ -316,7 +318,7 @@ export class Console extends Service {
 
     yield actions.define({
       name: 'ui.highlight',
-      description: 'Point at a control on the current dashboard page. Targets: providers.add, bots.add, bot.connection, bot.plugins, bot.live, bot.logs, agent.input.',
+      description: 'Point at a control on the current dashboard page. Targets: providers.add, bots.add, bot.connection, bot.plugins, bot.live, bot.logs, flows.add, flows.bots, flows.save, flows.test, agent.input.',
       risk: 'read',
       client: true,
       input: z.object({

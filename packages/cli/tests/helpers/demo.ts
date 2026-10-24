@@ -1,5 +1,5 @@
 // A local demo: a Mushin.js instance wired to a mock NapCat and a mock OpenAI-compatible LLM,
-// seeded with a provider, two bots, chat traffic and one Agent conversation.
+// seeded with a provider, two bots, a flow, chat traffic and one Agent conversation.
 // Run: pnpm --filter @mushin/cli exec tsx tests/helpers/demo.ts  (then open http://127.0.0.1:5160, token "demo")
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -37,9 +37,30 @@ const alpha = await call('bots.create', {
 await call('bots.create', { name: 'Beta', adapter: { type: 'onebot', config: { mode: 'reverse', token: 'secret' } } })
 while ((await call('bots.get', { id: alpha.id })).status !== 'online') await wait(50)
 
+await call('flows.create', {
+  name: 'Greeter',
+  description: 'Greets people who say hello and counts visitors, at most once every 10 seconds per chat.',
+  bots: [alpha.id],
+  nodes: [
+    { id: 'hello', type: 'trigger.keyword', config: { keywords: ['hello', 'hi there'], mode: 'startsWith' } },
+    { id: 'cooldown', type: 'logic.cooldown', config: { seconds: 10, scope: 'chat' } },
+    { id: 'count', type: 'data.increment', label: 'Visitor count', config: { name: 'visitors', scope: 'flow' } },
+    { id: 'reply', type: 'action.reply', config: { text: 'Hi {{sys.user}}! You are visitor #{{count.value}} today.' } },
+    { id: 'slow', type: 'action.reply', label: 'Slow down', config: { text: 'One moment, {{sys.user}}…' } },
+  ],
+  edges: [
+    { source: 'hello', sourceHandle: 'exec:next', target: 'cooldown', targetHandle: 'exec' },
+    { source: 'cooldown', sourceHandle: 'exec:ready', target: 'count', targetHandle: 'exec' },
+    { source: 'cooldown', sourceHandle: 'exec:cooling', target: 'slow', targetHandle: 'exec' },
+    { source: 'count', sourceHandle: 'exec:next', target: 'reply', targetHandle: 'exec' },
+  ],
+})
+
 napcat.pushGroupMessage('500', '42', [{ type: 'text', data: { text: 'echo hello, Mushin!' } }])
 await wait(300)
 napcat.pushGroupMessage('500', '43', [{ type: 'text', data: { text: 'nice' } }])
+await wait(300)
+napcat.pushGroupMessage('500', '44', [{ type: 'text', data: { text: 'hello everyone!' } }])
 await wait(300)
 napcat.pushGroupMessage('500', '43', [{ type: 'at', data: { qq: napcat.selfId } }, { type: 'text', data: { text: ' what is the weather like?' } }])
 await wait(500)

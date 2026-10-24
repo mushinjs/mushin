@@ -14,6 +14,10 @@
   },
   "dependencies": {
     "@vicons/ionicons5": "catalog:",
+    "@vue-flow/background": "catalog:",
+    "@vue-flow/controls": "catalog:",
+    "@vue-flow/core": "catalog:",
+    "@vue-flow/minimap": "catalog:",
     "naive-ui": "catalog:",
     "pinia": "catalog:",
     "vue": "catalog:",

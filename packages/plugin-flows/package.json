@@ -1,0 +1,31 @@
+{
+  "name": "@mushin/plugin-flows",
+  "version": "0.1.0",
+  "description": "Conversation flows: node registry, execution engine and flow storage",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "displayName": {
+      "en": "Conversation flows",
+      "zh-CN": "对话流程"
+    },
+    "description": {
+      "en": "Build bot behavior visually from nodes; other plugins can add node types",
+      "zh-CN": "用节点可视化地编排机器人行为；其他插件可以添加节点类型"
+    }
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-bots": "workspace:*",
+    "@mushin/plugin-providers": "workspace:*",
+    "@mushin/plugin-storage": "workspace:*"
+  }
+}

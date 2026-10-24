@@ -31,6 +31,7 @@
     "@cordisjs/plugin-server": "catalog:",
     "ws": "catalog:",
     "@mushin/dashboard": "workspace:*",
-    "@mushin/plugin-providers": "workspace:*"
+    "@mushin/plugin-providers": "workspace:*",
+    "@mushin/plugin-flows": "workspace:*"
   }
 }

@@ -28,7 +28,11 @@ const sourceDetail = computed(() => {
     case 'plugin':
       return [[t('hover.plugin'), s.plugin]]
     case 'flow':
-      return [[t('hover.flow'), s.flow], [t('hover.node'), s.node]]
+      return [
+        [t('hover.flow'), s.flow],
+        [t('hover.node'), s.node],
+        ...(s.model ? [[t('hover.provider'), s.provider ?? ''], [t('hover.model'), s.model]] : []),
+      ]
     case 'agent':
       return [[t('hover.session'), s.session]]
     default:

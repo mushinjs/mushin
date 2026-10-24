@@ -146,7 +146,7 @@ export type Provenance =
   | { kind: 'user' }
   | { kind: 'plugin'; plugin: string }
   | { kind: 'llm'; plugin?: string; provider: string; model: string; latencyMs: number; tokens?: number }
-  | { kind: 'flow'; flow: string; node: string }
+  | { kind: 'flow'; flow: string; node: string; provider?: string; model?: string }
   | { kind: 'agent'; session: string }
   | { kind: 'manual' }
 
@@ -218,4 +218,98 @@ export interface LogLine {
   type: string
   name: string
   text: string
+}
+
+export type PortType = 'text' | 'number' | 'boolean' | 'message' | 'any'
+export type NodeCategory = 'trigger' | 'logic' | 'data' | 'ai' | 'action'
+
+export interface PortDef {
+  name: string
+  type: PortType
+  title?: LocalizedText
+}
+
+export interface NodeTypeInfo {
+  type: string
+  kind: 'trigger' | 'action' | 'data'
+  category: NodeCategory
+  title: LocalizedText
+  description?: LocalizedText
+  plugin: string
+  configSchema?: JsonSchema
+  inputs: PortDef[]
+  outputs: PortDef[]
+  execIn: boolean
+  execOut: string[]
+  execOutFrom?: { key: string; extra?: string[] }
+}
+
+export interface FlowNodeDoc {
+  id: string
+  type: string
+  label?: string
+  position: { x: number; y: number }
+  config: Record<string, any>
+  inputs?: Record<string, string>
+}
+
+export interface FlowEdgeDoc {
+  id: string
+  source: string
+  sourceHandle: string
+  target: string
+  targetHandle: string
+}
+
+export interface FlowIssue {
+  severity: 'error' | 'warning'
+  message: string
+  nodeId?: string
+  edgeId?: string
+}
+
+export interface FlowDoc {
+  id: string
+  name: string
+  description?: string
+  bots: string[]
+  nodes: FlowNodeDoc[]
+  edges: FlowEdgeDoc[]
+  createdAt: number
+  updatedAt: number
+  issues: FlowIssue[]
+}
+
+export interface FlowSummary {
+  id: string
+  name: string
+  description?: string
+  bots: string[]
+  nodes: number
+  errors: number
+  warnings: number
+  updatedAt: number
+}
+
+export interface TraceStep {
+  nodeId: string
+  exec?: string
+  ms: number
+  inputs?: Record<string, unknown>
+  outputs?: Record<string, unknown>
+  error?: string
+}
+
+export interface RunTrace {
+  id: string
+  flowId: string
+  botId?: string
+  test: boolean
+  at: number
+  text: string
+  steps: TraceStep[]
+  edges: string[]
+  replies: string[]
+  stopAt?: string
+  error?: string
 }
