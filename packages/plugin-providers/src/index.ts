@@ -48,9 +48,15 @@ export class LlmService extends Service {
     this.home = ctx
   }
 
+  /** Provider lifecycle lines, tagged `provider` in the dashboard. Never includes config values. */
+  private get logger() {
+    return this.home.logger('provider')
+  }
+
   async *[Service.init]() {
     const stored = await this.home.storage.get<StoredProviders>(STORAGE_KEY)
     this.records = stored?.providers ?? []
+    this.logger.info('loaded %d provider(s)', this.records.length)
     yield* this.defineActions()
   }
 
@@ -60,9 +66,11 @@ export class LlmService extends Service {
     return ctx.effect(() => {
       if (this.typeStore.has(type.id)) throw new Error(`provider type "${type.id}" is already defined`)
       this.typeStore.set(type.id, type)
+      this.logger.info('provider type %s is available', type.id)
       ctx.emit('providers/changed')
       return () => {
         this.typeStore.delete(type.id)
+        this.logger.info('provider type %s was removed', type.id)
         for (const record of this.records) {
           if (record.type === type.id) this.clients.delete(record.id)
         }
@@ -144,6 +152,7 @@ export class LlmService extends Service {
     if (input.isDefault || !this.records.length) this.markDefault(record)
     this.records.push(record)
     await this.save()
+    this.logger.info('created provider %s', this.label(record))
     return this.redact(record)
   }
 
@@ -166,6 +175,7 @@ export class LlmService extends Service {
     record.lastTest = undefined
     this.clients.delete(id)
     await this.save()
+    this.logger.info('updated provider %s', this.label(record))
     return this.redact(record)
   }
 
@@ -175,6 +185,7 @@ export class LlmService extends Service {
     if (record.isDefault && this.records[0]) this.markDefault(this.records[0])
     this.clients.delete(id)
     await this.save()
+    this.logger.info('deleted provider %s', this.label(record))
     return { deleted: id }
   }
 
@@ -183,9 +194,14 @@ export class LlmService extends Service {
     record.isDefault = true
   }
 
+  private label(record: ProviderRecord) {
+    return `"${record.name}" (${record.type})`
+  }
+
   async setDefault(id: string) {
     this.markDefault(this.get(id))
     await this.save()
+    this.logger.info('default provider is now %s', this.label(this.get(id)))
     return this.redact(this.get(id))
   }
 
@@ -196,6 +212,7 @@ export class LlmService extends Service {
     const cached = this.clients.get(record.id)
     if (cached?.key === key) return cached.client
     const client = type.create(record.config)
+    this.logger.debug('created a client for provider %s', this.label(record))
     this.clients.set(record.id, { key, client })
     return client
   }
@@ -225,8 +242,13 @@ export class LlmService extends Service {
   async chat(options: LlmChatOptions): Promise<LlmResult> {
     const { record, model, client } = this.resolve(options)
     const start = Date.now()
-    const response = await client.chat({ ...options, model } satisfies ChatRequest)
-    return this.result(record, model, start, response)
+    try {
+      const response = await client.chat({ ...options, model } satisfies ChatRequest)
+      return this.result(record, model, start, response)
+    } catch (error) {
+      this.logRequestError(record, model, error)
+      throw error
+    }
   }
 
   /** Streams text deltas, then yields the final result. Falls back to `chat` for clients without streaming. */
@@ -234,16 +256,27 @@ export class LlmService extends Service {
     const { record, model, client } = this.resolve(options)
     const start = Date.now()
     const request: ChatRequest = { ...options, model }
-    if (!client.stream) {
-      const response = await client.chat(request)
-      if (response.text) yield { type: 'delta', text: response.text }
-      yield { type: 'result', result: this.result(record, model, start, response) }
-      return
+    try {
+      if (!client.stream) {
+        const response = await client.chat(request)
+        if (response.text) yield { type: 'delta', text: response.text }
+        yield { type: 'result', result: this.result(record, model, start, response) }
+        return
+      }
+      for await (const event of client.stream(request)) {
+        if (event.type === 'delta') yield event
+        else yield { type: 'result', result: this.result(record, model, start, event.response) }
+      }
+    } catch (error) {
+      this.logRequestError(record, model, error)
+      throw error
     }
-    for await (const event of client.stream(request)) {
-      if (event.type === 'delta') yield event
-      else yield { type: 'result', result: this.result(record, model, start, event.response) }
-    }
+  }
+
+  private logRequestError(record: ProviderRecord, model: string, error: unknown) {
+    // A caller that gave up (timeout, user stop) is not the provider's fault.
+    if (error instanceof Error && error.name === 'AbortError') return
+    this.logger.warn('request to %s (%s) failed: %s', this.label(record), model, error instanceof Error ? error.message : error)
   }
 
   async test(id: string): Promise<ProviderTest> {
@@ -259,6 +292,8 @@ export class LlmService extends Service {
     }
     record.lastTest = test
     await this.save()
+    if (test.ok) this.logger.info('provider %s passed its test in %d ms', this.label(record), test.latencyMs)
+    else this.logger.warn('provider %s failed its test: %s', this.label(record), test.error)
     return test
   }
 

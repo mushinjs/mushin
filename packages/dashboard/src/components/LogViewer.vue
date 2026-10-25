@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NButton, NCard, NInput, NRadioButton, NRadioGroup, NSpace, NSwitch } from 'naive-ui'
+import { NButton, NCard, NInput, NRadioButton, NRadioGroup, NSpace, NSwitch, NTag } from 'naive-ui'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { LogLine } from '../types'
@@ -12,6 +12,21 @@ const level = ref<'all' | 'info' | 'warn' | 'error'>('all')
 const query = ref('')
 const follow = ref(true)
 const box = ref<HTMLElement>()
+/** Selected source tags; none selected shows every source. */
+const tags = ref<string[]>([])
+
+const tagOrder = ['plugin', 'bot', 'adapter', 'flow', 'provider', 'agent', 'system', 'other']
+const tagOf = (line: LogLine) => line.tag ?? 'other'
+// Only sources that have lines get a chip, so a bot's log shows its own few.
+const presentTags = computed(() => {
+  const seen = new Set(props.lines.map(tagOf))
+  for (const tag of tags.value) seen.add(tag)
+  return tagOrder.filter((tag) => seen.has(tag))
+})
+
+function toggleTag(tag: string) {
+  tags.value = tags.value.includes(tag) ? tags.value.filter((item) => item !== tag) : [...tags.value, tag]
+}
 
 const rank: Record<string, number> = { error: 3, warn: 2, info: 1, debug: 0 }
 const minimum = { all: 0, info: 1, warn: 2, error: 3 }
@@ -20,7 +35,9 @@ const hasDebug = computed(() => props.lines.some((line) => line.type === 'debug'
 const visible = computed(() => {
   const min = minimum[level.value]
   const needle = query.value.toLowerCase()
+  const only = new Set(tags.value)
   return props.lines.filter((line) => (rank[line.type] ?? 1) >= min
+    && (!only.size || only.has(tagOf(line)))
     && (!needle || `${line.name} ${line.text}`.toLowerCase().includes(needle)))
 })
 
@@ -54,6 +71,21 @@ function time(ts: number) {
       </NSwitch>
       <NButton size="small" quaternary @click="emit('clear')">{{ t('logs.clear') }}</NButton>
     </NSpace>
+    <div v-if="presentTags.length > 1" class="tags" role="group" :aria-label="t('logs.tagsLabel')">
+      <span class="tags-label">{{ t('logs.tagsLabel') }}</span>
+      <NTag
+        v-for="tag in presentTags"
+        :key="tag"
+        size="small"
+        round
+        checkable
+        :checked="tags.includes(tag)"
+        @update:checked="toggleTag(tag)"
+      >
+        {{ t(`logs.tags.${tag}`) }}
+      </NTag>
+      <NButton v-if="tags.length" size="tiny" quaternary @click="tags = []">{{ t('logs.all') }}</NButton>
+    </div>
     <NCard content-style="padding: 0">
       <div ref="box" class="logs mono" role="log" aria-live="polite">
         <div v-for="line in visible" :key="line.sn" class="line" :class="line.type">
@@ -71,6 +103,20 @@ function time(ts: number) {
 <style scoped>
 .toolbar {
   margin-bottom: 12px;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.tags-label {
+  font-size: 12px;
+  opacity: 0.6;
+  margin-right: 2px;
 }
 
 .logs {

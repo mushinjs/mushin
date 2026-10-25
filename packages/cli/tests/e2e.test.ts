@@ -233,6 +233,20 @@ describe('bots over OneBot', () => {
     dashboard.close()
   })
 
+  it('writes tagged lifecycle lines to the global log', async () => {
+    const global = await app.call<any[]>('logs.recent', { limit: 1000 })
+    const has = (tag: string, pattern: RegExp) => global.some((line) => line.tag === tag && pattern.test(line.text))
+    expect(has('plugin', /^bots is active$/)).toBe(true)
+    expect(has('bot', /^started bot ".+" \(.+\) with the onebot adapter$/)).toBe(true)
+    expect(has('bot', /^bot ".+" \(.+\) is online$/)).toBe(true)
+    expect(has('provider', /^provider type openai is available$/)).toBe(true)
+    expect(has('flow', /^loaded \d+ flow\(s\)$/)).toBe(true)
+
+    const bots = await app.call<any[]>('logs.recent', { limit: 1000, tag: 'bot' })
+    expect(bots.length).toBeGreaterThan(0)
+    expect(bots.every((line) => line.tag === 'bot')).toBe(true)
+  })
+
   it('explains a rejected token in the status when no connection is live', async () => {
     const bot = await app.call('bots.create', {
       name: 'Delta',

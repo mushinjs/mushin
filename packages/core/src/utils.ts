@@ -80,3 +80,32 @@ export interface FieldText {
 export function field(title: string, description?: string, translations: Record<string, FieldText> = {}) {
   return { title, ...(description ? { description } : {}), 'x-i18n': translations }
 }
+
+/** Source category of a log line, for quick filters in the dashboard. */
+export const LOG_TAGS = ['plugin', 'bot', 'adapter', 'flow', 'provider', 'agent', 'system', 'other'] as const
+
+export type LogTag = typeof LOG_TAGS[number]
+
+const logTags: Record<string, LogTag> = {
+  plugin: 'plugin',
+  manager: 'plugin',
+  'llm-chat': 'plugin',
+  bot: 'bot',
+  bots: 'bot',
+  onebot: 'adapter',
+  flow: 'flow',
+  flows: 'flow',
+  provider: 'provider',
+  providers: 'provider',
+  llm: 'provider',
+  agent: 'agent',
+  app: 'system',
+  console: 'system',
+  server: 'system',
+  storage: 'system',
+}
+
+/** The tag of a logger name; `provider:openai` and `provider` share one. */
+export function logTag(name: string): LogTag {
+  return logTags[name.split(':')[0]] ?? 'other'
+}

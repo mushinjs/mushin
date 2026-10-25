@@ -346,6 +346,17 @@ const zhCN: typeof en = {
     noDebug: '隐藏调试',
     clear: '清空',
     empty: '没有日志',
+    tagsLabel: '来源',
+    tags: {
+      plugin: '插件',
+      bot: '机器人',
+      adapter: '适配器',
+      flow: '流程',
+      provider: '模型服务',
+      agent: '助手',
+      system: '系统',
+      other: '其他',
+    },
   },
   agent: {
     hello: '你好。告诉我你想设置什么，我来和你一起完成。',
