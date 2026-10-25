@@ -217,6 +217,22 @@ describe('commands', () => {
     await app.call('flows.delete', { id: first.id })
   })
 
+  it('shows where a message goes on a bot without sending it', async () => {
+    const flow = await app.call('flows.create', checkin('Routed'))
+    const sent = napcat.sent.length
+    const route = await app.call('flows.route', { bot: botId, text: '/checkin now' })
+    expect(route.triggers.find((slot: any) => slot.flowId === flow.id)).toMatchObject({ state: 'ran', keeps: true })
+    expect(route.replies).toEqual([{ from: 'Routed', text: 'checked in now' }])
+    expect(route.after).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'plugin', name: 'llm-chat', state: 'not-reached' })]))
+    const chat = await app.call('flows.route', { bot: botId, text: 'hello' })
+    expect(chat.triggers.find((slot: any) => slot.flowId === flow.id).state).toBe('no-match')
+    expect(chat.after.find((step: any) => step.name === 'llm-chat').state).toBe('receives')
+    const help = await app.call('flows.route', { bot: botId, text: '/help' })
+    expect(help.after.find((step: any) => step.kind === 'builtin')).toMatchObject({ state: 'answers', reply: expect.stringContaining('/checkin') })
+    expect(napcat.sent.length).toBe(sent)
+    await app.call('flows.delete', { id: flow.id })
+  })
+
   it('uses the bot\'s prefixes and turns the built-in help off without a restart', async () => {
     const flow = await app.call('flows.create', checkin('Prefixed'))
     await app.call('bots.update', { id: botId, commands: { prefixes: ['#'], help: false } })

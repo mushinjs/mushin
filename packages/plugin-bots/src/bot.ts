@@ -40,7 +40,7 @@ export type CommandHandler = (session: Session, args: Record<string, string | nu
 /** Replies from built-in commands such as `/help` are attributed to the bots plugin. */
 const BUILTIN_PLUGIN = 'bots'
 /** Built-in commands answer after flows (priority 10) and before plugins with the default priority. */
-const BUILTIN_PRIORITY = 5
+export const BUILTIN_PRIORITY = 5
 
 function isSourced(value: Sendable): value is SourcedContent {
   return typeof value === 'object' && value !== null && !Array.isArray(value) && !('type' in value)
@@ -252,6 +252,11 @@ export class Bot extends Service {
       }
       await handler(session, values.values, parsed)
     })
+  }
+
+  /** The plugins whose middleware sees incoming messages, in the order they see them. */
+  middlewareOrder() {
+    return this.middlewares.map(({ plugin, priority }) => ({ plugin, priority }))
   }
 
   /** Listens for adapter events that are not messages (notices, requests). */
