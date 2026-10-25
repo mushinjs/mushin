@@ -379,6 +379,7 @@ const iconOf = (nodeId: string) => {
   width: 240px;
   flex: none;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 8px;
   border-right: 1px solid rgba(127, 127, 127, 0.14);
   display: flex;
@@ -485,6 +486,7 @@ const iconOf = (nodeId: string) => {
   flex: 1;
   min-width: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: 8px 12px 12px;
 }
 

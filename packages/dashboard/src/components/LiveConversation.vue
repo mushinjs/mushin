@@ -146,6 +146,7 @@ async function send() {
   flex: none;
   border-right: 1px solid rgba(127, 127, 127, 0.18);
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .channels-empty {
@@ -230,6 +231,7 @@ async function send() {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 16px;
   display: flex;
   flex-direction: column;

@@ -226,6 +226,7 @@ function signOut() {
   flex: 1;
   min-width: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 .dock {

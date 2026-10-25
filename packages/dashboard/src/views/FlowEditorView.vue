@@ -1399,6 +1399,7 @@ watch(narrow, (value) => {
   width: 340px;
   flex: none;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 4px 14px 0;
   border-left: 1px solid rgba(127, 127, 127, 0.18);
   background: var(--flow-node-bg);
@@ -1550,6 +1551,7 @@ watch(narrow, (value) => {
   word-break: break-word;
   max-height: 160px;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 .narrow .side {
