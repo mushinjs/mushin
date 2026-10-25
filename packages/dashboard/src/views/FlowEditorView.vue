@@ -1,15 +1,13 @@
 <script setup lang="ts">
 import {
-  ArrowBackOutline, ChevronDownOutline, ChevronUpOutline, ConstructOutline, EyeOffOutline, EyeOutline, InformationCircleOutline, ListOutline, PlayOutline, TrashOutline,
+  ArrowBackOutline, BanOutline, ChevronDownOutline, ChevronUpOutline, ConstructOutline, InformationCircleOutline, ListOutline, PlayOutline, TrashOutline,
 } from '@vicons/ionicons5'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { type Connection, type Edge, type GraphNode, type Node, type OnConnectStartParams, useVueFlow, VueFlow } from '@vue-flow/core'
-import { MiniMap } from '@vue-flow/minimap'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
-import '@vue-flow/minimap/dist/style.css'
 import {
   type DropdownOption, NAlert, NButton, NDropdown, NEmpty, NForm, NFormItem, NIcon, NInput, NInputNumber, NSelect, NSwitch, NTabPane, NTabs, NTag, useMessage,
 } from 'naive-ui'
@@ -19,6 +17,7 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { call, on } from '../api'
 import { type CanvasNodeData, type FlowHighlight, flowEditorKey, type RunStatus } from '../components/flow/context'
 import FlowGroupBox from '../components/flow/FlowGroupBox.vue'
+import FlowMiniMap from '../components/flow/FlowMiniMap.vue'
 import FlowNodeCard from '../components/flow/FlowNodeCard.vue'
 import { nodeIcon } from '../components/flow/icons'
 import NodePalette from '../components/flow/NodePalette.vue'
@@ -41,7 +40,7 @@ const { isDark } = useTheme()
 const flowId = computed(() => String(route.params.id))
 
 const {
-  project, fitView, updateNodeInternals, findNode, getSelectedNodes, addSelectedNodes, removeSelectedNodes, viewport,
+  project, fitView, updateNodeInternals, findNode, getSelectedNodes, addSelectedNodes, removeSelectedNodes, viewport, getNodes,
 } = useVueFlow('flow-editor')
 
 const types = ref(new Map<string, NodeTypeInfo>())
@@ -90,6 +89,8 @@ const issuesByNode = computed(() => {
 const BOX = 'mushinGroup'
 const isBox = (node: { type?: string }) => node.type === BOX
 const isVirtual = (edge: { id: string }) => edge.id.startsWith('virt:')
+/** Edges drawn round a skipped step, from the steps before it to the ones after its first exit. Never saved. */
+const BYPASS = 'bypass:'
 const realNodes = computed(() => nodes.value.filter((node) => !isBox(node)))
 
 const order = computed(() => new Map(realNodes.value.map((node, index) => [node.id, index])))
@@ -144,17 +145,22 @@ const edgeColors: Record<RunStatus, string> = { running: '#2080f0', ok: '#18a058
  * moving dashed line, then green or red once that node succeeds or fails. Invalid edges are red
  * and dashed. Direction is left to right, so no arrowheads.
  */
-function edgeLook(edge: Pick<Edge, 'id'>): Partial<Edge> {
+function edgeLook(edge: Pick<Edge, 'id' | 'source' | 'target'>): Partial<Edge> {
   // A connection drawn to a collapsed group looks like the real one.
   const id = edge.id.replace(/^virt:/, '')
+  const bypass = id.startsWith(BYPASS)
   const status = highlight.value.edges.get(id)
   const broken = issues.value.some((issue) => issue.edgeId === id)
+  // A skipped node's own connections are dashed; runs go round it on the bypass drawn instead.
+  const skipped = !bypass && [edge.source, edge.target].some((node) => findNode(node)?.data?.skip)
   const color = status ? edgeColors[status] : broken ? '#d03050' : '#8c8c8c'
+  const dashed = (broken && !status) || skipped
   return {
     type: 'default',
     animated: status === 'running',
-    class: status ? `edge-${status}` : undefined,
-    style: { stroke: color, strokeWidth: status ? 2.5 : 2, ...(broken && !status ? { strokeDasharray: '4 4' } : {}) },
+    updatable: !edge.id.startsWith('virt:'),
+    class: [status ? `edge-${status}` : '', skipped ? 'edge-skipped' : '', bypass ? 'edge-bypass' : ''].filter(Boolean).join(' ') || undefined,
+    style: { stroke: color, strokeWidth: status ? 2.5 : 2, ...(dashed ? { strokeDasharray: skipped ? '6 5' : '4 4' } : {}), ...(skipped && !status ? { opacity: 0.6 } : {}) },
   }
 }
 
@@ -254,6 +260,33 @@ function isValidConnection(connection: Connection) {
   const toBox = connection.target.startsWith('group:')
   return (fromBox ? connection.sourceHandle === 'out' : parseHandle(connection.sourceHandle)?.kind === 'exec-out')
     && (toBox ? connection.targetHandle === 'exec' : parseHandle(connection.targetHandle)?.kind === 'exec-in')
+}
+
+// Dragging an end of a connection moves it to another handle; dropping it on empty canvas removes it.
+let edgeMoved = false
+/** Set while an existing connection's end is dragged, so dropping it does not offer new nodes. */
+let updatingEdge = false
+
+function onEdgeUpdateStart() {
+  edgeMoved = false
+  updatingEdge = true
+}
+
+function onEdgeUpdate({ edge, connection }: { edge: Edge; connection: Connection }) {
+  if (isVirtual(edge) || !isValidConnection(connection)) return
+  if (connection.source.startsWith('group:') || connection.target.startsWith('group:')) return
+  edgeMoved = true
+  edges.value = edges.value.map((item) => {
+    if (item.id !== edge.id) return item
+    const next = { ...item, source: connection.source, sourceHandle: connection.sourceHandle ?? '', target: connection.target, targetHandle: connection.targetHandle ?? '' }
+    return { ...next, ...edgeLook(next) }
+  })
+}
+
+function onEdgeUpdateEnd({ edge }: { edge: Edge }) {
+  requestAnimationFrame(() => (updatingEdge = false))
+  if (edgeMoved || isVirtual(edge)) return
+  edges.value = edges.value.filter((item) => item.id !== edge.id)
 }
 
 function onConnect(connection: Connection) {
@@ -689,6 +722,7 @@ function toggleSkip(ids: string[]) {
     const { skip: _, ...data } = node.data!
     return { ...node, data: skip ? { ...data, skip: true } : data }
   })
+  nextTick(restyleEdges)
 }
 
 /**
@@ -752,7 +786,7 @@ function syncGroups() {
   })
   const realEdges = edges.value.filter((edge) => !isVirtual(edge))
   const seen = new Set<string>()
-  const drawn = realEdges.flatMap((edge) => {
+  const drawn: Edge[] = realEdges.flatMap((edge): Edge[] => {
     const from = owner.get(edge.source)
     const to = owner.get(edge.target)
     if ((!from && !to) || from === to) return []
@@ -770,6 +804,12 @@ function syncGroups() {
     seen.add(key)
     return [{ ...item, ...edgeLook(item) }]
   })
+  drawn.push(...bypassEdges(real, realEdges, owner).filter((item) => {
+    const key = `${item.source}|${item.sourceHandle}|${item.target}|${item.targetHandle}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  }))
   const nextNodes = [...real, ...boxes]
   const nodesChanged = nextNodes.length !== nodes.value.length || nextNodes.some((node, index) => node !== nodes.value[index])
   const nextEdges = [...realEdges, ...drawn]
@@ -786,10 +826,65 @@ function syncGroups() {
   }
 }
 
-// Re-sync when groups fold or unfold, or nodes and connections around them change.
+/**
+ * Runs pass straight through a skipped step to its first exit, so the canvas draws that path: from
+ * each step that leads into a skipped one (through any skipped steps before it) to the first steps
+ * after it that are not skipped. Nodes inside collapsed groups are left to the group box.
+ */
+function bypassEdges(real: Node<CanvasNodeData>[], realEdges: Edge[], owner: Map<string, string>) {
+  const byId = new Map(real.map((node) => [node.id, node]))
+  const skipped = (id: string) => !!byId.get(id)?.data?.skip && types.value.get(byId.get(id)!.data!.typeId)?.kind !== 'trigger'
+  if (!real.some((node) => skipped(node.id))) return []
+  const firstExit = (id: string) => {
+    const node = byId.get(id)
+    const info = node && types.value.get(node.data!.typeId)
+    return info ? execOutHandle(portsOf(info, node.data!.config).execOut[0] ?? 'next') : undefined
+  }
+  /** The first steps that are not skipped after a skipped one, following first exits. */
+  const after = (id: string, seen = new Set<string>()): string[] => {
+    if (seen.has(id)) return []
+    seen.add(id)
+    const exit = firstExit(id)
+    return realEdges.filter((edge) => edge.source === id && edge.sourceHandle === exit)
+      .flatMap((edge) => (skipped(edge.target) ? after(edge.target, seen) : [edge.target]))
+  }
+  /** The exits that lead into a skipped step, through skipped steps before it. */
+  const before = (id: string, seen = new Set<string>()): Edge[] => {
+    if (seen.has(id)) return []
+    seen.add(id)
+    return realEdges.filter((edge) => edge.target === id)
+      .flatMap((edge) => (skipped(edge.source) ? (edge.sourceHandle === firstExit(edge.source) ? before(edge.source, seen) : []) : [edge]))
+  }
+  const drawn: Edge[] = []
+  for (const node of real) {
+    if (!skipped(node.id) || owner.has(node.id)) continue
+    // Only the outermost skipped step of a chain draws, so a chain gets one bypass.
+    if (realEdges.some((edge) => edge.target === node.id && skipped(edge.source))) continue
+    for (const from of before(node.id)) {
+      for (const target of after(node.id)) {
+        if (owner.has(from.source) || owner.has(target)) continue
+        if (realEdges.some((edge) => edge.source === from.source && edge.sourceHandle === from.sourceHandle && edge.target === target)) continue
+        const item = {
+          id: `virt:${BYPASS}${from.source}:${from.sourceHandle}:${target}`,
+          source: from.source,
+          sourceHandle: from.sourceHandle,
+          target,
+          targetHandle: 'exec',
+          selectable: false,
+          deletable: false,
+          updatable: false,
+        }
+        drawn.push({ ...item, ...edgeLook(item), updatable: false } as Edge)
+      }
+    }
+  }
+  return drawn
+}
+
+// Re-sync when groups fold or unfold, nodes are skipped, or nodes and connections around them change.
 watch(() => JSON.stringify([
   groups.value.map((group) => [group.id, !!group.collapsed, group.nodes]),
-  realNodes.value.map((node) => node.id),
+  realNodes.value.map((node) => [node.id, !!node.data!.skip]),
   edges.value.filter((edge) => !isVirtual(edge)).map((edge) => edge.id),
 ]), syncGroups)
 
@@ -1132,7 +1227,7 @@ function onConnectStart(params: OnConnectStartParams) {
 function onConnectEnd(event?: MouseEvent | TouchEvent) {
   const params = dragged
   dragged = undefined
-  if (!params?.nodeId || !event) return
+  if (!params?.nodeId || !event || updatingEdge) return
   const point = 'changedTouches' in event ? event.changedTouches[0] : event
   if (!point) return
   const below = document.elementFromPoint(point.clientX, point.clientY)
@@ -1293,6 +1388,25 @@ const nodeName = (id: string) => {
   const node = nodes.value.find((item) => item.id === id)
   return node ? node.data!.label || typeTitle(node.data!.typeId) : id
 }
+/** Room kept around the nodes, in canvas units: panning stops there, and the minimap shows it. */
+const CANVAS_MARGIN = 480
+const UNBOUNDED: [[number, number], [number, number]] = [[-Infinity, -Infinity], [Infinity, Infinity]]
+
+/** The canvas: the area the nodes take up plus a margin. Empty flows are not bounded. */
+const extent = computed<[[number, number], [number, number]]>(() => {
+  const shown = getNodes.value.filter((node) => !node.hidden)
+  if (!shown.length) return UNBOUNDED
+  let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity]
+  for (const node of shown) {
+    const { x, y } = node.computedPosition
+    x0 = Math.min(x0, x)
+    y0 = Math.min(y0, y)
+    x1 = Math.max(x1, x + (node.dimensions.width || 240))
+    y1 = Math.max(y1, y + (node.dimensions.height || 80))
+  }
+  return [[x0 - CANVAS_MARGIN, y0 - CANVAS_MARGIN], [x1 + CANVAS_MARGIN, y1 + CANVAS_MARGIN]]
+})
+
 const minimapColor = (node: Node<CanvasNodeData>) => {
   const info = types.value.get(node.data?.typeId ?? '')
   return info ? categoryColors[info.category] : '#8c8c8c'
@@ -1444,6 +1558,11 @@ watch(narrow, (value) => {
             :min-zoom="0.2"
             :max-zoom="2"
             :default-edge-options="{ type: 'default' }"
+            :edges-updatable="true"
+            :translate-extent="extent"
+            @edge-update-start="onEdgeUpdateStart"
+            @edge-update="onEdgeUpdate"
+            @edge-update-end="onEdgeUpdateEnd"
             @connect="onConnect"
             @connect-start="onConnectStart"
             @connect-end="onConnectEnd"
@@ -1496,9 +1615,9 @@ watch(narrow, (value) => {
                 </div>
               </div>
             </template>
-            <Background :gap="20" :pattern-color="isDark ? '#3a3a40' : '#d9d9d9'" />
+            <Background :gap="20" :size="1.4" :pattern-color="isDark ? '#5c5c66' : '#bdbdbd'" />
             <Controls />
-            <MiniMap v-if="!narrow" pannable zoomable :node-color="minimapColor" :mask-color="isDark ? 'rgba(20, 20, 24, 0.7)' : undefined" />
+            <FlowMiniMap v-if="!narrow && realNodes.length" :extent="extent" :node-color="minimapColor" :dark="isDark" />
           </VueFlow>
           <div v-if="loaded && !nodes.length" class="canvas-empty">{{ t('flows.emptyCanvas') }}</div>
           <NDropdown
@@ -1556,21 +1675,20 @@ watch(narrow, (value) => {
                   circle
                   size="small"
                   :type="selected.data!.skip ? 'warning' : 'default'"
-                  :title="selected.data!.skip ? t('flows.unskipNode') : t('flows.skipNodeHint')"
+                  :title="selected.data!.skip ? t('flows.unskipNode') : `${t('flows.skipNode')}：${t('flows.skipNodeHint')}`"
                   :aria-label="selected.data!.skip ? t('flows.unskipNode') : t('flows.skipNode')"
                   :aria-pressed="!!selected.data!.skip"
                   data-agent-target="flows.skipNode"
                   @click="toggleSkip([selected.id])"
                 >
-                  <template #icon><NIcon><EyeOffOutline v-if="selected.data!.skip" /><EyeOutline v-else /></NIcon></template>
+                  <template #icon><NIcon><BanOutline /></NIcon></template>
                 </NButton>
                 <NButton quaternary circle size="small" type="error" :title="t('flows.deleteNode')" :aria-label="t('flows.deleteNode')" @click="deleteSelected">
                   <template #icon><NIcon><TrashOutline /></NIcon></template>
                 </NButton>
               </div>
 
-              <NAlert v-if="selected.data!.skip" type="warning" :show-icon="false" class="skip-note">{{ t('flows.skippedNote') }}</NAlert>
-              <NAlert v-else-if="inheritedSkip.get(selected.id)" type="warning" :show-icon="false" class="skip-note">
+              <NAlert v-if="!selected.data!.skip && inheritedSkip.get(selected.id)" type="warning" :show-icon="false" class="skip-note">
                 {{ t('flows.inheritedSkip', { name: inheritedSkip.get(selected.id) }) }}
               </NAlert>
               <NAlert v-if="blockedNodes.get(selected.id)" type="warning" :show-icon="false" class="skip-note">
@@ -1863,6 +1981,17 @@ watch(narrow, (value) => {
   border: 1px solid rgba(127, 127, 127, 0.4);
   background: var(--flow-node-bg, #fff);
   color: inherit;
+}
+
+/* A selected connection stands out, so it can be deleted with Delete or from its menu. */
+.canvas :deep(.vue-flow__edge.selected path.vue-flow__edge-path) {
+  stroke: #2080f0 !important;
+  stroke-width: 3 !important;
+}
+
+/* The path a run takes round a skipped step. */
+.canvas :deep(.vue-flow__edge.edge-bypass) {
+  pointer-events: none;
 }
 
 /* A running edge is a moving dashed line; Vue Flow animates the dashes. */
