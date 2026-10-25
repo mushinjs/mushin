@@ -260,6 +260,9 @@ importers:
       '@mushin/plugin-bots':
         specifier: workspace:*
         version: link:../plugin-bots
+      '@mushin/plugin-flows':
+        specifier: workspace:*
+        version: link:../plugin-flows
       ws:
         specifier: 'catalog:'
         version: 8.22.0

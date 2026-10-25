@@ -25,6 +25,7 @@
   "dependencies": {
     "@mushin/core": "workspace:*",
     "@mushin/plugin-bots": "workspace:*",
+    "@mushin/plugin-flows": "workspace:*",
     "@cordisjs/plugin-server": "catalog:",
     "ws": "catalog:"
   }

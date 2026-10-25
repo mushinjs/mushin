@@ -2,8 +2,12 @@ import { WebSocket } from 'ws'
 import { type Context, field, z } from '@mushin/core'
 import type {} from '@mushin/plugin-bots'
 import type {} from '@cordisjs/plugin-server'
+import type {} from '@mushin/plugin-flows'
+import { onebotNodes } from './nodes'
 import { ONEBOT_SEGMENTS, OneBotConnection } from './protocol'
 
+export * from './events'
+export * from './nodes'
 export * from './protocol'
 
 export const name = 'adapter-onebot'
@@ -247,5 +251,9 @@ export function apply(ctx: Context) {
     secrets: ['token'],
     segments: ONEBOT_SEGMENTS,
     plugin: Connection,
+  })
+  // Flow nodes for OneBot events and APIs, while the flows plugin is running.
+  ctx.inject(['flows'], (ctx) => {
+    for (const node of onebotNodes) ctx.flows.defineNode(node)
   })
 }

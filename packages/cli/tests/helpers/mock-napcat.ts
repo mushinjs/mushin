@@ -16,6 +16,8 @@ export async function createMockNapCat(options: { token?: string; selfId?: strin
   const sent: SentCall[] = []
   const sockets = new Set<WebSocket>()
   let messageId = 1000
+  /** Canned responses by action: data, a function of the params, or a failure. */
+  const responses = new Map<string, any>()
 
   const handle = (socket: WebSocket) => {
     sockets.add(socket)
@@ -26,6 +28,15 @@ export async function createMockNapCat(options: { token?: string; selfId?: strin
       let data: any = {}
       if (action === 'get_login_info') data = { user_id: Number(selfId), nickname }
       if (action === 'send_group_msg' || action === 'send_private_msg') data = { message_id: ++messageId }
+      if (responses.has(action)) {
+        const canned = responses.get(action)
+        const value = typeof canned === 'function' ? canned(params) : canned
+        if (value?.failed) {
+          socket.send(JSON.stringify({ status: 'failed', retcode: value.retcode ?? 1400, data: null, message: value.message ?? 'failed', wording: value.message ?? 'failed', echo }))
+          return
+        }
+        data = value
+      }
       socket.send(JSON.stringify({ status: 'ok', retcode: 0, data, echo }))
     })
     socket.send(JSON.stringify({ time: Math.floor(Date.now() / 1000), self_id: Number(selfId), post_type: 'meta_event', meta_event_type: 'lifecycle', sub_type: 'connect' }))
@@ -67,12 +78,30 @@ export async function createMockNapCat(options: { token?: string; selfId?: strin
         socket.once('unexpected-response', (_req, res) => reject(new Error(`HTTP ${res.statusCode}`)))
       })
     },
-    pushGroupMessage(groupId: string, userId: string, message: { type: string; data: object }[]) {
+    pushGroupMessage(groupId: string, userId: string, message: { type: string; data: object }[], sender: { role?: string; card?: string } = {}) {
+      const id = ++messageId
       broadcast({
         time: Math.floor(Date.now() / 1000), self_id: Number(selfId), post_type: 'message', message_type: 'group',
-        sub_type: 'normal', message_id: ++messageId, group_id: Number(groupId), user_id: Number(userId),
-        message, raw_message: '', font: 0, sender: { user_id: Number(userId), nickname: `user${userId}`, card: '' },
+        sub_type: 'normal', message_id: id, group_id: Number(groupId), user_id: Number(userId),
+        message, raw_message: '', font: 0, sender: { user_id: Number(userId), nickname: `user${userId}`, card: sender.card ?? '', ...(sender.role ? { role: sender.role } : {}) },
       })
+      return id
+    },
+    /** A private message in a temporary chat started from a group (sub_type "group"). */
+    pushTempMessage(groupId: string, userId: string, message: { type: string; data: object }[]) {
+      broadcast({
+        time: Math.floor(Date.now() / 1000), self_id: Number(selfId), post_type: 'message', message_type: 'private',
+        sub_type: 'group', temp_source: 0, message_id: ++messageId, group_id: Number(groupId), user_id: Number(userId),
+        message, raw_message: '', font: 0, sender: { user_id: Number(userId), nickname: `user${userId}` },
+      })
+    },
+    /** Sends a raw event (notice, request, meta) with time and self_id filled in. */
+    push(payload: Record<string, any>) {
+      broadcast({ time: Math.floor(Date.now() / 1000), self_id: Number(selfId), ...payload })
+    },
+    /** Answers an action with fixed data, a function of its params, or `{ failed: true, retcode, message }`. */
+    respond(action: string, value: any) {
+      responses.set(action, value)
     },
     pushPrivateMessage(userId: string, message: { type: string; data: object }[]) {
       broadcast({
