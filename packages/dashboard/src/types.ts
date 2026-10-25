@@ -221,7 +221,7 @@ export interface LogLine {
 }
 
 export type PortType = 'text' | 'number' | 'boolean' | 'message' | 'any'
-export type NodeCategory = 'trigger' | 'logic' | 'data' | 'ai' | 'action'
+export type NodeCategory = 'trigger' | 'event' | 'logic' | 'data' | 'ai' | 'action' | 'manage' | 'platform'
 
 export interface PortDef {
   name: string
@@ -310,6 +310,10 @@ export interface RunTrace {
   steps: TraceStep[]
   edges: string[]
   replies: string[]
+  /** Platform API calls; in test runs recorded but not made. */
+  calls?: { action: string; params: Record<string, any>; error?: string }[]
+  /** What started the run when it was not a message: an event name, or `schedule`. */
+  event?: string
   stopAt?: string
   error?: string
 }

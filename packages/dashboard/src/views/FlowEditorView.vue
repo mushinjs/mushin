@@ -19,7 +19,7 @@ import { type CanvasNodeData, type FlowHighlight, flowEditorKey } from '../compo
 import FlowNodeCard from '../components/flow/FlowNodeCard.vue'
 import { nodeIcon } from '../components/flow/icons'
 import NodePalette from '../components/flow/NodePalette.vue'
-import RunLogs from '../components/flow/RunLogs.vue'
+import RunLogs, { type TestInput } from '../components/flow/RunLogs.vue'
 import VarInput from '../components/flow/VarInput.vue'
 import SchemaForm from '../components/SchemaForm.vue'
 import { categoryColors, parseHandle, portColors, portsOf, refOf, refsIn, schemaDefaults, sysPorts } from '../flow'
@@ -348,13 +348,46 @@ const off = on('flows/run', (trace: RunTrace) => {
 })
 onBeforeUnmount(off)
 
-const test = ref({ text: '', userName: '', private: false, mentioned: false })
+const test = ref<TestInput>({
+  text: '', userName: '', private: false, mentioned: false, mode: 'message', eventName: '', eventData: '{}', schedule: '', replies: '',
+})
 const testing = ref(false)
+const schedules = computed(() => nodes.value
+  .filter((node) => node.data?.typeId === 'trigger.schedule')
+  .map((node) => ({ id: node.id, name: nodeName(node.id) })))
+
+/** The flows.test input for the current test settings, or undefined when something is missing. */
+function testPayload() {
+  const { mode, text, userName, mentioned, eventName, eventData, schedule, replies } = test.value
+  const answers = replies.split('\n').map((line) => line.trim()).filter(Boolean)
+  const common = answers.length ? { replies: answers } : {}
+  if (mode === 'event') {
+    if (!eventName.trim()) return
+    let data: unknown
+    try {
+      data = JSON.parse(eventData || '{}')
+    } catch {
+      data = undefined
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error(t('flows.testEventInvalid'))
+    return { event: { name: eventName.trim(), data }, userName, ...common }
+  }
+  if (mode === 'schedule') return schedule ? { schedule, ...common } : undefined
+  if (!text.trim()) return
+  return { text, userName, private: test.value.private, mentioned, ...common }
+}
 
 /** Runs the saved flow with the test message; with a node, only the path up to that node runs. */
 async function runTest(nodeId?: string) {
   if (testing.value) return
-  if (!test.value.text.trim()) {
+  let payload: ReturnType<typeof testPayload>
+  try {
+    payload = testPayload()
+  } catch (error) {
+    message.error((error as Error).message)
+    return
+  }
+  if (!payload) {
     message.info(t('flows.testNeedsMessage'))
     showLogs.value = true
     await nextTick()
@@ -366,7 +399,7 @@ async function runTest(nodeId?: string) {
   try {
     // Tests run the saved flow, so save pending edits first.
     if (dirty.value) await save()
-    const result = await call<{ matched: boolean; trace: RunTrace }>('flows.test', { id: flowId.value, ...test.value, nodeId })
+    const result = await call<{ matched: boolean; trace: RunTrace }>('flows.test', { id: flowId.value, ...payload, nodeId })
     if (!runs.value.some((run) => run.id === result.trace.id)) runs.value = [result.trace, ...runs.value].slice(0, 20)
     showTrace(result.trace)
     await nextTick()
@@ -547,6 +580,7 @@ watch(narrow, (value) => {
           v-model:test="test"
           v-model:open="showLogs"
           :runs="runs"
+          :schedules="schedules"
           :testing="testing"
           :node-name="nodeName"
           :node-type="nodeType"
