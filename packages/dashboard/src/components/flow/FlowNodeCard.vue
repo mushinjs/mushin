@@ -28,6 +28,8 @@ const color = computed(() => (info.value ? categoryColors[info.value.category] :
 const icon = computed(() => nodeIcon(props.data.typeId, info.value?.category))
 const number = computed(() => String((editor.order.value.get(props.id) ?? 0) + 1).padStart(2, '0'))
 const executing = computed(() => editor.executing.value === props.id)
+/** The skipped trigger that keeps this node from ever running, if any. */
+const skippedBy = computed(() => (props.data.skip ? undefined : editor.inheritedSkip.value.get(props.id)))
 
 // A node with only `next` keeps its exec output on the header; branching nodes list one row per branch, like CASE / ELSE.
 const execOut = computed(() => ports.value?.execOut ?? [])
@@ -53,15 +55,16 @@ const summary = computed(() => (info.value ? configSummary(info.value, props.dat
 <template>
   <div
     class="flow-node"
-    :class="{ selected, [`issue-${issueLevel}`]: !!issueLevel, [`run-${run}`]: !!run, executing, skip: data.skip }"
+    :class="{ selected, [`issue-${issueLevel}`]: !!issueLevel, [`run-${run}`]: !!run, executing, skip: data.skip || !!skippedBy }"
     :style="{ '--accent': color }"
-    :title="issues.map((issue) => issue.message).join('\n') || undefined"
+    :title="[...(skippedBy ? [t('flows.inheritedSkip', { name: skippedBy })] : []), ...issues.map((issue) => issue.message)].join('\n') || undefined"
   >
     <Handle v-if="ports?.execIn" :id="EXEC_IN" type="target" :position="Position.Left" class="handle head-handle" />
     <header class="flow-node-head">
       <span class="icon"><NIcon :size="15"><component :is="icon" /></NIcon></span>
       <span class="name">{{ data.label || typeTitle }}</span>
       <span v-if="data.skip" class="off-tag">{{ t('flows.nodeSkipped') }}</span>
+      <span v-else-if="skippedBy" class="off-tag">{{ t('flows.upstreamSkipped') }}</span>
       <span class="number">{{ number }}</span>
       <span v-if="issueLevel" class="badge" :class="issueLevel">!</span>
       <NSpin v-else-if="run === 'running'" :size="12" class="run-spin" />

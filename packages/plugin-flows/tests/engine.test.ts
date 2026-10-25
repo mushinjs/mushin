@@ -409,3 +409,17 @@ describe('command trigger', () => {
     expect(replyText((await runAs(true)).sent)).toEqual(['kicked'])
   })
 })
+
+describe('skipped triggers', () => {
+  it('warns about steps only a skipped trigger leads to', () => {
+    const doc = flow([
+      { id: 'a', type: 'trigger.keyword', config: { keywords: ['a'] } },
+      { id: 'b', type: 'trigger.keyword', config: { keywords: ['b'] } },
+      { id: 'onlyA', type: 'action.reply', config: { text: 'a' } },
+      { id: 'shared', type: 'action.reply', config: { text: 'both' } },
+    ], [['a', 'exec:next', 'onlyA', 'exec'], ['onlyA', 'exec:next', 'shared', 'exec'], ['b', 'exec:next', 'shared', 'exec']])
+    doc.nodes[0].skip = true
+    const messages = compile(doc, types).issues.map((issue) => `${issue.nodeId}: ${issue.message}`)
+    expect(messages).toEqual(['onlyA: "action.reply" only follows skipped triggers, so it never runs'])
+  })
+})
