@@ -365,7 +365,7 @@ export interface FlowSummary {
   warnings: number
   /** `all`: on some bot none of the flow's triggers can run; `some`: a few cannot. */
   blocked?: 'all' | 'some'
-  triggers: { id: string; type: string; source: string; skip: boolean }[]
+  triggers: { id: string; type: string; source: 'message' | 'event' | 'schedule'; summary: string; skip: boolean }[]
   createdAt: number
   updatedAt: number
 }

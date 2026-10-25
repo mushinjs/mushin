@@ -5,7 +5,7 @@ import type {} from '@mushin/plugin-storage'
 import { FlowError, matchTriggers, runFlow, type RunEnvironment, type TriggerMatch } from './engine'
 import { compile, type CompiledFlow, layout, passesOn, triggerPriority } from './graph'
 import { builtinNodes, commandName, scheduleTarget } from './nodes'
-import { overlap, triggerOrder, type TriggerSlot } from './order'
+import { overlap, triggerOrder, triggerSummary, type TriggerSlot } from './order'
 import { migrateDataEdges } from './refs'
 import type { FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, FlowSession, LlmLike, NodeType, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
 
@@ -434,7 +434,7 @@ export class FlowService extends Service {
           blocked: !blocked.length ? undefined : doc.bots.some((bot) => triggers.length && triggers.every((id) => blocked.some((slot) => slot.botId === bot && slot.nodeId === id))) ? 'all' : 'some',
           triggers: this.compiledOf(doc).triggers.flatMap((id) => {
             const entry = this.compiledOf(doc).nodes.get(id)!
-            return entry.type?.kind === 'trigger' ? [{ id, type: entry.node.type, source: entry.type.source ?? 'message', skip: !!entry.node.skip }] : []
+            return entry.type?.kind === 'trigger' ? [{ id, type: entry.node.type, source: entry.type.source ?? 'message', summary: entry.node.label || triggerSummary(entry), skip: !!entry.node.skip }] : []
           }),
           createdAt: doc.createdAt,
           updatedAt: doc.updatedAt,
