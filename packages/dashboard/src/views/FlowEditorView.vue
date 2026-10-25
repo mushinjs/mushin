@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowBackOutline, ConstructOutline, InformationCircleOutline, ListOutline, PlayOutline, TrashOutline } from '@vicons/ionicons5'
+import { ArrowBackOutline, ChevronDownOutline, ConstructOutline, InformationCircleOutline, ListOutline, PlayOutline, TrashOutline } from '@vicons/ionicons5'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { type Connection, type Edge, type GraphNode, type Node, type OnConnectStartParams, useVueFlow, VueFlow } from '@vue-flow/core'
@@ -9,13 +9,14 @@ import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 import {
-  type DropdownOption, NAlert, NButton, NDropdown, NEmpty, NForm, NFormItem, NIcon, NInput, NSelect, NTabPane, NTabs, NTag, useMessage,
+  type DropdownOption, NAlert, NButton, NDropdown, NEmpty, NForm, NFormItem, NIcon, NInput, NSelect, NSwitch, NTabPane, NTabs, NTag, useMessage,
 } from 'naive-ui'
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, provide, type Ref, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { call, on } from '../api'
 import { type CanvasNodeData, type FlowHighlight, flowEditorKey, type RunStatus } from '../components/flow/context'
+import FlowGroupBox from '../components/flow/FlowGroupBox.vue'
 import FlowNodeCard from '../components/flow/FlowNodeCard.vue'
 import { nodeIcon } from '../components/flow/icons'
 import NodePalette from '../components/flow/NodePalette.vue'
@@ -78,9 +79,22 @@ const issuesByNode = computed(() => {
   return map
 })
 
-const order = computed(() => new Map(nodes.value.map((node, index) => [node.id, index])))
-provide(flowEditorKey, { types, issuesByNode, highlight, order, executing, execute: (nodeId: string) => runTest(nodeId), nodeName: (id: string) => nodeName(id) })
-const nodeTypes = { mushin: markRaw(FlowNodeCard) } as any
+// A collapsed group is drawn as one box node (type `mushinGroup`, id `group:<group id>`) with its
+// nodes hidden; connections that cross the group are drawn to the box as `virt:<edge id>`. Boxes
+// and those edges exist only on the canvas and are never saved.
+const BOX = 'mushinGroup'
+const isBox = (node: { type?: string }) => node.type === BOX
+const isVirtual = (edge: { id: string }) => edge.id.startsWith('virt:')
+const realNodes = computed(() => nodes.value.filter((node) => !isBox(node)))
+
+const order = computed(() => new Map(realNodes.value.map((node, index) => [node.id, index])))
+provide(flowEditorKey, {
+  types, issuesByNode, highlight, order, executing, groups,
+  execute: (nodeId: string) => runTest(nodeId),
+  nodeName: (id: string) => nodeName(id),
+  toggleGroup: (groupId: string) => toggleGroup(groupId),
+})
+const nodeTypes = { mushin: markRaw(FlowNodeCard), [BOX]: markRaw(FlowGroupBox) } as any
 
 // ---- document <-> canvas ----
 
@@ -90,15 +104,16 @@ function toDoc() {
     description: description.value,
     adapter: adapter.value ?? '',
     bots: bots.value,
-    nodes: nodes.value.map((node) => ({
+    nodes: realNodes.value.map((node) => ({
       id: node.id,
       type: node.data!.typeId,
       ...(node.data!.label ? { label: node.data!.label } : {}),
       position: { x: Math.round(node.position.x), y: Math.round(node.position.y) },
       config: node.data!.config,
       ...(node.data!.inputs && Object.keys(node.data!.inputs).length ? { inputs: node.data!.inputs } : {}),
+      ...(node.data!.disabled ? { disabled: true } : {}),
     })),
-    edges: edges.value.map((edge) => ({
+    edges: edges.value.filter((edge) => !isVirtual(edge)).map((edge) => ({
       id: edge.id,
       source: edge.source,
       sourceHandle: edge.sourceHandle ?? '',
@@ -112,7 +127,7 @@ function toDoc() {
 const signature = () => JSON.stringify(toDoc())
 const dirty = computed(() => loaded.value && signature() !== savedSignature.value)
 
-const edgeColors: Record<RunStatus, string> = { running: '#2080f0', ok: '#18a058', error: '#d03050' }
+const edgeColors: Record<RunStatus, string> = { running: '#2080f0', ok: '#18a058', error: '#d03050', skipped: '#18a058' }
 
 /**
  * Every edge means "run next". Grey by default; during a run the edge into a running node is a
@@ -120,8 +135,10 @@ const edgeColors: Record<RunStatus, string> = { running: '#2080f0', ok: '#18a058
  * and dashed. Direction is left to right, so no arrowheads.
  */
 function edgeLook(edge: Pick<Edge, 'id'>): Partial<Edge> {
-  const status = highlight.value.edges.get(edge.id)
-  const broken = issues.value.some((issue) => issue.edgeId === edge.id)
+  // A connection drawn to a collapsed group looks like the real one.
+  const id = edge.id.replace(/^virt:/, '')
+  const status = highlight.value.edges.get(id)
+  const broken = issues.value.some((issue) => issue.edgeId === id)
   const color = status ? edgeColors[status] : broken ? '#d03050' : '#8c8c8c'
   return {
     type: 'default',
@@ -148,10 +165,11 @@ function apply(flow: FlowDoc, fit: boolean) {
     id: node.id,
     type: 'mushin',
     position: { ...node.position },
-    data: { typeId: node.type, label: node.label, config: node.config ?? {}, inputs: { ...node.inputs } },
+    data: { typeId: node.type, label: node.label, config: node.config ?? {}, inputs: { ...node.inputs }, ...(node.disabled ? { disabled: true } : {}) },
   }))
   edges.value = flow.edges.map((edge) => ({ ...edge, ...edgeLook(edge) }))
   groups.value = clone(flow.groups ?? [])
+  syncGroups()
   if (selectedId.value && !flow.nodes.some((node) => node.id === selectedId.value)) selectedId.value = undefined
   savedAt = flow.updatedAt
   savedSignature.value = signature()
@@ -163,7 +181,8 @@ let pendingFit = false
 function onNodesInitialized() {
   if (!pendingFit) return
   pendingFit = false
-  fitView({ padding: 0.2, maxZoom: 1.2 })
+  // A frame later, once the canvas has its final size; fitting right away could zoom all the way out.
+  requestAnimationFrame(() => fitView({ padding: 0.2, maxZoom: 1.2 }))
 }
 
 async function load() {
@@ -196,13 +215,19 @@ watch(flowId, () => load().catch((error) => message.error(error.message)))
 
 // ---- editing ----
 
+// Vue Flow also checks the edges it is given against this, including those drawn to a collapsed
+// group's box; the box's handles cannot be dragged, so users never connect to it themselves.
 function isValidConnection(connection: Connection) {
   if (connection.source === connection.target) return false
-  return parseHandle(connection.sourceHandle)?.kind === 'exec-out' && parseHandle(connection.targetHandle)?.kind === 'exec-in'
+  const fromBox = connection.source.startsWith('group:')
+  const toBox = connection.target.startsWith('group:')
+  return (fromBox ? connection.sourceHandle === 'out' : parseHandle(connection.sourceHandle)?.kind === 'exec-out')
+    && (toBox ? connection.targetHandle === 'exec' : parseHandle(connection.targetHandle)?.kind === 'exec-in')
 }
 
 function onConnect(connection: Connection) {
   dragged = undefined
+  if (connection.source.startsWith('group:') || connection.target.startsWith('group:')) return
   if (!isValidConnection(connection)) return
   const kept = edges.value
   if (kept.some((edge) => edge.source === connection.source && edge.sourceHandle === connection.sourceHandle
@@ -253,6 +278,7 @@ const selected = computed(() => nodes.value.find((node) => node.id === selectedI
 const selectedInfo = computed(() => selected.value && types.value.get(selected.value.data!.typeId))
 
 function onNodeClick({ node }: { node: Node }) {
+  if (isBox(node)) return
   selectedId.value = node.id
   tab.value = 'node'
   logs.value?.showNode(node.id)
@@ -364,22 +390,24 @@ onBeforeRouteLeave(() => !dirty.value || window.confirm(t('flows.unsaved')))
 
 // ---- groups, clipboard, context menu ----
 
-/** Selected node ids: the canvas selection, or the node open in the panel. */
+/** Selected node ids: the canvas selection, or the node open in the panel. A collapsed group counts as its nodes. */
 function selectionIds() {
-  const ids = getSelectedNodes.value.map((node) => node.id)
+  const ids = getSelectedNodes.value.flatMap((node) => (isBox(node) ? groupOf(node.data?.groupId)?.nodes ?? [] : [node.id]))
   return ids.length ? ids : selectedId.value ? [selectedId.value] : []
 }
+
+const groupOf = (groupId: string | undefined) => groups.value.find((group) => group.id === groupId)
 
 function select(ids: string[]) {
   removeSelectedNodes(getSelectedNodes.value)
   addSelectedNodes(ids.map((id) => findNode(id)).filter((node): node is GraphNode => !!node))
 }
 
-const selectAll = () => select(nodes.value.map((node) => node.id))
+const selectAll = () => select(nodes.value.filter((node) => !node.hidden).map((node) => node.id))
 
 // A group needs two nodes that still exist; deleting nodes shrinks or removes their groups.
-watch(() => nodes.value.map((node) => node.id).join(','), () => {
-  const known = new Set(nodes.value.map((node) => node.id))
+watch(() => realNodes.value.map((node) => node.id).join(','), () => {
+  const known = new Set(realNodes.value.map((node) => node.id))
   const next = groups.value
     .map((group) => ({ ...group, nodes: group.nodes.filter((id) => known.has(id)) }))
     .filter((group) => group.nodes.length > 1)
@@ -400,6 +428,119 @@ function ungroupNodes(ids: string[]) {
   groups.value = groups.value.filter((group) => !group.nodes.some((id) => ids.includes(id)))
 }
 
+/** Disables the nodes, or enables them when all are disabled already. */
+function toggleDisabled(ids: string[]) {
+  const set = new Set(ids)
+  const disable = realNodes.value.some((node) => set.has(node.id) && !node.data!.disabled)
+  nodes.value = nodes.value.map((node) => {
+    if (!set.has(node.id) || isBox(node)) return node
+    const { disabled: _, ...data } = node.data!
+    return { ...node, data: disable ? { ...data, disabled: true } : data }
+  })
+}
+
+/**
+ * Collapses a group into one box, or expands it again. The box can be moved while collapsed;
+ * expanding moves the group's nodes along with it.
+ */
+function toggleGroup(groupId: string) {
+  const group = groupOf(groupId)
+  if (!group) return
+  if (group.collapsed) {
+    const box = nodes.value.find((node) => node.id === `group:${groupId}`)
+    const members = nodes.value.filter((node) => group.nodes.includes(node.id))
+    if (box && members.length) {
+      const dx = box.position.x - Math.min(...members.map((node) => node.position.x))
+      const dy = box.position.y - Math.min(...members.map((node) => node.position.y))
+      nodes.value = nodes.value.map((node) => (group.nodes.includes(node.id) ? { ...node, position: { x: node.position.x + dx, y: node.position.y + dy } } : node))
+    }
+  }
+  groups.value = groups.value.map((item) => {
+    if (item.id !== groupId) return item
+    const { collapsed: _, ...rest } = item
+    return group.collapsed ? rest : { ...rest, collapsed: true }
+  })
+  if (selectedId.value && group.nodes.includes(selectedId.value)) selectedId.value = undefined
+}
+
+/** A moved box takes its hidden nodes along, so the new place is saved and kept on expand. */
+function onNodeDragStop({ nodes: moved }: { nodes: GraphNode[] }) {
+  for (const box of moved.filter(isBox)) {
+    const group = groupOf(box.data?.groupId)
+    if (!group) continue
+    const members = nodes.value.filter((node) => group.nodes.includes(node.id))
+    if (!members.length) continue
+    const dx = box.position.x - Math.min(...members.map((node) => node.position.x))
+    const dy = box.position.y - Math.min(...members.map((node) => node.position.y))
+    if (!dx && !dy) continue
+    nodes.value = nodes.value.map((node) => (group.nodes.includes(node.id) ? { ...node, position: { x: node.position.x + dx, y: node.position.y + dy } } : node))
+  }
+}
+
+/** Puts boxes, hidden nodes and drawn-to-box connections on the canvas to match the groups. */
+function syncGroups() {
+  const owner = new Map<string, string>()
+  for (const group of groups.value) {
+    if (group.collapsed) for (const id of group.nodes) owner.set(id, `group:${group.id}`)
+  }
+  const real = nodes.value
+    .filter((node) => !isBox(node))
+    .map((node) => (!!node.hidden === owner.has(node.id) ? node : { ...node, hidden: owner.has(node.id) }))
+  const boxes: Node<CanvasNodeData>[] = groups.value.filter((group) => group.collapsed).flatMap((group) => {
+    const id = `group:${group.id}`
+    const members = real.filter((node) => group.nodes.includes(node.id))
+    if (!members.length) return []
+    const existing = nodes.value.find((node) => node.id === id)
+    if (existing) return [existing]
+    const position = {
+      x: Math.min(...members.map((node) => node.position.x)),
+      y: Math.min(...members.map((node) => node.position.y)),
+    }
+    return [{ id, type: BOX, position, deletable: false, data: { typeId: '', config: {}, groupId: group.id } }]
+  })
+  const realEdges = edges.value.filter((edge) => !isVirtual(edge))
+  const seen = new Set<string>()
+  const drawn = realEdges.flatMap((edge) => {
+    const from = owner.get(edge.source)
+    const to = owner.get(edge.target)
+    if ((!from && !to) || from === to) return []
+    const item = {
+      id: `virt:${edge.id}`,
+      source: from ?? edge.source,
+      sourceHandle: from ? 'out' : edge.sourceHandle,
+      target: to ?? edge.target,
+      targetHandle: to ? 'exec' : edge.targetHandle,
+      selectable: false,
+      deletable: false,
+    }
+    const key = `${item.source}|${item.sourceHandle}|${item.target}|${item.targetHandle}`
+    if (seen.has(key)) return []
+    seen.add(key)
+    return [{ ...item, ...edgeLook(item) }]
+  })
+  const nextNodes = [...real, ...boxes]
+  const nodesChanged = nextNodes.length !== nodes.value.length || nextNodes.some((node, index) => node !== nodes.value[index])
+  const nextEdges = [...realEdges, ...drawn]
+  if (!nodesChanged) {
+    edges.value = nextEdges
+    return
+  }
+  // Vue Flow drops edges to nodes it has not taken in yet, and edge changes can reach it before
+  // node changes in the same tick; so the canvas gets the boxes first and the edges a frame later.
+  nodes.value = nextNodes
+  edges.value = realEdges
+  if (drawn.length) {
+    requestAnimationFrame(() => (edges.value = [...edges.value.filter((edge) => !isVirtual(edge)), ...drawn]))
+  }
+}
+
+// Re-sync when groups fold or unfold, or nodes and connections around them change.
+watch(() => JSON.stringify([
+  groups.value.map((group) => [group.id, !!group.collapsed, group.nodes]),
+  realNodes.value.map((node) => node.id),
+  edges.value.filter((edge) => !isVirtual(edge)).map((edge) => edge.id),
+]), syncGroups)
+
 function deleteNodes(ids: string[]) {
   const gone = new Set(ids)
   nodes.value = nodes.value.filter((node) => !gone.has(node.id))
@@ -415,6 +556,7 @@ const GROUP_HEAD = 28
 
 /** Dashed frames around grouped nodes, in canvas coordinates. */
 const frames = computed(() => groups.value.flatMap((group) => {
+  if (group.collapsed) return []
   let left = Infinity
   let top = Infinity
   let right = -Infinity
@@ -496,7 +638,7 @@ function snapshot(ids: string[]): Clipboard {
       config: node.data!.config,
       inputs: node.data!.inputs,
     })),
-    edges: edges.value.filter((edge) => set.has(edge.source) && set.has(edge.target)).map((edge) => ({
+    edges: edges.value.filter((edge) => !isVirtual(edge) && set.has(edge.source) && set.has(edge.target)).map((edge) => ({
       source: edge.source, sourceHandle: edge.sourceHandle ?? '', target: edge.target, targetHandle: edge.targetHandle ?? '',
     })),
     groups: groups.value.filter((group) => group.nodes.every((id) => set.has(id))).map((group) => ({ label: group.label, nodes: group.nodes })),
@@ -578,6 +720,11 @@ function onMenuClickOutside() {
 }
 
 function onNodeContextMenu({ event, node }: { event: MouseEvent | TouchEvent; node: GraphNode }) {
+  if (isBox(node)) {
+    const group = groupOf(node.data?.groupId)
+    if (group) openMenu(event, 'group', group.id, group.nodes)
+    return
+  }
   const selection = getSelectedNodes.value.map((item) => item.id)
   if (selection.length > 1 && selection.includes(node.id)) openMenu(event, 'selection', undefined, selection)
   else {
@@ -610,8 +757,10 @@ const menuOptions = computed<DropdownOption[]>(() => {
     ]
   }
   if (kind === 'group') {
+    const collapsed = !!groupOf(current.target)?.collapsed
     return [
-      { key: 'rename', label: t('flows.menuRenameGroup') },
+      { key: 'toggleGroup', label: collapsed ? t('flows.menuExpand') : t('flows.menuCollapse') },
+      { key: 'rename', label: t('flows.menuRenameGroup'), disabled: collapsed },
       { key: 'copy', label: t('flows.menuCopy') },
       { key: 'duplicate', label: t('flows.menuDuplicate') },
       divider('d1'),
@@ -619,8 +768,10 @@ const menuOptions = computed<DropdownOption[]>(() => {
       { key: 'delete', label: t('flows.menuDeleteGroup') },
     ]
   }
+  const allDisabled = ids.every((id) => realNodes.value.find((node) => node.id === id)?.data?.disabled)
   return [
     ...(kind === 'node' ? [{ key: 'execute', label: t('flows.executeStep'), disabled: testing.value }] : []),
+    { key: 'toggleDisabled', label: allDisabled ? t('flows.menuEnable') : t('flows.menuDisable') },
     ...(kind === 'selection' ? [{ key: 'group', label: t('flows.menuGroup') }] : []),
     ...(inGroup(ids) ? [{ key: 'ungroup', label: t('flows.menuUngroup') }] : []),
     divider('d1'),
@@ -645,6 +796,8 @@ function onMenuSelect(key: string) {
     case 'group': return groupNodes(ids)
     case 'ungroup': return current.kind === 'group' ? (groups.value = groups.value.filter((group) => group.id !== target)) : ungroupNodes(ids)
     case 'rename': return (renaming.value = target)
+    case 'toggleGroup': return target && toggleGroup(target)
+    case 'toggleDisabled': return toggleDisabled(ids)
     case 'copy': return copyNodes(ids)
     case 'duplicate': return duplicateNodes(ids)
     case 'delete': return deleteNodes(ids)
@@ -754,11 +907,11 @@ function clearHighlight() {
 
 /** Draws a finished run: each edge takes the state of the node it led to. */
 function showTrace(trace: RunTrace) {
-  const nodeStatus = new Map<string, RunStatus>(trace.steps.map((step) => [step.nodeId, step.error ? 'error' : 'ok']))
+  const nodeStatus = new Map<string, RunStatus>(trace.steps.map((step) => [step.nodeId, step.error ? 'error' : step.skipped ? 'skipped' : 'ok']))
   const target = new Map(edges.value.map((edge) => [edge.id, edge.target]))
   const edgeStatus = new Map<string, RunStatus>(trace.edges.map((id) => {
     const status = nodeStatus.get(target.get(id) ?? '')
-    return [id, status ?? (trace.error ? 'error' : 'ok')]
+    return [id, status === 'skipped' ? 'ok' : status ?? (trace.error ? 'error' : 'ok')]
   }))
   liveRun = undefined
   highlight.value = { nodes: nodeStatus, edges: edgeStatus }
@@ -776,7 +929,7 @@ function showStep(step: RunStep) {
   }
   const next: FlowHighlight = { nodes: new Map(highlight.value.nodes), edges: new Map(highlight.value.edges) }
   next.nodes.set(step.nodeId, step.status)
-  if (step.edgeId) next.edges.set(step.edgeId, step.status)
+  if (step.edgeId) next.edges.set(step.edgeId, step.status === 'skipped' ? 'ok' : step.status)
   highlight.value = next
   restyleEdges()
 }
@@ -1040,6 +1193,8 @@ watch(narrow, (value) => {
             @connect-end="onConnectEnd"
             @nodes-initialized="onNodesInitialized"
             @node-click="onNodeClick"
+            @node-drag-stop="onNodeDragStop"
+            @node-double-click="({ node }) => isBox(node) && node.data?.groupId && toggleGroup(node.data.groupId)"
             @pane-click="selectedId = undefined"
             @pane-context-menu="openMenu($event, 'pane')"
             @node-context-menu="onNodeContextMenu"
@@ -1073,6 +1228,15 @@ watch(narrow, (value) => {
                   >
                   <span v-else class="flow-group-label">{{ frame.group.label || t('flows.groupDefault') }}</span>
                   <span class="flow-group-count">{{ frame.group.nodes.length }}</span>
+                  <button
+                    type="button"
+                    class="flow-group-fold nodrag"
+                    :title="t('flows.menuCollapse')"
+                    @pointerdown.stop
+                    @click.stop="toggleGroup(frame.group.id)"
+                  >
+                    <NIcon :size="13"><ChevronDownOutline /></NIcon>
+                  </button>
                 </div>
               </div>
             </template>
@@ -1141,6 +1305,9 @@ watch(narrow, (value) => {
                   <NForm label-placement="top" size="small">
                     <NFormItem :label="t('flows.nodeLabel')" :feedback="t('flows.nodeLabelHint')">
                       <NInput :value="selected.data!.label ?? ''" :placeholder="typeTitle(selected.data!.typeId)" @update:value="(label: string) => updateSelected({ label: label || undefined })" />
+                    </NFormItem>
+                    <NFormItem :label="t('flows.disableNode')" :feedback="t('flows.disableNodeHint')" label-placement="left">
+                      <NSwitch :value="!!selected.data!.disabled" @update:value="toggleDisabled([selected.id])" />
                     </NFormItem>
                   </NForm>
                   <template v-if="wiring?.inputs.length">
@@ -1323,6 +1490,24 @@ watch(narrow, (value) => {
 .flow-group-count {
   font-weight: 500;
   opacity: 0.6;
+}
+
+.flow-group-fold {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.flow-group-fold:hover {
+  background: rgba(127, 127, 127, 0.18);
 }
 
 .flow-group-rename {

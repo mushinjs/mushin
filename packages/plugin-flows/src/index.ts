@@ -50,6 +50,7 @@ const nodeInput = z.object({
   label: z.string().optional().describe('Name shown on the node and in message provenance'),
   position: z.object({ x: z.number(), y: z.number() }).optional().describe('Canvas position; laid out automatically when omitted'),
   config: z.record(z.string(), z.any()).optional().describe('Settings matching the node type\'s config schema; strings may contain references such as {{n1.rest}}'),
+  disabled: z.boolean().optional().describe('Skip this node when the flow runs: a disabled trigger never fires, a disabled step passes on to its first exec output'),
   inputs: z.record(z.string(), z.string()).optional()
     .describe('Input name → value: a reference like "{{n1.rest}}" ({{<node id>.<output>}}, {{sys.text|user|userId|groupId|isPrivate|mentioned}}, {{chat|user|flow|run.<variable>}}) or text containing references'),
 })
@@ -66,6 +67,7 @@ const groupInput = z.object({
   id: z.string().optional(),
   label: z.string().optional(),
   nodes: z.array(z.string()).describe('Ids of the nodes in the group'),
+  collapsed: z.boolean().optional().describe('Show the group as one box in the editor'),
 })
 
 const flowFields = {
@@ -90,7 +92,7 @@ function normalizeGroups(groups: GroupInput[], nodes: FlowNode[]): FlowGroup[] {
     const members = [...new Set(group.nodes)].filter((id) => known.has(id) && !taken.has(id))
     if (members.length < 2) continue
     for (const id of members) taken.add(id)
-    result.push({ id: group.id ?? `g-${randomId(5)}`, ...(group.label ? { label: group.label } : {}), nodes: members })
+    result.push({ id: group.id ?? `g-${randomId(5)}`, ...(group.label ? { label: group.label } : {}), nodes: members, ...(group.collapsed ? { collapsed: true } : {}) })
   }
   return result
 }
@@ -127,6 +129,7 @@ function normalize(nodes: NodeInput[], edges: EdgeInput[], types: Map<string, No
     position: node.position ?? { x: Number.NaN, y: Number.NaN },
     config: node.config ?? {},
     ...(node.inputs && Object.keys(node.inputs).length ? { inputs: node.inputs } : {}),
+    ...(node.disabled ? { disabled: true } : {}),
   }))
   const flowEdges: FlowEdge[] = edges.map((edge) => ({
     id: edge.id ?? `e-${randomId(5)}`,

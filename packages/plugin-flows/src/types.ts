@@ -169,6 +169,11 @@ export interface FlowNode {
   config: Record<string, any>
   /** Input name → a variable reference like `{{n1.text}}`, or text that may contain references. */
   inputs?: Record<string, string>
+  /**
+   * Skipped when the flow runs: a disabled trigger never starts a run, and a disabled step passes
+   * straight on to its first exec output with no outputs of its own.
+   */
+  disabled?: boolean
 }
 
 /** An edge means "run next": from an exec output `exec:<name>` to a node's exec input `exec`. */
@@ -186,6 +191,8 @@ export interface FlowGroup {
   label?: string
   /** Node ids; a node is in at most one group. */
   nodes: string[]
+  /** Shown as one box in the editor. */
+  collapsed?: boolean
 }
 
 export interface FlowDocument {
@@ -220,6 +227,8 @@ export interface TraceStep {
   /** Values the node produced, for triggers the values it matched. */
   outputs?: Record<string, unknown>
   error?: string
+  /** The node is disabled, so the run passed through it without running it. */
+  skipped?: boolean
 }
 
 export interface RunTrace {
@@ -250,5 +259,5 @@ export interface RunStep {
   nodeId: string
   /** The edge that led to the node, for nodes after the trigger. */
   edgeId?: string
-  status: 'running' | 'ok' | 'error'
+  status: 'running' | 'ok' | 'error' | 'skipped'
 }

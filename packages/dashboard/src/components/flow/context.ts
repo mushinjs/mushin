@@ -1,7 +1,8 @@
 import { type ComputedRef, inject, type InjectionKey, type Ref } from 'vue'
-import type { FlowIssue, NodeTypeInfo } from '../../types'
+import type { FlowGroupDoc, FlowIssue, NodeTypeInfo } from '../../types'
 
-export type RunStatus = 'running' | 'ok' | 'error'
+/** `skipped`: the node is disabled and the run passed through it. */
+export type RunStatus = 'running' | 'ok' | 'error' | 'skipped'
 
 /** A run shown on the canvas: each node's and edge's state, live while it runs. */
 export interface FlowHighlight {
@@ -22,6 +23,9 @@ export interface FlowEditorContext {
   execute(nodeId: string): void
   /** A node's label, or its type's title. */
   nodeName(nodeId: string): string
+  groups: Ref<FlowGroupDoc[]>
+  /** Collapses or expands a group. */
+  toggleGroup(groupId: string): void
 }
 
 export const flowEditorKey: InjectionKey<FlowEditorContext> = Symbol('flow-editor')
@@ -39,4 +43,8 @@ export interface CanvasNodeData {
   config: Record<string, any>
   /** Input name → a reference such as `{{n1.text}}`, or text containing references. */
   inputs?: Record<string, string>
+  /** Skipped when the flow runs. */
+  disabled?: boolean
+  /** Set on the box that stands for a collapsed group. */
+  groupId?: string
 }
