@@ -111,7 +111,7 @@ function toDoc() {
       position: { x: Math.round(node.position.x), y: Math.round(node.position.y) },
       config: node.data!.config,
       ...(node.data!.inputs && Object.keys(node.data!.inputs).length ? { inputs: node.data!.inputs } : {}),
-      ...(node.data!.disabled ? { disabled: true } : {}),
+      ...(node.data!.skip ? { skip: true } : {}),
     })),
     edges: edges.value.filter((edge) => !isVirtual(edge)).map((edge) => ({
       id: edge.id,
@@ -165,7 +165,7 @@ function apply(flow: FlowDoc, fit: boolean) {
     id: node.id,
     type: 'mushin',
     position: { ...node.position },
-    data: { typeId: node.type, label: node.label, config: node.config ?? {}, inputs: { ...node.inputs }, ...(node.disabled ? { disabled: true } : {}) },
+    data: { typeId: node.type, label: node.label, config: node.config ?? {}, inputs: { ...node.inputs }, ...(node.skip ? { skip: true } : {}) },
   }))
   edges.value = flow.edges.map((edge) => ({ ...edge, ...edgeLook(edge) }))
   groups.value = clone(flow.groups ?? [])
@@ -428,14 +428,14 @@ function ungroupNodes(ids: string[]) {
   groups.value = groups.value.filter((group) => !group.nodes.some((id) => ids.includes(id)))
 }
 
-/** Disables the nodes, or enables them when all are disabled already. */
-function toggleDisabled(ids: string[]) {
+/** Sets the nodes to be skipped, or stops skipping them when all are skipped already. */
+function toggleSkip(ids: string[]) {
   const set = new Set(ids)
-  const disable = realNodes.value.some((node) => set.has(node.id) && !node.data!.disabled)
+  const skip = realNodes.value.some((node) => set.has(node.id) && !node.data!.skip)
   nodes.value = nodes.value.map((node) => {
     if (!set.has(node.id) || isBox(node)) return node
-    const { disabled: _, ...data } = node.data!
-    return { ...node, data: disable ? { ...data, disabled: true } : data }
+    const { skip: _, ...data } = node.data!
+    return { ...node, data: skip ? { ...data, skip: true } : data }
   })
 }
 
@@ -768,10 +768,10 @@ const menuOptions = computed<DropdownOption[]>(() => {
       { key: 'delete', label: t('flows.menuDeleteGroup') },
     ]
   }
-  const allDisabled = ids.every((id) => realNodes.value.find((node) => node.id === id)?.data?.disabled)
+  const allSkipped = ids.every((id) => realNodes.value.find((node) => node.id === id)?.data?.skip)
   return [
     ...(kind === 'node' ? [{ key: 'execute', label: t('flows.executeStep'), disabled: testing.value }] : []),
-    { key: 'toggleDisabled', label: allDisabled ? t('flows.menuEnable') : t('flows.menuDisable') },
+    { key: 'toggleSkip', label: allSkipped ? t('flows.menuUnskip') : t('flows.menuSkip') },
     ...(kind === 'selection' ? [{ key: 'group', label: t('flows.menuGroup') }] : []),
     ...(inGroup(ids) ? [{ key: 'ungroup', label: t('flows.menuUngroup') }] : []),
     divider('d1'),
@@ -797,7 +797,7 @@ function onMenuSelect(key: string) {
     case 'ungroup': return current.kind === 'group' ? (groups.value = groups.value.filter((group) => group.id !== target)) : ungroupNodes(ids)
     case 'rename': return (renaming.value = target)
     case 'toggleGroup': return target && toggleGroup(target)
-    case 'toggleDisabled': return toggleDisabled(ids)
+    case 'toggleSkip': return toggleSkip(ids)
     case 'copy': return copyNodes(ids)
     case 'duplicate': return duplicateNodes(ids)
     case 'delete': return deleteNodes(ids)
@@ -1306,8 +1306,8 @@ watch(narrow, (value) => {
                     <NFormItem :label="t('flows.nodeLabel')" :feedback="t('flows.nodeLabelHint')">
                       <NInput :value="selected.data!.label ?? ''" :placeholder="typeTitle(selected.data!.typeId)" @update:value="(label: string) => updateSelected({ label: label || undefined })" />
                     </NFormItem>
-                    <NFormItem :label="t('flows.disableNode')" :feedback="t('flows.disableNodeHint')" label-placement="left">
-                      <NSwitch :value="!!selected.data!.disabled" @update:value="toggleDisabled([selected.id])" />
+                    <NFormItem :label="t('flows.skipNode')" :feedback="t('flows.skipNodeHint')" label-placement="left">
+                      <NSwitch :value="!!selected.data!.skip" @update:value="toggleSkip([selected.id])" />
                     </NFormItem>
                   </NForm>
                   <template v-if="wiring?.inputs.length">

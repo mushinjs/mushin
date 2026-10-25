@@ -1,7 +1,7 @@
 import { type ComputedRef, inject, type InjectionKey, type Ref } from 'vue'
 import type { FlowGroupDoc, FlowIssue, NodeTypeInfo } from '../../types'
 
-/** `skipped`: the node is disabled and the run passed through it. */
+/** `skipped`: the node is set to be skipped and the run passed through it. */
 export type RunStatus = 'running' | 'ok' | 'error' | 'skipped'
 
 /** A run shown on the canvas: each node's and edge's state, live while it runs. */
@@ -44,7 +44,7 @@ export interface CanvasNodeData {
   /** Input name → a reference such as `{{n1.text}}`, or text containing references. */
   inputs?: Record<string, string>
   /** Skipped when the flow runs. */
-  disabled?: boolean
+  skip?: boolean
   /** Set on the box that stands for a collapsed group. */
   groupId?: string
 }
