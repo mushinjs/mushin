@@ -312,49 +312,62 @@ const COMMAND = 'trigger.command'
 const KEYWORD = 'trigger.keyword'
 const unprefixed = (text: string) => text.trim().replace(/^\/+/, '')
 
-/**
- * Config edits from the settings form. A keyword node given a keyword that starts with `/` becomes
- * a command node named after it, the other keywords becoming aliases; the node keeps its id, so references to its `rest` output still work.
- */
-function updateConfig(config: Record<string, any>) {
-  const node = selected.value
-  if (!node) return
-  const keywords: string[] = Array.isArray(config.keywords) ? config.keywords.map((item: unknown) => String(item).trim()) : []
-  const first = keywords.find((item) => item.length > 1 && item.startsWith('/')) ?? ''
+const keywordsOf = (config: Record<string, any>): string[] => (Array.isArray(config.keywords) ? config.keywords.map((item: unknown) => String(item).trim()) : [])
+
+/** On a keyword node, the first keyword written like a command (`/foo`); it stays plain text unless the node is converted. */
+const commandLike = computed(() => {
+  if (selected.value?.data!.typeId !== KEYWORD || !types.value.has(COMMAND)) return
+  return keywordsOf(selected.value.data!.config).find((item) => item.length > 1 && item.startsWith('/'))
+})
+
+/** Turns the selected keyword node into a command node named after `commandLike`, other keywords becoming aliases. Keeps the node id, so `{{<id>.rest}}` still works. */
+function convertToCommand() {
   const command = types.value.get(COMMAND)
-  if (node.data!.typeId === KEYWORD && command && first) {
-    updateSelected({
-      typeId: COMMAND,
-      config: {
-        ...schemaDefaults(command.configSchema),
-        name: unprefixed(first),
-        aliases: [...new Set(keywords.map(unprefixed))].filter((item) => item && item !== unprefixed(first)),
-        passThrough: !!config.passThrough,
-      },
-    })
-    message.info(t('flows.convertedToCommand', { name: `/${unprefixed(first)}` }))
-    return
-  }
-  updateSelected({ config: clone(config) })
+  const first = commandLike.value
+  if (!command || !first || !selected.value) return
+  const config = selected.value.data!.config
+  updateSelected({
+    typeId: COMMAND,
+    config: {
+      ...schemaDefaults(command.configSchema),
+      name: unprefixed(first),
+      aliases: [...new Set(keywordsOf(config).map(unprefixed))].filter((item) => item && item !== unprefixed(first)),
+      passThrough: !!config.passThrough,
+    },
+  })
+  message.success(t('flows.convertedToCommand', { name: `/${unprefixed(first)}` }))
 }
 
-/** The command name field, shown with its `/`. Taking the `/` away turns the node back into a keyword node. */
+/** What the command field shows. Kept apart from the stored name so the `/` can be deleted while typing. */
+const commandText = ref('')
+watch(() => [selectedId.value, selected.value?.data!.typeId, selected.value?.data!.config.name] as const, ([id, typeId, name], previous) => {
+  if (typeId !== COMMAND) return
+  if (id !== previous?.[0] || unprefixed(commandText.value) !== (name ?? '')) commandText.value = `/${name ?? ''}`
+}, { immediate: true })
+
 function updateCommandName(value: string) {
   const node = selected.value
   if (!node) return
-  const config = node.data!.config
-  const keyword = types.value.get(KEYWORD)
-  if (value.trim() && !value.trim().startsWith('/') && keyword) {
-    const aliases: string[] = Array.isArray(config.aliases) ? config.aliases : []
-    updateSelected({
-      typeId: KEYWORD,
-      config: { ...schemaDefaults(keyword.configSchema), keywords: [value.trim(), ...aliases], mode: 'startsWith', passThrough: !!config.passThrough },
-    })
-    message.info(t('flows.convertedToKeyword'))
-    return
-  }
-  updateSelected({ config: { ...config, name: unprefixed(value) } })
+  commandText.value = value
+  updateSelected({ config: { ...node.data!.config, name: unprefixed(value) } })
 }
+
+/** Turns the selected command node into a keyword node matching the text in the command field and the aliases. */
+function convertToKeyword() {
+  const keyword = types.value.get(KEYWORD)
+  if (!keyword || !selected.value) return
+  const config = selected.value.data!.config
+  const aliases: string[] = Array.isArray(config.aliases) ? config.aliases : []
+  updateSelected({
+    typeId: KEYWORD,
+    config: { ...schemaDefaults(keyword.configSchema), keywords: [commandText.value.trim(), ...aliases].filter(Boolean), mode: 'startsWith', passThrough: !!config.passThrough },
+  })
+  message.success(t('flows.convertedToKeyword'))
+}
+
+/** Settings fields shown above the conversion hint: the keywords of a keyword node. */
+const leadFields = computed(() => (selected.value?.data!.typeId === KEYWORD ? ['keywords'] : []))
+const otherFields = (schema: { properties?: Record<string, unknown> }, keep: string[]) => Object.keys(schema.properties ?? {}).filter((name) => !keep.includes(name))
 
 function deleteSelected() {
   const id = selectedId.value
@@ -1373,16 +1386,32 @@ watch(narrow, (value) => {
                   </template>
                   <NForm v-if="selected.data!.typeId === COMMAND" label-placement="top" size="small">
                     <NFormItem :label="t('flows.commandName')" :feedback="t('flows.commandNameHint')">
-                      <NInput :value="`/${selected.data!.config.name ?? ''}`" @update:value="updateCommandName" />
+                      <NInput :value="commandText" @update:value="updateCommandName" />
                     </NFormItem>
                   </NForm>
-                  <SchemaForm
-                    v-if="selectedInfo.configSchema"
-                    :model-value="selected.data!.config"
-                    :schema="selectedInfo.configSchema"
-                    :hidden="selected.data!.typeId === COMMAND ? ['name'] : []"
-                    @update:model-value="updateConfig"
-                  />
+                  <NAlert v-if="selected.data!.typeId === COMMAND && commandText.trim() && !commandText.trim().startsWith('/')" type="info" :show-icon="false" class="convert-hint">
+                    {{ t('flows.suggestKeyword', { name: `/${unprefixed(commandText)}` }) }}
+                    <NButton size="tiny" secondary type="primary" @click="convertToKeyword">{{ t('flows.convertToKeyword') }}</NButton>
+                  </NAlert>
+                  <template v-if="selectedInfo.configSchema">
+                    <SchemaForm
+                      v-if="leadFields.length"
+                      :model-value="selected.data!.config"
+                      :schema="selectedInfo.configSchema"
+                      :hidden="otherFields(selectedInfo.configSchema, leadFields)"
+                      @update:model-value="(config: Record<string, any>) => updateSelected({ config: clone(config) })"
+                    />
+                    <NAlert v-if="commandLike" type="info" :show-icon="false" class="convert-hint">
+                      {{ t('flows.suggestCommand', { name: commandLike }) }}
+                      <NButton size="tiny" secondary type="primary" @click="convertToCommand">{{ t('flows.convertToCommand') }}</NButton>
+                    </NAlert>
+                    <SchemaForm
+                      :model-value="selected.data!.config"
+                      :schema="selectedInfo.configSchema"
+                      :hidden="selected.data!.typeId === COMMAND ? ['name'] : leadFields"
+                      @update:model-value="(config: Record<string, any>) => updateSelected({ config: clone(config) })"
+                    />
+                  </template>
                   <NAlert v-for="(issue, index) in issuesByNode.get(selected.id) ?? []" :key="index" :type="issue.severity" :show-icon="false" class="issue">
                     {{ issue.message }}
                   </NAlert>
@@ -1818,6 +1847,15 @@ watch(narrow, (value) => {
 .section {
   margin: 16px 0 8px;
   font-size: 13px;
+}
+
+.convert-hint {
+  margin: -6px 0 14px;
+  font-size: 13px;
+}
+
+.convert-hint :deep(.n-button) {
+  margin-left: 6px;
 }
 
 .muted {
