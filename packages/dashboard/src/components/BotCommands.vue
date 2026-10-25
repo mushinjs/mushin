@@ -98,7 +98,7 @@ const columns = computed(() => [
   <NSpace vertical :size="16">
     <NCard :title="t('bot.commandList')">
       <NAlert v-for="item in list.conflicts" :key="item.name" type="warning" :show-icon="false" class="conflict">
-        {{ t('bot.commandConflict', { name: `${prefix}${item.name}`, sources: item.sources.map(sourceLabel).join('、') }) }}
+        {{ t('bot.commandConflict', { name: `${prefix}${item.name}`, first: sourceLabel(item.sources[0]), sources: item.sources.slice(1).map(sourceLabel).join('、') }) }}
       </NAlert>
       <NDataTable :columns="columns" :data="list.commands" :bordered="false" size="small" :row-key="(row: CommandEntry) => `${row.source.kind}:${row.source.id}:${row.source.nodeId ?? ''}:${row.name}`" />
       <p class="muted small hint">{{ t('bot.commandListHint') }}</p>

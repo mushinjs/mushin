@@ -30,6 +30,8 @@ const number = computed(() => String((editor.order.value.get(props.id) ?? 0) + 1
 const executing = computed(() => editor.executing.value === props.id)
 /** The skipped trigger that keeps this node from ever running, if any. */
 const skippedBy = computed(() => (props.data.skip ? undefined : editor.inheritedSkip.value.get(props.id)))
+/** Why this node never runs on some bot: an earlier trigger keeps the message. */
+const blocked = computed(() => (props.data.skip || skippedBy.value ? undefined : editor.blocked.value.get(props.id)))
 
 // A node with only `next` keeps its exec output on the header; branching nodes list one row per branch, like CASE / ELSE.
 const execOut = computed(() => ports.value?.execOut ?? [])
@@ -55,9 +57,9 @@ const summary = computed(() => (info.value ? configSummary(info.value, props.dat
 <template>
   <div
     class="flow-node"
-    :class="{ selected, [`issue-${issueLevel}`]: !!issueLevel, [`run-${run}`]: !!run, executing, skip: data.skip || !!skippedBy }"
+    :class="{ selected, [`issue-${issueLevel}`]: !!issueLevel, [`run-${run}`]: !!run, executing, skip: data.skip || !!skippedBy, blocked: !!blocked }"
     :style="{ '--accent': color }"
-    :title="[...(skippedBy ? [t('flows.inheritedSkip', { name: skippedBy })] : []), ...issues.map((issue) => issue.message)].join('\n') || undefined"
+    :title="[...(skippedBy ? [t('flows.inheritedSkip', { name: skippedBy })] : []), ...(blocked ? [blocked.reason] : []), ...issues.map((issue) => issue.message)].join('\n') || undefined"
   >
     <Handle v-if="ports?.execIn" :id="EXEC_IN" type="target" :position="Position.Left" class="handle head-handle" />
     <header class="flow-node-head">
@@ -65,6 +67,8 @@ const summary = computed(() => (info.value ? configSummary(info.value, props.dat
       <span class="name">{{ data.label || typeTitle }}</span>
       <span v-if="data.skip" class="off-tag">{{ t('flows.nodeSkipped') }}</span>
       <span v-else-if="skippedBy" class="off-tag">{{ t('flows.upstreamSkipped') }}</span>
+      <span v-else-if="blocked" class="off-tag blocked-tag">{{ t('flows.blockedTag') }}</span>
+      <span v-if="data.priority" class="priority" :title="t('flows.priority')">{{ data.priority > 0 ? `+${data.priority}` : data.priority }}</span>
       <span class="number">{{ number }}</span>
       <span v-if="issueLevel" class="badge" :class="issueLevel">!</span>
       <NSpin v-else-if="run === 'running'" :size="12" class="run-spin" />
@@ -166,6 +170,28 @@ const summary = computed(() => (info.value ? configSummary(info.value, props.dat
 
 .flow-node.skip > :not(.handle) {
   opacity: 0.45;
+}
+
+/* Never runs on some bot: an earlier trigger keeps the message. */
+.flow-node.blocked {
+  border-style: dashed;
+  border-color: #f0a020;
+}
+
+.flow-node.blocked > :not(.handle) {
+  opacity: 0.6;
+}
+
+.blocked-tag {
+  background: rgba(240, 160, 32, 0.22);
+  color: #f0a020;
+}
+
+.priority {
+  flex: none;
+  font-size: 10px;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
 }
 
 .flow-node.run-skipped {

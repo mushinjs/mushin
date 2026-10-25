@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  ArrowBackOutline, ChevronDownOutline, ConstructOutline, EyeOffOutline, EyeOutline, InformationCircleOutline, ListOutline, PlayOutline, TrashOutline,
+  ArrowBackOutline, ChevronDownOutline, ChevronUpOutline, ConstructOutline, EyeOffOutline, EyeOutline, InformationCircleOutline, ListOutline, PlayOutline, TrashOutline,
 } from '@vicons/ionicons5'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
@@ -11,7 +11,7 @@ import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 import {
-  type DropdownOption, NAlert, NButton, NDropdown, NEmpty, NForm, NFormItem, NIcon, NInput, NSelect, NSwitch, NTabPane, NTabs, NTag, useMessage,
+  type DropdownOption, NAlert, NButton, NDropdown, NEmpty, NForm, NFormItem, NIcon, NInput, NInputNumber, NSelect, NSwitch, NTabPane, NTabs, NTag, useMessage,
 } from 'naive-ui'
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, provide, type Ref, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -29,7 +29,7 @@ import SchemaForm from '../components/SchemaForm.vue'
 import { categoryColors, execOutHandle, parseHandle, portColors, portsOf, refOf, refsIn, schemaDefaults, supports, sysPorts } from '../flow'
 import { useDataStore } from '../stores/data'
 import { useTheme } from '../theme'
-import type { FlowDoc, FlowGroupDoc, FlowIssue, NodeTypeInfo, RunStep, RunTrace } from '../types'
+import type { FlowDoc, FlowGroupDoc, FlowIssue, NodeTypeInfo, RunStep, RunTrace, TriggerSlot } from '../types'
 import { clone, localize } from '../utils'
 
 const { t, locale } = useI18n()
@@ -58,6 +58,7 @@ const toggling = ref(false)
 /** The adapter saved on the flow; see `currentAdapter` for the one in effect. */
 const adapter = ref<string>()
 const issues = ref<FlowIssue[]>([])
+const blockedSlots = ref<NonNullable<FlowDoc['blocked']>>([])
 const runs = ref<RunTrace[]>([])
 const loaded = ref(false)
 const saving = ref(false)
@@ -96,6 +97,7 @@ provide(flowEditorKey, {
   types, issuesByNode, highlight, order, executing, groups,
   // Declared further down, with the other run helpers.
   inheritedSkip: computed(() => inheritedSkip.value),
+  blocked: computed(() => blockedNodes.value),
   execute: (nodeId: string) => runTest(nodeId),
   nodeName: (id: string) => nodeName(id),
   toggleGroup: (groupId: string) => toggleGroup(groupId),
@@ -118,6 +120,8 @@ function toDoc() {
       config: node.data!.config,
       ...(node.data!.inputs && Object.keys(node.data!.inputs).length ? { inputs: node.data!.inputs } : {}),
       ...(node.data!.skip ? { skip: true } : {}),
+      ...(node.data!.priority ? { priority: node.data!.priority } : {}),
+      ...(node.data!.passOn === false ? { passOn: false } : {}),
     })),
     edges: edges.value.filter((edge) => !isVirtual(edge)).map((edge) => ({
       id: edge.id,
@@ -168,11 +172,21 @@ function apply(flow: FlowDoc, fit: boolean) {
   enabled.value = flow.enabled !== false
   adapter.value = flow.adapter
   issues.value = flow.issues
+  blockedSlots.value = flow.blocked ?? []
   nodes.value = flow.nodes.map((node) => ({
     id: node.id,
     type: 'mushin',
     position: { ...node.position },
-    data: { typeId: node.type, label: node.label, config: node.config ?? {}, inputs: { ...node.inputs }, ...(node.skip ? { skip: true } : {}) },
+    data: {
+      typeId: node.type,
+      label: node.label,
+      // Defaults the settings form would fill in anyway, so opening a node does not count as an edit.
+      config: { ...schemaDefaults(types.value.get(node.type)?.configSchema), ...node.config },
+      inputs: { ...node.inputs },
+      ...(node.skip ? { skip: true } : {}),
+      ...(node.priority ? { priority: node.priority } : {}),
+      ...(node.passOn === false ? { passOn: false } : {}),
+    },
   }))
   edges.value = flow.edges.map((edge) => ({ ...edge, ...edgeLook(edge) }))
   groups.value = clone(flow.groups ?? [])
@@ -202,6 +216,16 @@ async function load() {
   types.value = new Map(typeList.map((type) => [type.type, type]))
   runs.value = [...recent].reverse()
   apply(flow, true)
+  // A link such as /flows/<id>?node=<node id> opens with that node selected.
+  const target = typeof route.query.node === 'string' ? route.query.node : undefined
+  if (target && flow.nodes.some((node) => node.id === target)) {
+    selectedId.value = target
+    tab.value = 'node'
+    if (narrow.value) {
+      showPanel.value = true
+      showPalette.value = false
+    }
+  }
 }
 
 // Someone else (usually the Agent) changed the flow: follow along unless there are local edits.
@@ -400,7 +424,9 @@ async function save() {
     const result = await call<FlowDoc>('flows.update', { id: flowId.value, ...toDoc(), adapter: currentAdapter.value ?? '' })
     adapter.value = result.adapter
     issues.value = result.issues
+    blockedSlots.value = result.blocked ?? []
     restyleEdges()
+    loadCompeting()
     savedAt = result.updatedAt
     savedSignature.value = signature()
     const errors = result.issues.filter((issue) => issue.severity === 'error').length
@@ -544,6 +570,116 @@ const inheritedSkip = computed(() => {
   }
   return result
 })
+
+/**
+ * Triggers that certainly never run on a bot (an earlier trigger keeps the message), and the steps
+ * only they, or skipped triggers, lead to. Comes from the saved flow.
+ */
+const blockedNodes = computed(() => {
+  const result = new Map<string, { reason: string; trigger: boolean }>()
+  for (const slot of blockedSlots.value) {
+    if (!slot.certain || result.has(slot.nodeId) || !slot.blockedBy) continue
+    result.set(slot.nodeId, {
+      trigger: true,
+      reason: t('flows.blockedNote', { bot: botName(slot.botId), flow: slot.blockedBy.flowName, name: slot.blockedBy.name, priority: slot.blockedBy.priority }),
+    })
+  }
+  if (!result.size) return result
+  const next = new Map<string, string[]>()
+  for (const edge of edges.value) {
+    if (!edge.sourceHandle?.startsWith('exec:')) continue
+    next.set(edge.source, [...(next.get(edge.source) ?? []), edge.target])
+  }
+  const reach = (starts: string[]) => {
+    const seen = new Set<string>()
+    const queue = [...starts]
+    while (queue.length) {
+      const id = queue.shift()!
+      if (seen.has(id)) continue
+      seen.add(id)
+      queue.push(...(next.get(id) ?? []))
+    }
+    return seen
+  }
+  const triggers = realNodes.value.filter((node) => types.value.get(node.data!.typeId)?.kind === 'trigger')
+  const live = reach(triggers.filter((node) => !node.data!.skip && !result.has(node.id)).map((node) => node.id))
+  for (const trigger of triggers.filter((node) => result.get(node.id)?.trigger)) {
+    for (const id of reach([trigger.id])) {
+      if (id === trigger.id || live.has(id) || result.has(id) || inheritedSkip.value.has(id)) continue
+      result.set(id, { trigger: false, reason: t('flows.upstreamBlockedNote', { name: nodeName(trigger.id) }) })
+    }
+  }
+  return result
+})
+
+const botName = (id: string) => data.bots.find((bot) => bot.id === id)?.name ?? id
+
+// ---- trigger order ----
+
+const orderBot = ref<string>()
+const competing = ref<TriggerSlot[]>([])
+const pluginsAfter = ref<string[]>([])
+const ordering = ref(false)
+const selectedIsTrigger = computed(() => !!selected.value && types.value.get(selected.value.data!.typeId)?.kind === 'trigger')
+/** Event and schedule triggers have no "let other plugins answer too"; they pass on unless told not to. */
+const hasPassThrough = computed(() => !!selectedInfo.value?.configSchema?.properties?.passThrough)
+
+watch(bots, (list) => {
+  if (!orderBot.value || !list.includes(orderBot.value)) orderBot.value = list[0]
+}, { immediate: true })
+
+async function loadCompeting() {
+  const node = selected.value
+  if (!node || !selectedIsTrigger.value || !orderBot.value) {
+    competing.value = []
+    return
+  }
+  try {
+    const result = await call<{ triggers: TriggerSlot[]; plugins: string[] }>('flows.triggers', { bot: orderBot.value, flow: flowId.value, node: node.id })
+    competing.value = result.triggers
+    pluginsAfter.value = result.plugins
+  } catch {
+    competing.value = []
+  }
+}
+watch(() => [selectedId.value, orderBot.value, selectedIsTrigger.value], loadCompeting)
+
+/** Moves a trigger up or down among the competing ones by rewriting their priorities. */
+async function moveTrigger(index: number, by: -1 | 1) {
+  const list = [...competing.value]
+  const target = index + by
+  if (target < 0 || target >= list.length) return
+  ;[list[index], list[target]] = [list[target], list[index]]
+  ordering.value = true
+  try {
+    const result = await call<{ flowId: string; nodeId: string; priority: number }[]>('flows.setTriggerOrder', {
+      order: list.map((slot) => ({ flowId: slot.flowId, nodeId: slot.nodeId })),
+    })
+    // Keep this flow's canvas in step with the priorities just saved for it.
+    const wasDirty = dirty.value
+    for (const item of result.filter((entry) => entry.flowId === flowId.value)) {
+      nodes.value = nodes.value.map((node) => (node.id === item.nodeId ? { ...node, data: { ...node.data!, priority: item.priority || undefined } } : node))
+    }
+    if (!wasDirty) savedSignature.value = signature()
+    await loadCompeting()
+    const flow = await call<FlowDoc>('flows.get', { id: flowId.value })
+    blockedSlots.value = flow.blocked ?? []
+    issues.value = flow.issues
+  } catch (error) {
+    message.error((error as Error).message)
+  } finally {
+    ordering.value = false
+  }
+}
+
+function openTrigger(slot: { flowId: string; nodeId: string }) {
+  if (slot.flowId === flowId.value) {
+    selectedId.value = slot.nodeId
+    tab.value = 'node'
+    return
+  }
+  router.push({ path: `/flows/${slot.flowId}`, query: { node: slot.nodeId } })
+}
 
 function toggleSkip(ids: string[]) {
   const set = new Set(ids)
@@ -1437,6 +1573,20 @@ watch(narrow, (value) => {
               <NAlert v-else-if="inheritedSkip.get(selected.id)" type="warning" :show-icon="false" class="skip-note">
                 {{ t('flows.inheritedSkip', { name: inheritedSkip.get(selected.id) }) }}
               </NAlert>
+              <NAlert v-if="blockedNodes.get(selected.id)" type="warning" :show-icon="false" class="skip-note">
+                {{ blockedNodes.get(selected.id)!.reason }}
+                <template v-if="blockedNodes.get(selected.id)!.trigger">
+                  <NButton
+                    v-for="slot in blockedSlots.filter((item) => item.nodeId === selected!.id && item.certain).slice(0, 1)"
+                    :key="slot.botId"
+                    size="tiny"
+                    secondary
+                    type="warning"
+                    class="note-action"
+                    @click="openTrigger(slot.blockedBy!)"
+                  >{{ t('flows.goToBlocker') }}</NButton>
+                </template>
+              </NAlert>
               <NTabs v-model:value="nodeTab" type="segment" size="small" class="node-tabs">
                 <NTabPane name="settings" :tab="t('flows.nodeSettings')">
                   <NForm label-placement="top" size="small">
@@ -1485,6 +1635,45 @@ watch(narrow, (value) => {
                       @update:model-value="(config: Record<string, any>) => updateSelected({ config: clone(config) })"
                     />
                   </template>
+                  <div v-if="selectedIsTrigger" class="order" data-agent-target="flows.triggerOrder">
+                    <div class="inputs-title">{{ t('flows.triggerOrder') }}</div>
+                    <NForm label-placement="top" size="small">
+                      <NFormItem :label="t('flows.priority')" :feedback="t('flows.priorityHint')">
+                        <NInputNumber :value="selected.data!.priority ?? 0" :precision="0" @update:value="(value: number | null) => updateSelected({ priority: value || undefined })" />
+                      </NFormItem>
+                      <NFormItem v-if="!hasPassThrough" :label="t('flows.passOn')" :feedback="t('flows.passOnHint')" label-placement="left">
+                        <NSwitch :value="selected.data!.passOn !== false" @update:value="(value: boolean) => updateSelected({ passOn: value ? undefined : false })" />
+                      </NFormItem>
+                    </NForm>
+                    <template v-if="bots.length">
+                      <div class="order-head">
+                        <span class="muted small">{{ t('flows.competing') }}</span>
+                        <NSelect v-if="bots.length > 1" v-model:value="orderBot" size="tiny" class="order-bot" :options="bots.map((id) => ({ label: botName(id), value: id }))" />
+                        <span v-else class="muted small">{{ botName(bots[0]) }}</span>
+                      </div>
+                      <ol v-if="competing.length" class="order-list">
+                        <li v-for="(slot, index) in competing" :key="`${slot.flowId}:${slot.nodeId}`" :class="{ current: slot.flowId === flowId && slot.nodeId === selected.id, blocked: slot.certain }">
+                          <button type="button" class="order-name" @click="openTrigger(slot)">
+                            <span>{{ slot.name }}</span>
+                            <span class="muted small">{{ slot.flowName }} · {{ t('flows.priorityShort', { n: slot.priority }) }}{{ slot.passesOn ? ` · ${t('flows.passesOnShort')}` : '' }}</span>
+                            <span v-if="slot.certain" class="order-tag">{{ t('flows.blockedTag') }}</span>
+                            <span v-else-if="slot.blockedBy" class="order-tag maybe">{{ t('flows.maybeBlocked') }}</span>
+                          </button>
+                          <NButton quaternary circle size="tiny" :disabled="ordering || index === 0" :aria-label="t('flows.moveUp')" :title="t('flows.moveUp')" @click="moveTrigger(index, -1)">
+                            <template #icon><NIcon><ChevronUpOutline /></NIcon></template>
+                          </NButton>
+                          <NButton quaternary circle size="tiny" :disabled="ordering || index === competing.length - 1" :aria-label="t('flows.moveDown')" :title="t('flows.moveDown')" @click="moveTrigger(index, 1)">
+                            <template #icon><NIcon><ChevronDownOutline /></NIcon></template>
+                          </NButton>
+                        </li>
+                      </ol>
+                      <p class="muted small">
+                        {{ pluginsAfter.length ? t('flows.afterFlows', { plugins: pluginsAfter.map((name) => name.replace(/^@mushin\/bot-plugin-/, '')).join('、') }) : t('flows.afterFlowsNone') }}
+                        <template v-if="dirty"> {{ t('flows.orderSavedOnly') }}</template>
+                      </p>
+                    </template>
+                    <p v-else class="muted small">{{ t('flows.orderNoBots') }}</p>
+                  </div>
                   <NAlert v-for="(issue, index) in issuesByNode.get(selected.id) ?? []" :key="index" :type="issue.severity" :show-icon="false" class="issue">
                     {{ issue.message }}
                   </NAlert>
@@ -1920,6 +2109,78 @@ watch(narrow, (value) => {
 .section {
   margin: 16px 0 8px;
   font-size: 13px;
+}
+
+.order {
+  margin: 4px 0 14px;
+}
+
+.order-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.order-bot {
+  width: 140px;
+}
+
+.order-list {
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.order-list li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(127, 127, 127, 0.2);
+}
+
+.order-list li.current {
+  border-color: #2080f0;
+}
+
+.order-list li.blocked {
+  border-style: dashed;
+  border-color: #f0a020;
+}
+
+.order-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.order-tag {
+  font-size: 11px;
+  color: #f0a020;
+}
+
+.order-tag.maybe {
+  opacity: 0.75;
+}
+
+.note-action {
+  margin-left: 6px;
 }
 
 .skip-note {

@@ -25,6 +25,8 @@ export interface FlowEditorContext {
   nodeName(nodeId: string): string
   /** Nodes that never run because every trigger reaching them is skipped, with that trigger's name. */
   inheritedSkip: ComputedRef<Map<string, string>>
+  /** Nodes that never run on some bot because an earlier trigger keeps the message, with why. */
+  blocked: ComputedRef<Map<string, { reason: string; trigger: boolean }>>
   groups: Ref<FlowGroupDoc[]>
   /** Collapses or expands a group. */
   toggleGroup(groupId: string): void
@@ -47,6 +49,10 @@ export interface CanvasNodeData {
   inputs?: Record<string, string>
   /** Skipped when the flow runs. */
   skip?: boolean
+  /** Triggers: run order among the triggers one message starts on a bot. */
+  priority?: number
+  /** Event and schedule triggers: false stops later triggers. */
+  passOn?: boolean
   /** Set on the box that stands for a collapsed group. */
   groupId?: string
 }

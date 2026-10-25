@@ -194,7 +194,22 @@ describe('commands', () => {
   it('warns when two flows register the same command on a bot', async () => {
     const first = await app.call('flows.create', checkin('First'))
     const second = await app.call('flows.create', checkin('Second', { name: '签到' }))
-    expect(second.issues).toEqual([expect.objectContaining({ severity: 'warning', nodeId: 'cmd', message: expect.stringContaining('the flow "First"') })])
+    expect(second.issues).toEqual([expect.objectContaining({ severity: 'warning', nodeId: 'cmd', message: expect.stringContaining('never runs on the bot "Flowy": "/checkin" of the flow "First" (priority 0) answers first') })])
+    expect(second.blocked).toEqual([expect.objectContaining({ botId, nodeId: 'cmd', certain: true, blockedBy: expect.objectContaining({ flowId: first.id }) })])
+    expect((await app.call<any[]>('flows.list')).find((flow) => flow.id === second.id).blocked).toBe('all')
+    expect((await app.call('flows.get', { id: first.id })).issues).toEqual([expect.objectContaining({ message: expect.stringContaining('the flow "Second"') })])
+
+    // Moving the second one first makes it answer, and the first one is blocked instead.
+    await app.call('flows.setTriggerOrder', { order: [{ flowId: second.id, nodeId: 'cmd' }, { flowId: first.id, nodeId: 'cmd' }] })
+    const competing = await app.call('flows.triggers', { bot: botId, flow: first.id, node: 'cmd' })
+    expect(competing.triggers.map((slot: any) => slot.flowName)).toEqual(['Second', 'First'])
+    expect(competing.plugins).toEqual(['@mushin/bot-plugin-llm-chat'])
+    await say('/签到')
+    expect(groupReplies().at(-1)).toBe('checked in ')
+    expect((await app.call('flows.runs', { id: second.id })).at(-1)).toMatchObject({ text: '/签到' })
+    expect((await app.call('flows.runs', { id: first.id })).some((run: any) => run.text === '/签到')).toBe(false)
+    // The first one still answers /checkin, which the second one does not take.
+    expect((await app.call<any[]>('flows.list')).find((flow) => flow.id === first.id).blocked).toBeUndefined()
     const { conflicts } = await app.call('commands.list', { bot: botId })
     expect(conflicts.map((item: any) => item.name)).toContain('签到')
     await app.call('flows.delete', { id: second.id })

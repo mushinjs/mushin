@@ -191,6 +191,13 @@ export interface FlowNode {
    * straight on to its first exec output with no outputs of its own.
    */
   skip?: boolean
+  /** Triggers: higher runs first when one message (or event) starts several triggers on a bot. Default 0. */
+  priority?: number
+  /**
+   * Triggers without a "let other plugins answer too" setting (events, schedules): false stops
+   * later triggers once this one runs. Default true.
+   */
+  passOn?: boolean
 }
 
 /** An edge means "run next": from an exec output `exec:<name>` to a node's exec input `exec`. */
