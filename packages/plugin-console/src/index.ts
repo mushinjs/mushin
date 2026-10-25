@@ -7,6 +7,7 @@ import type {} from '@mushin/plugin-agent'
 import type {} from '@mushin/plugin-bots'
 import type {} from '@mushin/plugin-flows'
 import type {} from '@mushin/plugin-providers'
+import type {} from '@mushin/plugin-stats'
 import type {} from '@mushin/plugin-storage'
 import { AUTH_KEY, type AuthRecord, generateToken, isAuthRecord, tokensEqual } from './auth'
 import { dashboardRoot, MISSING_BUILD_PAGE, readStatic } from './static'
@@ -57,7 +58,7 @@ const CLIENT_CALL_TIMEOUT = 15_000
 const FORWARDED_EVENTS = [
   'actions/changed', 'manager/changed', 'providers/changed',
   'bots/changed', 'bots/status', 'bots/message', 'bots/log', 'agent/event',
-  'flows/changed', 'flows/run', 'flows/step',
+  'flows/changed', 'flows/run', 'flows/step', 'stats/sample',
 ] as const
 
 const plainExporter: Exporter = { colors: false, export() {} }

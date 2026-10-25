@@ -13,7 +13,19 @@ declare module '@mushin/core' {
 
   interface Events {
     'providers/changed'(): void
+    'llm/called'(call: LlmCall): void
   }
+}
+
+/** One finished model request, for usage statistics. */
+export interface LlmCall {
+  provider: string
+  providerName: string
+  model: string
+  ok: boolean
+  inputTokens?: number
+  outputTokens?: number
+  latencyMs: number
 }
 
 const STORAGE_KEY = 'providers'
@@ -228,6 +240,15 @@ export class LlmService extends Service {
   private result(record: ProviderRecord, model: string, start: number, response: Awaited<ReturnType<ProviderClient['chat']>>): LlmResult {
     const latencyMs = Date.now() - start
     const tokens = response.usage ? response.usage.inputTokens + response.usage.outputTokens : undefined
+    this.home.emit('llm/called', {
+      provider: record.id,
+      providerName: record.name,
+      model,
+      ok: true,
+      inputTokens: response.usage?.inputTokens,
+      outputTokens: response.usage?.outputTokens,
+      latencyMs,
+    })
     return {
       ...response,
       provider: record.id,
@@ -246,7 +267,7 @@ export class LlmService extends Service {
       const response = await client.chat({ ...options, model } satisfies ChatRequest)
       return this.result(record, model, start, response)
     } catch (error) {
-      this.logRequestError(record, model, error)
+      this.logRequestError(record, model, error, start)
       throw error
     }
   }
@@ -268,14 +289,15 @@ export class LlmService extends Service {
         else yield { type: 'result', result: this.result(record, model, start, event.response) }
       }
     } catch (error) {
-      this.logRequestError(record, model, error)
+      this.logRequestError(record, model, error, start)
       throw error
     }
   }
 
-  private logRequestError(record: ProviderRecord, model: string, error: unknown) {
+  private logRequestError(record: ProviderRecord, model: string, error: unknown, start: number) {
     // A caller that gave up (timeout, user stop) is not the provider's fault.
     if (error instanceof Error && error.name === 'AbortError') return
+    this.home.emit('llm/called', { provider: record.id, providerName: record.name, model, ok: false, latencyMs: Date.now() - start })
     this.logger.warn('request to %s (%s) failed: %s', this.label(record), model, error instanceof Error ? error.message : error)
   }
 

@@ -32,6 +32,7 @@
     "ws": "catalog:",
     "@mushin/dashboard": "workspace:*",
     "@mushin/plugin-providers": "workspace:*",
-    "@mushin/plugin-flows": "workspace:*"
+    "@mushin/plugin-flows": "workspace:*",
+    "@mushin/plugin-stats": "workspace:*"
   }
 }

@@ -11,7 +11,8 @@ Mushin.js is built on [Cordis](https://github.com/cordiverse/cordis). The MVP sh
 | Plugin architecture | Every feature is a Cordis plugin. App plugins extend Mushin.js; bot plugins run per bot, each bot in its own isolated context. |
 | Agent | A chat dock on every page. It operates the instance through the same actions the dashboard uses, asks before dangerous ones, and can open pages and point at controls. |
 | Providers | OpenAI-compatible endpoints (OpenAI, DeepSeek, Moonshot, Qwen, SiliconFlow, OpenRouter, Ollama) and Anthropic. Keys are masked everywhere. |
-| Bots | Create, start, stop and configure bots; enable bot plugins per bot. |
+| Overview | The start page: bots online, today's messages and model tokens, flows with errors, commands, providers and plugins; a message chart for 24 hours or 7 days per bot; the busiest chats, users, commands, flows and models; live CPU, memory and event loop delay; versions, uptime and data directory size. |
+| Bots | Create, start, stop and configure bots; enable bot plugins per bot; each bot's commands and `/help`. |
 | OneBot adapter | OneBot v11 over WebSocket, in forward mode (Mushin dials NapCat) or reverse mode (NapCat dials Mushin). |
 | Conversation flows | A visual editor for bot behavior: wire triggers, conditions, variables, LLM calls and replies into a graph, test it with a made-up message, and watch live runs light up the path. The Agent can build flows too. |
 | Live conversation view | Messages appear as they arrive. Hover a message to see its type, supported platforms and what generated it (an LLM with provider and model, a plugin, or a flow). |
@@ -149,6 +150,7 @@ pnpm typecheck    # TypeScript for all packages, vue-tsc for the dashboard
 | `@mushin/plugin-agent` | The Agent's tool loop |
 | `@mushin/plugin-console` | HTTP API, WebSocket, admin token, dashboard hosting |
 | `@mushin/plugin-flows` | Flow documents, node types, validation and the execution engine |
+| `@mushin/plugin-stats` | Hourly counts of messages, commands, flow runs and model usage (kept hourly for 30 days, daily for a year, in `data/stats/`) and process samples for the overview |
 | `@mushin/bot-plugin-echo`, `@mushin/bot-plugin-llm-chat`, `@mushin/bot-plugin-flows` | Bot plugins |
 | `@mushin/plugin-demo` | Offline demo provider, sandbox bot adapter and sample flows (opt-in) |
 | `@mushin/dashboard` | The Vue 3 dashboard |
