@@ -307,6 +307,10 @@ const zhCN: typeof en = {
     empty: '暂无日志。连接尝试、适配器错误、插件警告以及大模型对话跳过消息的原因都会显示在这里。',
   },
   flows: {
+    filter: '筛选',
+    filterNone: '暂无可选项',
+    recentlyEdited: '最近编辑',
+    allFlows: '全部流程',
     priorityWheel: '可用滚轮调整',
     dragToOrder: '拖动排序',
     focusTrigger: '在画布上定位到这个触发器',
@@ -340,7 +344,6 @@ const zhCN: typeof en = {
       enabled: '已启用',
       disabled: '已停用',
       errors: '有错误',
-      blocked: '不会生效',
     },
     groupBy: {
       none: '不分组',
@@ -353,7 +356,6 @@ const zhCN: typeof en = {
       updated: '最近编辑',
       created: '创建时间',
       name: '名称',
-      issues: '问题数',
     },
     recent: {
       today: '今天',

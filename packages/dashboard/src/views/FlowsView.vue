@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { AddOutline, AppsOutline, GitNetworkOutline, ListOutline, SearchOutline, TrashOutline } from '@vicons/ionicons5'
 import {
-  type DataTableColumns, NButton, NCard, NDataTable, NEmpty, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup,
-  NSelect, NSwitch, NTag, useDialog, useMessage,
+  AddOutline, AlertCircleOutline, AppsOutline, ChatbubblesOutline, CloseCircleOutline, ExtensionPuzzleOutline, FilterOutline, GitNetworkOutline,
+  LayersOutline, ListOutline, NotificationsOutline, PauseCircleOutline, PlayCircleOutline, SearchOutline, SwapVerticalOutline, TimeOutline,
+  TrashOutline,
+} from '@vicons/ionicons5'
+import {
+  type DataTableColumns, NBadge, NButton, NCard, NDataTable, NEmpty, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NModal, NPopover,
+  NRadioButton, NRadioGroup, NSelect, type SelectOption, NSwitch, NTag, useDialog, useMessage,
 } from 'naive-ui'
-import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { type Component, computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { call, on } from '../api'
+import { nodeIcon } from '../components/flow/icons'
 import IconAction from '../components/IconAction.vue'
 import { flowTemplates } from '../flow'
 import { useDataStore } from '../stores/data'
@@ -42,9 +47,9 @@ const botOptions = computed(() => data.bots.map((bot) => ({ label: bot.name, val
 
 type View = 'cards' | 'list'
 type Group = 'none' | 'trigger' | 'adapter' | 'bot' | 'recent'
-type Sort = 'updated' | 'created' | 'name' | 'issues'
+type Sort = 'updated' | 'created' | 'name'
 type TriggerKind = 'message' | 'keyword' | 'command' | 'regex' | 'schedule' | 'event'
-type Status = 'enabled' | 'disabled' | 'errors' | 'blocked'
+type Status = 'enabled' | 'disabled' | 'errors'
 
 const VIEW_KEY = 'mushin.flows.view'
 const list = (value: unknown) => (typeof value === 'string' && value ? value.split(',') : [])
@@ -58,7 +63,8 @@ const savedView = (() => {
 
 const search = ref(String(route.query.q ?? ''))
 const view = ref<View>((route.query.view as View) || savedView || 'cards')
-const group = ref<Group>((route.query.group as Group) || 'none')
+const DEFAULT_GROUP: Group = 'bot'
+const group = ref<Group>((route.query.group as Group) || DEFAULT_GROUP)
 const sort = ref<Sort>((route.query.sort as Sort) || 'updated')
 const triggerFilter = ref<string[]>(list(route.query.trigger))
 const adapterFilter = ref<string[]>(list(route.query.adapter))
@@ -69,7 +75,7 @@ watch([search, view, group, sort, triggerFilter, adapterFilter, botFilter, statu
   const query: Record<string, string> = {}
   if (search.value) query.q = search.value
   if (view.value !== 'cards') query.view = view.value
-  if (group.value !== 'none') query.group = group.value
+  if (group.value !== DEFAULT_GROUP) query.group = group.value
   if (sort.value !== 'updated') query.sort = sort.value
   if (triggerFilter.value.length) query.trigger = triggerFilter.value.join(',')
   if (adapterFilter.value.length) query.adapter = adapterFilter.value.join(',')
@@ -96,12 +102,50 @@ const adapterLabel = (id?: string) => {
   return localize(data.adapters.find((adapter) => adapter.id === id)?.displayName, locale.value) || id
 }
 
-const triggerOptions = computed(() => triggerKinds.map((kind) => ({ label: t(`flows.kind.${kind}`), value: kind })))
-const adapterOptions = computed(() => [...new Set(flows.value.map((flow) => flow.adapter ?? ''))].map((id) => ({ label: adapterLabel(id || undefined), value: id })))
-const statusOptions = computed(() => (['enabled', 'disabled', 'errors', 'blocked'] as Status[]).map((value) => ({ label: t(`flows.status.${value}`), value })))
-const groupOptions = computed(() => (['none', 'trigger', 'adapter', 'bot', 'recent'] as Group[]).map((value) => ({ label: t(`flows.groupBy.${value}`), value })))
-const sortOptions = computed(() => (['updated', 'created', 'name', 'issues'] as Sort[]).map((value) => ({ label: t(`flows.sortBy.${value}`), value })))
-const filtered = computed(() => !!(search.value || triggerFilter.value.length || adapterFilter.value.length || botFilter.value.length || statusFilter.value.length))
+/**
+ * The adapter a flow is for: the one set on it, or else the adapter its bots all use. Flows made
+ * before adapters could be picked (or by the demo plugin) have none set but run on one anyway.
+ */
+function adapterOf(flow: FlowSummary) {
+  if (flow.adapter) return flow.adapter
+  const used = new Set(flow.bots.map((id) => data.bots.find((bot) => bot.id === id)?.adapter.type).filter(Boolean))
+  return used.size === 1 ? [...used][0]! : ''
+}
+
+const kindIcon = (kind: string): Component => (kind === 'event' ? NotificationsOutline : nodeIcon(`trigger.${kind}`, 'trigger'))
+const statusIcons: Record<Status, Component> = { enabled: PlayCircleOutline, disabled: PauseCircleOutline, errors: AlertCircleOutline }
+const groupIcons: Record<Group, Component> = { none: AppsOutline, trigger: NotificationsOutline, adapter: ExtensionPuzzleOutline, bot: ChatbubblesOutline, recent: TimeOutline }
+const icon = (component: Component, size = 15) => h(NIcon, { size, class: 'option-icon' }, { default: () => h(component) })
+
+/** Select options shown with their icon. */
+const renderLabel = (option: SelectOption & { icon?: Component }) => h('span', { class: 'option' }, [option.icon ? icon(option.icon) : null, String(option.label)])
+
+const adapterIds = computed(() => {
+  const ids = new Set(data.adapters.map((adapter) => adapter.id))
+  for (const flow of flows.value) ids.add(adapterOf(flow))
+  return [...ids].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)))
+})
+const groupOptions = computed(() => (['bot', 'trigger', 'adapter', 'recent', 'none'] as Group[]).map((value) => ({ label: t(`flows.groupBy.${value}`), value, icon: groupIcons[value] })))
+const sortOptions = computed(() => (['updated', 'created', 'name'] as Sort[]).map((value) => ({ label: t(`flows.sortBy.${value}`), value })))
+
+/** The filter panel: one section per field, each a row of toggles with icons. */
+const filterSections = computed(() => [
+  { key: 'trigger', title: t('flows.filterTrigger'), model: triggerFilter, items: triggerKinds.map((kind) => ({ value: kind, label: t(`flows.kind.${kind}`), icon: kindIcon(kind) })) },
+  { key: 'adapter', title: t('flows.filterAdapter'), model: adapterFilter, items: adapterIds.value.map((id) => ({ value: id, label: adapterLabel(id || undefined), icon: ExtensionPuzzleOutline })) },
+  { key: 'bot', title: t('flows.filterBot'), model: botFilter, items: data.bots.map((bot) => ({ value: bot.id, label: bot.name, icon: ChatbubblesOutline })) },
+  { key: 'status', title: t('flows.filterStatus'), model: statusFilter, items: (['enabled', 'disabled', 'errors'] as Status[]).map((value) => ({ value, label: t(`flows.status.${value}`), icon: statusIcons[value] })) },
+])
+
+function toggleFilter(model: { value: string[] }, value: string) {
+  model.value = model.value.includes(value) ? model.value.filter((item) => item !== value) : [...model.value, value]
+}
+
+/** Every active filter as a removable tag. */
+const activeFilters = computed(() => filterSections.value.flatMap((section) => section.items
+  .filter((item) => section.model.value.includes(item.value))
+  .map((item) => ({ key: `${section.key}:${item.value}`, label: item.label, icon: item.icon, remove: () => toggleFilter(section.model, item.value) }))))
+const filterCount = computed(() => activeFilters.value.length)
+const filtered = computed(() => !!(search.value || filterCount.value))
 
 function clearFilters() {
   search.value = ''
@@ -116,10 +160,10 @@ const shown = computed(() => {
   const result = flows.value.filter((flow) => {
     if (words && !`${flow.name} ${flow.description ?? ''} ${flow.triggers.map((item) => item.summary).join(' ')}`.toLowerCase().includes(words)) return false
     if (triggerFilter.value.length && !kindsOf(flow).some((kind) => triggerFilter.value.includes(kind))) return false
-    if (adapterFilter.value.length && !adapterFilter.value.includes(flow.adapter ?? '')) return false
+    if (adapterFilter.value.length && !adapterFilter.value.includes(adapterOf(flow))) return false
     if (botFilter.value.length && !flow.bots.some((bot) => botFilter.value.includes(bot))) return false
     if (statusFilter.value.length) {
-      const states: Status[] = [flow.enabled ? 'enabled' : 'disabled', ...(flow.errors ? ['errors' as const] : []), ...(flow.blocked ? ['blocked' as const] : [])]
+      const states: Status[] = [flow.enabled ? 'enabled' : 'disabled', ...(flow.errors ? ['errors' as const] : [])]
       if (!statusFilter.value.some((status) => states.includes(status as Status))) return false
     }
     return true
@@ -128,7 +172,6 @@ const shown = computed(() => {
     updated: (a, b) => b.updatedAt - a.updatedAt,
     created: (a, b) => b.createdAt - a.createdAt,
     name: (a, b) => a.name.localeCompare(b.name),
-    issues: (a, b) => (b.errors * 1000 + b.warnings) - (a.errors * 1000 + a.warnings) || b.updatedAt - a.updatedAt,
   }
   return result.sort(compare[sort.value])
 })
@@ -145,35 +188,53 @@ function recency(time: number) {
   return 'earlier'
 }
 
-const groups = computed(() => {
-  if (group.value === 'none') return [{ key: 'all', label: '', items: shown.value }]
-  const buckets = new Map<string, { key: string; label: string; items: FlowSummary[] }>()
-  const add = (key: string, label: string, flow: FlowSummary) => {
+interface Bucket {
+  key: string
+  label: string
+  icon?: Component
+  items: FlowSummary[]
+}
+
+/** How many of the most recently edited flows the group at the top shows. */
+const RECENT_COUNT = 4
+
+const groups = computed<Bucket[]>(() => {
+  // The most recently edited flows come first, whatever the grouping, so the ones being worked on are at hand.
+  const recent: Bucket[] = group.value === 'recent' || shown.value.length <= RECENT_COUNT ? [] : [{
+    key: '@recent',
+    label: t('flows.recentlyEdited'),
+    icon: TimeOutline,
+    items: [...shown.value].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, RECENT_COUNT),
+  }]
+  if (group.value === 'none') return [...recent, { key: 'all', label: t('flows.allFlows'), icon: AppsOutline, items: shown.value }]
+  const buckets = new Map<string, Bucket>()
+  const add = (key: string, label: string, flow: FlowSummary, bucketIcon?: Component) => {
     let bucket = buckets.get(key)
-    if (!bucket) buckets.set(key, bucket = { key, label, items: [] })
+    if (!bucket) buckets.set(key, bucket = { key, label, icon: bucketIcon, items: [] })
     bucket.items.push(flow)
   }
   for (const flow of shown.value) {
     if (group.value === 'trigger') {
       const kinds = kindsOf(flow)
-      if (!kinds.length) add('none', t('flows.kind.none'), flow)
+      if (!kinds.length) add('none', t('flows.kind.none'), flow, AppsOutline)
       // A flow with several kinds of trigger shows in each of their groups.
-      for (const kind of kinds) add(kind, t(`flows.kind.${kind}`), flow)
+      for (const kind of kinds) add(kind, t(`flows.kind.${kind}`), flow, kindIcon(kind))
     } else if (group.value === 'adapter') {
-      add(flow.adapter ?? '', adapterLabel(flow.adapter), flow)
+      const adapter = adapterOf(flow)
+      add(adapter, adapterLabel(adapter || undefined), flow, ExtensionPuzzleOutline)
     } else if (group.value === 'bot') {
-      if (!flow.bots.length) add('', t('flows.runsOnNone'), flow)
-      for (const bot of flow.bots) add(bot, botName(bot), flow)
+      if (!flow.bots.length) add('', t('flows.runsOnNone'), flow, ChatbubblesOutline)
+      for (const bot of flow.bots) add(bot, botName(bot), flow, ChatbubblesOutline)
     } else {
       const key = recency(flow.updatedAt)
-      add(key, t(`flows.recent.${key}`), flow)
+      add(key, t(`flows.recent.${key}`), flow, TimeOutline)
     }
   }
   const order = group.value === 'trigger' ? [...triggerKinds, 'none'] : group.value === 'recent' ? ['today', 'yesterday', 'week', 'earlier'] : undefined
   const result = [...buckets.values()]
   if (order) result.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key))
   else result.sort((a, b) => (a.key === '' ? 1 : b.key === '' ? -1 : a.label.localeCompare(b.label)))
-  return result
+  return [...recent, ...result]
 })
 
 const collapsed = ref(new Set<string>())
@@ -197,7 +258,7 @@ const columns = computed<DataTableColumns<FlowSummary>>(() => [
     ]),
   },
   { title: t('flows.colTriggers'), key: 'triggers', ellipsis: { tooltip: true }, render: (flow) => triggerText(flow) || '—' },
-  { title: t('flows.adapter'), key: 'adapter', width: 110, render: (flow) => adapterLabel(flow.adapter) },
+  { title: t('flows.adapter'), key: 'adapter', width: 130, render: (flow) => adapterLabel(adapterOf(flow) || undefined) },
   {
     title: t('flows.bots'),
     key: 'bots',
@@ -294,33 +355,75 @@ function remove(flow: FlowSummary) {
         <h1>{{ t('nav.flows') }}</h1>
         <p class="page-lead">{{ t('flows.lead') }}</p>
       </div>
-      <NButton type="primary" data-agent-target="flows.add" @click="openCreate">
-        <template #icon><NIcon><AddOutline /></NIcon></template>
-        {{ t('flows.add') }}
-      </NButton>
+      <div class="header-actions">
+        <NRadioGroup v-if="flows.length" v-model:value="view" class="views">
+          <NRadioButton value="cards" :title="t('flows.viewCards')" :aria-label="t('flows.viewCards')"><NIcon class="view-icon"><AppsOutline /></NIcon></NRadioButton>
+          <NRadioButton value="list" :title="t('flows.viewList')" :aria-label="t('flows.viewList')"><NIcon class="view-icon"><ListOutline /></NIcon></NRadioButton>
+        </NRadioGroup>
+        <NButton type="primary" data-agent-target="flows.add" @click="openCreate">
+          <template #icon><NIcon><AddOutline /></NIcon></template>
+          {{ t('flows.add') }}
+        </NButton>
+      </div>
     </div>
 
     <div v-if="flows.length" class="toolbar" data-agent-target="flows.filters">
       <NInput v-model:value="search" clearable :placeholder="t('flows.searchPlaceholder')" class="search">
         <template #prefix><NIcon><SearchOutline /></NIcon></template>
       </NInput>
-      <NSelect v-model:value="triggerFilter" multiple clearable max-tag-count="responsive" :options="triggerOptions" :placeholder="t('flows.filterTrigger')" class="filter" />
-      <NSelect v-model:value="adapterFilter" multiple clearable max-tag-count="responsive" :options="adapterOptions" :placeholder="t('flows.filterAdapter')" class="filter" />
-      <NSelect v-model:value="botFilter" multiple clearable max-tag-count="responsive" :options="botOptions" :placeholder="t('flows.filterBot')" class="filter" />
-      <NSelect v-model:value="statusFilter" multiple clearable max-tag-count="responsive" :options="statusOptions" :placeholder="t('flows.filterStatus')" class="filter" />
+      <NPopover trigger="click" placement="bottom-start" :show-arrow="false" class="filter-popover">
+        <template #trigger>
+          <NBadge :value="filterCount" :show="filterCount > 0" :offset="[-4, 4]">
+            <NButton :type="filterCount ? 'primary' : 'default'" :secondary="!!filterCount">
+              <template #icon><NIcon><FilterOutline /></NIcon></template>
+              {{ t('flows.filter') }}
+            </NButton>
+          </NBadge>
+        </template>
+        <div class="filter-panel">
+          <section v-for="section in filterSections" :key="section.key" class="filter-section">
+            <div class="filter-title">{{ section.title }}</div>
+            <div class="chips">
+              <button
+                v-for="item in section.items"
+                :key="item.value"
+                type="button"
+                class="chip"
+                :class="{ on: section.model.value.includes(item.value) }"
+                @click="toggleFilter(section.model, item.value)"
+              >
+                <NIcon :size="14"><component :is="item.icon" /></NIcon>
+                {{ item.label }}
+              </button>
+              <span v-if="!section.items.length" class="sub">{{ t('flows.filterNone') }}</span>
+            </div>
+          </section>
+          <div v-if="filterCount" class="filter-foot">
+            <NButton size="small" quaternary @click="clearFilters">
+              <template #icon><NIcon><CloseCircleOutline /></NIcon></template>
+              {{ t('flows.clearFilters') }}
+            </NButton>
+          </div>
+        </div>
+      </NPopover>
+      <NTag v-for="item in activeFilters" :key="item.key" closable size="small" :bordered="false" type="info" class="active-filter" @close="item.remove()">
+        <template #icon><NIcon><component :is="item.icon" /></NIcon></template>
+        {{ item.label }}
+      </NTag>
       <span class="spacer" />
-      <NSelect v-model:value="group" :options="groupOptions" class="small-select" :title="t('flows.groupTitle')" />
-      <NSelect v-model:value="sort" :options="sortOptions" class="small-select" :title="t('flows.sortTitle')" />
-      <NRadioGroup v-model:value="view" size="small" class="views">
-        <NRadioButton value="cards" :title="t('flows.viewCards')" :aria-label="t('flows.viewCards')"><NIcon class="view-icon"><AppsOutline /></NIcon></NRadioButton>
-        <NRadioButton value="list" :title="t('flows.viewList')" :aria-label="t('flows.viewList')"><NIcon class="view-icon"><ListOutline /></NIcon></NRadioButton>
-      </NRadioGroup>
+      <NSelect v-model:value="group" :options="groupOptions" :render-label="renderLabel" class="small-select" :title="t('flows.groupTitle')">
+        <template #arrow><NIcon><LayersOutline /></NIcon></template>
+      </NSelect>
+      <NSelect v-model:value="sort" :options="sortOptions" class="small-select" :title="t('flows.sortTitle')">
+        <template #arrow><NIcon><SwapVerticalOutline /></NIcon></template>
+      </NSelect>
     </div>
 
     <template v-if="shown.length">
       <section v-for="bucket in groups" :key="bucket.key" class="bucket">
-        <button v-if="group !== 'none'" type="button" class="bucket-head" @click="toggleGroup(bucket.key)">
+        <button v-if="group !== 'none' || groups.length > 1" type="button" class="bucket-head" @click="toggleGroup(bucket.key)">
           <span class="caret" :class="{ closed: collapsed.has(bucket.key) }">▾</span>
+          <NIcon v-if="bucket.icon" :size="16" class="bucket-icon"><component :is="bucket.icon" /></NIcon>
           <strong>{{ bucket.label }}</strong>
           <span class="sub">{{ bucket.items.length }}</span>
         </button>
@@ -413,16 +516,82 @@ function remove(flow: FlowSummary) {
   margin-bottom: 16px;
 }
 
-.search {
-  width: 200px;
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.filter {
-  width: 150px;
+.search {
+  width: 240px;
 }
 
 .small-select {
-  width: 130px;
+  width: 140px;
+}
+
+.active-filter {
+  max-width: 180px;
+}
+
+.filter-panel {
+  width: min(420px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 2px;
+}
+
+.filter-title {
+  font-size: 12px;
+  opacity: 0.65;
+  margin-bottom: 6px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(127, 127, 127, 0.3);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.chip:hover {
+  background: var(--row-hover);
+}
+
+.chip.on {
+  border-color: #2080f0;
+  background: rgba(32, 128, 240, 0.12);
+  color: #2080f0;
+}
+
+.filter-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+:deep(.option) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bucket-icon {
+  opacity: 0.7;
 }
 
 .spacer {

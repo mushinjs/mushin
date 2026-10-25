@@ -305,6 +305,10 @@ export default {
     empty: 'Nothing logged yet. Connection attempts, adapter errors, plugin warnings and why LLM chat skipped a message show up here.',
   },
   flows: {
+    filter: 'Filter',
+    filterNone: 'Nothing to filter by yet',
+    recentlyEdited: 'Recently edited',
+    allFlows: 'All flows',
     priorityWheel: 'Scroll to change it',
     dragToOrder: 'Drag to reorder',
     focusTrigger: 'Show this trigger on its canvas',
@@ -338,7 +342,6 @@ export default {
       enabled: 'On',
       disabled: 'Off',
       errors: 'Has errors',
-      blocked: 'Never runs',
     },
     groupBy: {
       none: 'No groups',
@@ -351,7 +354,6 @@ export default {
       updated: 'Last edited',
       created: 'Created',
       name: 'Name',
-      issues: 'Issues',
     },
     recent: {
       today: 'Today',
