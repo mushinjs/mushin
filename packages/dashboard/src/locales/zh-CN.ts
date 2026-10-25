@@ -301,6 +301,7 @@ const zhCN: typeof en = {
     json: '卡片',
     forward: '合并转发',
     mface: '表情包',
+    imageExpired: '[图片加载失败，可能已过期，点此打开链接]',
   },
   botLogs: {
     failed: '无法加载机器人日志：{error}',
