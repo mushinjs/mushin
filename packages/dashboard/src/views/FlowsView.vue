@@ -115,10 +115,13 @@ function adapterOf(flow: FlowSummary) {
 const kindIcon = (kind: string): Component => (kind === 'event' ? NotificationsOutline : nodeIcon(`trigger.${kind}`, 'trigger'))
 const statusIcons: Record<Status, Component> = { enabled: PlayCircleOutline, disabled: PauseCircleOutline, errors: AlertCircleOutline }
 const groupIcons: Record<Group, Component> = { none: AppsOutline, trigger: NotificationsOutline, adapter: ExtensionPuzzleOutline, bot: ChatbubblesOutline, recent: TimeOutline }
-const icon = (component: Component, size = 15) => h(NIcon, { size, class: 'option-icon' }, { default: () => h(component) })
+const icon = (component: Component, size = 15) => h(NIcon, { size, style: { flex: 'none' } }, { default: () => h(component) })
 
 /** Select options shown with their icon. */
-const renderLabel = (option: SelectOption & { icon?: Component }) => h('span', { class: 'option' }, [option.icon ? icon(option.icon) : null, String(option.label)])
+// Styled inline: the dropdown is rendered outside this component, where its scoped styles do not reach.
+const renderLabel = (option: SelectOption & { icon?: Component }) => h('span', {
+  style: { display: 'inline-flex', alignItems: 'center', gap: '8px', lineHeight: 1, verticalAlign: 'middle' },
+}, [option.icon ? icon(option.icon) : null, h('span', null, String(option.label))])
 
 const adapterIds = computed(() => {
   const ids = new Set(data.adapters.map((adapter) => adapter.id))
@@ -582,12 +585,6 @@ function remove(flow: FlowSummary) {
 .filter-foot {
   display: flex;
   justify-content: flex-end;
-}
-
-:deep(.option) {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .bucket-icon {
