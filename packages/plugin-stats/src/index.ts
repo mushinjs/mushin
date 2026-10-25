@@ -351,7 +351,7 @@ export class StatsService extends Service {
       bots: { online: botList.filter((bot) => bot.status === 'online').length, total: botList.length },
       appPlugins: { enabled: manager.entries.filter((entry) => entry.enabled !== false).length, total: manager.entries.length },
       botPlugins: { enabled: botList.reduce((count, bot) => count + bot.plugins.filter((plugin) => plugin.enabled).length, 0) },
-      flows: { total: flowList.length, withErrors: flowList.filter((flow) => flow.errors > 0).length },
+      flows: { total: flowList.length, enabled: flowList.filter((flow) => flow.enabled).length, withErrors: flowList.filter((flow) => flow.errors > 0).length },
       commands: commands.size,
       providers: { total: providers.length, passed: providers.filter((provider) => provider.lastTest?.ok).length },
       today: await this.today(),

@@ -75,6 +75,7 @@ const flowFields = {
   description: z.string().optional(),
   adapter: z.string().optional().describe('Adapter type id from bots.adapters the flow is built for, e.g. "onebot"; node types list the adapters they need in platforms'),
   bots: z.array(z.string()).optional().describe('Bot ids that run this flow'),
+  enabled: z.boolean().optional().describe('False keeps the flow and its bots but stops it from answering messages, events and schedules'),
   nodes: z.array(nodeInput).optional(),
   edges: z.array(edgeInput).optional(),
   groups: z.array(groupInput).optional().describe('Nodes framed together in the editor so they move and copy as one; no effect on runs'),
@@ -296,6 +297,7 @@ export class FlowService extends Service {
   }
 
   private commandIssues(doc: FlowDocument): FlowIssue[] {
+    if (doc.enabled === false) return []
     const bots = this.home.get('bots')
     const issues: FlowIssue[] = []
     const seen = new Set<string>()
@@ -304,7 +306,7 @@ export class FlowService extends Service {
       if (!mine.length) continue
       // Other flows on the bot, even ones that cannot run yet, and commands from plugins and the bot itself.
       const others = [
-        ...[...this.docs.values()].filter((other) => other.id !== doc.id && other.bots.includes(botId)).flatMap((other) => this.commandsOf(other, botId)),
+        ...[...this.docs.values()].filter((other) => other.id !== doc.id && other.bots.includes(botId) && other.enabled !== false).flatMap((other) => this.commandsOf(other, botId)),
         ...(bots?.commands(botId).filter((entry) => entry.source.kind !== 'flow' && entry.source.kind !== 'builtin') ?? []),
       ]
       for (const entry of mine) {
@@ -332,9 +334,11 @@ export class FlowService extends Service {
           description: doc.description,
           adapter: doc.adapter,
           bots: doc.bots,
+          enabled: doc.enabled !== false,
           nodes: doc.nodes.length,
           errors: issues.filter((issue) => issue.severity === 'error').length,
           warnings: issues.filter((issue) => issue.severity === 'warning').length,
+          createdAt: doc.createdAt,
           updatedAt: doc.updatedAt,
         }
       })
@@ -360,7 +364,7 @@ export class FlowService extends Service {
     }
   }
 
-  async create(input: { name: string; description?: string; adapter?: string; bots?: string[]; nodes?: NodeInput[]; edges?: EdgeInput[]; groups?: GroupInput[] }) {
+  async create(input: { name: string; description?: string; adapter?: string; bots?: string[]; enabled?: boolean; nodes?: NodeInput[]; edges?: EdgeInput[]; groups?: GroupInput[] }) {
     const { nodes, edges } = normalize(input.nodes ?? [], input.edges ?? [], this.types)
     const groups = normalizeGroups(input.groups ?? [], nodes)
     const now = Date.now()
@@ -370,6 +374,7 @@ export class FlowService extends Service {
       ...(input.description ? { description: input.description } : {}),
       ...(input.adapter ? { adapter: input.adapter } : {}),
       bots: input.bots ?? [],
+      ...(input.enabled === false ? { enabled: false } : {}),
       nodes,
       edges,
       ...(groups.length ? { groups } : {}),
@@ -382,7 +387,7 @@ export class FlowService extends Service {
     return this.describe(doc)
   }
 
-  async update(id: string, patch: Partial<{ name: string; description: string; adapter: string; bots: string[]; nodes: NodeInput[]; edges: EdgeInput[]; groups: GroupInput[] }>) {
+  async update(id: string, patch: Partial<{ name: string; description: string; adapter: string; bots: string[]; enabled: boolean; nodes: NodeInput[]; edges: EdgeInput[]; groups: GroupInput[] }>) {
     const doc = { ...this.get(id) }
     if (patch.name !== undefined) doc.name = patch.name
     if (patch.description !== undefined) doc.description = patch.description
@@ -400,12 +405,17 @@ export class FlowService extends Service {
       if (groups.length) doc.groups = groups
       else delete doc.groups
     }
+    if (patch.enabled !== undefined) {
+      if (patch.enabled) delete doc.enabled
+      else doc.enabled = false
+    }
     if (patch.bots !== undefined) {
       await this.attach(patch.bots.filter((bot) => !doc.bots.includes(bot)))
       doc.bots = patch.bots
     }
     await this.save(doc)
-    this.logger.info('saved flow %s', this.label(doc))
+    if (patch.enabled !== undefined) this.logger.info('%s flow %s', patch.enabled ? 'enabled' : 'disabled', this.label(doc))
+    else this.logger.info('saved flow %s', this.label(doc))
     return this.describe(doc)
   }
 
@@ -484,7 +494,7 @@ export class FlowService extends Service {
 
   private flowsOf(botId: string) {
     return [...this.docs.values()]
-      .filter((doc) => doc.bots.includes(botId))
+      .filter((doc) => doc.bots.includes(botId) && doc.enabled !== false)
       .sort((a, b) => a.createdAt - b.createdAt)
       .map((doc) => this.compiledOf(doc))
       .filter((compiled) => compiled.runnable)

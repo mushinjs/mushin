@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { AddOutline, GitNetworkOutline, TrashOutline } from '@vicons/ionicons5'
 import {
-  NButton, NCard, NEmpty, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NModal, NSelect, NTag, useDialog, useMessage,
+  NButton, NCard, NEmpty, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NModal, NSelect, NSwitch, NTag, useDialog, useMessage,
 } from 'naive-ui'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -64,6 +64,15 @@ async function create() {
   }
 }
 
+async function setEnabled(flow: FlowSummary, value: boolean) {
+  try {
+    await call('flows.update', { id: flow.id, enabled: value })
+    await refresh()
+  } catch (error) {
+    message.error((error as Error).message)
+  }
+}
+
 function remove(flow: FlowSummary) {
   dialog.warning({
     title: t('common.confirmDelete', { name: flow.name }),
@@ -94,19 +103,21 @@ function remove(flow: FlowSummary) {
 
     <NGrid v-if="flows.length" cols="1 640:2 1000:3" :x-gap="16" :y-gap="16">
       <NGridItem v-for="flow in flows" :key="flow.id">
-        <NCard hoverable class="flow-card" @click="router.push(`/flows/${flow.id}`)">
+        <NCard hoverable class="flow-card" :class="{ off: !flow.enabled }" @click="router.push(`/flows/${flow.id}`)">
           <div class="flow-head">
             <div class="flow-avatar"><NIcon size="22"><GitNetworkOutline /></NIcon></div>
             <div class="flow-title">
               <strong>{{ flow.name }}</strong>
               <span class="sub">{{ t('flows.nodeCount', flow.nodes) }} · {{ formatTime(flow.updatedAt) }}</span>
             </div>
+            <NSwitch size="small" :value="flow.enabled" :title="flow.enabled ? t('flows.enabledHint') : t('flows.disabledHint')" @click.stop @update:value="(value: boolean) => setEnabled(flow, value)" />
             <NButton quaternary circle size="small" :aria-label="t('common.delete')" @click.stop="remove(flow)">
               <template #icon><NIcon><TrashOutline /></NIcon></template>
             </NButton>
           </div>
           <p v-if="flow.description" class="flow-desc">{{ flow.description }}</p>
           <div class="flow-tags">
+            <NTag v-if="!flow.enabled" size="small" :bordered="false">{{ t('flows.disabledTag') }}</NTag>
             <NTag v-if="flow.errors" type="error" size="small" :bordered="false">{{ t('flows.errorCount', flow.errors) }}</NTag>
             <NTag v-else-if="flow.warnings" type="warning" size="small" :bordered="false">{{ t('flows.warningCount', flow.warnings) }}</NTag>
             <NTag v-for="bot in flow.bots" :key="bot" size="small" :bordered="false" type="info">{{ botName(bot) }}</NTag>
@@ -159,6 +170,10 @@ function remove(flow: FlowSummary) {
 </template>
 
 <style scoped>
+.flow-card.off {
+  opacity: 0.6;
+}
+
 .flow-card {
   cursor: pointer;
 }

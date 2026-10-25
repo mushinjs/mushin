@@ -220,6 +220,8 @@ export interface FlowDocument {
   adapter?: string
   /** Bots that run this flow. */
   bots: string[]
+  /** A disabled flow keeps its bots but answers nothing; missing means enabled. */
+  enabled?: boolean
   nodes: FlowNode[]
   edges: FlowEdge[]
   groups?: FlowGroup[]

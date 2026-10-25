@@ -262,6 +262,13 @@ const zhCN: typeof en = {
     empty: '暂无日志。连接尝试、适配器错误、插件警告以及大模型对话跳过消息的原因都会显示在这里。',
   },
   flows: {
+    on: '启用',
+    off: '停用',
+    enabledHint: '已启用：流程会在绑定的机器人上响应。停用后保留流程和机器人绑定。',
+    disabledHint: '已停用：重新启用前，流程不响应任何消息、事件和定时。',
+    enabledNow: '已启用流程',
+    disabledNow: '已停用流程',
+    disabledTag: '已停用',
     convertedToCommand: '已转换为指令节点 {name}',
     convertedToKeyword: '已转换为关键词节点',
     commandName: '指令',
