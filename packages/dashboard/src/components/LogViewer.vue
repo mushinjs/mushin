@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { TrashOutline } from '@vicons/ionicons5'
+import IconAction from './IconAction.vue'
 import { NButton, NCard, NInput, NRadioButton, NRadioGroup, NSpace, NSwitch, NTag } from 'naive-ui'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -69,7 +71,7 @@ function time(ts: number) {
         <template #checked>{{ t('logs.follow') }}</template>
         <template #unchecked>{{ t('logs.follow') }}</template>
       </NSwitch>
-      <NButton size="small" quaternary @click="emit('clear')">{{ t('logs.clear') }}</NButton>
+      <IconAction :icon="TrashOutline" :label="t('logs.clear')" @click="emit('clear')" />
     </NSpace>
     <div v-if="presentTags.length > 1" class="tags" role="group" :aria-label="t('logs.tagsLabel')">
       <span class="tags-label">{{ t('logs.tagsLabel') }}</span>

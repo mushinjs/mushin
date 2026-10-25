@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { SettingsOutline } from '@vicons/ionicons5'
+import IconAction from './IconAction.vue'
 import { NButton, NCard, NEmpty, NList, NListItem, NModal, NSpace, NSpin, NSwitch, NTag, NThing, useMessage } from 'naive-ui'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -87,7 +89,7 @@ async function save() {
           </NThing>
           <template #suffix>
             <NSpace :wrap="false" align="center">
-              <NButton v-if="plugin.configSchema" size="small" quaternary @click="configure(plugin)">{{ t('common.configure') }}</NButton>
+              <IconAction v-if="plugin.configSchema" :icon="SettingsOutline" :label="t('common.configure')" @click="configure(plugin)" />
               <NSwitch :value="plugin.enabled" :loading="busy === plugin.package" @update:value="(value: boolean) => toggle(plugin, value)" />
             </NSpace>
           </template>

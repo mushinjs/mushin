@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { RefreshOutline, SettingsOutline } from '@vicons/ionicons5'
+import IconAction from '../components/IconAction.vue'
 import { NButton, NCard, NInput, NList, NListItem, NModal, NSpace, NSpin, NSwitch, NTag, NThing, NTooltip, useMessage } from 'naive-ui'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -141,8 +143,8 @@ async function save() {
             </NThing>
             <template #suffix>
               <NSpace :wrap="false" align="center">
-                <NButton size="small" quaternary :disabled="!plugin.enabled" @click="reload(plugin)">{{ t('common.reload') }}</NButton>
-                <NButton size="small" quaternary :disabled="!plugin.id" @click="configure(plugin)">{{ t('common.configure') }}</NButton>
+                <IconAction :icon="RefreshOutline" :label="t('common.reload')" :disabled="!plugin.enabled" @click="reload(plugin)" />
+                <IconAction :icon="SettingsOutline" :label="t('common.configure')" :disabled="!plugin.id" @click="configure(plugin)" />
                 <NSwitch
                   :value="plugin.enabled"
                   :disabled="plugin.manifest?.essential && plugin.enabled"

@@ -224,7 +224,7 @@ function openSession(id: string) {
           <NRadioButton v-for="item in dimensions" :key="item.value" :value="item.value">{{ item.label }}</NRadioButton>
         </NRadioGroup>
         <div v-if="ranking.length" class="ranks">
-          <div v-for="(row, index) in ranking" :key="row.key" class="rank">
+          <div v-for="(row, index) in ranking" :key="row.key" class="rank hover-row">
             <span class="rank-no">{{ index + 1 }}</span>
             <div class="rank-body">
               <div class="rank-line">
@@ -275,21 +275,21 @@ function openSession(id: string) {
 
     <div class="shortcuts">
       <NCard :title="t('overview.recentChats')" size="small">
-        <button v-for="session in agent.sessions.slice(0, 4)" :key="session.id" type="button" class="shortcut" @click="openSession(session.id)">
+        <button v-for="session in agent.sessions.slice(0, 4)" :key="session.id" type="button" class="shortcut hover-row" @click="openSession(session.id)">
           <span class="shortcut-name">{{ session.title || t('overview.untitled') }}</span>
           <span class="muted small">{{ formatTime(session.updatedAt) }}</span>
         </button>
         <p v-if="!agent.sessions.length" class="muted small">{{ t('overview.noChats') }}</p>
       </NCard>
       <NCard :title="t('overview.recentFlows')" size="small">
-        <button v-for="flow in flows" :key="flow.id" type="button" class="shortcut" @click="router.push(`/flows/${flow.id}`)">
+        <button v-for="flow in flows" :key="flow.id" type="button" class="shortcut hover-row" @click="router.push(`/flows/${flow.id}`)">
           <span class="shortcut-name">{{ flow.name }}</span>
           <span class="small" :class="flow.errors ? 'danger' : 'muted'">{{ flow.errors ? t('overview.flowErrors', { n: flow.errors }) : formatTime(flow.updatedAt) }}</span>
         </button>
         <p v-if="!flows.length" class="muted small">{{ t('overview.noFlows') }}</p>
       </NCard>
       <NCard :title="t('overview.recentErrors')" size="small">
-        <button v-for="line in errors" :key="line.sn" type="button" class="shortcut" @click="router.push('/logs')">
+        <button v-for="line in errors" :key="line.sn" type="button" class="shortcut hover-row" @click="router.push('/logs')">
           <span class="shortcut-name" :class="line.type === 'error' ? 'danger' : 'warn'">{{ line.text }}</span>
           <span class="muted small">{{ formatTime(line.ts) }}</span>
         </button>
@@ -378,6 +378,7 @@ function openSession(id: string) {
 }
 
 .rank {
+  padding: 2px 6px;
   display: flex;
   gap: 10px;
   align-items: flex-start;
@@ -492,6 +493,8 @@ function openSession(id: string) {
 }
 
 .shortcut {
+  padding-left: 6px !important;
+  padding-right: 6px !important;
   display: flex;
   justify-content: space-between;
   align-items: baseline;
