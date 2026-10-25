@@ -92,7 +92,8 @@ function onImageError(index: number) {
           <template v-for="(segment, index) in record.segments" :key="index">
             <!--
               QQ's image servers answer requests that carry another site's address as the referrer with an
-              anti-hotlinking placeholder, so images are fetched without one.
+              anti-hotlinking placeholder, so images are fetched without one. Not lazy: a lazy image has no
+              size until it loads, and in the conversation's scroll area it was never asked to load.
             -->
             <template v-if="imageUrl(segment)">
               <img
@@ -100,7 +101,7 @@ function onImageError(index: number) {
                 :src="imageUrl(segment)"
                 class="image"
                 alt=""
-                loading="lazy"
+                decoding="async"
                 referrerpolicy="no-referrer"
                 @error="onImageError(index)"
               >
