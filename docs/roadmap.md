@@ -662,10 +662,15 @@ Agent 现在只在用户消息里收到一句“当前页面是 /flows/xxx”，
 - 配置位置：Bot 详情页新增「权限」标签页（P1 的「指令」页里的“管理员”名单迁移到这里，按 admin 处理），也可以在插件设置页按机器人统一编辑。
 - **权限检测节点 `logic.permission`**
   - 分支：`allow`、`deny`；输出 `role`（`master` / `admin` / `user`）和 `reason`（没通过的原因）。
-  - 配置：允许的角色（多选 master、admin、user，或填“至少 admin”）；拒绝时静默（默认）、回复固定文案，或只走 `deny` 分支交给后续节点。
+  - 配置：允许的角色，多选：机器人角色 master、admin、user（或填“至少 admin”），以及群身份**群主**、**群管理员**（适配器支持时才可选）。满足任一选中项即通过。拒绝时静默（默认）、回复固定文案，或只走 `deny` 分支交给后续节点。
+  - 输出里另有 `groupRole`（`owner` / `admin` / `member`，私聊或适配器不支持时为空）。
   - 节点卡片标题显示摘要，例如“权限：至少 admin”。
 - 指令节点的“谁可以使用”改成同样的三个角色；`bot.command()` 也接受 `role: 'admin'` 这样的要求；`/help` 可选择只列出对方能用的指令。
-- 群身份（群主、群管理员）是平台概念，和这里的角色分开：OneBot「发送者身份」节点保留，用来按群身份分支；权限检测节点可以勾选“群主 / 群管理员也视为 admin”，默认关闭。
+- 群身份（群主、群管理员）是平台概念，和机器人角色分开存放、分开判断，但都能在权限检测节点里选：
+  - 适配器通过 `bot.useRoleResolver()` 声明自己能提供群身份。OneBot 先用消息里自带的 `sender.role`，事件触发（没有发送者身份）时再调用 `get_group_member_info`，结果按群和用户缓存几分钟；
+  - 适配器不支持时，群主、群管理员两个选项显示为不可用，并说明当前适配器不提供群身份；流程的适配器未选定时，选项可选，但运行在不支持的机器人上时视为不满足；
+  - 私聊里没有群身份，这两个选项不满足；
+  - OneBot「发送者身份」节点保留，用来按群身份走不同分支。
 - 流程测试增加“模拟角色”，可以分别以 master、admin、user 发送测试消息，执行日志里显示判定结果和原因。
 
 **第二阶段：装了数据库之后（依赖第 7 项）**
@@ -685,25 +690,27 @@ Agent 现在只在用户消息里收到一句“当前页面是 /flows/xxx”，
 ### 实现方式
 
 - 新插件 `@mushin/plugin-permissions`（App 插件）：
-  - 服务 `ctx.permissions`：`roleOf(botId, userId, session?)`、`check(rule, session)`，以及插件扩展点 `defineSource()`，第二阶段的数据库来源通过它接入；
+  - 服务 `ctx.permissions`：`roleOf(botId, userId, session?)`、`groupRoleOf(session)`（交给机器人的角色解析函数）、`check(rule, session)`，以及插件扩展点 `defineSource()`，第二阶段的数据库来源通过它接入；
   - 每个机器人的 master / admin 名单存放在插件自己的存储里（`ctx.storage`），第一阶段不依赖数据库；
   - 注册 `logic.permission` 节点（依赖 flows，可选）；
   - action：`permissions.get / update`（按机器人读写名单）、`permissions.check`（给 Agent 和测试用）。
 - `plugin-bots`：P1 的 `commands.admins` 在启动时迁移为权限插件的 admin 名单；指令权限的判断改为调用 `ctx.permissions`（未启用权限插件时，带权限要求的指令一律拒绝并在日志里说明）。
-- `plugin-flows`：`FlowSession` 增加 `role()`；测试输入增加 `role`。
+- `plugin-bots`：新增 `bot.useRoleResolver()`，适配器注册群身份解析函数，`bots.adapters` 返回是否支持群身份，供节点配置界面判断选项是否可用。
+- `plugin-adapter-onebot`：注册群身份解析（`sender.role` → `get_group_member_info`，带缓存）；「发送者身份」节点复用它。
+- `plugin-flows`：`FlowSession` 增加 `role()` 和 `groupRole()`；测试输入增加 `role` 和 `groupRole`，测试面板可以模拟“群管理员”等身份。
 - 第二阶段：权限插件对数据库插件声明可选依赖，检测到数据库后用 `ctx.model.extend` 建会话成员表和规则表，并注册数据库来源和配套节点。
 - Agent：`flows.nodeTypes` 自动带上新节点；用户可以说“把 12345 设为这个机器人的管理员”。
 
 ### 最终效果
 
-- 第一阶段：做一个“禁言”流程：指令 `/禁言 <QQ> [分钟:number]` → 权限检测（至少 admin，拒绝时回复“只有管理员可以禁言”）→ 禁言节点。普通用户会收到提示，admin 和 master 可以直接用；测试面板里切换“模拟角色”就能分别验证。
+- 第一阶段：做一个“禁言”流程：指令 `/禁言 <QQ> [分钟:number]` → 权限检测（至少 admin，拒绝时回复“只有管理员可以禁言”）→ 禁言节点。普通用户会收到提示，admin 和 master 可以直接用；如果再勾选“群管理员”，QQ 群里的管理员不用加进名单也能禁言；测试面板里切换“模拟角色”就能分别验证。
 - 第二阶段：签到游戏群里，`/签到` 流程用数据库节点记积分；`/抽奖` 前的权限检测读取本群规则，只有带“VIP”标签的成员能抽；群管理员用 `/拉黑 @某人` 把捣乱的人加入本群黑名单。
 
 ### 待讨论
 
 - Q13-1 没有权限时默认静默还是回复？建议默认静默，避免被刷屏；在节点里可改为回复。
 - Q13-2 是否需要实例级（跨机器人）的 master？建议第一版只做机器人级，以后再考虑全局 master。
-- Q13-3 群主、群管理员要不要默认映射为 admin？建议默认不映射，由节点勾选。
+- ~~Q13-3 群主、群管理员要不要默认映射为 admin？~~ 已定：不映射，权限检测节点直接提供群主、群管理员选项（适配器支持时）。
 - Q13-4 第二阶段的会话规则是否允许普通 admin 修改，还是只允许 master？建议 admin 可以管理成员和标签，只有 master 能改规则。
 
 ---
