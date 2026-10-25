@@ -180,6 +180,14 @@ export interface FlowEdge {
   targetHandle: string
 }
 
+/** Nodes the editor frames together so they can be moved and copied as one. Has no effect on runs. */
+export interface FlowGroup {
+  id: string
+  label?: string
+  /** Node ids; a node is in at most one group. */
+  nodes: string[]
+}
+
 export interface FlowDocument {
   id: string
   name: string
@@ -190,6 +198,7 @@ export interface FlowDocument {
   bots: string[]
   nodes: FlowNode[]
   edges: FlowEdge[]
+  groups?: FlowGroup[]
   createdAt: number
   updatedAt: number
 }

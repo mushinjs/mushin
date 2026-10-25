@@ -86,7 +86,7 @@ export function supports(type: Pick<NodeTypeInfo, 'platforms'>, adapter: string 
   return !adapter || !type.platforms?.length || type.platforms.includes(adapter)
 }
 
-export const categories: NodeCategory[] =['trigger', 'event', 'logic', 'data', 'ai', 'action', 'manage', 'platform']
+export const categories: NodeCategory[] = ['trigger', 'event', 'logic', 'data', 'ai', 'action', 'manage', 'platform']
 
 /**
  * Sample OneBot events for test runs, shaped like NapCat sends them. Picking one fills the event

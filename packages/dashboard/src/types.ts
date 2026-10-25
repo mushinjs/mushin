@@ -270,6 +270,13 @@ export interface FlowIssue {
   edgeId?: string
 }
 
+/** Nodes the editor frames together; no effect on runs. */
+export interface FlowGroupDoc {
+  id: string
+  label?: string
+  nodes: string[]
+}
+
 export interface FlowDoc {
   id: string
   name: string
@@ -279,6 +286,7 @@ export interface FlowDoc {
   bots: string[]
   nodes: FlowNodeDoc[]
   edges: FlowEdgeDoc[]
+  groups?: FlowGroupDoc[]
   createdAt: number
   updatedAt: number
   issues: FlowIssue[]

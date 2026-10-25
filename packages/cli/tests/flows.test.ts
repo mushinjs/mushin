@@ -116,6 +116,18 @@ describe('flows', () => {
     expect(groupReplies().at(-1)).toBe('pong, user42')
   })
 
+  it('keeps node groups, dropping missing nodes and groups left with one node', async () => {
+    const flow = await app.call('flows.create', {
+      ...pingPong,
+      name: 'Grouped',
+      groups: [{ label: 'Pair', nodes: ['trigger', 'answer', 'missing'] }, { nodes: ['answer'] }],
+    })
+    expect(flow.groups).toEqual([{ id: expect.any(String), label: 'Pair', nodes: ['trigger', 'answer'] }])
+    const fewer = await app.call('flows.update', { id: flow.id, nodes: pingPong.nodes.slice(0, 1), edges: [] })
+    expect(fewer.groups).toBeUndefined()
+    await app.call('flows.delete', { id: flow.id })
+  })
+
   it('records the model when a flow replies with an LLM answer', async () => {
     llm.setFallback({ text: 'Flow LLM answer' })
     const flow = await app.call('flows.create', {

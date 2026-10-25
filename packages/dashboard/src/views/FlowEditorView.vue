@@ -2,14 +2,14 @@
 import { ArrowBackOutline, ConstructOutline, InformationCircleOutline, ListOutline, PlayOutline, TrashOutline } from '@vicons/ionicons5'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
-import { type Connection, type Edge, type Node, useVueFlow, VueFlow } from '@vue-flow/core'
+import { type Connection, type Edge, type GraphNode, type Node, type OnConnectStartParams, useVueFlow, VueFlow } from '@vue-flow/core'
 import { MiniMap } from '@vue-flow/minimap'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 import {
-  NAlert, NButton, NEmpty, NForm, NFormItem, NIcon, NInput, NSelect, NTabPane, NTabs, NTag, useMessage,
+  type DropdownOption, NAlert, NButton, NDropdown, NEmpty, NForm, NFormItem, NIcon, NInput, NSelect, NTabPane, NTabs, NTag, useMessage,
 } from 'naive-ui'
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, provide, type Ref, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -19,13 +19,14 @@ import { type CanvasNodeData, type FlowHighlight, flowEditorKey, type RunStatus 
 import FlowNodeCard from '../components/flow/FlowNodeCard.vue'
 import { nodeIcon } from '../components/flow/icons'
 import NodePalette from '../components/flow/NodePalette.vue'
+import NodePicker from '../components/flow/NodePicker.vue'
 import RunLogs, { type TestInput } from '../components/flow/RunLogs.vue'
 import VarInput from '../components/flow/VarInput.vue'
 import SchemaForm from '../components/SchemaForm.vue'
-import { categoryColors, parseHandle, portColors, portsOf, refOf, refsIn, schemaDefaults, supports, sysPorts } from '../flow'
+import { categoryColors, execOutHandle, parseHandle, portColors, portsOf, refOf, refsIn, schemaDefaults, supports, sysPorts } from '../flow'
 import { useDataStore } from '../stores/data'
 import { useTheme } from '../theme'
-import type { FlowDoc, FlowIssue, NodeTypeInfo, RunStep, RunTrace } from '../types'
+import type { FlowDoc, FlowGroupDoc, FlowIssue, NodeTypeInfo, RunStep, RunTrace } from '../types'
 import { clone, localize } from '../utils'
 
 const { t, locale } = useI18n()
@@ -36,12 +37,16 @@ const data = useDataStore()
 const { isDark } = useTheme()
 const flowId = computed(() => String(route.params.id))
 
-const { project, fitView, updateNodeInternals } = useVueFlow('flow-editor')
+const {
+  project, fitView, updateNodeInternals, findNode, getSelectedNodes, addSelectedNodes, removeSelectedNodes, viewport,
+} = useVueFlow('flow-editor')
 
 const types = ref(new Map<string, NodeTypeInfo>())
 // Typed by assertion: Vue's deep ref unwrapping of Vue Flow's node types is too deep for TypeScript.
 const nodes = ref([]) as Ref<Node<CanvasNodeData>[]>
 const edges = ref([]) as Ref<Edge[]>
+/** Nodes framed together; only the editor uses them. */
+const groups = ref<FlowGroupDoc[]>([])
 const name = ref('')
 const description = ref('')
 const bots = ref<string[]>([])
@@ -100,6 +105,7 @@ function toDoc() {
       target: edge.target,
       targetHandle: edge.targetHandle ?? '',
     })),
+    groups: groups.value,
   }
 }
 
@@ -145,6 +151,7 @@ function apply(flow: FlowDoc, fit: boolean) {
     data: { typeId: node.type, label: node.label, config: node.config ?? {}, inputs: { ...node.inputs } },
   }))
   edges.value = flow.edges.map((edge) => ({ ...edge, ...edgeLook(edge) }))
+  groups.value = clone(flow.groups ?? [])
   if (selectedId.value && !flow.nodes.some((node) => node.id === selectedId.value)) selectedId.value = undefined
   savedAt = flow.updatedAt
   savedSignature.value = signature()
@@ -195,6 +202,7 @@ function isValidConnection(connection: Connection) {
 }
 
 function onConnect(connection: Connection) {
+  dragged = undefined
   if (!isValidConnection(connection)) return
   const kept = edges.value
   if (kept.some((edge) => edge.source === connection.source && edge.sourceHandle === connection.sourceHandle
@@ -231,6 +239,7 @@ function addNode(typeId: string, position?: { x: number; y: number }) {
   tab.value = 'node'
   showPanel.value = true
   if (narrow.value) showPalette.value = false
+  return id
 }
 
 function onDrop(event: DragEvent) {
@@ -311,10 +320,26 @@ async function save() {
 }
 
 function onKeydown(event: KeyboardEvent) {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+  if (event.key === 'Escape') menu.value = undefined
+  if (!(event.ctrlKey || event.metaKey)) return
+  const key = event.key.toLowerCase()
+  if (key === 's') {
     event.preventDefault()
     save()
+    return
   }
+  // Canvas shortcuts leave text fields alone.
+  const target = event.target as HTMLElement | null
+  if (target?.closest('input, textarea, [contenteditable="true"]')) return
+  const ids = selectionIds()
+  if (key === 'c' && ids.length) copyNodes(ids)
+  else if (key === 'v' && clipboard) pasteNodes(pointerFlowPosition())
+  else if (key === 'd' && ids.length) duplicateNodes(ids)
+  else if (key === 'g' && event.shiftKey && ids.length) ungroupNodes(ids)
+  else if (key === 'g' && !event.shiftKey && ids.length > 1) groupNodes(ids)
+  else if (key === 'a') selectAll()
+  else return
+  event.preventDefault()
 }
 
 function onBeforeUnload(event: BeforeUnloadEvent) {
@@ -336,6 +361,383 @@ onBeforeUnmount(() => {
   observer.disconnect()
 })
 onBeforeRouteLeave(() => !dirty.value || window.confirm(t('flows.unsaved')))
+
+// ---- groups, clipboard, context menu ----
+
+/** Selected node ids: the canvas selection, or the node open in the panel. */
+function selectionIds() {
+  const ids = getSelectedNodes.value.map((node) => node.id)
+  return ids.length ? ids : selectedId.value ? [selectedId.value] : []
+}
+
+function select(ids: string[]) {
+  removeSelectedNodes(getSelectedNodes.value)
+  addSelectedNodes(ids.map((id) => findNode(id)).filter((node): node is GraphNode => !!node))
+}
+
+const selectAll = () => select(nodes.value.map((node) => node.id))
+
+// A group needs two nodes that still exist; deleting nodes shrinks or removes their groups.
+watch(() => nodes.value.map((node) => node.id).join(','), () => {
+  const known = new Set(nodes.value.map((node) => node.id))
+  const next = groups.value
+    .map((group) => ({ ...group, nodes: group.nodes.filter((id) => known.has(id)) }))
+    .filter((group) => group.nodes.length > 1)
+  if (JSON.stringify(next) !== JSON.stringify(groups.value)) groups.value = next
+})
+
+function groupNodes(ids: string[]) {
+  if (ids.length < 2) return
+  const taken = new Set(ids)
+  const rest = groups.value
+    .map((group) => ({ ...group, nodes: group.nodes.filter((id) => !taken.has(id)) }))
+    .filter((group) => group.nodes.length > 1)
+  groups.value = [...rest, { id: `g-${Math.random().toString(36).slice(2, 7)}`, label: t('flows.groupDefault'), nodes: ids }]
+}
+
+/** Dissolves every group that holds one of these nodes. */
+function ungroupNodes(ids: string[]) {
+  groups.value = groups.value.filter((group) => !group.nodes.some((id) => ids.includes(id)))
+}
+
+function deleteNodes(ids: string[]) {
+  const gone = new Set(ids)
+  nodes.value = nodes.value.filter((node) => !gone.has(node.id))
+  edges.value = edges.value.filter((edge) => !gone.has(edge.source) && !gone.has(edge.target))
+  if (selectedId.value && gone.has(selectedId.value)) {
+    selectedId.value = undefined
+    tab.value = 'flow'
+  }
+}
+
+const GROUP_PAD = 18
+const GROUP_HEAD = 28
+
+/** Dashed frames around grouped nodes, in canvas coordinates. */
+const frames = computed(() => groups.value.flatMap((group) => {
+  let left = Infinity
+  let top = Infinity
+  let right = -Infinity
+  let bottom = -Infinity
+  for (const id of group.nodes) {
+    const node = nodes.value.find((item) => item.id === id)
+    if (!node) continue
+    const size = findNode(id)?.dimensions
+    left = Math.min(left, node.position.x)
+    top = Math.min(top, node.position.y)
+    right = Math.max(right, node.position.x + (size?.width || 240))
+    bottom = Math.max(bottom, node.position.y + (size?.height || 80))
+  }
+  if (left === Infinity) return []
+  return [{
+    group,
+    style: {
+      transform: `translate(${left - GROUP_PAD}px, ${top - GROUP_PAD - GROUP_HEAD}px)`,
+      width: `${right - left + GROUP_PAD * 2}px`,
+      height: `${bottom - top + GROUP_PAD * 2 + GROUP_HEAD}px`,
+    },
+  }]
+}))
+
+/** Dragging a frame's header moves its nodes; a click selects them. */
+function startGroupDrag(event: PointerEvent, group: FlowGroupDoc) {
+  if (event.button !== 0 || renaming.value === group.id) return
+  const start = { x: event.clientX, y: event.clientY }
+  const origin = new Map(nodes.value.filter((node) => group.nodes.includes(node.id)).map((node) => [node.id, { ...node.position }]))
+  select(group.nodes)
+  const move = (moved: PointerEvent) => {
+    const zoom = viewport.value.zoom || 1
+    const dx = (moved.clientX - start.x) / zoom
+    const dy = (moved.clientY - start.y) / zoom
+    nodes.value = nodes.value.map((node) => {
+      const from = origin.get(node.id)
+      return from ? { ...node, position: { x: from.x + dx, y: from.y + dy } } : node
+    })
+  }
+  const stop = () => {
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', stop)
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', stop)
+}
+
+const renaming = ref<string>()
+function renameGroup(id: string, label: string) {
+  groups.value = groups.value.map((group) => (group.id === id ? { ...group, label: label.trim() || undefined } : group))
+  renaming.value = undefined
+}
+
+interface Clipboard {
+  nodes: { id: string; type: string; label?: string; position: { x: number; y: number }; config: Record<string, any>; inputs?: Record<string, string> }[]
+  edges: { source: string; sourceHandle: string; target: string; targetHandle: string }[]
+  groups: { label?: string; nodes: string[] }[]
+}
+
+const CLIPBOARD_KEY = 'mushin.flows.clipboard'
+// Kept in this browser so nodes can be pasted into another flow.
+let clipboard: Clipboard | undefined = (() => {
+  try {
+    return JSON.parse(localStorage.getItem(CLIPBOARD_KEY) ?? 'null') ?? undefined
+  } catch {
+    return undefined
+  }
+})()
+
+/** The nodes, the edges between them and the groups wholly inside them. */
+function snapshot(ids: string[]): Clipboard {
+  const set = new Set(ids)
+  return clone({
+    nodes: nodes.value.filter((node) => set.has(node.id)).map((node) => ({
+      id: node.id,
+      type: node.data!.typeId,
+      label: node.data!.label,
+      position: { ...node.position },
+      config: node.data!.config,
+      inputs: node.data!.inputs,
+    })),
+    edges: edges.value.filter((edge) => set.has(edge.source) && set.has(edge.target)).map((edge) => ({
+      source: edge.source, sourceHandle: edge.sourceHandle ?? '', target: edge.target, targetHandle: edge.targetHandle ?? '',
+    })),
+    groups: groups.value.filter((group) => group.nodes.every((id) => set.has(id))).map((group) => ({ label: group.label, nodes: group.nodes })),
+  })
+}
+
+function copyNodes(ids: string[]) {
+  clipboard = snapshot(ids)
+  try {
+    localStorage.setItem(CLIPBOARD_KEY, JSON.stringify(clipboard))
+  } catch {}
+  message.success(t('flows.copied', clipboard.nodes.length))
+}
+
+/**
+ * Adds copies with new ids, placed with their top-left node at `at` (or just below and right of
+ * the originals). References between copied nodes point to the copies.
+ */
+function insertCopy(copy: Clipboard, at?: { x: number; y: number }) {
+  if (!copy.nodes.length) return
+  const used = new Set(nodes.value.map((node) => node.id))
+  const ids = new Map<string, string>()
+  let index = nodes.value.length + 1
+  for (const node of copy.nodes) {
+    while (used.has(`n${index}`)) index++
+    ids.set(node.id, `n${index}`)
+    used.add(`n${index}`)
+  }
+  const remap = <T>(value: T): T => JSON.parse(JSON.stringify(value ?? null)
+    .replace(/\{\{(\s*)([\w-]+)\./g, (whole, space: string, head: string) => (ids.has(head) ? `{{${space}${ids.get(head)}.` : whole)))
+  const minX = Math.min(...copy.nodes.map((node) => node.position.x))
+  const minY = Math.min(...copy.nodes.map((node) => node.position.y))
+  const dx = at ? at.x - minX : 40
+  const dy = at ? at.y - minY : 40
+  const added: Node<CanvasNodeData>[] = copy.nodes.map((node) => ({
+    id: ids.get(node.id)!,
+    type: 'mushin',
+    position: { x: node.position.x + dx, y: node.position.y + dy },
+    data: { typeId: node.type, label: node.label, config: remap(node.config) ?? {}, inputs: remap(node.inputs) ?? undefined },
+  }))
+  const links = copy.edges.map((edge) => {
+    const item = { ...edge, id: `e-${Math.random().toString(36).slice(2, 8)}`, source: ids.get(edge.source)!, target: ids.get(edge.target)! }
+    return { ...item, ...edgeLook(item) }
+  })
+  nodes.value = [...nodes.value, ...added]
+  edges.value = [...edges.value, ...links]
+  groups.value = [...groups.value, ...copy.groups.map((group) => ({
+    id: `g-${Math.random().toString(36).slice(2, 7)}`, label: group.label, nodes: group.nodes.map((id) => ids.get(id)!),
+  }))]
+  nextTick(() => select(added.map((node) => node.id)))
+}
+
+const pasteNodes = (at?: { x: number; y: number }) => clipboard && insertCopy(clipboard, at)
+const duplicateNodes = (ids: string[]) => insertCopy(snapshot(ids))
+
+// Where the pointer last was on the canvas, so pasting with the keyboard lands there.
+let pointer: { x: number; y: number } | undefined
+function toFlow(clientX: number, clientY: number) {
+  const rect = canvas.value?.getBoundingClientRect()
+  return project({ x: clientX - (rect?.left ?? 0), y: clientY - (rect?.top ?? 0) })
+}
+const pointerFlowPosition = () => (pointer ? toFlow(pointer.x, pointer.y) : undefined)
+
+type MenuKind = 'pane' | 'node' | 'selection' | 'group' | 'edge'
+const menu = ref<{ x: number; y: number; kind: MenuKind; target?: string; ids: string[]; at: { x: number; y: number } }>()
+
+function openMenu(event: MouseEvent | TouchEvent, kind: MenuKind, target?: string, ids: string[] = []) {
+  event.preventDefault()
+  const point = 'touches' in event ? event.touches[0] ?? event.changedTouches[0] : event
+  picker.value = undefined
+  menuOpenedAt = Date.now()
+  menu.value = { x: point.clientX, y: point.clientY, kind, target, ids, at: toFlow(point.clientX, point.clientY) }
+}
+
+// The right button's own mouseup can land outside the menu it just opened; that is not a click away.
+let menuOpenedAt = 0
+function onMenuClickOutside() {
+  if (Date.now() - menuOpenedAt > 250) menu.value = undefined
+}
+
+function onNodeContextMenu({ event, node }: { event: MouseEvent | TouchEvent; node: GraphNode }) {
+  const selection = getSelectedNodes.value.map((item) => item.id)
+  if (selection.length > 1 && selection.includes(node.id)) openMenu(event, 'selection', undefined, selection)
+  else {
+    select([node.id])
+    selectedId.value = node.id
+    openMenu(event, 'node', node.id, [node.id])
+  }
+}
+
+const inGroup = (ids: string[]) => groups.value.some((group) => group.nodes.some((id) => ids.includes(id)))
+
+const menuOptions = computed<DropdownOption[]>(() => {
+  const current = menu.value
+  if (!current) return []
+  const divider = (key: string): DropdownOption => ({ type: 'divider', key })
+  const { kind, ids } = current
+  if (kind === 'pane') {
+    return [
+      { key: 'add', label: t('flows.menuAddNode') },
+      { key: 'paste', label: t('flows.menuPaste'), disabled: !clipboard },
+      divider('d1'),
+      { key: 'selectAll', label: t('flows.menuSelectAll'), disabled: !nodes.value.length },
+      { key: 'fit', label: t('flows.menuFitView') },
+    ]
+  }
+  if (kind === 'edge') {
+    return [
+      { key: 'insert', label: t('flows.menuInsertNode') },
+      { key: 'deleteEdge', label: t('flows.menuDeleteEdge') },
+    ]
+  }
+  if (kind === 'group') {
+    return [
+      { key: 'rename', label: t('flows.menuRenameGroup') },
+      { key: 'copy', label: t('flows.menuCopy') },
+      { key: 'duplicate', label: t('flows.menuDuplicate') },
+      divider('d1'),
+      { key: 'ungroup', label: t('flows.menuUngroup') },
+      { key: 'delete', label: t('flows.menuDeleteGroup') },
+    ]
+  }
+  return [
+    ...(kind === 'node' ? [{ key: 'execute', label: t('flows.executeStep'), disabled: testing.value }] : []),
+    ...(kind === 'selection' ? [{ key: 'group', label: t('flows.menuGroup') }] : []),
+    ...(inGroup(ids) ? [{ key: 'ungroup', label: t('flows.menuUngroup') }] : []),
+    divider('d1'),
+    { key: 'copy', label: t('flows.menuCopy') },
+    { key: 'duplicate', label: t('flows.menuDuplicate') },
+    divider('d2'),
+    { key: 'delete', label: t('flows.menuDelete') },
+  ]
+})
+
+function onMenuSelect(key: string) {
+  const current = menu.value
+  menu.value = undefined
+  if (!current) return
+  const { ids, target, at } = current
+  switch (key) {
+    case 'add': return openPicker(current.x, current.y, at, {})
+    case 'paste': return pasteNodes(at)
+    case 'selectAll': return selectAll()
+    case 'fit': return fitView({ padding: 0.2, maxZoom: 1.2 })
+    case 'execute': return target && runTest(target)
+    case 'group': return groupNodes(ids)
+    case 'ungroup': return current.kind === 'group' ? (groups.value = groups.value.filter((group) => group.id !== target)) : ungroupNodes(ids)
+    case 'rename': return (renaming.value = target)
+    case 'copy': return copyNodes(ids)
+    case 'duplicate': return duplicateNodes(ids)
+    case 'delete': return deleteNodes(ids)
+    case 'deleteEdge': return (edges.value = edges.value.filter((edge) => edge.id !== target))
+    case 'insert': return openPicker(current.x, current.y, at, { insert: target })
+  }
+}
+
+// ---- adding nodes at a point: from the menu, or by dropping a connection on empty canvas ----
+
+interface PickerTarget {
+  /** Connect from (source) or to (target) this handle. */
+  connect?: OnConnectStartParams
+  /** Put the node in the middle of this edge. */
+  insert?: string
+}
+const picker = ref<{ x: number; y: number; at: { x: number; y: number }; target: PickerTarget }>()
+
+/** Node types that fit where the picker was opened. */
+const pickerTypes = computed(() => {
+  const target = picker.value?.target
+  const all = [...types.value.values()]
+  const hasExecOut = (type: NodeTypeInfo) => portsOf(type, schemaDefaults(type.configSchema)).execOut.length > 0
+  if (target?.insert) return all.filter((type) => type.execIn && hasExecOut(type))
+  if (target?.connect?.handleType === 'source') return all.filter((type) => type.execIn)
+  if (target?.connect?.handleType === 'target') return all.filter(hasExecOut)
+  return all
+})
+const pickerTitle = computed(() => {
+  const target = picker.value?.target
+  if (target?.insert) return t('flows.pickerInsert')
+  if (target?.connect) return target.connect.handleType === 'target' ? t('flows.pickerConnectPrev') : t('flows.pickerConnectNext')
+  return undefined
+})
+
+function openPicker(x: number, y: number, at: { x: number; y: number }, target: PickerTarget) {
+  menu.value = undefined
+  picker.value = { x, y, at, target }
+}
+
+function link(source: string, sourceHandle: string, target: string) {
+  const edge = { id: `e-${Math.random().toString(36).slice(2, 8)}`, source, sourceHandle, target, targetHandle: 'exec' }
+  return { ...edge, ...edgeLook(edge) }
+}
+
+function onPick(typeId: string) {
+  const current = picker.value
+  picker.value = undefined
+  const info = types.value.get(typeId)
+  if (!current || !info) return
+  const { at, target } = current
+  const backwards = target.connect?.handleType === 'target'
+  // The node's input lands under the pointer; when connecting backwards, its output does.
+  const id = addNode(typeId, { x: backwards ? at.x - 250 : at.x, y: at.y - 20 })
+  if (!id) return
+  const firstOut = execOutHandle(portsOf(info, schemaDefaults(info.configSchema)).execOut[0] ?? 'next')
+  const connect = target.connect
+  if (connect?.nodeId && connect.handleId) {
+    if (backwards) edges.value = [...edges.value, link(id, firstOut, connect.nodeId)]
+    else edges.value = [...edges.value, link(connect.nodeId, connect.handleId, id)]
+  }
+  if (target.insert) {
+    const edge = edges.value.find((item) => item.id === target.insert)
+    if (edge) {
+      edges.value = [
+        ...edges.value.filter((item) => item.id !== edge.id),
+        link(edge.source, edge.sourceHandle ?? '', id),
+        link(id, firstOut, edge.target),
+      ]
+    }
+  }
+}
+
+let dragged: OnConnectStartParams | undefined
+function onConnectStart(params: OnConnectStartParams) {
+  dragged = params
+}
+
+/** A connection dropped on empty canvas offers the nodes that can connect there. */
+function onConnectEnd(event?: MouseEvent | TouchEvent) {
+  const params = dragged
+  dragged = undefined
+  if (!params?.nodeId || !event) return
+  const point = 'changedTouches' in event ? event.changedTouches[0] : event
+  if (!point) return
+  const below = document.elementFromPoint(point.clientX, point.clientY)
+  if (!below?.closest('.vue-flow__pane') || below.closest('.vue-flow__node, .flow-group')) return
+  const handle = parseHandle(params.handleId)
+  if (!handle) return
+  openPicker(point.clientX, point.clientY, toFlow(point.clientX, point.clientY), {
+    connect: { ...params, handleType: handle.kind === 'exec-out' ? 'source' : 'target' },
+  })
+}
 
 // ---- runs and tests ----
 
@@ -622,7 +1024,7 @@ watch(narrow, (value) => {
       />
 
       <div class="main">
-        <div ref="canvas" class="canvas" @dragover.prevent @drop.prevent="onDrop">
+        <div ref="canvas" class="canvas" @dragover.prevent @drop.prevent="onDrop" @pointermove="pointer = { x: $event.clientX, y: $event.clientY }">
           <VueFlow
             id="flow-editor"
             v-model:nodes="nodes"
@@ -634,15 +1036,74 @@ watch(narrow, (value) => {
             :max-zoom="2"
             :default-edge-options="{ type: 'default' }"
             @connect="onConnect"
+            @connect-start="onConnectStart"
+            @connect-end="onConnectEnd"
             @nodes-initialized="onNodesInitialized"
             @node-click="onNodeClick"
             @pane-click="selectedId = undefined"
+            @pane-context-menu="openMenu($event, 'pane')"
+            @node-context-menu="onNodeContextMenu"
+            @selection-context-menu="({ event, nodes: picked }) => openMenu(event, 'selection', undefined, picked.map((node) => node.id))"
+            @edge-context-menu="({ event, edge }) => openMenu(event, 'edge', edge.id)"
           >
+            <template #zoom-pane>
+              <div
+                v-for="frame in frames"
+                :key="frame.group.id"
+                class="flow-group"
+                :style="frame.style"
+              >
+                <div
+                  class="flow-group-head"
+                  :title="t('flows.groupHint')"
+                  @pointerdown.stop="startGroupDrag($event, frame.group)"
+                  @dblclick.stop="renaming = frame.group.id"
+                  @contextmenu.stop="openMenu($event, 'group', frame.group.id, frame.group.nodes)"
+                >
+                  <input
+                    v-if="renaming === frame.group.id"
+                    class="flow-group-rename nodrag"
+                    :value="frame.group.label ?? ''"
+                    :placeholder="t('flows.groupDefault')"
+                    autofocus
+                    @pointerdown.stop
+                    @keydown.enter="renameGroup(frame.group.id, ($event.target as HTMLInputElement).value)"
+                    @keydown.esc="renaming = undefined"
+                    @blur="renameGroup(frame.group.id, ($event.target as HTMLInputElement).value)"
+                  >
+                  <span v-else class="flow-group-label">{{ frame.group.label || t('flows.groupDefault') }}</span>
+                  <span class="flow-group-count">{{ frame.group.nodes.length }}</span>
+                </div>
+              </div>
+            </template>
             <Background :gap="20" :pattern-color="isDark ? '#3a3a40' : '#d9d9d9'" />
             <Controls />
             <MiniMap v-if="!narrow" pannable zoomable :node-color="minimapColor" :mask-color="isDark ? 'rgba(20, 20, 24, 0.7)' : undefined" />
           </VueFlow>
           <div v-if="loaded && !nodes.length" class="canvas-empty">{{ t('flows.emptyCanvas') }}</div>
+          <NDropdown
+            trigger="manual"
+            placement="bottom-start"
+            size="small"
+            :show="!!menu"
+            :x="menu?.x ?? 0"
+            :y="menu?.y ?? 0"
+            :options="menuOptions"
+            @select="onMenuSelect"
+            @clickoutside="onMenuClickOutside"
+          />
+          <NodePicker
+            v-if="picker"
+            :key="`${picker.x},${picker.y}`"
+            :types="pickerTypes"
+            :x="picker.x"
+            :y="picker.y"
+            :title="pickerTitle"
+            :adapter="currentAdapter"
+            :adapter-name="adapterName"
+            @pick="onPick"
+            @close="picker = undefined"
+          />
         </div>
         <RunLogs
           ref="logs"
@@ -819,6 +1280,59 @@ watch(narrow, (value) => {
 .bots-select {
   flex: 0 1 260px;
   min-width: 120px;
+}
+
+/* Groups: a dashed frame behind their nodes; the header moves the group. */
+.flow-group {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  box-sizing: border-box;
+  border: 1.5px dashed rgba(127, 127, 127, 0.55);
+  border-radius: 14px;
+  background: rgba(127, 127, 127, 0.05);
+  pointer-events: none;
+}
+
+.flow-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--flow-node-fg, #222);
+  opacity: 0.75;
+  cursor: grab;
+  pointer-events: all;
+  user-select: none;
+}
+
+.flow-group-head:active {
+  cursor: grabbing;
+}
+
+.flow-group-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flow-group-count {
+  font-weight: 500;
+  opacity: 0.6;
+}
+
+.flow-group-rename {
+  font: inherit;
+  width: 160px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(127, 127, 127, 0.4);
+  background: var(--flow-node-bg, #fff);
+  color: inherit;
 }
 
 /* A running edge is a moving dashed line; Vue Flow animates the dashes. */
