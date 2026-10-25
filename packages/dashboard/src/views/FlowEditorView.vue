@@ -40,7 +40,7 @@ const { isDark } = useTheme()
 const flowId = computed(() => String(route.params.id))
 
 const {
-  project, fitView, updateNodeInternals, findNode, getSelectedNodes, addSelectedNodes, removeSelectedNodes, viewport, getNodes,
+  project, fitView, updateNodeInternals, findNode, getSelectedNodes, addSelectedNodes, removeSelectedNodes, viewport, getNodes, setCenter,
 } = useVueFlow('flow-editor')
 
 const types = ref(new Map<string, NodeTypeInfo>())
@@ -205,11 +205,31 @@ function apply(flow: FlowDoc, fit: boolean) {
 }
 
 let pendingFit = false
+/** A node to center on once the canvas is ready, instead of fitting the whole flow. */
+let pendingFocus: string | undefined
 function onNodesInitialized() {
   if (!pendingFit) return
   pendingFit = false
+  const focus = pendingFocus
+  pendingFocus = undefined
   // A frame later, once the canvas has its final size; fitting right away could zoom all the way out.
-  requestAnimationFrame(() => fitView({ padding: 0.2, maxZoom: 1.2 }))
+  requestAnimationFrame(() => (focus ? focusNode(focus, false) : fitView({ padding: 0.2, maxZoom: 1.2 })))
+}
+
+/** Selects a node, opens its settings and centers the canvas on it. */
+function focusNode(id: string, animate = true) {
+  selectedId.value = id
+  tab.value = 'node'
+  if (narrow.value) {
+    showPanel.value = true
+    showPalette.value = false
+  }
+  const node = findNode(id)
+  if (!node) return
+  addSelectedNodes([node])
+  const x = node.computedPosition.x + (node.dimensions.width || 240) / 2
+  const y = node.computedPosition.y + (node.dimensions.height || 80) / 2
+  setCenter(x, y, { zoom: Math.max(viewport.value.zoom, 0.9), duration: animate ? 300 : 0 })
 }
 
 async function load() {
@@ -227,10 +247,21 @@ async function load() {
   if (target && flow.nodes.some((node) => node.id === target)) {
     selectedId.value = target
     tab.value = 'node'
-    if (narrow.value) {
-      showPanel.value = true
-      showPalette.value = false
+    pendingFocus = target
+    // Opening another flow in the same editor may not fire "nodes initialized"; focus once its nodes have a size.
+    const started = Date.now()
+    const wait = () => {
+      if (pendingFocus !== target) return
+      const node = findNode(target)
+      if (node?.dimensions.width) {
+        pendingFocus = undefined
+        pendingFit = false
+        focusNode(target, false)
+      } else if (Date.now() - started < 3000) {
+        setTimeout(wait, 50)
+      }
     }
+    setTimeout(wait, 50)
   }
 }
 
@@ -683,6 +714,34 @@ async function moveTrigger(index: number, by: -1 | 1) {
   const target = index + by
   if (target < 0 || target >= list.length) return
   ;[list[index], list[target]] = [list[target], list[index]]
+  await applyOrder(list)
+}
+
+// Dragging a row of the order list onto another puts it in that row's place.
+const dragFrom = ref<number>()
+const dragOver = ref<number>()
+
+function onOrderDrop(index: number) {
+  const from = dragFrom.value
+  dragFrom.value = undefined
+  dragOver.value = undefined
+  if (from === undefined || from === index) return
+  const list = [...competing.value]
+  const [moved] = list.splice(from, 1)
+  list.splice(index, 0, moved)
+  // Show the new order at once; the saved priorities follow.
+  competing.value = list
+  applyOrder(list)
+}
+
+/** The priority field also follows the mouse wheel: up raises it, down lowers it. */
+function onPriorityWheel(event: WheelEvent) {
+  if (!selected.value || !event.deltaY) return
+  const next = (selected.value.data!.priority ?? 0) + (event.deltaY < 0 ? 1 : -1)
+  updateSelected({ priority: next || undefined })
+}
+
+async function applyOrder(list: TriggerSlot[]) {
   ordering.value = true
   try {
     const result = await call<{ flowId: string; nodeId: string; priority: number }[]>('flows.setTriggerOrder', {
@@ -707,8 +766,7 @@ async function moveTrigger(index: number, by: -1 | 1) {
 
 function openTrigger(slot: { flowId: string; nodeId: string }) {
   if (slot.flowId === flowId.value) {
-    selectedId.value = slot.nodeId
-    tab.value = 'node'
+    focusNode(slot.nodeId)
     return
   }
   router.push({ path: `/flows/${slot.flowId}`, query: { node: slot.nodeId } })
@@ -1757,7 +1815,9 @@ watch(narrow, (value) => {
                     <div class="inputs-title">{{ t('flows.triggerOrder') }}</div>
                     <NForm label-placement="top" size="small">
                       <NFormItem :label="t('flows.priority')" :feedback="t('flows.priorityHint')">
-                        <NInputNumber :value="selected.data!.priority ?? 0" :precision="0" @update:value="(value: number | null) => updateSelected({ priority: value || undefined })" />
+                        <div class="priority-input" :title="t('flows.priorityWheel')" @wheel.prevent="onPriorityWheel">
+                          <NInputNumber :value="selected.data!.priority ?? 0" :precision="0" @update:value="(value: number | null) => updateSelected({ priority: value || undefined })" />
+                        </div>
                       </NFormItem>
                       <NFormItem v-if="!hasPassThrough" :label="t('flows.passOn')" :feedback="t('flows.passOnHint')" label-placement="left">
                         <NSwitch :value="selected.data!.passOn !== false" @update:value="(value: boolean) => updateSelected({ passOn: value ? undefined : false })" />
@@ -1770,9 +1830,20 @@ watch(narrow, (value) => {
                         <span v-else class="muted small">{{ botName(bots[0]) }}</span>
                       </div>
                       <ol v-if="competing.length" class="order-list">
-                        <li v-for="(slot, index) in competing" :key="`${slot.flowId}:${slot.nodeId}`" :class="{ current: slot.flowId === flowId && slot.nodeId === selected.id, blocked: slot.certain }">
-                          <button type="button" class="order-name" @click="openTrigger(slot)">
-                            <span>{{ slot.name }}</span>
+                        <li
+                          v-for="(slot, index) in competing"
+                          :key="`${slot.flowId}:${slot.nodeId}`"
+                          :class="{ current: slot.flowId === flowId && slot.nodeId === selected.id, blocked: slot.certain, dragging: dragFrom === index, over: dragOver === index && dragFrom !== index }"
+                          :draggable="!ordering"
+                          @dragstart="dragFrom = index"
+                          @dragover.prevent="dragOver = index"
+                          @dragleave="dragOver === index && (dragOver = undefined)"
+                          @drop.prevent="onOrderDrop(index)"
+                          @dragend="dragFrom = undefined; dragOver = undefined"
+                        >
+                          <span class="order-grip" :title="t('flows.dragToOrder')">⋮⋮</span>
+                          <button type="button" class="order-name" :title="t('flows.focusTrigger')" @click="openTrigger(slot)">
+                            <span><span class="order-number">{{ String(slot.number).padStart(2, '0') }}</span>{{ slot.name }}</span>
                             <span class="muted small">{{ slot.flowName }} · {{ t('flows.priorityShort', { n: slot.priority }) }}{{ slot.passesOn ? ` · ${t('flows.passesOnShort')}` : '' }}</span>
                             <span v-if="slot.certain" class="order-tag">{{ t('flows.blockedTag') }}</span>
                             <span v-else-if="slot.blockedBy" class="order-tag maybe">{{ t('flows.maybeBlocked') }}</span>
@@ -2272,6 +2343,34 @@ watch(narrow, (value) => {
   padding: 4px 6px;
   border-radius: 6px;
   border: 1px solid rgba(127, 127, 127, 0.2);
+}
+
+.order-list li.dragging {
+  opacity: 0.4;
+}
+
+.order-list li.over {
+  box-shadow: 0 -2px 0 #2080f0;
+}
+
+.order-grip {
+  flex: none;
+  cursor: grab;
+  opacity: 0.45;
+  font-size: 11px;
+  letter-spacing: -2px;
+  user-select: none;
+}
+
+.order-number {
+  margin-right: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.priority-input {
+  width: 100%;
 }
 
 .order-list li.current {

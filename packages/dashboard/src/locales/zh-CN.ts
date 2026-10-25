@@ -307,6 +307,9 @@ const zhCN: typeof en = {
     empty: '暂无日志。连接尝试、适配器错误、插件警告以及大模型对话跳过消息的原因都会显示在这里。',
   },
   flows: {
+    priorityWheel: '可用滚轮调整',
+    dragToOrder: '拖动排序',
+    focusTrigger: '在画布上定位到这个触发器',
     searchPlaceholder: '搜索流程和触发器',
     filterTrigger: '触发器',
     filterAdapter: '适配器',

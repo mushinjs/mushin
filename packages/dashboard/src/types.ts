@@ -302,6 +302,8 @@ export interface TriggerSlot {
   flowId: string
   flowName: string
   nodeId: string
+  /** The node's number in its flow, as the editor shows it. */
+  number: number
   name: string
   type: string
   source: 'message' | 'event' | 'schedule'

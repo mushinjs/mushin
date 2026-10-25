@@ -305,6 +305,9 @@ export default {
     empty: 'Nothing logged yet. Connection attempts, adapter errors, plugin warnings and why LLM chat skipped a message show up here.',
   },
   flows: {
+    priorityWheel: 'Scroll to change it',
+    dragToOrder: 'Drag to reorder',
+    focusTrigger: 'Show this trigger on its canvas',
     searchPlaceholder: 'Search flows and triggers',
     filterTrigger: 'Trigger',
     filterAdapter: 'Adapter',

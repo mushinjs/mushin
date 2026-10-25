@@ -7,6 +7,8 @@ export interface TriggerSlot {
   flowId: string
   flowName: string
   nodeId: string
+  /** The node's number in its flow, as the editor shows it (1-based). */
+  number: number
   /** The node's label, or a summary such as `/checkin`. */
   name: string
   type: string
@@ -105,6 +107,7 @@ export function triggerOrder(flows: CompiledFlow[]): TriggerSlot[] {
       flowId: flow.doc.id,
       flowName: flow.doc.name,
       nodeId: entry.node.id,
+      number: flow.doc.nodes.findIndex((node) => node.id === entry.node.id) + 1,
       name: entry.node.label || triggerSummary(entry) || entry.node.type,
       type: entry.node.type,
       source: entry.type?.kind === 'trigger' ? entry.type.source ?? 'message' : 'message',
