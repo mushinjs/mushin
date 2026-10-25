@@ -76,6 +76,7 @@ function time(ts: number) {
 .logs {
   height: min(70vh, 760px);
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: 12px 16px;
   font-size: 12px;
   line-height: 1.7;

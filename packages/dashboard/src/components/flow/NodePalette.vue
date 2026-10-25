@@ -128,6 +128,7 @@ function onClick(type: NodeTypeInfo) {
   width: 190px;
   flex: none;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 12px;
   border-right: 1px solid rgba(127, 127, 127, 0.18);
   display: flex;

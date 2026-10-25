@@ -10,6 +10,57 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/*
+ * Thin scrollbars whose thumb only shows while the pointer is over the
+ * scrolling element. Only the color changes on hover, never the width, so
+ * the reserved track (plus scrollbar-gutter on scroll containers) keeps the
+ * layout from shifting.
+ */
+:root {
+  --scrollbar-thumb: rgba(127, 127, 127, 0.4);
+  --scrollbar-thumb-hover: rgba(127, 127, 127, 0.6);
+}
+
+html[data-theme='dark'] {
+  --scrollbar-thumb: rgba(200, 200, 200, 0.3);
+  --scrollbar-thumb-hover: rgba(200, 200, 200, 0.5);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+*:hover {
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+/* Fallback for engines without scrollbar-color (older Safari). */
+@supports not (scrollbar-color: auto) {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    background: transparent;
+  }
+
+  :hover::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+  }
+}
+
 .page {
   padding: 24px;
   max-width: 1200px;
@@ -50,6 +101,7 @@ pre.json {
   background: rgba(127, 127, 127, 0.1);
   max-height: 240px;
   overflow: auto;
+  scrollbar-gutter: stable;
   white-space: pre-wrap;
   word-break: break-word;
 }

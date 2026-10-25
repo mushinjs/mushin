@@ -202,6 +202,7 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 16px;
   display: flex;
   flex-direction: column;

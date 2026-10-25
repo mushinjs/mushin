@@ -143,6 +143,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onPointerDown, t
 
 .list {
   overflow-y: auto;
+  scrollbar-gutter: stable;
   min-height: 0;
   display: flex;
   flex-direction: column;
