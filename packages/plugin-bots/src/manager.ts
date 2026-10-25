@@ -1,5 +1,5 @@
 import {
-  type ChannelInfo, Context, type Exporter, type Fiber, fiberError, fiberStatus, isMasked, Logger, mask, type Message,
+  type ChannelInfo, Context, type LogTag, logTag, type Exporter, type Fiber, fiberError, fiberStatus, isMasked, Logger, mask, type Message,
   type MessageRecord, messageType, MushinError, type Plugin, pluginSchema, randomId, type Segment, Service, toJsonSchema,
   validatePluginConfig, z,
 } from '@mushin/core'
@@ -28,6 +28,7 @@ export interface BotLogLine {
   ts: number
   type: string
   name: string
+  tag: LogTag
   text: string
 }
 
@@ -45,6 +46,8 @@ interface Runtime {
   bot?: Bot
   plugins: Map<string, Fiber>
   pluginErrors: Map<string, string>
+  /** Last connection status written to the global log. */
+  logged?: BotStatus
 }
 
 const STORAGE_KEY = 'bots'
@@ -86,9 +89,18 @@ export class BotManager extends Service {
     this.home = ctx
   }
 
+  /**
+   * Bot lifecycle lines for the global log, tagged `bot` in the dashboard. Written from the manager's
+   * own context, so they stay out of the bot's log, which has its own lines from inside the bot.
+   */
+  private get logger() {
+    return this.home.logger('bot')
+  }
+
   async *[Service.init]() {
     const stored = await this.home.storage.get<{ bots: BotRecord[] }>(STORAGE_KEY)
     this.records = stored?.bots ?? []
+    this.logger.info('loaded %d bot(s)', this.records.length)
     yield this.home.logger.exporter({
       colors: false,
       levels: { default: LOG_LEVEL_DEBUG },
@@ -108,6 +120,7 @@ export class BotManager extends Service {
     return ctx.effect(() => {
       if (this.adapterStore.has(adapter.id)) throw new Error(`adapter "${adapter.id}" is already defined`)
       this.adapterStore.set(adapter.id, adapter)
+      this.logger.info('adapter %s is available', adapter.id)
       for (const record of this.records) {
         if (record.enabled && record.adapter.type === adapter.id && !this.runtimes.has(record.id)) {
           this.startSafely(record.id)
@@ -116,6 +129,7 @@ export class BotManager extends Service {
       ctx.emit('bots/changed')
       return async () => {
         this.adapterStore.delete(adapter.id)
+        this.logger.info('adapter %s was removed', adapter.id)
         for (const record of this.records) {
           if (record.adapter.type !== adapter.id || !this.runtimes.has(record.id)) continue
           await this.stopRuntime(record.id)
@@ -218,6 +232,7 @@ export class BotManager extends Service {
     }
     this.records.push(record)
     await this.save()
+    this.logger.info('created bot %s', this.label(record))
     if (record.enabled) await this.start(id).catch(() => {})
     return this.describe(record)
   }
@@ -235,6 +250,7 @@ export class BotManager extends Service {
       record.adapter = { type: patch.adapter.type, config: this.validateAdapter(patch.adapter.type, config) }
     }
     await this.save()
+    this.logger.info('updated bot %s', this.label(record))
     if (record.enabled) await this.start(id).catch(() => {})
     return this.describe(record)
   }
@@ -247,13 +263,14 @@ export class BotManager extends Service {
     this.logs.delete(id)
     this.startErrors.delete(id)
     await this.save()
+    this.logger.info('deleted bot %s', this.label(record))
     return { deleted: id }
   }
 
   // ---- runtimes ----
 
   private startSafely(id: string) {
-    this.start(id).catch((error) => this.home.logger('bots').warn('failed to start bot %s: %s', id, error))
+    this.start(id).catch((error) => this.logger.warn('failed to start bot %s: %s', id, error))
   }
 
   async start(id: string) {
@@ -265,6 +282,7 @@ export class BotManager extends Service {
       const message = `Adapter "${record.adapter.type}" is not loaded; enable its plugin`
       this.startErrors.set(id, message)
       this.emitStatus(id)
+      this.logger.warn('cannot start bot %s: %s', this.label(record), message)
       throw new MushinError('unavailable', message)
     }
 
@@ -283,6 +301,12 @@ export class BotManager extends Service {
       record: (partial) => this.record(partial),
       status: (bot) => {
         runtime.bot = bot
+        // Connecting is left to the bot's own log, so a reconnect loop writes one error line here, not one per try.
+        if (bot.status !== 'connecting' && bot.status !== runtime.logged && (runtime.logged || bot.status !== 'offline')) {
+          runtime.logged = bot.status
+          if (bot.status === 'error') this.logger.warn('bot %s: error (%s)', this.label(record), bot.error ?? 'no details')
+          else this.logger.info('bot %s is %s', this.label(record), bot.status)
+        }
         this.emitStatus(id)
       },
     }
@@ -303,6 +327,9 @@ export class BotManager extends Service {
     })
     await runtime.fiber
     runtime.bot = runtime.ctx?.get('bot') ?? runtime.bot
+    const error = fiberError(runtime.fiber)
+    if (error) this.logger.warn('bot %s failed to start: %s', this.label(record), error)
+    else this.logger.info('started bot %s with the %s adapter', this.label(record), record.adapter.type)
     this.emitStatus(id)
     return this.status(id)
   }
@@ -312,6 +339,7 @@ export class BotManager extends Service {
     if (!runtime) return
     this.runtimes.delete(id)
     await runtime.fiber?.dispose()
+    this.logger.info('stopped bot %s', this.label(this.records.find((item) => item.id === id) ?? id))
     this.emitStatus(id)
   }
 
@@ -322,6 +350,10 @@ export class BotManager extends Service {
     if (enabled) return this.start(id)
     await this.stopRuntime(id)
     return this.status(id)
+  }
+
+  private label(record: BotRecord | string) {
+    return typeof record === 'string' ? record : `"${record.name}" (${record.id})`
   }
 
   // ---- bot plugins ----
@@ -370,6 +402,7 @@ export class BotManager extends Service {
     entry.enabled = true
     entry.config = nextConfig
     await this.save()
+    this.logger.info('enabled plugin %s on bot %s', name, this.label(record))
     this.reloadPlugin(id, entry, plugin)
     return this.plugins(id).then((list) => list.find((item) => item.package === name))
   }
@@ -380,6 +413,7 @@ export class BotManager extends Service {
     if (!entry) throw new MushinError('not_found', `${name} is not configured on this bot`)
     entry.enabled = false
     await this.save()
+    this.logger.info('disabled plugin %s on bot %s', name, this.label(record))
     const runtime = this.runtimes.get(id)
     const fiber = runtime?.plugins.get(name)
     runtime?.plugins.delete(name)
@@ -395,6 +429,7 @@ export class BotManager extends Service {
     validatePluginConfig(plugin, config)
     entry.config = config
     await this.save()
+    this.logger.info('config of plugin %s on bot %s changed', name, this.label(record))
     if (entry.enabled) this.reloadPlugin(id, entry, plugin)
     return this.plugins(id).then((list) => list.find((item) => item.package === name))
   }
@@ -438,6 +473,7 @@ export class BotManager extends Service {
       ts: message.ts,
       type: message.type,
       name: message.name,
+      tag: logTag(message.name),
       text: Logger.format(plainExporter, message),
     }
     let buffer = this.logs.get(botId)
@@ -454,7 +490,9 @@ export class BotManager extends Service {
     let buffer = this.logs.get(id)
     if (!buffer) {
       const day = new Date().toISOString().slice(0, 10)
-      buffer = await this.home.storage.tail<BotLogLine>(`logs/${id}/${day}`, LOG_BUFFER_SIZE)
+      // Lines stored before tags existed get one from their logger name.
+      buffer = (await this.home.storage.tail<BotLogLine>(`logs/${id}/${day}`, LOG_BUFFER_SIZE))
+        .map((line) => (line.tag ? line : { ...line, tag: logTag(line.name) }))
       this.logs.set(id, buffer)
     }
     return buffer.slice(-limit)
@@ -475,7 +513,7 @@ export class BotManager extends Service {
     if (buffer.length > BUFFER_SIZE) buffer.splice(0, buffer.length - BUFFER_SIZE)
     const day = new Date(record.timestamp).toISOString().slice(0, 10)
     this.home.storage.append(`messages/${record.botId}/${day}`, record).catch((error) => {
-      this.home.logger('bots').warn('failed to write message log: %s', error)
+      this.logger.warn('failed to write message log: %s', error)
     })
     this.home.emit('bots/message', record)
     return record

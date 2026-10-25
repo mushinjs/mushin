@@ -344,6 +344,17 @@ export default {
     noDebug: 'Hide debug',
     clear: 'Clear',
     empty: 'No log lines',
+    tagsLabel: 'Sources',
+    tags: {
+      plugin: 'Plugins',
+      bot: 'Bots',
+      adapter: 'Adapters',
+      flow: 'Flows',
+      provider: 'Providers',
+      agent: 'Agent',
+      system: 'System',
+      other: 'Other',
+    },
   },
   agent: {
     hello: 'Hi. Tell me what you want to set up, and I will do it with you.',

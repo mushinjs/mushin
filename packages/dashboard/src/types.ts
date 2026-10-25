@@ -217,6 +217,8 @@ export interface LogLine {
   ts: number
   type: string
   name: string
+  /** Source category: plugin, bot, adapter, flow, provider, agent, system or other. */
+  tag?: string
   text: string
 }
 

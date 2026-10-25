@@ -1,6 +1,6 @@
 import type { WebSocket } from 'ws'
 import {
-  type ActionCaller, Context, type Exporter, field, Logger, type Message, MushinError, randomId, Service, toErrorPayload, z,
+  type ActionCaller, Context, type Exporter, field, Logger, LOG_TAGS, type LogTag, logTag, type Message, MushinError, randomId, Service, toErrorPayload, z,
 } from '@mushin/core'
 import type {} from '@cordisjs/plugin-server'
 import type {} from '@mushin/plugin-agent'
@@ -46,6 +46,8 @@ export interface LogLine {
   ts: number
   type: string
   name: string
+  /** Source category from the logger name, for the dashboard's quick filters. */
+  tag: LogTag
   text: string
 }
 
@@ -61,7 +63,14 @@ const FORWARDED_EVENTS = [
 const plainExporter: Exporter = { colors: false, export() {} }
 
 function formatLog(message: Message): LogLine {
-  return { sn: message.sn, ts: message.ts, type: message.type, name: message.name, text: Logger.format(plainExporter, message) }
+  return {
+    sn: message.sn,
+    ts: message.ts,
+    type: message.type,
+    name: message.name,
+    tag: logTag(message.name),
+    text: Logger.format(plainExporter, message),
+  }
 }
 
 /**
@@ -342,11 +351,14 @@ export class Console extends Service {
 
     yield actions.define({
       name: 'logs.recent',
-      description: 'Recent log lines of Mushin.js itself, oldest first. Lines written inside a bot are in bots.logs instead.',
+      description: 'Recent log lines of Mushin.js itself, oldest first, each with a source tag. Lines written inside a bot are in bots.logs instead.',
       risk: 'read',
-      input: z.object({ limit: z.number().int().min(1).max(1000).optional() }),
-      handler: ({ limit }) => this.home.logger.buffer
-        .filter((message) => !this.isBotLog(message))
+      input: z.object({
+        limit: z.number().int().min(1).max(1000).optional(),
+        tag: z.enum(LOG_TAGS).optional().describe('Only lines from this source: plugin, bot, adapter, flow, provider, agent, system or other'),
+      }),
+      handler: ({ limit, tag }) => this.home.logger.buffer
+        .filter((message) => !this.isBotLog(message) && (!tag || logTag(message.name) === tag))
         .slice(-(limit ?? 200))
         .map(formatLog),
     })

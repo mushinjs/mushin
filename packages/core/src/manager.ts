@@ -110,6 +110,11 @@ export class PluginManager extends Service {
     this.home = ctx
   }
 
+  /** Plugin lifecycle lines, tagged `plugin` in the dashboard. */
+  private get logger() {
+    return this.home.logger('plugin')
+  }
+
   get entries() {
     return this.options.config.plugins
   }
@@ -117,14 +122,18 @@ export class PluginManager extends Service {
   async *[Service.init]() {
     yield this.home.on('internal/status', (fiber) => {
       for (const [id, tracked] of this.fibers) {
-        if (tracked.ctx.fiber === fiber) this.home.emit('manager/changed', id)
+        if (tracked.ctx.fiber !== fiber) continue
+        const status = fiberStatus(fiber)
+        if (status === 'active') this.logger.info('%s is active', id)
+        else if (status === 'failed') this.logger.error('%s failed: %s', id, fiberError(fiber) ?? 'no details')
+        this.home.emit('manager/changed', id)
       }
     })
     yield* this.defineActions()
     for (const entry of this.entries) {
       if (entry.enabled === false) continue
       await this.start(entry).catch((error) => {
-        this.home.logger('manager').error('failed to load %s: %s', entry.package, error)
+        this.logger.error('failed to load %s: %s', entry.package, error)
       })
     }
   }
@@ -159,6 +168,7 @@ export class PluginManager extends Service {
   }
 
   private async start(entry: PluginEntry) {
+    this.logger.debug('starting %s (%s)', entry.id, entry.package)
     const plugin = await this.loadPlugin(entry.package)
     // Let the old instance release its resources (e.g. the server's port) before the new one starts.
     await this.fibers.get(entry.id)?.dispose()
@@ -173,6 +183,7 @@ export class PluginManager extends Service {
     if (!fiber) return
     this.fibers.delete(id)
     await fiber.dispose()
+    this.logger.info('%s stopped', id)
     this.home.emit('manager/changed', id)
   }
 
@@ -191,6 +202,7 @@ export class PluginManager extends Service {
     }
     entry.enabled = true
     await this.save()
+    this.logger.info('enabled %s (%s)', entry.id, entry.package)
     await this.start(entry)
     return entry
   }
@@ -203,6 +215,7 @@ export class PluginManager extends Service {
     }
     entry.enabled = false
     await this.save()
+    this.logger.info('disabled %s', id)
     await this.stop(id)
     return entry
   }
@@ -213,6 +226,7 @@ export class PluginManager extends Service {
     validatePluginConfig(plugin, config)
     entry.config = config
     await this.save()
+    this.logger.info('config of %s changed', id)
     if (entry.enabled !== false) await this.start(entry)
     return entry
   }
@@ -220,6 +234,7 @@ export class PluginManager extends Service {
   async reload(id: string) {
     const entry = this.require(id)
     if (entry.enabled === false) throw new MushinError('conflict', `${id} is disabled`)
+    this.logger.info('reloading %s', id)
     await this.stop(id)
     await this.start(entry)
     return entry

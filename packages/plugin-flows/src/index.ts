@@ -168,6 +168,11 @@ export class FlowService extends Service {
     this.home = ctx
   }
 
+  /** Flow lifecycle lines for the global log, tagged `flow` in the dashboard. Runs log inside each bot. */
+  private get logger() {
+    return this.home.logger('flow')
+  }
+
   async *[Service.init]() {
     for (const key of await this.home.storage.list('flows')) {
       const doc = await this.home.storage.get<FlowDocument>(key)
@@ -183,7 +188,9 @@ export class FlowService extends Service {
       const next = { ...doc, nodes, edges: migrated.edges }
       this.docs.set(doc.id, next)
       await this.home.storage.set(`flows/${doc.id}`, next)
+      this.logger.info('migrated flow "%s" to the current format', doc.name)
     }
+    this.logger.info('loaded %d flow(s)', this.docs.size)
     yield* this.defineActions()
     yield this.home.effect(() => {
       const timer = setInterval(() => this.tick(), TICK)
@@ -312,6 +319,7 @@ export class FlowService extends Service {
     }
     await this.attach(doc.bots)
     await this.save(doc)
+    this.logger.info('created flow %s', this.label(doc))
     return this.describe(doc)
   }
 
@@ -338,17 +346,23 @@ export class FlowService extends Service {
       doc.bots = patch.bots
     }
     await this.save(doc)
+    this.logger.info('saved flow %s', this.label(doc))
     return this.describe(doc)
   }
 
   async remove(id: string) {
-    this.get(id)
+    const doc = this.get(id)
     this.docs.delete(id)
     this.compiled.delete(id)
     this.traces.delete(id)
     await this.home.storage.delete(`flows/${id}`)
     this.home.emit('flows/changed')
+    this.logger.info('deleted flow %s', this.label(doc))
     return { deleted: id }
+  }
+
+  private label(doc: FlowDocument) {
+    return `"${doc.name}" (${doc.id})`
   }
 
   // ---- running ----
@@ -422,8 +436,10 @@ export class FlowService extends Service {
     const botId = ctx.bot.id
     return ctx.effect(() => {
       this.runners.set(botId, ctx)
+      this.logger.info('runner started on bot %s; %d flow(s) attached', botId, this.flowsOf(botId).length)
       return () => {
         if (this.runners.get(botId) === ctx) this.runners.delete(botId)
+        this.logger.info('runner stopped on bot %s', botId)
         for (const waiter of this.waiters) {
           if (waiter.botId !== botId) continue
           this.waiters.delete(waiter)
