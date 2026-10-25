@@ -4,7 +4,7 @@ import type {} from '@mushin/plugin-flows'
 import type {} from '@mushin/plugin-providers'
 import type {} from '@mushin/plugin-storage'
 import { AdapterConfig, sandboxAdapter, simulate } from './adapter'
-import { type DemoFlowKey, demoFlows, waitReplyNode } from './flows'
+import { type DemoFlowKey, demoFlows } from './flows'
 import { DEMO_MODEL, demoProviderType } from './provider'
 
 export * from './adapter'
@@ -138,7 +138,6 @@ export async function apply(ctx: Context, raw: Config) {
 
   ctx.llm.defineType(demoProviderType)
   ctx.bots.defineAdapter(sandboxAdapter)
-  ctx.flows.defineNode(waitReplyNode(ctx))
 
   ctx.actions.define({
     name: 'demo.say',

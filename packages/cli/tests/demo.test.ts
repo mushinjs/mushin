@@ -41,7 +41,7 @@ describe('demo plugin', () => {
     await app.call('plugins.enable', { package: PACKAGE })
     expect((await app.call<any[]>('providers.types')).map((type) => type.id)).toContain('demo')
     expect((await app.call<any[]>('bots.adapters')).map((adapter) => adapter.id)).toContain('demo')
-    expect((await app.call<any[]>('flows.nodeTypes')).map((type) => type.type)).toContain('demo.waitReply')
+    expect((await app.call<any[]>('flows.nodeTypes')).map((type) => type.type)).toContain('logic.waitReply')
     expect((await app.call('providers.list')).providers).toEqual([])
     expect(await app.call('bots.list')).toEqual([])
     expect(await app.call('flows.list')).toEqual([])

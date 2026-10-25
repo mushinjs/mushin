@@ -1,9 +1,13 @@
 import { type Logger, randomId, seg } from '@mushin/core'
 import type { CompiledFlow } from './graph'
 import { interpolate, interpolateConfig, SCOPES, sysValues, toText } from './refs'
-import type { FlowSession, LlmLike, PortType, RunState, RunTrace, Variables, VariableScope } from './types'
+import type { FlowBot, FlowEvent, FlowSession, LlmLike, PortType, RunState, RunTrace, TriggerSource, Variables, VariableScope, WaitOptions } from './types'
 
 export const MAX_STEPS = 200
+/** How long a run may work; time spent waiting for a reply does not count. */
+export const RUN_LIMIT = 60_000
+/** The longest a single wait for a reply may last. */
+export const MAX_WAIT = 3_600_000
 
 export class FlowError extends Error {
   name = 'FlowError'
@@ -41,6 +45,44 @@ export interface RunEnvironment {
   signal?: AbortSignal
   /** Stop once this node has run: the path up to it runs, nothing after it. */
   stopAt?: string
+  /** Set for runs started by an adapter event: only event triggers are tried. */
+  event?: FlowEvent
+  /** Set for runs started by the clock: only this schedule trigger fires. */
+  scheduled?: { nodeId: string; now: Date }
+  bot?: FlowBot
+  /** Working time allowed, in ms; `RUN_LIMIT` by default. */
+  limit?: number
+  /** Waits for the next message in the session's chat. Without it, waits time out at once. */
+  waitForMessage?(options: WaitOptions, session: FlowSession): Promise<FlowSession | undefined>
+}
+
+/**
+ * A run's time limit that can be paused: waiting for a reply can take minutes, but only the time
+ * a run spends working counts toward `RUN_LIMIT`.
+ */
+function runBudget(limit: number) {
+  const controller = new AbortController()
+  let remaining = limit
+  let startedAt = Date.now()
+  let timer: NodeJS.Timeout | undefined
+  const start = () => {
+    startedAt = Date.now()
+    timer = setTimeout(() => controller.abort(new FlowError('The run took too long and was stopped')), remaining)
+  }
+  start()
+  return {
+    signal: controller.signal,
+    pause() {
+      clearTimeout(timer)
+      remaining = Math.max(0, remaining - (Date.now() - startedAt))
+    },
+    resume: start,
+    dispose: () => clearTimeout(timer),
+  }
+}
+
+function sourceOf(env: RunEnvironment): TriggerSource {
+  return env.scheduled ? 'schedule' : env.event ? 'event' : 'message'
 }
 
 export interface RunResult {
@@ -59,7 +101,8 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
     botId: env.botId,
     test: !!env.test,
     at: Date.now(),
-    text: env.session.text,
+    text: env.event ? `[${env.event.name}]` : env.scheduled ? '[schedule]' : env.session.text,
+    ...(env.event ? { event: env.event.name } : env.scheduled ? { event: 'schedule' } : {}),
     steps: [],
     edges: [],
     replies: [],
@@ -76,9 +119,9 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
 
   // Record replies for the trace without changing how they are sent.
   const session: FlowSession = Object.create(env.session)
-  const remember = (content: unknown) => {
+  const remember = (content: unknown, to?: string) => {
     const text = typeof content === 'string' ? content : (content as { text?: string })?.text ?? ''
-    trace.replies.push(text)
+    trace.replies.push(to ? `→ ${to}: ${text}` : text)
   }
   session.send = (content) => {
     remember(content)
@@ -89,10 +132,49 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
     return env.session.reply(content)
   }
 
+  // Platform calls are recorded for the trace; test runs record them without making them.
+  let bot: FlowBot | undefined
+  if (env.bot || env.test) {
+    const real = env.bot
+    const calls: NonNullable<RunTrace['calls']> = trace.calls = []
+    bot = {
+      id: real?.id ?? 'test',
+      platform: real?.platform ?? 'test',
+      selfId: real?.selfId,
+      async call(action, params = {}) {
+        const entry: (typeof calls)[number] = { action, params }
+        calls.push(entry)
+        if (env.test || !real) return null
+        try {
+          return await real.call(action, params)
+        } catch (error) {
+          entry.error = String((error as Error)?.message ?? error)
+          throw error
+        }
+      },
+      async send(channel, content) {
+        remember(content, `${channel.type}:${channel.id}`)
+        if (env.test || !real) return undefined
+        return real.send(channel, content)
+      },
+    }
+  }
+
   const state: RunState = {}
   const outputs = new Map<string, Record<string, unknown>>()
   const sys = sysValues(session)
-  const signal = env.signal ?? AbortSignal.timeout(60_000)
+  const budget = env.signal ? undefined : runBudget(env.limit ?? RUN_LIMIT)
+  const signal = env.signal ?? budget!.signal
+  const waitForMessage = async (options: WaitOptions) => {
+    if (!env.waitForMessage) return undefined
+    const seconds = Math.min(Math.max(options.seconds, 1), MAX_WAIT / 1000)
+    budget?.pause()
+    try {
+      return await env.waitForMessage({ ...options, seconds }, env.session)
+    } finally {
+      budget?.resume()
+    }
+  }
   let steps = 0
   let matched = false
   let consumed = false
@@ -131,6 +213,10 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
       logger: env.logger,
       signal,
       run: state,
+      bot,
+      event: env.event,
+      waitForMessage,
+      test: !!env.test,
     }
   }
 
@@ -163,13 +249,16 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
     await follow(id, exec)
   }
 
+  const source = sourceOf(env)
   try {
     for (const id of flow.triggers) {
       if (stopped) break
       const entry = flow.nodes.get(id)!
       if (entry.type?.kind !== 'trigger') continue
+      if ((entry.type.source ?? 'message') !== source) continue
+      if (env.scheduled && env.scheduled.nodeId !== id) continue
       const started = Date.now()
-      const result = entry.type.match({ config: entry.config, session, vars })
+      const result = entry.type.match({ config: entry.config, session, vars, event: env.event, now: env.scheduled?.now })
       if (!result) continue
       matched = true
       if (!entry.config.passThrough) consumed = true
@@ -181,6 +270,8 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
   } catch (error) {
     trace.error = String((error as Error)?.message ?? error)
     env.logger.warn('flow "%s" stopped: %s', flow.doc.name, trace.error)
+  } finally {
+    budget?.dispose()
   }
   return { matched, consumed, trace }
 }

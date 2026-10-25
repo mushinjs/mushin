@@ -67,11 +67,15 @@ export interface ChannelInfo {
   type: 'group' | 'private'
   id: string
   name?: string
+  /** For a private chat started from a group (a temporary chat): that group's id. */
+  fromGroup?: string
 }
 
 export interface UserInfo {
   id: string
   name?: string
+  /** The sender's role in a group chat, when the platform reports it. */
+  role?: 'owner' | 'admin' | 'member'
 }
 
 export interface MessageRecord {

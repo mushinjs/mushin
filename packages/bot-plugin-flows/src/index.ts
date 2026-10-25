@@ -14,4 +14,10 @@ export function apply(ctx: Context) {
     // A matched trigger keeps the message unless it lets other plugins answer too.
     if (!consumed) return next()
   }, { priority: PRIORITY })
+
+  // Event triggers (a member joins, a poke…) and schedule triggers run through this bot.
+  ctx.flows.useRunner(ctx)
+  ctx.bot.onEvent((event) => {
+    ctx.flows.dispatchEvent(ctx, event).catch((error) => ctx.logger('flows').warn('event %s: %s', event.name ?? event.type, error))
+  })
 }

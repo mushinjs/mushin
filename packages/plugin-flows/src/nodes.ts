@@ -1,4 +1,4 @@
-import { field, z } from '@mushin/core'
+import { type ChannelInfo, field, segmentsToText, z } from '@mushin/core'
 import { FlowError } from './engine'
 import type { FlowSession, LlmLike, NodeType, VariableScope } from './types'
 
@@ -270,6 +270,8 @@ const messageNode: NodeType = {
     { name: 'groupId', type: 'text', title: { en: 'Group id', 'zh-CN': '群号' } },
     { name: 'isPrivate', type: 'boolean', title: { en: 'Private chat', 'zh-CN': '是私聊' } },
     { name: 'mentioned', type: 'boolean', title: { en: 'Mentions the bot', 'zh-CN': '@ 了机器人' } },
+    { name: 'role', type: 'text', title: { en: 'Sender role (owner / admin / member)', 'zh-CN': '发送者身份（owner / admin / member）' } },
+    { name: 'messageId', type: 'text', title: { en: 'Message id', 'zh-CN': '消息 ID' } },
   ],
   run: ({ session }) => ({
     outputs: {
@@ -277,6 +279,8 @@ const messageNode: NodeType = {
       groupId: session.isDirect ? '' : session.channel.id,
       isPrivate: session.isDirect,
       mentioned: session.mentioned,
+      role: session.user.role ?? '',
+      messageId: session.messageId ?? '',
     },
   }),
 }
@@ -435,20 +439,211 @@ const replyNode: NodeType = {
     quote: z.boolean().default(false).meta(field('Quote the message', undefined, { 'zh-CN': { title: '引用原消息' } })),
   }),
   inputs: [{ name: 'text', type: 'text', title: { en: 'Text', 'zh-CN': '文本' } }],
+  outputs: [{ name: 'messageId', type: 'text', title: { en: 'Sent message id', 'zh-CN': '发出的消息 ID' } }],
   async run({ config, inputs, session, flow, node, run }) {
     const text = inputs.text !== undefined && inputs.text !== ''
       ? String(inputs.text)
       : fillTemplate(config.text, { user: session.user.name ?? session.user.id, message: session.text })
-    if (!text.trim()) return
+    if (!text.trim()) return { outputs: { messageId: '' } }
     const content = { text, source: { kind: 'flow' as const, flow: flow.name, node: node.label, ...(run.llm ?? {}) } }
-    await (config.quote ? session.reply(content) : session.send(content))
+    const sent = await (config.quote ? session.reply(content) : session.send(content))
+    return { outputs: { messageId: sent?.messageId ?? '' } }
+  },
+}
+
+const targetFields = {
+  targetType: z.enum(['current', 'group', 'private']).default('current').meta(field(
+    'Send to',
+    'current: the chat the run is about. group / private: the group or person below.',
+    { 'zh-CN': { title: '发送到', description: 'current：本次运行所在的会话。group / private：下面填写的群或个人。' } },
+  )),
+  targetId: z.string().default('').meta(field('Group or user id', 'Supports references such as {{sys.userId}}', {
+    'zh-CN': { title: '群号或 QQ', description: '支持 {{sys.userId}} 这样的变量引用' },
+  })),
+}
+
+/** The chat a send or schedule node targets; `current` is the session's chat. */
+export function resolveTarget(config: { targetType: string; targetId: string }, current?: ChannelInfo): ChannelInfo | undefined {
+  const id = String(config.targetId ?? '').trim()
+  if (config.targetType === 'group' && id) return { type: 'group', id }
+  if (config.targetType === 'private' && id) return { type: 'private', id }
+  if (config.targetType === 'current' && current?.id) return current
+}
+
+/** The chat a schedule trigger's runs send to. */
+export function scheduleTarget(config: Record<string, any>): ChannelInfo | undefined {
+  return resolveTarget({ targetType: config.targetType === 'private' ? 'private' : 'group', targetId: config.targetId })
+}
+
+const sendNode: NodeType = {
+  kind: 'action',
+  type: 'action.send',
+  category: 'action',
+  title: { en: 'Send to chat', 'zh-CN': '发送到会话' },
+  description: { en: 'Sends the text to the current chat or to a given group or person', 'zh-CN': '把文本发到当前会话，或指定的群、个人' },
+  config: z.object({
+    ...targetFields,
+    text: z.string().default('').meta(field('Fixed text', 'Used when the input is not set', { 'zh-CN': { title: '固定文本', description: '未设置输入时使用' } })),
+  }),
+  inputs: [{ name: 'text', type: 'text', title: { en: 'Text', 'zh-CN': '文本' } }],
+  outputs: [{ name: 'messageId', type: 'text', title: { en: 'Sent message id', 'zh-CN': '发出的消息 ID' } }],
+  execOut: ['next', 'failed'],
+  async run({ config, inputs, session, bot, flow, node, run, logger }) {
+    const text = inputs.text !== undefined && inputs.text !== '' ? String(inputs.text) : String(config.text ?? '')
+    const channel = resolveTarget(config, session.channel)
+    if (!channel) throw new FlowError('Set the group or user id to send to')
+    if (!text.trim()) return { outputs: { messageId: '' } }
+    const content = { text, source: { kind: 'flow' as const, flow: flow.name, node: node.label, ...(run.llm ?? {}) } }
+    try {
+      const sent = channel === session.channel || !bot ? await session.send(content) : await bot.send(channel, content)
+      return { outputs: { messageId: sent?.messageId ?? '' } }
+    } catch (error) {
+      logger.warn('sending to %s:%s failed: %s', channel.type, channel.id, error)
+      return { exec: 'failed', outputs: { messageId: '' } }
+    }
+  },
+}
+
+const waitReplyNode: NodeType = {
+  kind: 'action',
+  type: 'logic.waitReply',
+  category: 'logic',
+  title: { en: 'Wait for reply', 'zh-CN': '等待回复' },
+  description: {
+    en: 'Waits for the next message in this chat; continues on "reply", or on "timeout". The awaited message does not start other flows.',
+    'zh-CN': '等待当前会话的下一条消息；收到走 reply，超时走 timeout。等到的这条消息不会再触发其他流程。',
+  },
+  config: z.object({
+    seconds: z.number().int().min(1).max(3600).default(30).meta(field('Timeout (seconds)', 'Up to an hour; waiting does not count toward the 60-second run limit', {
+      'zh-CN': { title: '超时（秒）', description: '最长 1 小时；等待时间不计入单次运行 60 秒的上限' },
+    })),
+    who: z.enum(['sender', 'anyone']).default('sender').meta(field('From whom', 'sender: only the person who started the run. anyone: anyone in this chat.', {
+      'zh-CN': { title: '等谁', description: 'sender：只等触发这次运行的人。anyone：这个会话里任何人。' },
+    })),
+  }),
+  outputs: [
+    { name: 'text', type: 'text', title: { en: 'Reply', 'zh-CN': '回复内容' } },
+    { name: 'userId', type: 'text', title: { en: 'Replied by (id)', 'zh-CN': '回复者 ID' } },
+    { name: 'userName', type: 'text', title: { en: 'Replied by', 'zh-CN': '回复者' } },
+    { name: 'message', type: 'message', title: { en: 'Reply content', 'zh-CN': '回复消息内容' } },
+    { name: 'messageId', type: 'text', title: { en: 'Reply message id', 'zh-CN': '回复的消息 ID' } },
+  ],
+  execOut: ['reply', 'timeout'],
+  async run({ config, waitForMessage }) {
+    const reply = await waitForMessage({ who: config.who, seconds: config.seconds })
+    if (!reply) return { exec: 'timeout', outputs: { text: '', userId: '', userName: '', message: [], messageId: '' } }
+    return {
+      exec: 'reply',
+      outputs: {
+        text: reply.text || segmentsToText(reply.segments, false).trim(),
+        userId: reply.user.id,
+        userName: reply.user.name ?? reply.user.id,
+        message: reply.segments,
+        messageId: reply.messageId ?? '',
+      },
+    }
+  },
+}
+
+const CRON_FIELDS: [number, number][] = [[0, 59], [0, 23], [1, 31], [1, 12], [0, 7]]
+
+/** Parses a five-field cron expression (minute hour day month weekday) into the allowed values of each field. */
+export function parseCron(expression: string): Set<number>[] | undefined {
+  const parts = expression.trim().split(/\s+/)
+  if (parts.length !== 5) return
+  const sets: Set<number>[] = []
+  for (const [index, part] of parts.entries()) {
+    const [min, max] = CRON_FIELDS[index]
+    const set = new Set<number>()
+    for (const item of part.split(',')) {
+      const match = /^(\*|(\d+)(?:-(\d+))?)(?:\/(\d+))?$/.exec(item)
+      if (!match) return
+      const from = match[1] === '*' ? min : Number(match[2])
+      const to = match[1] === '*' ? max : match[3] !== undefined ? Number(match[3]) : match[4] ? max : from
+      const step = match[4] ? Number(match[4]) : 1
+      if (from < min || to > max || from > to || step < 1) return
+      for (let value = from; value <= to; value += step) set.add(index === 4 && value === 7 ? 0 : value)
+    }
+    sets.push(set)
+  }
+  return sets
+}
+
+function cronMatches(sets: Set<number>[], date: Date) {
+  const [minute, hour, day, month, weekday] = sets
+  const dayRestricted = day.size < 31
+  const weekdayRestricted = weekday.size < 7
+  const dayOk = day.has(date.getDate())
+  const weekdayOk = weekday.has(date.getDay())
+  // As in standard cron: when both day fields are restricted, either one matching is enough.
+  const dateOk = dayRestricted && weekdayRestricted ? dayOk || weekdayOk : dayOk && weekdayOk
+  return minute.has(date.getMinutes()) && hour.has(date.getHours()) && month.has(date.getMonth() + 1) && dateOk
+}
+
+const minuteOf = (time: number) => Math.floor(time / 60_000)
+
+const scheduleTrigger: NodeType = {
+  kind: 'trigger',
+  type: 'trigger.schedule',
+  source: 'schedule',
+  category: 'trigger',
+  title: { en: 'On schedule', 'zh-CN': '定时触发' },
+  description: {
+    en: 'Starts at set times on every bot the flow runs on, while the bot is online; replies go to the chat set here',
+    'zh-CN': '在设定的时间开始，流程绑定的每个在线机器人各运行一次；回复发到这里设置的会话',
+  },
+  config: z.object({
+    mode: z.enum(['daily', 'interval', 'cron']).default('daily').meta(field(
+      'When',
+      'daily: every day at the time below. interval: every N minutes. cron: a cron expression.',
+      { 'zh-CN': { title: '何时', description: 'daily：每天在下面的时间。interval：每隔 N 分钟。cron：cron 表达式。' } },
+    )),
+    time: z.string().regex(/^([01]?\d|2[0-3]):[0-5]\d$/, 'use HH:MM').default('08:00').meta(field('Time (daily)', 'HH:MM, server time', {
+      'zh-CN': { title: '时间（daily）', description: 'HH:MM，按服务器时间' },
+    })),
+    minutes: z.number().int().min(1).max(10080).default(60).meta(field('Every N minutes (interval)', undefined, {
+      'zh-CN': { title: '间隔分钟（interval）' },
+    })),
+    cron: z.string().default('0 8 * * *')
+      .refine((value) => !!parseCron(value), 'not a valid five-field cron expression')
+      .meta(field('Cron (cron)', 'minute hour day month weekday, e.g. "0 8 * * 1-5" for 8:00 on weekdays', {
+        'zh-CN': { title: 'Cron（cron）', description: '分 时 日 月 周，例如 "0 8 * * 1-5" 表示工作日 8:00' },
+      })),
+    targetType: z.enum(['group', 'private']).default('group').meta(field('Send to', undefined, { 'zh-CN': { title: '发送到' } })),
+    targetId: z.string().default('').meta(field('Group or user id', 'Reply nodes in this run send here', {
+      'zh-CN': { title: '群号或 QQ', description: '本次运行中的回复节点发到这里' },
+    })),
+  }),
+  outputs: [
+    { name: 'time', type: 'text', title: { en: 'Time', 'zh-CN': '时间' } },
+    { name: 'date', type: 'text', title: { en: 'Date', 'zh-CN': '日期' } },
+    { name: 'weekday', type: 'number', title: { en: 'Weekday (0 = Sunday)', 'zh-CN': '星期（0 为周日）' } },
+  ],
+  due(config, { now, last, since }) {
+    if (config.mode === 'interval') return now.getTime() - (last ?? since) >= config.minutes * 60_000
+    if (last !== undefined && minuteOf(last) === minuteOf(now.getTime())) return false
+    if (config.mode === 'cron') {
+      const sets = parseCron(config.cron)
+      return !!sets && cronMatches(sets, now)
+    }
+    const [hour, minute] = String(config.time).split(':').map(Number)
+    return now.getHours() === hour && now.getMinutes() === minute
+  },
+  match({ now }) {
+    const at = now ?? new Date()
+    const pad = (value: number) => String(value).padStart(2, '0')
+    return {
+      time: `${pad(at.getHours())}:${pad(at.getMinutes())}`,
+      date: `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`,
+      weekday: at.getDay(),
+    }
   },
 }
 
 export const builtinNodes: NodeType[] = [
-  messageTrigger, keywordTrigger, regexTrigger,
-  ifNode, compareNode, randomNode, cooldownNode, delayNode,
+  messageTrigger, keywordTrigger, regexTrigger, scheduleTrigger,
+  ifNode, compareNode, randomNode, cooldownNode, delayNode, waitReplyNode,
   templateNode, messageNode, getVarNode, setVarNode, incrementNode,
   chatNode, classifyNode,
-  replyNode,
+  replyNode, sendNode,
 ]
