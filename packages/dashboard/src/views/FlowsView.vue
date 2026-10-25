@@ -8,6 +8,7 @@ import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { call, on } from '../api'
+import IconAction from '../components/IconAction.vue'
 import { flowTemplates } from '../flow'
 import { useDataStore } from '../stores/data'
 import type { FlowDoc, FlowSummary } from '../types'
@@ -215,13 +216,7 @@ const columns = computed<DataTableColumns<FlowSummary>>(() => [
     title: '',
     key: 'actions',
     width: 50,
-    render: (flow) => h(NButton, {
-      quaternary: true, circle: true, size: 'small', type: 'error', title: t('common.delete'), 'aria-label': t('common.delete'),
-      onClick: (event: Event) => {
-        event.stopPropagation()
-        remove(flow)
-      },
-    }, { icon: () => h(NIcon, null, { default: () => h(TrashOutline) }) }),
+    render: (flow) => h(IconAction, { icon: TrashOutline, label: t('common.delete'), type: 'error', onClick: () => remove(flow) }),
   },
 ])
 
@@ -340,9 +335,7 @@ function remove(flow: FlowSummary) {
                     <span class="sub">{{ t('flows.nodeCount', flow.nodes) }} · {{ formatTime(flow.updatedAt) }}</span>
                   </div>
                   <NSwitch size="small" :value="flow.enabled" :title="flow.enabled ? t('flows.enabledHint') : t('flows.disabledHint')" @click.stop @update:value="(value: boolean) => setEnabled(flow, value)" />
-                  <NButton quaternary circle size="small" :aria-label="t('common.delete')" :title="t('common.delete')" @click.stop="remove(flow)">
-                    <template #icon><NIcon><TrashOutline /></NIcon></template>
-                  </NButton>
+                  <IconAction :icon="TrashOutline" :label="t('common.delete')" type="error" @click="remove(flow)" />
                 </div>
                 <p v-if="flow.description" class="flow-desc">{{ flow.description }}</p>
                 <p v-if="triggerText(flow)" class="flow-triggers">{{ triggerText(flow) }}</p>

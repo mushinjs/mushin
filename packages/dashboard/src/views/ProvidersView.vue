@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { CreateOutline, FlashOutline, Star, StarOutline, TrashOutline } from '@vicons/ionicons5'
+import IconAction from '../components/IconAction.vue'
 import { AddOutline } from '@vicons/ionicons5'
 import {
   type DataTableColumns, NButton, NCard, NDataTable, NEmpty, NIcon, NModal, NSpace, NTag, NTooltip, useDialog, useMessage,
@@ -114,12 +116,12 @@ const columns = computed<DataTableColumns<Provider>>(() => [
     key: 'actions',
     align: 'right',
     fixed: 'right',
-    width: 270,
-    render: (row) => h(NSpace, { size: 4, justify: 'end', wrap: false }, () => [
-      h(NButton, { size: 'small', secondary: true, loading: testing.value === row.id, onClick: () => test(row) }, () => t('common.test')),
-      !row.isDefault ? h(NButton, { size: 'small', quaternary: true, onClick: () => setDefault(row) }, () => t('providers.makeDefault')) : null,
-      h(NButton, { size: 'small', quaternary: true, onClick: () => openEdit(row) }, () => t('common.edit')),
-      h(NButton, { size: 'small', quaternary: true, type: 'error', onClick: () => remove(row) }, () => t('common.delete')),
+    width: 150,
+    render: (row) => h(NSpace, { size: 2, justify: 'end', wrap: false }, () => [
+      h(IconAction, { icon: FlashOutline, label: t('common.test'), type: 'primary', loading: testing.value === row.id, onClick: () => test(row) }),
+      h(IconAction, { icon: row.isDefault ? Star : StarOutline, label: row.isDefault ? t('common.default') : t('providers.makeDefault'), disabled: row.isDefault, onClick: () => setDefault(row) }),
+      h(IconAction, { icon: CreateOutline, label: t('common.edit'), onClick: () => openEdit(row) }),
+      h(IconAction, { icon: TrashOutline, label: t('common.delete'), type: 'error', onClick: () => remove(row) }),
     ]),
   },
 ])

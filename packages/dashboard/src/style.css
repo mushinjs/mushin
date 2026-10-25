@@ -61,6 +61,37 @@ html[data-theme='dark'] {
   }
 }
 
+/*
+ * Lists react the same way everywhere: rows light up under the pointer and when focused from the
+ * keyboard. Naive UI tables already do this; lists and the dashboard's own rows join in.
+ */
+:root {
+  --row-hover: rgba(127, 127, 127, 0.08);
+  --row-focus: rgba(32, 128, 240, 0.35);
+}
+
+.n-list .n-list-item,
+.hover-row {
+  border-radius: 6px;
+  transition: background-color 0.15s;
+}
+
+.n-list .n-list-item {
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+
+.n-list .n-list-item:hover,
+.hover-row:hover {
+  background: var(--row-hover);
+}
+
+.hover-row:focus-visible,
+.n-card.n-card--hoverable:focus-visible {
+  outline: 2px solid var(--row-focus);
+  outline-offset: 1px;
+}
+
 .page {
   padding: 24px;
   max-width: 1200px;
