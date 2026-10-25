@@ -373,7 +373,7 @@ export default {
     moveDown: 'Run later',
     afterFlows: 'Then: {plugins}',
     afterFlowsNone: 'No bot plugin sees the message after the flows.',
-    orderSavedOnly: 'The order reflects the saved flow.',
+    orderPreview: 'Previewing unsaved changes; they take effect once saved.',
     orderNoBots: 'Pick a bot for the flow to see the order there.',
     blockedTag: 'Never runs',
     maybeBlocked: 'May be blocked',

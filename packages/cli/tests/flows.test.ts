@@ -199,6 +199,12 @@ describe('commands', () => {
     expect((await app.call<any[]>('flows.list')).find((flow) => flow.id === second.id).blocked).toBe('all')
     expect((await app.call('flows.get', { id: first.id })).issues).toEqual([expect.objectContaining({ message: expect.stringContaining('the flow "Second"') })])
 
+    // Unsaved edits can be previewed: with a higher priority in the draft, the second one would run first.
+    const draft = { nodes: second.nodes.map((node: any) => (node.id === 'cmd' ? { ...node, priority: 5 } : node)), edges: second.edges }
+    const preview = await app.call('flows.triggers', { bot: botId, flow: second.id, node: 'cmd', draft })
+    expect(preview.triggers.map((slot: any) => [slot.flowName, slot.priority])).toEqual([['Second', 5], ['First', 0]])
+    expect((await app.call('flows.get', { id: second.id })).nodes.find((node: any) => node.id === 'cmd').priority).toBeUndefined()
+
     // Moving the second one first makes it answer, and the first one is blocked instead.
     await app.call('flows.setTriggerOrder', { order: [{ flowId: second.id, nodeId: 'cmd' }, { flowId: first.id, nodeId: 'cmd' }] })
     const competing = await app.call('flows.triggers', { bot: botId, flow: first.id, node: 'cmd' })

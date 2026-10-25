@@ -102,6 +102,13 @@ function normalizeGroups(groups: GroupInput[], nodes: FlowNode[]): FlowGroup[] {
   return result
 }
 
+/** Unsaved edits of a flow, for previews. */
+export interface FlowDraft {
+  nodes: (Omit<FlowNode, 'position' | 'config'> & { position?: FlowNode['position']; config?: FlowNode['config'] })[]
+  edges: (Omit<FlowEdge, 'id'> & { id?: string })[]
+  bots?: string[]
+}
+
 /** A message to trace through a bot without sending it. */
 export interface RouteInput {
   text: string
@@ -319,8 +326,8 @@ export class FlowService extends Service {
    * The triggers on a bot that compete with one trigger: those an overlapping message also starts,
    * in the order they run, so the editor can reorder them.
    */
-  competing(botId: string, flowId: string, nodeId: string) {
-    const flows = this.flowsOf(botId)
+  competing(botId: string, flowId: string, nodeId: string, draft?: FlowDraft) {
+    const flows = draft ? this.withDraft(botId, flowId, draft) : this.flowsOf(botId)
     const own = flows.find((flow) => flow.doc.id === flowId)?.nodes.get(nodeId)
     const slots = triggerOrder(flows)
     if (!own) return { triggers: slots.filter((slot) => slot.flowId === flowId && slot.nodeId === nodeId), plugins: this.pluginsAfter(botId) }
@@ -330,6 +337,23 @@ export class FlowService extends Service {
       return !!other && (!!overlap(other, own) || !!overlap(own, other))
     })
     return { triggers, plugins: this.pluginsAfter(botId) }
+  }
+
+  /**
+   * The bot's flows with one flow replaced by unsaved edits, so the editor can preview the order
+   * before saving. The draft counts even with errors, and only if it still runs on the bot.
+   */
+  private withDraft(botId: string, flowId: string, draft: FlowDraft) {
+    const saved = this.get(flowId)
+    const doc: FlowDocument = {
+      ...saved,
+      nodes: draft.nodes.map((node) => ({ ...node, position: node.position ?? { x: 0, y: 0 }, config: node.config ?? {} })),
+      edges: draft.edges.map((edge, index) => ({ ...edge, id: edge.id ?? `draft-${index}` })),
+      bots: draft.bots ?? saved.bots,
+    }
+    const others = this.flowsOf(botId).filter((flow) => flow.doc.id !== flowId)
+    if (!doc.bots.includes(botId) || doc.enabled === false) return others
+    return [...others, compile(doc, this.types)].sort((a, b) => a.doc.createdAt - b.doc.createdAt)
   }
 
   /** Bot plugins that see messages after the flows, for the order list. */
@@ -991,8 +1015,13 @@ export class FlowService extends Service {
         bot: z.string().describe('Bot id from bots.list'),
         flow: z.string().optional(),
         node: z.string().optional(),
+        draft: z.object({
+          nodes: z.array(nodeInput.extend({ id: z.string() })),
+          edges: z.array(edgeInput),
+          bots: z.array(z.string()).optional(),
+        }).optional().describe('Unsaved nodes, edges and bots of the flow, to preview the order before saving'),
       }),
-      handler: ({ bot, flow, node }) => (flow && node ? this.competing(bot, flow, node) : { triggers: this.triggersOn(bot), plugins: this.pluginsAfter(bot) }),
+      handler: ({ bot, flow, node, draft }) => (flow && node ? this.competing(bot, flow, node, draft) : { triggers: this.triggersOn(bot), plugins: this.pluginsAfter(bot) }),
     })
 
     yield actions.define({
