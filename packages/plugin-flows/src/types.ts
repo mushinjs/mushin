@@ -170,10 +170,10 @@ export interface FlowNode {
   /** Input name → a variable reference like `{{n1.text}}`, or text that may contain references. */
   inputs?: Record<string, string>
   /**
-   * Skipped when the flow runs: a disabled trigger never starts a run, and a disabled step passes
+   * Skipped when the flow runs: a skipped trigger never starts a run, and a skipped step passes
    * straight on to its first exec output with no outputs of its own.
    */
-  disabled?: boolean
+  skip?: boolean
 }
 
 /** An edge means "run next": from an exec output `exec:<name>` to a node's exec input `exec`. */
@@ -227,7 +227,7 @@ export interface TraceStep {
   /** Values the node produced, for triggers the values it matched. */
   outputs?: Record<string, unknown>
   error?: string
-  /** The node is disabled, so the run passed through it without running it. */
+  /** The node is set to be skipped, so the run passed through it without running it. */
   skipped?: boolean
 }
 

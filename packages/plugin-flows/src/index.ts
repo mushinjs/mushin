@@ -50,7 +50,7 @@ const nodeInput = z.object({
   label: z.string().optional().describe('Name shown on the node and in message provenance'),
   position: z.object({ x: z.number(), y: z.number() }).optional().describe('Canvas position; laid out automatically when omitted'),
   config: z.record(z.string(), z.any()).optional().describe('Settings matching the node type\'s config schema; strings may contain references such as {{n1.rest}}'),
-  disabled: z.boolean().optional().describe('Skip this node when the flow runs: a disabled trigger never fires, a disabled step passes on to its first exec output'),
+  skip: z.boolean().optional().describe('Keep the node but skip it when the flow runs: a skipped trigger never fires, a skipped step passes on to its first exec output'),
   inputs: z.record(z.string(), z.string()).optional()
     .describe('Input name → value: a reference like "{{n1.rest}}" ({{<node id>.<output>}}, {{sys.text|user|userId|groupId|isPrivate|mentioned}}, {{chat|user|flow|run.<variable>}}) or text containing references'),
 })
@@ -129,7 +129,7 @@ function normalize(nodes: NodeInput[], edges: EdgeInput[], types: Map<string, No
     position: node.position ?? { x: Number.NaN, y: Number.NaN },
     config: node.config ?? {},
     ...(node.inputs && Object.keys(node.inputs).length ? { inputs: node.inputs } : {}),
-    ...(node.disabled ? { disabled: true } : {}),
+    ...(node.skip ? { skip: true } : {}),
   }))
   const flowEdges: FlowEdge[] = edges.map((edge) => ({
     id: edge.id ?? `e-${randomId(5)}`,

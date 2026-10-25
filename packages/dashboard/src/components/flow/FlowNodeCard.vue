@@ -49,7 +49,7 @@ const summary = computed(() => (info.value ? configSummary(info.value, props.dat
 <template>
   <div
     class="flow-node"
-    :class="{ selected, [`issue-${issueLevel}`]: !!issueLevel, [`run-${run}`]: !!run, executing, disabled: data.disabled }"
+    :class="{ selected, [`issue-${issueLevel}`]: !!issueLevel, [`run-${run}`]: !!run, executing, skip: data.skip }"
     :style="{ '--accent': color }"
     :title="issues.map((issue) => issue.message).join('\n') || undefined"
   >
@@ -57,7 +57,7 @@ const summary = computed(() => (info.value ? configSummary(info.value, props.dat
     <header class="flow-node-head">
       <span class="icon"><NIcon :size="15"><component :is="icon" /></NIcon></span>
       <span class="name">{{ data.label || typeTitle }}</span>
-      <span v-if="data.disabled" class="off-tag">{{ t('flows.nodeOff') }}</span>
+      <span v-if="data.skip" class="off-tag">{{ t('flows.nodeSkipped') }}</span>
       <span class="number">{{ number }}</span>
       <span v-if="issueLevel" class="badge" :class="issueLevel">!</span>
       <NSpin v-else-if="run === 'running'" :size="12" class="run-spin" />
@@ -152,12 +152,12 @@ const summary = computed(() => (info.value ? configSummary(info.value, props.dat
   flex: none;
 }
 
-/* Disabled nodes stay readable but recede; the run passes through them. */
-.flow-node.disabled {
+/* Skipped nodes stay readable but recede; the run passes through them. */
+.flow-node.skip {
   border-style: dashed;
 }
 
-.flow-node.disabled > :not(.handle) {
+.flow-node.skip > :not(.handle) {
   opacity: 0.45;
 }
 

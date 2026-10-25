@@ -253,7 +253,7 @@ export interface FlowNodeDoc {
   position: { x: number; y: number }
   config: Record<string, any>
   inputs?: Record<string, string>
-  disabled?: boolean
+  skip?: boolean
 }
 
 export interface FlowEdgeDoc {
@@ -314,7 +314,7 @@ export interface TraceStep {
   inputs?: Record<string, unknown>
   outputs?: Record<string, unknown>
   error?: string
-  /** The node is disabled; the run passed through it. */
+  /** The node is set to be skipped; the run passed through it. */
   skipped?: boolean
 }
 
