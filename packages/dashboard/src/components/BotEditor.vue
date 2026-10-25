@@ -33,7 +33,8 @@ watch(show, async (visible) => {
 const adapter = computed(() => data.adapters.find((item) => item.id === adapterType.value))
 const adapterOptions = computed(() => data.adapters.map((item) => ({ label: localize(item.displayName, locale.value), value: item.id })))
 const mode = computed(() => config.value.mode ?? 'forward')
-const hidden = computed(() => (mode.value === 'reverse' ? ['url'] : ['path']))
+// Fields each connection mode does not use.
+const hidden = computed(() => (mode.value === 'reverse' ? ['url', 'secret'] : mode.value === 'http' ? [] : ['path', 'secret']))
 
 async function create() {
   saving.value = true
@@ -66,7 +67,7 @@ async function create() {
     </NForm>
 
     <NAlert v-if="adapterType === 'onebot'" type="info" :show-icon="false" class="hint">
-      {{ mode === 'reverse' ? t('bots.napcatReverse') : t('bots.napcatForward') }}
+      {{ mode === 'reverse' ? t('bots.napcatReverse') : mode === 'http' ? t('bots.napcatHttp') : t('bots.napcatForward') }}
     </NAlert>
 
     <SchemaForm v-if="adapter" v-model="config" :schema="adapter.configSchema" :secrets="adapter.secrets" :hidden="hidden" />

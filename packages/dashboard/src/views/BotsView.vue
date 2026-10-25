@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { AddOutline, ChatbubblesOutline } from '@vicons/ionicons5'
-import { NButton, NCard, NEmpty, NGrid, NGridItem, NIcon, NSpace, NSwitch, useMessage } from 'naive-ui'
+import { NButton, NCard, NEmpty, NGrid, NGridItem, NIcon, NSpace, NSwitch, NTag, useMessage } from 'naive-ui'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -31,10 +31,14 @@ async function toggle(bot: Bot, enabled: boolean) {
   }
 }
 
-function describe(bot: Bot) {
-  const config = bot.adapter.config
-  if (bot.adapter.type !== 'onebot') return bot.adapter.type
-  return config.mode === 'reverse' ? t('bots.reverseTo', { path: config.path || `/onebot/${bot.id}` }) : t('bots.forwardTo', { url: config.url })
+/** The connection mode as a short tag, and where the bot connects. */
+function connectionOf(bot: Bot) {
+  const info = bot.connection
+  if (!info) return { tag: bot.adapter.type, address: '' }
+  const tag = t(`bots.mode.${info.mode}`) === `bots.mode.${info.mode}` ? info.mode : t(`bots.mode.${info.mode}`)
+  if (info.mode === 'ws-reverse') return { tag, address: t('bots.reverseTo', { path: info.address }) }
+  if (info.mode === 'http') return { tag, address: t('bots.httpTo', { url: info.address, path: info.inbound }) }
+  return { tag, address: t('bots.forwardTo', { url: info.address }) }
 }
 </script>
 
@@ -62,7 +66,10 @@ function describe(bot: Bot) {
             </div>
             <StatusBadge :status="bot.status" :error="bot.error" />
           </div>
-          <p class="bot-desc mono">{{ describe(bot) }}</p>
+          <p class="bot-desc">
+            <NTag size="small" :bordered="false" class="mode-tag">{{ connectionOf(bot).tag }}</NTag>
+            <span class="mono" :title="connectionOf(bot).address">{{ connectionOf(bot).address }}</span>
+          </p>
           <NSpace justify="space-between" align="center" @click.stop>
             <span class="sub">{{ t('bots.pluginCount', { count: bot.plugins.filter((p) => p.enabled).length }) }}</span>
             <NSwitch :value="bot.enabled" :loading="busy === bot.id" @update:value="(value: boolean) => toggle(bot, value)">
@@ -125,6 +132,10 @@ function describe(bot: Bot) {
 .sub {
   font-size: 12px;
   opacity: 0.6;
+}
+
+.mode-tag {
+  margin-right: 6px;
 }
 
 .bot-desc {

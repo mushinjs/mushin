@@ -217,7 +217,13 @@ export class BotManager extends Service {
   }
 
   describe(record: BotRecord) {
-    return { ...this.redact(record), ...this.status(record.id) }
+    return { ...this.redact(record), ...this.status(record.id), connection: this.connectionOf(record) }
+  }
+
+  private connectionOf(record: BotRecord) {
+    try {
+      return this.adapterStore.get(record.adapter.type)?.describe?.(record.adapter.config, record.id)
+    } catch {}
   }
 
   list() {

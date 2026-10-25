@@ -13,7 +13,7 @@ Mushin.js is built on [Cordis](https://github.com/cordiverse/cordis). The MVP sh
 | Providers | OpenAI-compatible endpoints (OpenAI, DeepSeek, Moonshot, Qwen, SiliconFlow, OpenRouter, Ollama) and Anthropic. Keys are masked everywhere. |
 | Overview | The start page: bots online, today's messages and model tokens, flows with errors, commands, providers and plugins; a message chart for 24 hours or 7 days per bot; the busiest chats, users, commands, flows and models; live CPU, memory and event loop delay; versions, uptime and data directory size. |
 | Bots | Create, start, stop and configure bots; enable bot plugins per bot; each bot's commands and `/help`. |
-| OneBot adapter | OneBot v11 over WebSocket, in forward mode (Mushin dials NapCat) or reverse mode (NapCat dials Mushin). |
+| OneBot adapter | OneBot v11 over WebSocket, in forward mode (Mushin dials NapCat) or reverse mode (NapCat dials Mushin), or over HTTP (API calls plus signed event reports). |
 | Conversation flows | A visual editor for bot behavior: wire triggers, conditions, variables, LLM calls and replies into a graph, test it with a made-up message, and watch live runs light up the path. The Agent can build flows too. |
 | Live conversation view | Messages appear as they arrive. Hover a message to see its type, supported platforms and what generated it (an LLM with provider and model, a plugin, or a flow). |
 | Dashboard | Vue 3 + Naive UI, English and Simplified Chinese, light and dark themes, works on phones. |
@@ -78,6 +78,15 @@ Set NapCat's message format to `array` and use the same access token on both sid
 ```json
 { "name": "WsClient", "enable": true, "url": "ws://127.0.0.1:5160/onebot/<bot id>", "messagePostFormat": "array", "token": "your-token" }
 ```
+
+**HTTP mode.** Create the bot with mode `http` and URL of NapCat's HTTP server, such as `http://127.0.0.1:3000`; Mushin calls the OneBot API there. In NapCat also add an HTTP client that posts events to `http://<mushin-host>:5160/onebot/<bot id>` (shown on the Connection tab). If the HTTP client has a `secret`, set the same **Report secret** on the bot; events whose `X-Signature` does not match are refused. The bot counts as online once NapCat answers `get_login_info`, retrying every 30 seconds.
+
+```json
+{ "name": "HttpServer", "enable": true, "port": 3000, "messagePostFormat": "array", "token": "your-token" }
+{ "name": "HttpClient", "enable": true, "url": "http://127.0.0.1:5160/onebot/<bot id>", "messagePostFormat": "array", "token": "your-token", "secret": "your-secret" }
+```
+
+The bots list shows each bot's connection mode and address.
 
 If Mushin.js and NapCat run on different machines, bind Mushin.js to a reachable address (`host` in the server entry) and keep the admin token private.
 

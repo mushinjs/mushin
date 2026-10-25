@@ -104,6 +104,8 @@ export interface Bot {
   plugins: BotPluginEntry[]
   provider?: string
   commands?: CommandSettings
+  /** How the bot connects: `ws` (forward), `ws-reverse` or `http`, and the addresses involved. */
+  connection?: { mode: string; address?: string; inbound?: string }
   createdAt: number
   status: BotStatus
   error?: string

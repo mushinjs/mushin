@@ -37,10 +37,21 @@ export interface AdapterType<C = any> {
   /** Segment types this adapter can send; used to compute a message's supported platforms. */
   segments: string[]
   /**
+   * How a bot with this config connects, for the bots list: a mode such as `ws`, `ws-reverse` or
+   * `http`, the address it dials or is reached at, and for HTTP the path events are posted to.
+   */
+  describe?(config: C, botId: string): BotConnectionInfo
+  /**
    * Loaded inside each bot's isolated context with the bot's adapter config.
    * It injects `bot`, opens the connection and registers a transport.
    */
   plugin: Plugin
+}
+
+export interface BotConnectionInfo {
+  mode: string
+  address?: string
+  inbound?: string
 }
 
 export interface IncomingMessage {
