@@ -299,6 +299,7 @@ export default {
     json: 'card',
     forward: 'forwarded',
     mface: 'sticker',
+    imageExpired: '[Image could not be loaded; open the link]',
   },
   botLogs: {
     failed: 'Could not load the bot\'s log: {error}',

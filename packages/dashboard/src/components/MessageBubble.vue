@@ -57,9 +57,17 @@ function segmentText(segment: Segment) {
   }
 }
 
+/** Images and sticker images (`mface`) that can be shown, by their address. */
 function imageUrl(segment: Segment) {
+  if (segment.type !== 'image' && segment.type !== 'mface') return undefined
   const url = segment.data.url ?? segment.data.file
   return typeof url === 'string' && /^(https?:|data:image\/)/.test(url) ? url : undefined
+}
+
+// Images that failed to load: QQ's links expire after a while, and then only a note is shown.
+const broken = ref(new Set<number>())
+function onImageError(index: number) {
+  broken.value = new Set([...broken.value, index])
 }
 </script>
 
@@ -82,7 +90,22 @@ function imageUrl(segment: Segment) {
           @blur="open = false"
         >
           <template v-for="(segment, index) in record.segments" :key="index">
-            <img v-if="segment.type === 'image' && imageUrl(segment)" :src="imageUrl(segment)" class="image" alt="" loading="lazy">
+            <!--
+              QQ's image servers answer requests that carry another site's address as the referrer with an
+              anti-hotlinking placeholder, so images are fetched without one.
+            -->
+            <template v-if="imageUrl(segment)">
+              <img
+                v-if="!broken.has(index)"
+                :src="imageUrl(segment)"
+                class="image"
+                alt=""
+                loading="lazy"
+                referrerpolicy="no-referrer"
+                @error="onImageError(index)"
+              >
+              <a v-else :href="imageUrl(segment)" target="_blank" rel="noreferrer noopener" class="image-missing">{{ t('segment.imageExpired') }}</a>
+            </template>
             <span v-else-if="segment.type === 'at'" class="at">{{ segmentText(segment) }}</span>
             <span v-else>{{ segmentText(segment) }}</span>
           </template>
@@ -176,6 +199,14 @@ function imageUrl(segment: Segment) {
   max-height: 220px;
   border-radius: 6px;
   margin: 4px 0;
+}
+
+.image-missing {
+  display: inline-block;
+  margin: 4px 0;
+  font-size: 12px;
+  opacity: 0.75;
+  color: inherit;
 }
 
 .info {
