@@ -247,7 +247,8 @@ const iconOf = (nodeId: string) => {
             <span class="step-icon"><NIcon :size="13"><component :is="iconOf(item.nodeId)" /></NIcon></span>
             <span class="step-name">{{ nodeName(item.nodeId) }}</span>
             <span v-if="item.exec && item.exec !== 'next'" class="step-exec">{{ item.exec }}</span>
-            <span class="step-ms">{{ item.ms }} ms</span>
+            <span v-if="item.skipped" class="step-ms">{{ t('flows.logsSkipped') }}</span>
+            <span v-else class="step-ms">{{ item.ms }} ms</span>
           </button>
           <p v-if="!run.steps.length && !run.error" class="muted small">{{ t('flows.testNoMatch') }}</p>
           <template v-if="run.replies.length">

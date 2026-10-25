@@ -253,6 +253,7 @@ export interface FlowNodeDoc {
   position: { x: number; y: number }
   config: Record<string, any>
   inputs?: Record<string, string>
+  disabled?: boolean
 }
 
 export interface FlowEdgeDoc {
@@ -275,6 +276,8 @@ export interface FlowGroupDoc {
   id: string
   label?: string
   nodes: string[]
+  /** Shown as one box in the editor. */
+  collapsed?: boolean
 }
 
 export interface FlowDoc {
@@ -311,6 +314,8 @@ export interface TraceStep {
   inputs?: Record<string, unknown>
   outputs?: Record<string, unknown>
   error?: string
+  /** The node is disabled; the run passed through it. */
+  skipped?: boolean
 }
 
 export interface RunTrace {
@@ -338,5 +343,5 @@ export interface RunStep {
   test: boolean
   nodeId: string
   edgeId?: string
-  status: 'running' | 'ok' | 'error'
+  status: 'running' | 'ok' | 'error' | 'skipped'
 }

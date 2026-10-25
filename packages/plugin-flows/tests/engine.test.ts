@@ -277,6 +277,34 @@ describe('runFlow', () => {
   })
 })
 
+describe('disabled nodes', () => {
+  it('passes through a disabled step to its first exec output without running it', async () => {
+    const doc = flow([
+      { type: 'trigger.keyword', config: { keywords: ['go'] } },
+      { type: 'action.reply', config: { text: 'skipped' } },
+      { type: 'action.reply', config: { text: 'after' } },
+    ], [['n1', 'exec:next', 'n2', 'exec'], ['n2', 'exec:next', 'n3', 'exec']])
+    doc.nodes[1].disabled = true
+    const steps: any[] = []
+    const result = await run(doc, 'go', { onStep: (step) => steps.push(step.status) })
+    expect(replyText(result.sent)).toEqual(['after'])
+    expect(result.trace.steps.map(({ nodeId, skipped }) => ({ nodeId, skipped }))).toEqual([
+      { nodeId: 'n1', skipped: undefined },
+      { nodeId: 'n2', skipped: true },
+      { nodeId: 'n3', skipped: undefined },
+    ])
+    expect(steps).toEqual(['ok', 'skipped', 'running', 'ok'])
+  })
+
+  it('never fires a disabled trigger', async () => {
+    const doc = flow([{ type: 'trigger.message' }, { type: 'action.reply', config: { text: 'hi' } }], [['n1', 'exec:next', 'n2', 'exec']])
+    doc.nodes[0].disabled = true
+    const result = await run(doc, 'hello')
+    expect(result.matched).toBe(false)
+    expect(result.sent).toEqual([])
+  })
+})
+
 describe('adapters', () => {
   const onebotOnly: NodeType = { kind: 'action', type: 'x.onebot', category: 'platform', title: 'OneBot only', platforms: ['onebot'], run: () => {} }
   const withOneBot = new Map([...types, [onebotOnly.type, onebotOnly]])

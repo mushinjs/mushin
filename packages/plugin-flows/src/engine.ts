@@ -241,6 +241,15 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
     if (++steps > MAX_STEPS) throw new FlowError(`Stopped after ${MAX_STEPS} steps; check for a loop in the flow`)
     const entry = flow.nodes.get(id)
     if (entry?.type?.kind !== 'action' || !entry.ports) return
+    if (entry.node.disabled) {
+      const exec = entry.ports.execOut[0]
+      outputs.set(id, {})
+      trace.steps.push({ nodeId: id, exec, ms: 0, skipped: true })
+      step(id, 'skipped', edgeId)
+      if (id === env.stopAt) stopped = true
+      await follow(id, exec)
+      return
+    }
     const started = Date.now()
     const inputs = resolveInputs(id)
     step(id, 'running', edgeId)
@@ -265,7 +274,7 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
     for (const id of flow.triggers) {
       if (stopped) break
       const entry = flow.nodes.get(id)!
-      if (entry.type?.kind !== 'trigger') continue
+      if (entry.type?.kind !== 'trigger' || entry.node.disabled) continue
       if ((entry.type.source ?? 'message') !== source) continue
       if (env.scheduled && env.scheduled.nodeId !== id) continue
       const started = Date.now()
