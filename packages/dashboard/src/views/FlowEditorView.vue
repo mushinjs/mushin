@@ -15,17 +15,17 @@ import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, provide, type 
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { call, on } from '../api'
-import { type CanvasNodeData, type FlowHighlight, flowEditorKey } from '../components/flow/context'
+import { type CanvasNodeData, type FlowHighlight, flowEditorKey, type RunStatus } from '../components/flow/context'
 import FlowNodeCard from '../components/flow/FlowNodeCard.vue'
 import { nodeIcon } from '../components/flow/icons'
 import NodePalette from '../components/flow/NodePalette.vue'
 import RunLogs, { type TestInput } from '../components/flow/RunLogs.vue'
 import VarInput from '../components/flow/VarInput.vue'
 import SchemaForm from '../components/SchemaForm.vue'
-import { categoryColors, parseHandle, portColors, portsOf, refOf, refsIn, schemaDefaults, sysPorts } from '../flow'
+import { categoryColors, parseHandle, portColors, portsOf, refOf, refsIn, schemaDefaults, supports, sysPorts } from '../flow'
 import { useDataStore } from '../stores/data'
 import { useTheme } from '../theme'
-import type { FlowDoc, FlowIssue, NodeTypeInfo, RunTrace } from '../types'
+import type { FlowDoc, FlowIssue, NodeTypeInfo, RunStep, RunTrace } from '../types'
 import { clone, localize } from '../utils'
 
 const { t, locale } = useI18n()
@@ -45,6 +45,8 @@ const edges = ref([]) as Ref<Edge[]>
 const name = ref('')
 const description = ref('')
 const bots = ref<string[]>([])
+/** The adapter saved on the flow; see `currentAdapter` for the one in effect. */
+const adapter = ref<string>()
 const issues = ref<FlowIssue[]>([])
 const runs = ref<RunTrace[]>([])
 const loaded = ref(false)
@@ -53,7 +55,7 @@ const savedSignature = ref('')
 const selectedId = ref<string>()
 const tab = ref<'node' | 'flow'>('flow')
 const nodeTab = ref<'settings' | 'io'>('settings')
-const highlight = ref<FlowHighlight>({ nodes: new Map(), edges: new Set() })
+const highlight = ref<FlowHighlight>({ nodes: new Map(), edges: new Map() })
 const canvas = ref<HTMLElement>()
 const root = ref<HTMLElement>()
 const width = ref(1200)
@@ -81,6 +83,7 @@ function toDoc() {
   return {
     name: name.value,
     description: description.value,
+    adapter: adapter.value ?? '',
     bots: bots.value,
     nodes: nodes.value.map((node) => ({
       id: node.id,
@@ -103,15 +106,22 @@ function toDoc() {
 const signature = () => JSON.stringify(toDoc())
 const dirty = computed(() => loaded.value && signature() !== savedSignature.value)
 
-/** Every edge means "run next": grey, traced edges green, invalid ones red. Direction is left to right, so no arrowheads. */
+const edgeColors: Record<RunStatus, string> = { running: '#2080f0', ok: '#18a058', error: '#d03050' }
+
+/**
+ * Every edge means "run next". Grey by default; during a run the edge into a running node is a
+ * moving dashed line, then green or red once that node succeeds or fails. Invalid edges are red
+ * and dashed. Direction is left to right, so no arrowheads.
+ */
 function edgeLook(edge: Pick<Edge, 'id'>): Partial<Edge> {
-  const traced = highlight.value.edges.has(edge.id)
+  const status = highlight.value.edges.get(edge.id)
   const broken = issues.value.some((issue) => issue.edgeId === edge.id)
-  const color = broken ? '#d03050' : traced ? '#18a058' : '#8c8c8c'
+  const color = status ? edgeColors[status] : broken ? '#d03050' : '#8c8c8c'
   return {
     type: 'default',
-    animated: traced,
-    style: { stroke: color, strokeWidth: 2 },
+    animated: status === 'running',
+    class: status ? `edge-${status}` : undefined,
+    style: { stroke: color, strokeWidth: status ? 2.5 : 2, ...(broken && !status ? { strokeDasharray: '4 4' } : {}) },
   }
 }
 
@@ -126,6 +136,7 @@ function apply(flow: FlowDoc, fit: boolean) {
   name.value = flow.name
   description.value = flow.description ?? ''
   bots.value = [...flow.bots]
+  adapter.value = flow.adapter
   issues.value = flow.issues
   nodes.value = flow.nodes.map((node) => ({
     id: node.id,
@@ -207,7 +218,7 @@ function nextNodeId() {
 
 function addNode(typeId: string, position?: { x: number; y: number }) {
   const info = types.value.get(typeId)
-  if (!info) return
+  if (!info || !supports(info, currentAdapter.value)) return
   let at = position
   if (!at) {
     const rect = canvas.value?.getBoundingClientRect()
@@ -283,7 +294,8 @@ async function save() {
   if (saving.value) return
   saving.value = true
   try {
-    const result = await call<FlowDoc>('flows.update', { id: flowId.value, ...toDoc() })
+    const result = await call<FlowDoc>('flows.update', { id: flowId.value, ...toDoc(), adapter: currentAdapter.value ?? '' })
+    adapter.value = result.adapter
     issues.value = result.issues
     restyleEdges()
     savedAt = result.updatedAt
@@ -328,25 +340,55 @@ onBeforeRouteLeave(() => !dirty.value || window.confirm(t('flows.unsaved')))
 // ---- runs and tests ----
 
 let clearTimer: number | undefined
+/** The run being drawn live from its steps, until its trace arrives. */
+let liveRun: string | undefined
+
+function clearHighlight() {
+  window.clearTimeout(clearTimer)
+  liveRun = undefined
+  highlight.value = { nodes: new Map(), edges: new Map() }
+  restyleEdges()
+}
+
+/** Draws a finished run: each edge takes the state of the node it led to. */
 function showTrace(trace: RunTrace) {
-  highlight.value = {
-    nodes: new Map(trace.steps.map((step) => [step.nodeId, step.error ? 'error' : 'ok'])),
-    edges: new Set(trace.edges),
-  }
+  const nodeStatus = new Map<string, RunStatus>(trace.steps.map((step) => [step.nodeId, step.error ? 'error' : 'ok']))
+  const target = new Map(edges.value.map((edge) => [edge.id, edge.target]))
+  const edgeStatus = new Map<string, RunStatus>(trace.edges.map((id) => {
+    const status = nodeStatus.get(target.get(id) ?? '')
+    return [id, status ?? (trace.error ? 'error' : 'ok')]
+  }))
+  liveRun = undefined
+  highlight.value = { nodes: nodeStatus, edges: edgeStatus }
   restyleEdges()
   window.clearTimeout(clearTimer)
-  clearTimer = window.setTimeout(() => {
-    highlight.value = { nodes: new Map(), edges: new Set() }
-    restyleEdges()
-  }, 10_000)
+  clearTimer = window.setTimeout(clearHighlight, 10_000)
+}
+
+/** A node of a run in this flow started or finished: update the canvas while the run goes on. */
+function showStep(step: RunStep) {
+  window.clearTimeout(clearTimer)
+  if (liveRun !== step.runId) {
+    liveRun = step.runId
+    highlight.value = { nodes: new Map(), edges: new Map() }
+  }
+  const next: FlowHighlight = { nodes: new Map(highlight.value.nodes), edges: new Map(highlight.value.edges) }
+  next.nodes.set(step.nodeId, step.status)
+  if (step.edgeId) next.edges.set(step.edgeId, step.status)
+  highlight.value = next
+  restyleEdges()
 }
 
 const off = on('flows/run', (trace: RunTrace) => {
   if (trace.flowId !== flowId.value) return
   runs.value = [trace, ...runs.value].slice(0, 20)
-  if (!trace.test) showTrace(trace)
+  if (!trace.test || liveRun === trace.id) showTrace(trace)
 })
 onBeforeUnmount(off)
+const offStep = on('flows/step', (step: RunStep) => {
+  if (step.flowId === flowId.value) showStep(step)
+})
+onBeforeUnmount(offStep)
 
 const test = ref<TestInput>({
   text: '', userName: '', private: false, mentioned: false, mode: 'message', eventName: '', eventData: '{}', schedule: '', replies: '',
@@ -415,9 +457,7 @@ async function runTest(nodeId?: string) {
 
 function clearRuns() {
   runs.value = []
-  window.clearTimeout(clearTimer)
-  highlight.value = { nodes: new Map(), edges: new Set() }
-  restyleEdges()
+  clearHighlight()
 }
 
 function selectFromLogs(nodeId: string) {
@@ -426,7 +466,19 @@ function selectFromLogs(nodeId: string) {
   tab.value = 'node'
 }
 
-const botOptions = computed(() => data.bots.map((bot) => ({ label: bot.name, value: bot.id })))
+/** The flow's adapter: the saved one, or the only adapter there is. */
+const currentAdapter = computed(() => adapter.value || (data.adapters.length === 1 ? data.adapters[0].id : undefined))
+const adapterName = (id: string) => localize(data.adapters.find((item) => item.id === id)?.displayName, locale.value) || id
+const adapterOptions = computed(() => data.adapters.map((item) => ({ label: localize(item.displayName, locale.value) || item.id, value: item.id })))
+function setAdapter(value: string | null) {
+  adapter.value = value ?? undefined
+  // Bots on another adapter cannot run this flow's adapter-specific nodes.
+  if (value) bots.value = bots.value.filter((id) => data.bots.find((bot) => bot.id === id)?.adapter.type === value)
+}
+// Bots of other adapters are left out; ones already picked stay so they can be removed.
+const botOptions = computed(() => data.bots
+  .filter((bot) => !currentAdapter.value || bot.adapter.type === currentAdapter.value || bots.value.includes(bot.id))
+  .map((bot) => ({ label: bot.name, value: bot.id })))
 const errorCount = computed(() => issues.value.filter((issue) => issue.severity === 'error').length)
 const warningCount = computed(() => issues.value.length - errorCount.value)
 const typeTitle = (typeId: string) => localize(types.value.get(typeId)?.title, locale.value) || typeId
@@ -528,6 +580,16 @@ watch(narrow, (value) => {
       </NButton>
       <NInput v-model:value="name" class="name-input" :placeholder="t('common.name')" />
       <NSelect
+        :value="currentAdapter ?? null"
+        class="adapter-select"
+        :options="adapterOptions"
+        :placeholder="t('flows.adapterAny')"
+        :clearable="adapterOptions.length > 1"
+        :title="t('flows.adapter')"
+        data-agent-target="flows.adapter"
+        @update:value="setAdapter"
+      />
+      <NSelect
         v-model:value="bots"
         class="bots-select"
         multiple
@@ -550,7 +612,14 @@ watch(narrow, (value) => {
     </header>
 
     <div class="editor-body">
-      <NodePalette v-if="showPalette" class="side" :types="[...types.values()]" @add="(typeId: string) => addNode(typeId)" />
+      <NodePalette
+        v-if="showPalette"
+        class="side"
+        :types="[...types.values()]"
+        :adapter="currentAdapter"
+        :adapter-name="adapterName"
+        @add="(typeId: string) => addNode(typeId)"
+      />
 
       <div class="main">
         <div ref="canvas" class="canvas" @dragover.prevent @drop.prevent="onDrop">
@@ -742,9 +811,25 @@ watch(narrow, (value) => {
   min-width: 110px;
 }
 
+.adapter-select {
+  flex: 0 1 150px;
+  min-width: 110px;
+}
+
 .bots-select {
   flex: 0 1 260px;
   min-width: 120px;
+}
+
+/* A running edge is a moving dashed line; Vue Flow animates the dashes. */
+.canvas :deep(.vue-flow__edge.animated path.vue-flow__edge-path) {
+  stroke-dasharray: 6 4;
+  animation-duration: 0.6s;
+}
+
+.canvas :deep(.vue-flow__edge.edge-ok path.vue-flow__edge-path),
+.canvas :deep(.vue-flow__edge.edge-error path.vue-flow__edge-path) {
+  transition: stroke 0.2s;
 }
 
 @media (max-width: 640px) {

@@ -910,9 +910,10 @@ const callApiNode: NodeType = {
   },
 }
 
-export const onebotNodes: NodeType[] = [
+/** Every OneBot node; they only work on OneBot bots, so the editor greys them out for other adapters. */
+export const onebotNodes: NodeType[] = ([
   memberJoin, memberLeave, poke, recall, groupBan, groupAdmin, groupUpload, friendAdd, friendRequest, groupRequest, groupChange, honor, anyEvent,
   muteNode, muteAllNode, kickNode, setAdminNode, setCardNode, setTitleNode, setGroupNameNode, groupNoticeNode, essenceNode, groupSignNode, leaveGroupNode,
   deleteMsgNode, getMsgNode, forwardNode, pokeNode, emojiLikeNode, likeNode, handleRequestNode,
   memberInfoNode, userInfoNode, groupInfoNode, senderRoleNode, callApiNode,
-]
+] as NodeType[]).map((node) => ({ ...node, platforms: ['onebot'] }))

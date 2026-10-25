@@ -59,6 +59,7 @@ const summary = computed(() => (info.value ? configSummary(info.value, props.dat
       <span class="name">{{ data.label || typeTitle }}</span>
       <span class="number">{{ number }}</span>
       <span v-if="issueLevel" class="badge" :class="issueLevel">!</span>
+      <NSpin v-else-if="run === 'running'" :size="12" class="run-spin" />
       <span v-else-if="run" class="run-mark" :class="run">
         <NIcon :size="11"><CheckmarkOutline v-if="run === 'ok'" /><CloseOutline v-else /></NIcon>
       </span>
@@ -139,6 +140,15 @@ const summary = computed(() => (info.value ? configSummary(info.value, props.dat
 
 .flow-node.run-error {
   border-color: #d03050;
+}
+
+.flow-node.run-running {
+  border-color: #2080f0;
+  box-shadow: 0 0 0 3px rgba(32, 128, 240, 0.18), 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.run-spin {
+  flex: none;
 }
 
 .flow-node.executing {

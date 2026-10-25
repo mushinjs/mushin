@@ -1,7 +1,7 @@
 import { type Logger, randomId, seg } from '@mushin/core'
 import type { CompiledFlow } from './graph'
 import { interpolate, interpolateConfig, SCOPES, sysValues, toText } from './refs'
-import type { FlowBot, FlowEvent, FlowSession, LlmLike, PortType, RunState, RunTrace, TriggerSource, Variables, VariableScope, WaitOptions } from './types'
+import type { FlowBot, FlowEvent, FlowSession, LlmLike, PortType, RunState, RunStep, RunTrace, TriggerSource, Variables, VariableScope, WaitOptions } from './types'
 
 export const MAX_STEPS = 200
 /** How long a run may work; time spent waiting for a reply does not count. */
@@ -54,6 +54,8 @@ export interface RunEnvironment {
   limit?: number
   /** Waits for the next message in the session's chat. Without it, waits time out at once. */
   waitForMessage?(options: WaitOptions, session: FlowSession): Promise<FlowSession | undefined>
+  /** Called as each node starts and finishes, so the editor can show the run live. */
+  onStep?(step: RunStep): void
 }
 
 /**
@@ -220,29 +222,38 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
     }
   }
 
+  const step = (nodeId: string, status: RunStep['status'], edgeId?: string) => {
+    try {
+      env.onStep?.({ runId: trace.id, flowId: flow.doc.id, test: trace.test, nodeId, ...(edgeId ? { edgeId } : {}), status })
+    } catch {}
+  }
+
   const follow = async (id: string, exec: string | undefined) => {
     if (!exec || stopped) return
     for (const link of flow.execOut.get(`${id}|${exec}`) ?? []) {
       trace.edges.push(link.edgeId)
-      await visit(link.target)
+      await visit(link.target, link.edgeId)
     }
   }
 
-  const visit = async (id: string): Promise<void> => {
+  const visit = async (id: string, edgeId?: string): Promise<void> => {
     if (signal.aborted) throw new FlowError('The run took too long and was stopped')
     if (++steps > MAX_STEPS) throw new FlowError(`Stopped after ${MAX_STEPS} steps; check for a loop in the flow`)
     const entry = flow.nodes.get(id)
     if (entry?.type?.kind !== 'action' || !entry.ports) return
     const started = Date.now()
     const inputs = resolveInputs(id)
+    step(id, 'running', edgeId)
     let exec: string | undefined
     try {
       const result = await entry.type.run(contextFor(id, inputs))
       exec = result?.exec ?? entry.ports.execOut[0]
       outputs.set(id, result?.outputs ?? {})
       trace.steps.push({ nodeId: id, exec, ms: Date.now() - started, inputs, outputs: result?.outputs ?? {} })
+      step(id, 'ok', edgeId)
     } catch (error) {
       trace.steps.push({ nodeId: id, ms: Date.now() - started, inputs, error: String((error as Error)?.message ?? error) })
+      step(id, 'error', edgeId)
       throw error
     }
     if (id === env.stopAt) stopped = true
@@ -264,6 +275,7 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
       if (!entry.config.passThrough) consumed = true
       outputs.set(id, result)
       trace.steps.push({ nodeId: id, exec: 'next', ms: Date.now() - started, outputs: result })
+      step(id, 'ok')
       if (id === env.stopAt) stopped = true
       await follow(id, 'next')
     }

@@ -257,6 +257,44 @@ describe('runFlow', () => {
     expect(result.trace.error).toContain('No LLM provider is available')
     expect(result.trace.steps.at(-1)).toMatchObject({ nodeId: 'n2', error: expect.stringContaining('No LLM provider') })
   })
+
+  it('reports each node as it starts and finishes, with the edge that led to it', async () => {
+    const doc = flow([
+      { type: 'trigger.keyword', config: { keywords: ['go'] } },
+      { type: 'action.reply', config: { text: 'ok' } },
+      { type: 'ai.chat' },
+    ], [['n1', 'exec:next', 'n2', 'exec'], ['n2', 'exec:next', 'n3', 'exec']])
+    const steps: any[] = []
+    const result = await run(doc, 'go', { onStep: (step) => steps.push(step) })
+    expect(steps.map(({ nodeId, edgeId, status }) => ({ nodeId, edgeId, status }))).toEqual([
+      { nodeId: 'n1', edgeId: undefined, status: 'ok' },
+      { nodeId: 'n2', edgeId: 'e1', status: 'running' },
+      { nodeId: 'n2', edgeId: 'e1', status: 'ok' },
+      { nodeId: 'n3', edgeId: 'e2', status: 'running' },
+      { nodeId: 'n3', edgeId: 'e2', status: 'error' },
+    ])
+    expect(steps.every((step) => step.runId === result.trace.id && step.flowId === 'f1')).toBe(true)
+  })
+})
+
+describe('adapters', () => {
+  const onebotOnly: NodeType = { kind: 'action', type: 'x.onebot', category: 'platform', title: 'OneBot only', platforms: ['onebot'], run: () => {} }
+  const withOneBot = new Map([...types, [onebotOnly.type, onebotOnly]])
+  const doc = (adapter?: string) => ({
+    ...flow([{ type: 'trigger.message' }, { type: 'x.onebot' }], [['n1', 'exec:next', 'n2', 'exec']]),
+    ...(adapter ? { adapter } : {}),
+  })
+
+  it('warns about nodes the flow\'s adapter does not support', () => {
+    expect(compile(doc('discord'), withOneBot).issues).toEqual([
+      expect.objectContaining({ severity: 'warning', nodeId: 'n2', message: expect.stringContaining('needs a onebot bot') }),
+    ])
+  })
+
+  it('accepts them on their adapter, or when the flow has none', () => {
+    expect(compile(doc('onebot'), withOneBot).issues).toEqual([])
+    expect(compile(doc(), withOneBot).issues).toEqual([])
+  })
 })
 
 describe('migrateDataEdges', () => {

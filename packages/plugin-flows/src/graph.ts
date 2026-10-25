@@ -79,6 +79,9 @@ export function compile(doc: FlowDocument, types: Map<string, NodeType>): Compil
       nodes.set(node.id, { node, config: node.config ?? {} })
       continue
     }
+    if (doc.adapter && type.platforms && !type.platforms.includes(doc.adapter)) {
+      issues.push({ severity: 'warning', nodeId: node.id, message: `"${node.label ?? node.type}" needs a ${type.platforms.join(' or ')} bot; this flow is for ${doc.adapter}` })
+    }
     let config = node.config ?? {}
     if (type.config) {
       const result = type.config.safeParse(config)

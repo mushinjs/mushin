@@ -81,7 +81,12 @@ export const portColors: Record<PortType, string> = {
   any: '#8c8c8c',
 }
 
-export const categories: NodeCategory[] = ['trigger', 'event', 'logic', 'data', 'ai', 'action', 'manage', 'platform']
+/** Whether a node type works on the flow's adapter; with no adapter chosen every node does. */
+export function supports(type: Pick<NodeTypeInfo, 'platforms'>, adapter: string | undefined) {
+  return !adapter || !type.platforms?.length || type.platforms.includes(adapter)
+}
+
+export const categories: NodeCategory[] =['trigger', 'event', 'logic', 'data', 'ai', 'action', 'manage', 'platform']
 
 /**
  * Sample OneBot events for test runs, shaped like NapCat sends them. Picking one fills the event
