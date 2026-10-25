@@ -51,7 +51,7 @@ const inputRows = computed(() => (ports.value?.inputs ?? []).flatMap((port) => {
     text: binding,
   }]
 }))
-const summary = computed(() => (info.value ? configSummary(info.value, props.data.config, locale.value, inputRows.value.length ? 1 : 2) : []))
+const summary = computed(() => (info.value ? configSummary(info.value, props.data.config, locale.value) : []))
 </script>
 
 <template>

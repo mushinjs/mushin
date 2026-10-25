@@ -178,8 +178,8 @@ export const flowTemplates: FlowTemplate[] = [
   },
 ]
 
-/** One short line per filled-in setting, for the node card. */
-export function configSummary(type: NodeTypeInfo, config: Record<string, any>, locale: string, limit = 2) {
+/** One short line per filled-in setting, for the node card: every one, unless a limit is given. */
+export function configSummary(type: NodeTypeInfo, config: Record<string, any>, locale: string, limit = Infinity) {
   const lines: { key: string; label: string; value: string }[] = []
   for (const [key, field] of Object.entries<JsonSchema>(type.configSchema?.properties ?? {})) {
     const value = config?.[key]
