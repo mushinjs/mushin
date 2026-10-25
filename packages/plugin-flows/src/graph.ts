@@ -145,10 +145,22 @@ export function compile(doc: FlowDocument, types: Map<string, NodeType>): Compil
       for (const link of execOut.get(`${id}|${name}`) ?? []) queue.push(link.target)
     }
   }
-  for (const [id, entry] of nodes) {
-    if (entry.type?.kind === 'action' && !reached.has(id)) {
-      issues.push({ severity: 'warning', nodeId: id, message: `"${entry.node.label ?? entry.node.type}" is not connected to a trigger, so it never runs` })
+  // Nodes only skipped triggers lead to never run either.
+  const live = new Set<string>()
+  const liveQueue = triggers.filter((id) => !nodes.get(id)?.node.skip)
+  while (liveQueue.length) {
+    const id = liveQueue.shift()!
+    if (live.has(id)) continue
+    live.add(id)
+    for (const name of nodes.get(id)?.ports?.execOut ?? []) {
+      for (const link of execOut.get(`${id}|${name}`) ?? []) liveQueue.push(link.target)
     }
+  }
+  for (const [id, entry] of nodes) {
+    if (entry.type?.kind !== 'action') continue
+    const name = entry.node.label ?? entry.node.type
+    if (!reached.has(id)) issues.push({ severity: 'warning', nodeId: id, message: `"${name}" is not connected to a trigger, so it never runs` })
+    else if (!live.has(id) && !entry.node.skip) issues.push({ severity: 'warning', nodeId: id, message: `"${name}" only follows skipped triggers, so it never runs` })
   }
 
   // References must name an output that exists; whether it ran yet is only known at run time.

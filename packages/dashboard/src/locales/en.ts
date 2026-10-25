@@ -260,6 +260,10 @@ export default {
     empty: 'Nothing logged yet. Connection attempts, adapter errors, plugin warnings and why LLM chat skipped a message show up here.',
   },
   flows: {
+    unskipNode: 'Run this node again',
+    skippedNote: 'This node is skipped: it stays on the canvas but runs pass through it.',
+    inheritedSkip: 'Only the skipped trigger "{name}" leads here, so this node never runs.',
+    upstreamSkipped: 'Upstream skipped',
     on: 'On',
     off: 'Off',
     enabledHint: 'On: the flow answers on its bots. Turning it off keeps the flow and its bots.',

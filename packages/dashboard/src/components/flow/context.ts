@@ -23,6 +23,8 @@ export interface FlowEditorContext {
   execute(nodeId: string): void
   /** A node's label, or its type's title. */
   nodeName(nodeId: string): string
+  /** Nodes that never run because every trigger reaching them is skipped, with that trigger's name. */
+  inheritedSkip: ComputedRef<Map<string, string>>
   groups: Ref<FlowGroupDoc[]>
   /** Collapses or expands a group. */
   toggleGroup(groupId: string): void

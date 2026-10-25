@@ -262,6 +262,10 @@ const zhCN: typeof en = {
     empty: '暂无日志。连接尝试、适配器错误、插件警告以及大模型对话跳过消息的原因都会显示在这里。',
   },
   flows: {
+    unskipNode: '取消跳过',
+    skippedNote: '此节点已跳过：留在画布上，但运行时直接经过它。',
+    inheritedSkip: '只有被跳过的触发器「{name}」通向这里，所以这个节点不会运行。',
+    upstreamSkipped: '上游已跳过',
     on: '启用',
     off: '停用',
     enabledHint: '已启用：流程会在绑定的机器人上响应。停用后保留流程和机器人绑定。',

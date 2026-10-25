@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ArrowBackOutline, ChevronDownOutline, ConstructOutline, InformationCircleOutline, ListOutline, PlayOutline, TrashOutline } from '@vicons/ionicons5'
+import {
+  ArrowBackOutline, ChevronDownOutline, ConstructOutline, EyeOffOutline, EyeOutline, InformationCircleOutline, ListOutline, PlayOutline, TrashOutline,
+} from '@vicons/ionicons5'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { type Connection, type Edge, type GraphNode, type Node, type OnConnectStartParams, useVueFlow, VueFlow } from '@vue-flow/core'
@@ -92,6 +94,8 @@ const realNodes = computed(() => nodes.value.filter((node) => !isBox(node)))
 const order = computed(() => new Map(realNodes.value.map((node, index) => [node.id, index])))
 provide(flowEditorKey, {
   types, issuesByNode, highlight, order, executing, groups,
+  // Declared further down, with the other run helpers.
+  inheritedSkip: computed(() => inheritedSkip.value),
   execute: (nodeId: string) => runTest(nodeId),
   nodeName: (id: string) => nodeName(id),
   toggleGroup: (groupId: string) => toggleGroup(groupId),
@@ -508,6 +512,39 @@ function ungroupNodes(ids: string[]) {
 }
 
 /** Sets the nodes to be skipped, or stops skipping them when all are skipped already. */
+/**
+ * Nodes that only skipped triggers lead to: they never run, so the canvas shows them as skipped
+ * too. A node that another trigger still reaches is left alone, and a skipped step does not pass
+ * its skip on (runs go through it).
+ */
+const inheritedSkip = computed(() => {
+  const next = new Map<string, string[]>()
+  for (const edge of edges.value) {
+    if (!edge.sourceHandle?.startsWith('exec:')) continue
+    next.set(edge.source, [...(next.get(edge.source) ?? []), edge.target])
+  }
+  const reach = (starts: string[]) => {
+    const seen = new Set<string>()
+    const queue = [...starts]
+    while (queue.length) {
+      const id = queue.shift()!
+      if (seen.has(id)) continue
+      seen.add(id)
+      queue.push(...(next.get(id) ?? []))
+    }
+    return seen
+  }
+  const triggers = realNodes.value.filter((node) => types.value.get(node.data!.typeId)?.kind === 'trigger')
+  const live = reach(triggers.filter((node) => !node.data!.skip).map((node) => node.id))
+  const result = new Map<string, string>()
+  for (const trigger of triggers.filter((node) => node.data!.skip)) {
+    for (const id of reach([trigger.id])) {
+      if (id !== trigger.id && !live.has(id) && !result.has(id)) result.set(id, nodeName(trigger.id))
+    }
+  }
+  return result
+})
+
 function toggleSkip(ids: string[]) {
   const set = new Set(ids)
   const skip = realNodes.value.some((node) => set.has(node.id) && !node.data!.skip)
@@ -1378,19 +1415,33 @@ watch(narrow, (value) => {
                   <div class="node-name"><span class="node-number">{{ selectedNumber }}</span>{{ selected.data!.label || typeTitle(selected.data!.typeId) }}</div>
                   <div class="muted small">{{ selected.data!.label ? typeTitle(selected.data!.typeId) : selected.data!.typeId }}</div>
                 </div>
+                <NButton
+                  quaternary
+                  circle
+                  size="small"
+                  :type="selected.data!.skip ? 'warning' : 'default'"
+                  :title="selected.data!.skip ? t('flows.unskipNode') : t('flows.skipNodeHint')"
+                  :aria-label="selected.data!.skip ? t('flows.unskipNode') : t('flows.skipNode')"
+                  :aria-pressed="!!selected.data!.skip"
+                  data-agent-target="flows.skipNode"
+                  @click="toggleSkip([selected.id])"
+                >
+                  <template #icon><NIcon><EyeOffOutline v-if="selected.data!.skip" /><EyeOutline v-else /></NIcon></template>
+                </NButton>
                 <NButton quaternary circle size="small" type="error" :title="t('flows.deleteNode')" :aria-label="t('flows.deleteNode')" @click="deleteSelected">
                   <template #icon><NIcon><TrashOutline /></NIcon></template>
                 </NButton>
               </div>
 
+              <NAlert v-if="selected.data!.skip" type="warning" :show-icon="false" class="skip-note">{{ t('flows.skippedNote') }}</NAlert>
+              <NAlert v-else-if="inheritedSkip.get(selected.id)" type="warning" :show-icon="false" class="skip-note">
+                {{ t('flows.inheritedSkip', { name: inheritedSkip.get(selected.id) }) }}
+              </NAlert>
               <NTabs v-model:value="nodeTab" type="segment" size="small" class="node-tabs">
                 <NTabPane name="settings" :tab="t('flows.nodeSettings')">
                   <NForm label-placement="top" size="small">
                     <NFormItem :label="t('flows.nodeLabel')" :feedback="t('flows.nodeLabelHint')">
                       <NInput :value="selected.data!.label ?? ''" :placeholder="typeTitle(selected.data!.typeId)" @update:value="(label: string) => updateSelected({ label: label || undefined })" />
-                    </NFormItem>
-                    <NFormItem :label="t('flows.skipNode')" :feedback="t('flows.skipNodeHint')" label-placement="left">
-                      <NSwitch :value="!!selected.data!.skip" @update:value="toggleSkip([selected.id])" />
                     </NFormItem>
                   </NForm>
                   <template v-if="wiring?.inputs.length">
@@ -1868,6 +1919,11 @@ watch(narrow, (value) => {
 
 .section {
   margin: 16px 0 8px;
+  font-size: 13px;
+}
+
+.skip-note {
+  margin: 0 0 10px;
   font-size: 13px;
 }
 
