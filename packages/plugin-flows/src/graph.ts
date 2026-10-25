@@ -76,6 +76,18 @@ function stringsOf(value: unknown): string[] {
   return []
 }
 
+export const triggerPriority = (entry: Pick<CompiledNode, 'node'>) => entry.node.priority ?? 0
+
+/**
+ * Whether later triggers (and the bot's plugins) still see the message after this trigger runs.
+ * Message triggers say so with their "let other plugins answer too" setting; triggers without
+ * that setting (events, schedules) pass on unless the node turns it off.
+ */
+export function passesOn(entry: Pick<CompiledNode, 'node' | 'config'>) {
+  if (entry.config && 'passThrough' in entry.config) return !!entry.config.passThrough
+  return entry.node.passOn !== false
+}
+
 /** Resolves node types, checks every edge and config, and builds the lookup tables the engine runs on. */
 export function compile(doc: FlowDocument, types: Map<string, NodeType>): CompiledFlow {
   const issues: FlowIssue[] = []

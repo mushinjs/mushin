@@ -1,5 +1,5 @@
 import { type Logger, randomId, seg } from '@mushin/core'
-import type { CompiledFlow } from './graph'
+import { type CompiledFlow, passesOn, triggerPriority } from './graph'
 import { interpolate, interpolateConfig, SCOPES, sysValues, toText } from './refs'
 import type { FlowBot, FlowEvent, FlowSession, LlmLike, PortType, RunState, RunStep, RunTrace, TriggerSource, Variables, VariableScope, WaitOptions } from './types'
 
@@ -61,6 +61,33 @@ export interface RunEnvironment {
   waitForMessage?(options: WaitOptions, session: FlowSession): Promise<FlowSession | undefined>
   /** Called as each node starts and finishes, so the editor can show the run live. */
   onStep?(step: RunStep): void
+  /** Run only this trigger, already matched by the caller (which ordered triggers across flows). */
+  matched?: TriggerMatch
+}
+
+/** A trigger that the message (or event, or tick) starts, with what it matched. */
+export interface TriggerMatch {
+  nodeId: string
+  outputs: Record<string, unknown> | TriggerReply
+}
+
+/**
+ * The triggers of a flow that this message, event or tick starts, highest priority first (then in
+ * canvas order). Matching only reads the message; nothing runs.
+ */
+export function matchTriggers(flow: CompiledFlow, env: Pick<RunEnvironment, 'session' | 'vars' | 'event' | 'scheduled'>): TriggerMatch[] {
+  const source = sourceOf(env)
+  const ids = [...flow.triggers].sort((a, b) => triggerPriority(flow.nodes.get(b)!) - triggerPriority(flow.nodes.get(a)!))
+  const matches: TriggerMatch[] = []
+  for (const id of ids) {
+    const entry = flow.nodes.get(id)!
+    if (entry.type?.kind !== 'trigger' || entry.node.skip) continue
+    if ((entry.type.source ?? 'message') !== source) continue
+    if (env.scheduled && env.scheduled.nodeId !== id) continue
+    const outputs = entry.type.match({ config: entry.config, session: env.session, vars: env.vars as Variables, event: env.event, now: env.scheduled?.now })
+    if (outputs) matches.push({ nodeId: id, outputs })
+  }
+  return matches
 }
 
 /**
@@ -88,7 +115,7 @@ function runBudget(limit: number) {
   }
 }
 
-function sourceOf(env: RunEnvironment): TriggerSource {
+function sourceOf(env: Pick<RunEnvironment, 'event' | 'scheduled'>): TriggerSource {
   return env.scheduled ? 'schedule' : env.event ? 'event' : 'message'
 }
 
@@ -100,7 +127,10 @@ export interface RunResult {
   trace: RunTrace
 }
 
-/** Runs one flow against one incoming message: every matching trigger starts a run. */
+/**
+ * Runs one flow against one incoming message: matching triggers run highest priority first, until
+ * one that does not pass the message on.
+ */
 export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<RunResult> {
   const trace: RunTrace = {
     id: randomId(8),
@@ -274,30 +304,27 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
     await follow(id, exec)
   }
 
-  const source = sourceOf(env)
   try {
-    for (const id of flow.triggers) {
+    const started = Date.now()
+    const matches = env.matched ? [env.matched] : matchTriggers(flow, { ...env, session, vars })
+    for (const { nodeId: id, outputs: result } of matches) {
       if (stopped) break
       const entry = flow.nodes.get(id)!
-      if (entry.type?.kind !== 'trigger' || entry.node.skip) continue
-      if ((entry.type.source ?? 'message') !== source) continue
-      if (env.scheduled && env.scheduled.nodeId !== id) continue
-      const started = Date.now()
-      const result = entry.type.match({ config: entry.config, session, vars, event: env.event, now: env.scheduled?.now })
-      if (!result) continue
       matched = true
-      if (!entry.config.passThrough) consumed = true
+      const passes = passesOn(entry)
+      if (!passes) consumed = true
       if (result instanceof TriggerReply) {
         trace.steps.push({ nodeId: id, ms: Date.now() - started, outputs: { reply: result.reply } })
         step(id, 'ok')
         await session.reply(result.reply)
-        continue
+      } else {
+        outputs.set(id, result)
+        trace.steps.push({ nodeId: id, exec: 'next', ms: Date.now() - started, outputs: result })
+        step(id, 'ok')
+        if (id === env.stopAt) stopped = true
+        await follow(id, 'next')
       }
-      outputs.set(id, result)
-      trace.steps.push({ nodeId: id, exec: 'next', ms: Date.now() - started, outputs: result })
-      step(id, 'ok')
-      if (id === env.stopAt) stopped = true
-      await follow(id, 'next')
+      if (!passes) break
     }
   } catch (error) {
     trace.error = String((error as Error)?.message ?? error)

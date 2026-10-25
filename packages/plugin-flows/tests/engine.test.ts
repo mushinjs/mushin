@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { seg } from '@mushin/core'
-import { builtinNodes, compile, type FlowDocument, type FlowEdge, type FlowNode, type FlowSession, layout, migrateDataEdges, type NodeType, runFlow } from '../src'
+import { builtinNodes, compile, type FlowDocument, type FlowEdge, type FlowNode, type FlowSession, layout, migrateDataEdges, type NodeType, runFlow, triggerOrder } from '../src'
 
 const types = new Map<string, NodeType>(builtinNodes.map((type) => [type.type, type]))
 const logger = { info() {}, warn() {}, debug() {}, error() {} } as any
@@ -10,7 +10,7 @@ function flow(nodes: Partial<FlowNode>[], edges: [string, string, string, string
     id: 'f1',
     name: 'Test flow',
     bots: [],
-    nodes: nodes.map((node, index) => ({ id: node.id ?? `n${index + 1}`, type: node.type!, label: node.label, position: { x: 0, y: 0 }, config: node.config ?? {}, inputs: node.inputs })),
+    nodes: nodes.map((node, index) => ({ ...node, id: node.id ?? `n${index + 1}`, type: node.type!, position: { x: 0, y: 0 }, config: node.config ?? {} })),
     edges: edges.map(([source, sourceHandle, target, targetHandle], index): FlowEdge => ({ id: `e${index + 1}`, source, sourceHandle, target, targetHandle })),
     createdAt: 0,
     updatedAt: 0,
@@ -421,5 +421,31 @@ describe('skipped triggers', () => {
     doc.nodes[0].skip = true
     const messages = compile(doc, types).issues.map((issue) => `${issue.nodeId}: ${issue.message}`)
     expect(messages).toEqual(['onlyA: "action.reply" only follows skipped triggers, so it never runs'])
+  })
+})
+
+describe('trigger order', () => {
+  const two = (first: Partial<FlowNode>, second: Partial<FlowNode>) => flow([
+    { id: 'a', type: 'trigger.keyword', config: { keywords: ['hi'], mode: 'exact' }, ...first },
+    { id: 'b', type: 'trigger.keyword', config: { keywords: ['hi'], mode: 'exact' }, ...second },
+    { id: 'sayA', type: 'action.reply', config: { text: 'A' } },
+    { id: 'sayB', type: 'action.reply', config: { text: 'B' } },
+  ], [['a', 'exec:next', 'sayA', 'exec'], ['b', 'exec:next', 'sayB', 'exec']])
+
+  it('runs the highest priority first and stops at a trigger that keeps the message', async () => {
+    expect(replyText((await run(two({}, {}), 'hi')).sent)).toEqual(['A'])
+    expect(replyText((await run(two({}, { priority: 5 }), 'hi')).sent)).toEqual(['B'])
+    expect(replyText((await run(two({ config: { keywords: ['hi'], mode: 'exact', passThrough: true } }, {}), 'hi')).sent)).toEqual(['A', 'B'])
+  })
+
+  it('finds triggers an earlier one always or sometimes keeps from running', () => {
+    const order = triggerOrder([compile(two({}, {}), types)])
+    expect(order.map((slot) => [slot.nodeId, slot.certain, slot.blockedBy?.nodeId])).toEqual([['a', undefined, undefined], ['b', true, 'a']])
+    const loose = flow([
+      { id: 'a', type: 'trigger.keyword', config: { keywords: ['hi'], mode: 'contains' } },
+      { id: 'b', type: 'trigger.keyword', config: { keywords: ['hi there'], mode: 'exact' } },
+      { id: 'c', type: 'trigger.keyword', config: { keywords: ['bye'], mode: 'exact' } },
+    ], [])
+    expect(triggerOrder([compile(loose, types)]).map((slot) => slot.certain)).toEqual([undefined, false, undefined])
   })
 })

@@ -289,6 +289,25 @@ export interface FlowNodeDoc {
   config: Record<string, any>
   inputs?: Record<string, string>
   skip?: boolean
+  /** Triggers: higher runs first among the triggers one message starts on a bot. */
+  priority?: number
+  /** Event and schedule triggers: false stops later triggers once this one runs. */
+  passOn?: boolean
+}
+
+/** A trigger's place in its bot's order (see `flows.triggers`). */
+export interface TriggerSlot {
+  flowId: string
+  flowName: string
+  nodeId: string
+  name: string
+  type: string
+  source: 'message' | 'event' | 'schedule'
+  priority: number
+  passesOn: boolean
+  blockedBy?: { flowId: string; flowName: string; nodeId: string; name: string; priority: number }
+  /** True: never runs on this bot. False: may not, depending on the message. */
+  certain?: boolean
 }
 
 export interface FlowEdgeDoc {
@@ -330,6 +349,8 @@ export interface FlowDoc {
   createdAt: number
   updatedAt: number
   issues: FlowIssue[]
+  /** Triggers that an earlier trigger on one of the flow's bots keeps from running. */
+  blocked?: (TriggerSlot & { botId: string })[]
 }
 
 export interface FlowSummary {
@@ -342,6 +363,9 @@ export interface FlowSummary {
   nodes: number
   errors: number
   warnings: number
+  /** `all`: on some bot none of the flow's triggers can run; `some`: a few cannot. */
+  blocked?: 'all' | 'some'
+  triggers: { id: string; type: string; source: string; skip: boolean }[]
   createdAt: number
   updatedAt: number
 }

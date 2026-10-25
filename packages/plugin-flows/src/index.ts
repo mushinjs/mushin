@@ -2,15 +2,17 @@ import { type ChannelInfo, Context, MushinError, randomId, seg, Service, toJsonS
 import { type BotEvent, type CommandEntry, commandMatches, splitCommand } from '@mushin/plugin-bots'
 import type {} from '@mushin/plugin-providers'
 import type {} from '@mushin/plugin-storage'
-import { FlowError, runFlow, type RunEnvironment } from './engine'
-import { compile, type CompiledFlow, layout } from './graph'
+import { FlowError, matchTriggers, runFlow, type RunEnvironment, type TriggerMatch } from './engine'
+import { compile, type CompiledFlow, layout, passesOn, triggerPriority } from './graph'
 import { builtinNodes, commandName, scheduleTarget } from './nodes'
+import { overlap, triggerOrder, type TriggerSlot } from './order'
 import { migrateDataEdges } from './refs'
 import type { FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, FlowSession, LlmLike, NodeType, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
 
 export * from './engine'
 export * from './graph'
 export * from './nodes'
+export * from './order'
 export * from './refs'
 export * from './types'
 
@@ -51,6 +53,8 @@ const nodeInput = z.object({
   position: z.object({ x: z.number(), y: z.number() }).optional().describe('Canvas position; laid out automatically when omitted'),
   config: z.record(z.string(), z.any()).optional().describe('Settings matching the node type\'s config schema; strings may contain references such as {{n1.rest}}'),
   skip: z.boolean().optional().describe('Keep the node but skip it when the flow runs: a skipped trigger never fires, a skipped step passes on to its first exec output'),
+  priority: z.number().optional().describe('Triggers only: when one message starts several triggers on a bot (across all its flows), higher priority runs first; default 0. A trigger that does not let other plugins answer too stops the ones after it'),
+  passOn: z.boolean().optional().describe('Event and schedule triggers only: false stops later triggers once this one runs; default true'),
   inputs: z.record(z.string(), z.string()).optional()
     .describe('Input name → value: a reference like "{{n1.rest}}" ({{<node id>.<output>}}, {{sys.text|user|userId|groupId|isPrivate|mentioned}}, {{chat|user|flow|run.<variable>}}) or text containing references'),
 })
@@ -133,6 +137,8 @@ function normalize(nodes: NodeInput[], edges: EdgeInput[], types: Map<string, No
     config: node.config ?? {},
     ...(node.inputs && Object.keys(node.inputs).length ? { inputs: node.inputs } : {}),
     ...(node.skip ? { skip: true } : {}),
+    ...(node.priority ? { priority: node.priority } : {}),
+    ...(node.passOn === false ? { passOn: false } : {}),
   }))
   const flowEdges: FlowEdge[] = edges.map((edge) => ({
     id: edge.id ?? `e-${randomId(5)}`,
@@ -263,12 +269,95 @@ export class FlowService extends Service {
   }
 
   describe(doc: FlowDocument) {
-    return { ...doc, issues: this.issuesOf(doc) }
+    return { ...doc, issues: this.issuesOf(doc), blocked: this.blockedIn(doc) }
   }
 
-  /** Validation issues, plus commands that another flow or plugin on the same bot also registers. */
+  /** Validation issues, commands another source also registers, and triggers that never run. */
   private issuesOf(doc: FlowDocument): FlowIssue[] {
-    return [...this.compiledOf(doc).issues, ...this.commandIssues(doc)]
+    const blocked = this.blockedIn(doc).filter((slot) => slot.certain).map((slot): FlowIssue => ({
+      severity: 'warning',
+      nodeId: slot.nodeId,
+      message: `"${slot.name}" never runs on ${this.botLabel(slot.botId)}: "${slot.blockedBy!.name}"${slot.blockedBy!.flowId === doc.id ? '' : ` of the flow "${slot.blockedBy!.flowName}"`} (priority ${slot.blockedBy!.priority}) answers first and does not pass the message on`,
+    }))
+    // A command that certainly never runs says so once, as blocked.
+    const commands = this.commandIssues(doc).filter((issue) => !blocked.some((item) => item.nodeId === issue.nodeId))
+    return [...this.compiledOf(doc).issues, ...commands, ...blocked]
+  }
+
+  private botLabel(botId: string) {
+    try {
+      return `the bot "${this.home.get('bots')?.get(botId).name ?? botId}"`
+    } catch {
+      return `the bot ${botId}`
+    }
+  }
+
+  /** Each bot's triggers in the order a message reaches them; see `triggerOrder`. */
+  triggersOn(botId: string): TriggerSlot[] {
+    return triggerOrder(this.flowsOf(botId))
+  }
+
+  /** Triggers of a flow that an earlier trigger on one of its bots keeps from running, certainly or possibly. */
+  private blockedIn(doc: FlowDocument) {
+    if (doc.enabled === false) return []
+    return doc.bots.flatMap((botId) => this.triggersOn(botId)
+      .filter((slot) => slot.flowId === doc.id && slot.blockedBy)
+      .map((slot) => ({ ...slot, botId })))
+  }
+
+  /**
+   * The triggers on a bot that compete with one trigger: those an overlapping message also starts,
+   * in the order they run, so the editor can reorder them.
+   */
+  competing(botId: string, flowId: string, nodeId: string) {
+    const flows = this.flowsOf(botId)
+    const own = flows.find((flow) => flow.doc.id === flowId)?.nodes.get(nodeId)
+    const slots = triggerOrder(flows)
+    if (!own) return { triggers: slots.filter((slot) => slot.flowId === flowId && slot.nodeId === nodeId), plugins: this.pluginsAfter(botId) }
+    const triggers = slots.filter((slot) => {
+      if (slot.flowId === flowId && slot.nodeId === nodeId) return true
+      const other = flows.find((flow) => flow.doc.id === slot.flowId)?.nodes.get(slot.nodeId)
+      return !!other && (!!overlap(other, own) || !!overlap(own, other))
+    })
+    return { triggers, plugins: this.pluginsAfter(botId) }
+  }
+
+  /** Bot plugins that see messages after the flows, for the order list. */
+  private pluginsAfter(botId: string) {
+    try {
+      return (this.home.get('bots')?.get(botId).plugins ?? [])
+        .filter((entry) => entry.enabled && entry.package !== RUNNER_PACKAGE)
+        .map((entry) => entry.package)
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * Puts triggers in this order on their bots by rewriting their priorities: the first one gets
+   * the highest. Only the listed triggers change.
+   */
+  async setTriggerOrder(order: { flowId: string; nodeId: string }[]) {
+    const found = order.map(({ flowId, nodeId }) => {
+      const doc = this.get(flowId)
+      const node = doc.nodes.find((item) => item.id === nodeId)
+      if (!node) throw new MushinError('not_found', `No node "${nodeId}" in the flow "${doc.name}"`)
+      return { doc, node }
+    })
+    const top = Math.max(order.length - 1, ...found.map(({ node }) => node.priority ?? 0))
+    const changed = new Map<string, FlowDocument>()
+    found.forEach(({ doc, node }, index) => {
+      const priority = top - index
+      if ((node.priority ?? 0) === priority) return
+      const next = changed.get(doc.id) ?? { ...doc, nodes: doc.nodes.map((item) => ({ ...item })) }
+      const target = next.nodes.find((item) => item.id === node.id)!
+      if (priority) target.priority = priority
+      else delete target.priority
+      changed.set(doc.id, next)
+    })
+    for (const doc of changed.values()) await this.save(doc)
+    if (changed.size) this.logger.info('reordered %d trigger(s) in %d flow(s)', order.length, changed.size)
+    return order.map(({ flowId, nodeId }) => ({ flowId, nodeId, priority: this.get(flowId).nodes.find((node) => node.id === nodeId)?.priority ?? 0 }))
   }
 
   /** The commands a flow's command nodes register on a bot; skipped nodes register none. */
@@ -285,6 +374,7 @@ export class FlowService extends Service {
         ...(config.usage ? { usage: String(config.usage) } : {}),
         ...(config.showInHelp === false ? { hidden: true } : {}),
         ...(config.permission === 'admin' ? { permission: 'admin' as const } : {}),
+        ...(node.priority ? { priority: node.priority } : {}),
         botId,
         source: { kind: 'flow' as const, id: doc.id, name: doc.name, nodeId: node.id },
       }]
@@ -328,6 +418,8 @@ export class FlowService extends Service {
       .sort((a, b) => a.createdAt - b.createdAt)
       .map((doc) => {
         const issues = this.issuesOf(doc)
+        const blocked = this.blockedIn(doc).filter((slot) => slot.certain)
+        const triggers = this.compiledOf(doc).triggers.filter((id) => !doc.nodes.find((node) => node.id === id)?.skip)
         return {
           id: doc.id,
           name: doc.name,
@@ -338,6 +430,12 @@ export class FlowService extends Service {
           nodes: doc.nodes.length,
           errors: issues.filter((issue) => issue.severity === 'error').length,
           warnings: issues.filter((issue) => issue.severity === 'warning').length,
+          // `all`: on some bot, none of the flow's triggers can run; `some`: a few cannot.
+          blocked: !blocked.length ? undefined : doc.bots.some((bot) => triggers.length && triggers.every((id) => blocked.some((slot) => slot.botId === bot && slot.nodeId === id))) ? 'all' : 'some',
+          triggers: this.compiledOf(doc).triggers.flatMap((id) => {
+            const entry = this.compiledOf(doc).nodes.get(id)!
+            return entry.type?.kind === 'trigger' ? [{ id, type: entry.node.type, source: entry.type.source ?? 'message', skip: !!entry.node.skip }] : []
+          }),
           createdAt: doc.createdAt,
           updatedAt: doc.updatedAt,
         }
@@ -554,11 +652,29 @@ export class FlowService extends Service {
   async dispatch(ctx: Context, session: FlowSession) {
     const botId = ctx.bot.id
     if (this.deliverToWaiter(botId, session)) return { consumed: true }
+    const runs = this.flowsOf(botId).map((compiled) => ({ compiled, env: this.environment(ctx, compiled.doc.id, session) }))
+    return this.runOrdered(runs)
+  }
+
+  /**
+   * Runs the triggers a message or event starts across a bot's flows, highest priority first (ties:
+   * older flow first, then canvas order), until one that does not pass the message on.
+   */
+  private async runOrdered(runs: { compiled: CompiledFlow; env: RunEnvironment }[]) {
+    const matches: { compiled: CompiledFlow; env: RunEnvironment; match: TriggerMatch }[] = []
+    for (const run of runs) {
+      for (const match of matchTriggers(run.compiled, run.env)) matches.push({ ...run, match })
+    }
+    // Array sort is stable, so ties keep flow order and each flow's own order.
+    matches.sort((a, b) => triggerPriority(b.compiled.nodes.get(b.match.nodeId)!) - triggerPriority(a.compiled.nodes.get(a.match.nodeId)!))
     let consumed = false
-    for (const compiled of this.flowsOf(botId)) {
-      const result = await runFlow(compiled, this.environment(ctx, compiled.doc.id, session))
-      if (result.matched) this.record(result.trace)
-      if (result.consumed) consumed = true
+    for (const { compiled, env, match } of matches) {
+      const result = await runFlow(compiled, { ...env, matched: match })
+      this.record(result.trace)
+      if (!passesOn(compiled.nodes.get(match.nodeId)!)) {
+        consumed = true
+        break
+      }
     }
     return { consumed }
   }
@@ -589,10 +705,7 @@ export class FlowService extends Service {
     const flowEvent: FlowEvent = { name: event.name, data: event.data ?? {}, ...(event.message ? { message: event.message } : {}) }
     const channel = event.channel ?? (event.user?.id ? { type: 'private' as const, id: event.user.id } : undefined)
     const session = this.botSession(ctx, channel, event.user, event.message?.id)
-    for (const compiled of this.flowsOf(botId)) {
-      const result = await runFlow(compiled, { ...this.environment(ctx, compiled.doc.id, session), event: flowEvent })
-      if (result.matched) this.record(result.trace)
-    }
+    await this.runOrdered(this.flowsOf(botId).map((compiled) => ({ compiled, env: { ...this.environment(ctx, compiled.doc.id, session), event: flowEvent } })))
   }
 
   /** Fires schedule triggers that are due. Runs on a timer; tests call it with a fixed time. */
@@ -759,6 +872,26 @@ export class FlowService extends Service {
         if (!input.event && !input.schedule && !input.text) throw new MushinError('invalid_input', 'Give text, event or schedule')
         return this.test(id, input)
       },
+    })
+
+    yield actions.define({
+      name: 'flows.triggers',
+      description: 'The triggers on one bot in the order a message reaches them (higher priority first), with the earlier trigger that keeps each one from running. With flow and node, only the triggers that compete with that trigger, plus the bot plugins that see messages after the flows.',
+      risk: 'read',
+      input: z.object({
+        bot: z.string().describe('Bot id from bots.list'),
+        flow: z.string().optional(),
+        node: z.string().optional(),
+      }),
+      handler: ({ bot, flow, node }) => (flow && node ? this.competing(bot, flow, node) : { triggers: this.triggersOn(bot), plugins: this.pluginsAfter(bot) }),
+    })
+
+    yield actions.define({
+      name: 'flows.setTriggerOrder',
+      description: 'Put triggers in this order, first runs first, by rewriting their priorities. Get them from flows.triggers.',
+      risk: 'write',
+      input: z.object({ order: z.array(z.object({ flowId: z.string(), nodeId: z.string() })).min(1) }),
+      handler: ({ order }) => this.setTriggerOrder(order),
     })
 
     yield actions.define({

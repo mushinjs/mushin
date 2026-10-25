@@ -40,6 +40,8 @@ export interface CommandSource {
 export interface CommandEntry extends CommandDef {
   botId: string
   source: CommandSource
+  /** For flow commands: higher answers first when two register the same name. */
+  priority?: number
 }
 
 /** Per-bot command settings, stored on the bot record. */
@@ -158,5 +160,6 @@ export function commandConflicts(entries: CommandEntry[]) {
   }
   return [...owners.entries()]
     .filter(([, list]) => list.length > 1)
-    .map(([key, list]) => ({ botId: key.split('|')[0], name: key.slice(key.indexOf('|') + 1), entries: list }))
+    // The first entry is the one that answers: highest priority, then registration order.
+    .map(([key, list]) => ({ botId: key.split('|')[0], name: key.slice(key.indexOf('|') + 1), entries: [...list].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0)) }))
 }
