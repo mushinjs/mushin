@@ -1,6 +1,7 @@
 import type { WebSocket } from 'ws'
-import type { ChannelInfo, Context, Segment } from '@mushin/core'
+import { type ChannelInfo, type Context, type Segment, segmentsToText, type UserInfo } from '@mushin/core'
 import type {} from '@mushin/plugin-bots'
+import { normalizeEvent } from './events'
 
 export interface OneBotResponse {
   status: 'ok' | 'async' | 'failed'
@@ -24,7 +25,7 @@ const DEFAULT_HEARTBEAT = 30_000
 /** Segment types this adapter sends; drives the "supported platforms" field of message records. */
 export const ONEBOT_SEGMENTS = ['text', 'at', 'face', 'image', 'record', 'video', 'reply', 'file', 'json', 'xml', 'forward', 'node', 'poke', 'dice', 'rps', 'music', 'mface', 'markdown']
 
-function toId(value: string) {
+export function toId(value: string) {
   const number = Number(value)
   return Number.isSafeInteger(number) ? number : value
 }
@@ -47,6 +48,8 @@ export class OneBotConnection {
   private warnedStringFormat = false
   private disposed = false
   private loginTask?: Promise<void>
+  /** Set while NapCat reports the QQ account offline, so the bot shows an error instead of "online". */
+  private accountOffline?: string
   private logger
 
   constructor(private ctx: Context, private socket: WebSocket, private onDead: () => void) {
@@ -105,9 +108,10 @@ export class OneBotConnection {
 
   async send(channel: ChannelInfo, segments: Segment[]) {
     const message = segments.map(toOneBotSegment)
+    // A temporary chat needs its source group, or NapCat may fail to find the person when they are not a friend.
     const data = channel.type === 'group'
       ? await this.call('send_group_msg', { group_id: toId(channel.id), message })
-      : await this.call('send_private_msg', { user_id: toId(channel.id), message })
+      : await this.call('send_private_msg', { user_id: toId(channel.id), message, ...(channel.fromGroup ? { group_id: toId(channel.fromGroup) } : {}) })
     return { messageId: data?.message_id !== undefined ? String(data.message_id) : undefined }
   }
 
@@ -154,15 +158,62 @@ export class OneBotConnection {
         return this.handleMessage(payload)
       case 'notice':
       case 'request':
-        return this.ctx.bot.dispatchEvent({ type: payload.post_type, data: payload })
+        return this.handleEvent(payload)
       // message_sent (NapCat's reportSelfMessage) echoes our own sends; they are recorded on send.
     }
   }
 
+  private handleEvent(payload: any) {
+    if (payload.notice_type === 'bot_offline') {
+      // NapCat: the QQ account was logged out, e.g. kicked by a login elsewhere. The socket stays open.
+      this.markAccount(false, String(payload.message || payload.tag || 'the QQ account went offline'))
+    }
+    const event = normalizeEvent(payload)
+    if (event.name === 'group_recall' || event.name === 'friend_recall') {
+      return this.withRecalled(event).then((full) => this.ctx.bot.dispatchEvent(full))
+    }
+    this.ctx.bot.dispatchEvent(event)
+  }
+
+  /** Adds the text of a recalled message from the bot's recent messages, when it is still there. */
+  private async withRecalled(event: ReturnType<typeof normalizeEvent>) {
+    const id = String(event.data.message_id ?? '')
+    const bots = this.ctx.get('bots')
+    if (!id || !bots) return event
+    try {
+      const records = await bots.messages(this.ctx.bot.id, { limit: 1000 })
+      const record = records.findLast((item) => item.messageId === id)
+      if (record) event.message = { id, text: segmentsToText(record.segments, true).trim(), segments: record.segments }
+    } catch (error) {
+      this.logger.debug('cannot look up recalled message %s: %s', id, error)
+    }
+    return event
+  }
+
+  /** Tracks whether NapCat's QQ account is logged in, from heartbeats and bot_offline notices. */
+  private markAccount(online: boolean, reason = 'NapCat reports the QQ account offline') {
+    if (!online) {
+      if (this.accountOffline) return
+      this.accountOffline = reason
+      this.logger.warn('QQ account offline: %s', reason)
+      this.ctx.bot.setStatus('error', `QQ account offline: ${reason}`)
+      return
+    }
+    if (!this.accountOffline) return
+    this.accountOffline = undefined
+    this.logger.info('QQ account back online')
+    this.ctx.bot.setStatus('online')
+  }
+
   private handleMeta(payload: any) {
-    if (payload.meta_event_type === 'heartbeat' && typeof payload.interval === 'number' && payload.interval > 0) {
-      this.heartbeatInterval = payload.interval
-      this.touch()
+    if (payload.meta_event_type === 'heartbeat') {
+      if (typeof payload.interval === 'number' && payload.interval > 0) {
+        this.heartbeatInterval = payload.interval
+        this.touch()
+      }
+      // OneBot 11: status.online is false when the account cannot send or receive.
+      if (payload.status?.online === false) this.markAccount(false)
+      else if (payload.status?.online === true) this.markAccount(true)
     }
     if (payload.meta_event_type === 'lifecycle' && payload.sub_type === 'connect' && this.ctx.bot.status !== 'online') {
       this.login().catch((error) => this.logger.warn('get_login_info failed: %s', error))
@@ -182,13 +233,17 @@ export class OneBotConnection {
     }
     const sender = payload.sender ?? {}
     const userId = String(payload.user_id ?? sender.user_id ?? '')
+    // A private message with sub_type "group" is a temporary chat started from group_id.
+    const fromGroup = payload.message_type === 'private' && payload.sub_type === 'group' && payload.group_id ? String(payload.group_id) : undefined
     const channel: ChannelInfo = payload.message_type === 'group'
       ? { type: 'group', id: String(payload.group_id), ...(payload.group_name ? { name: String(payload.group_name) } : {}) }
-      : { type: 'private', id: userId, ...(sender.nickname ? { name: String(sender.nickname) } : {}) }
+      : { type: 'private', id: userId, ...(sender.nickname ? { name: String(sender.nickname) } : {}), ...(fromGroup ? { fromGroup } : {}) }
+    const user: UserInfo = { id: userId, name: sender.card || sender.nickname || undefined }
+    if (sender.role === 'owner' || sender.role === 'admin' || sender.role === 'member') user.role = sender.role
     this.ctx.bot.receive({
       messageId: payload.message_id !== undefined ? String(payload.message_id) : undefined,
       channel,
-      user: { id: userId, name: sender.card || sender.nickname || undefined },
+      user,
       segments,
       timestamp: typeof payload.time === 'number' ? payload.time * 1000 : Date.now(),
     }).catch((error) => this.logger.warn('failed to handle message: %s', error))
