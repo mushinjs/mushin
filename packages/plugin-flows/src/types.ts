@@ -1,5 +1,6 @@
 import type { ChannelInfo, Logger, LocalizedText, Segment, UserInfo, z } from '@mushin/core'
-import type { SourcedContent } from '@mushin/plugin-bots'
+import type { ParsedCommand, SourcedContent } from '@mushin/plugin-bots'
+import type { TriggerReply } from './engine'
 
 type SourcedContentLike = SourcedContent
 
@@ -14,6 +15,12 @@ export interface PortDef {
 
 /** `event`, `manage` and `platform` hold nodes for one chat platform, such as OneBot. */
 export type NodeCategory = 'trigger' | 'event' | 'logic' | 'data' | 'ai' | 'action' | 'manage' | 'platform'
+
+/** Outputs read from a config value: `signature` turns `<score:number> [note]` into outputs `score` and `note`. */
+export interface OutputsFromConfig {
+  key: string
+  format: 'signature'
+}
 
 /** Exec outputs taken from a config array, e.g. one branch per intent label plus `other`. */
 export interface ExecOutFromConfig {
@@ -32,6 +39,8 @@ interface NodeTypeBase<C> {
   inputs?: PortDef[]
   /** Outputs, which later nodes reference as `{{<node id>.<output>}}`. */
   outputs?: PortDef[]
+  /** More outputs that depend on the node's config, after `outputs`. */
+  outputsFrom?: OutputsFromConfig
   /** Adapter ids the node works with, e.g. `['onebot']`; omitted means every adapter. */
   platforms?: string[]
 }
@@ -47,8 +56,12 @@ export interface TriggerNodeType<C = any> extends NodeTypeBase<C> {
   kind: 'trigger'
   /** Defaults to `message`. */
   source?: TriggerSource
-  /** Returns the trigger's outputs when the message, event or tick matches, or nothing. */
-  match(context: TriggerContext<C>): Record<string, unknown> | undefined
+  /**
+   * Returns the trigger's outputs when the message, event or tick matches, or nothing. A
+   * `TriggerReply` means the message was meant for this trigger but cannot start it (e.g. a command
+   * with the wrong arguments): the text is sent back and the flow does not run.
+   */
+  match(context: TriggerContext<C>): Record<string, unknown> | TriggerReply | undefined
   /**
    * Schedule triggers: whether to fire at `now`. `last` is when it last fired, `since` when the
    * scheduler started watching it (bot start or flow save), so an interval counts from there.
@@ -82,6 +95,10 @@ export interface FlowSession {
   isDirect: boolean
   mentioned: boolean
   messageId?: string
+  /** The command the message runs, split by the bot's prefixes; command triggers fall back to `/`. */
+  command?: ParsedCommand
+  /** The sender is one of the bot's admins. */
+  isAdmin?: boolean
   send(content: string | SourcedContentLike): Promise<SentLike | undefined | void>
   reply(content: string | SourcedContentLike): Promise<SentLike | undefined | void>
 }

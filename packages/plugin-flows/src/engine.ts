@@ -13,6 +13,11 @@ export class FlowError extends Error {
   name = 'FlowError'
 }
 
+/** Returned by a trigger's `match` when the message was meant for it but cannot start it; the text is sent back. */
+export class TriggerReply {
+  constructor(readonly reply: string) {}
+}
+
 /** Converts a value to what an input port expects. */
 export function coerce(value: unknown, type: PortType): unknown {
   switch (type) {
@@ -282,6 +287,12 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
       if (!result) continue
       matched = true
       if (!entry.config.passThrough) consumed = true
+      if (result instanceof TriggerReply) {
+        trace.steps.push({ nodeId: id, ms: Date.now() - started, outputs: { reply: result.reply } })
+        step(id, 'ok')
+        await session.reply(result.reply)
+        continue
+      }
       outputs.set(id, result)
       trace.steps.push({ nodeId: id, exec: 'next', ms: Date.now() - started, outputs: result })
       step(id, 'ok')

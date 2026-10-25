@@ -13,7 +13,18 @@ export interface NodePorts {
   outputs: PortDef[]
 }
 
-/** Same rule as the server: classify-style nodes get one exec output per configured label. */
+// Same as the server's command signatures: `<name>` required, `[name]` optional, `:number` a number, `...` the rest.
+const SIGNATURE_ARG = /<([^<>\s:.]+)(?::(\w+))?(\.\.\.)?>|\[([^[\]\s:.]+)(?::(\w+))?(\.\.\.)?\]/g
+
+export function parseSignature(usage: string | undefined) {
+  if (!usage) return []
+  return [...usage.matchAll(SIGNATURE_ARG)].map((match) => {
+    const optional = match[4] !== undefined
+    return { name: optional ? match[4] : match[1], type: ((optional ? match[5] : match[2]) === 'number' ? 'number' : 'text') as PortType, optional }
+  })
+}
+
+/** Same rule as the server: classify-style nodes get one exec output per configured label, command nodes one output per argument. */
 export function portsOf(type: NodeTypeInfo, config: Record<string, any>): NodePorts {
   let execOut = type.execOut
   if (type.execOutFrom) {
@@ -21,7 +32,13 @@ export function portsOf(type: NodeTypeInfo, config: Record<string, any>): NodePo
     const names = Array.isArray(list) ? list.filter((item): item is string => typeof item === 'string' && !!item.trim()) : []
     execOut = [...new Set([...names.map((name) => name.trim()), ...(type.execOutFrom.extra ?? [])])]
   }
-  return { execIn: type.execIn, execOut, inputs: type.inputs, outputs: type.outputs }
+  let outputs = type.outputs
+  if (type.outputsFrom?.format === 'signature') {
+    const taken = new Set(outputs.map((port) => port.name))
+    const extra = parseSignature(String(config?.[type.outputsFrom.key] ?? '')).filter((arg) => !taken.has(arg.name) && !!taken.add(arg.name))
+    outputs = [...outputs, ...extra.map((arg) => ({ name: arg.name, type: arg.type, title: arg.name }))]
+  }
+  return { execIn: type.execIn, execOut, inputs: type.inputs, outputs }
 }
 
 export function parseHandle(handle: string | null | undefined) {
@@ -31,8 +48,8 @@ export function parseHandle(handle: string | null | undefined) {
 }
 
 // Same syntax as the server: `{{<node id>.<output>}}`, `{{sys.<name>}}`, `{{chat|user|flow|run.<variable>}}`.
-const REF = /\{\{\s*([\w-]+)\.([\w-]+)\s*\}\}/g
-const WHOLE_REF = /^\s*\{\{\s*([\w-]+)\.([\w-]+)\s*\}\}\s*$/
+const REF = /\{\{\s*([\w-]+)\.([\p{L}\p{N}_-]+)\s*\}\}/gu
+const WHOLE_REF = /^\s*\{\{\s*([\w-]+)\.([\p{L}\p{N}_-]+)\s*\}\}\s*$/u
 export const SCOPES = ['chat', 'user', 'flow', 'run']
 
 export const refOf = (head: string, name: string) => `{{${head}.${name}}}`

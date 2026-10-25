@@ -14,7 +14,8 @@ let botId: string
 let flowId: string
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-const groupReplies = () => napcat.sent.filter((call) => call.action === 'send_group_msg').map((call) => call.params.message[0].data.text)
+const groupReplies = () => napcat.sent.filter((call) => call.action === 'send_group_msg')
+  .map((call) => call.params.message.find((segment: any) => segment.type === 'text')?.data.text)
 
 async function say(text: string) {
   const before = (await app.call<any[]>('bots.messages', { id: botId, limit: 500 })).length
@@ -150,6 +151,55 @@ describe('flows', () => {
     expect(reply.source).toEqual({ kind: 'flow', flow: 'Ask', node: 'Answer', provider: 'Mock', model: 'mock-model' })
     await app.call('flows.delete', { id: flow.id })
     expect((await app.call<any[]>('flows.list')).map((item) => item.id)).not.toContain(flow.id)
+  })
+})
+
+describe('commands', () => {
+  const checkin = (name: string, extra: Record<string, unknown> = {}) => ({
+    name,
+    bots: [botId],
+    nodes: [
+      { id: 'cmd', type: 'trigger.command', config: { name: 'checkin', aliases: ['签到'], description: 'Daily check-in', ...extra } },
+      { id: 'say', type: 'action.reply', config: { text: 'checked in {{cmd.rest}}' } },
+    ],
+    edges: [{ source: 'cmd', sourceHandle: 'exec:next', target: 'say', targetHandle: 'exec' }],
+  })
+
+  it('lists command nodes and answers /help from them', async () => {
+    const flow = await app.call('flows.create', checkin('Check-in'))
+    const { commands } = await app.call('commands.list', { bot: botId })
+    expect(commands).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'checkin', aliases: ['签到'], botId, source: { kind: 'flow', id: flow.id, name: 'Check-in', nodeId: 'cmd' } }),
+      expect.objectContaining({ name: 'help', source: expect.objectContaining({ kind: 'builtin' }) }),
+    ]))
+    await say('/help')
+    expect(groupReplies().at(-1)).toBe('可用指令：\n/checkin（/签到） —— Daily check-in\n/help —— 列出所有指令')
+    await say('/签到 now')
+    expect(groupReplies().at(-1)).toBe('checked in now')
+    await app.call('flows.delete', { id: flow.id })
+  })
+
+  it('warns when two flows register the same command on a bot', async () => {
+    const first = await app.call('flows.create', checkin('First'))
+    const second = await app.call('flows.create', checkin('Second', { name: '签到' }))
+    expect(second.issues).toEqual([expect.objectContaining({ severity: 'warning', nodeId: 'cmd', message: expect.stringContaining('the flow "First"') })])
+    const { conflicts } = await app.call('commands.list', { bot: botId })
+    expect(conflicts.map((item: any) => item.name)).toContain('签到')
+    await app.call('flows.delete', { id: second.id })
+    expect((await app.call('flows.get', { id: first.id })).issues).toEqual([])
+    await app.call('flows.delete', { id: first.id })
+  })
+
+  it('uses the bot\'s prefixes and turns the built-in help off without a restart', async () => {
+    const flow = await app.call('flows.create', checkin('Prefixed'))
+    await app.call('bots.update', { id: botId, commands: { prefixes: ['#'], help: false } })
+    expect((await app.call('bots.get', { id: botId })).status).toBe('online')
+    await say('#checkin')
+    expect(groupReplies().at(-1)).toBe('checked in ')
+    expect((await app.call('commands.list', { bot: botId })).commands.map((entry: any) => entry.name)).not.toContain('help')
+    expect((await app.call('flows.test', { id: flow.id, text: '#签到 x' })).trace.replies).toEqual(['checked in x'])
+    await app.call('bots.update', { id: botId, commands: { prefixes: ['/'], help: true } })
+    await app.call('flows.delete', { id: flow.id })
   })
 })
 

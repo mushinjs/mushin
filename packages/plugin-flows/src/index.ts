@@ -1,12 +1,12 @@
 import { type ChannelInfo, Context, MushinError, randomId, seg, Service, toJsonSchema, type UserInfo, z } from '@mushin/core'
-import type { BotEvent } from '@mushin/plugin-bots'
+import { type BotEvent, type CommandEntry, commandMatches, splitCommand } from '@mushin/plugin-bots'
 import type {} from '@mushin/plugin-providers'
 import type {} from '@mushin/plugin-storage'
 import { FlowError, runFlow, type RunEnvironment } from './engine'
 import { compile, type CompiledFlow, layout } from './graph'
-import { builtinNodes, scheduleTarget } from './nodes'
+import { builtinNodes, commandName, scheduleTarget } from './nodes'
 import { migrateDataEdges } from './refs'
-import type { FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowNode, FlowSession, LlmLike, NodeType, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
+import type { FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, FlowSession, LlmLike, NodeType, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
 
 export * from './engine'
 export * from './graph'
@@ -102,6 +102,8 @@ export interface TestInput {
   userName?: string
   private?: boolean
   mentioned?: boolean
+  /** Pretend the sender is one of the bot's admins. */
+  admin?: boolean
   nodeId?: string
   /** Pretend an adapter event happened, e.g. `{ name: 'group_increase', data: { group_id: 1, user_id: 2 } }`. */
   event?: { name: string; data?: Record<string, any> }
@@ -229,6 +231,7 @@ export class FlowService extends Service {
       configSchema: type.config ? toJsonSchema(type.config) : undefined,
       inputs: type.inputs ?? [],
       outputs: type.outputs ?? [],
+      outputsFrom: type.outputsFrom,
       platforms: type.platforms,
       execIn: type.kind === 'action',
       execOut: type.kind === 'trigger' ? ['next'] : type.kind === 'action' ? type.execOut ?? ['next'] : [],
@@ -259,14 +262,70 @@ export class FlowService extends Service {
   }
 
   describe(doc: FlowDocument) {
-    return { ...doc, issues: this.compiledOf(doc).issues }
+    return { ...doc, issues: this.issuesOf(doc) }
+  }
+
+  /** Validation issues, plus commands that another flow or plugin on the same bot also registers. */
+  private issuesOf(doc: FlowDocument): FlowIssue[] {
+    return [...this.compiledOf(doc).issues, ...this.commandIssues(doc)]
+  }
+
+  /** The commands a flow's command nodes register on a bot; skipped nodes register none. */
+  private commandsOf(doc: FlowDocument, botId: string): CommandEntry[] {
+    return doc.nodes.flatMap((node) => {
+      if (node.type !== 'trigger.command' || node.skip) return []
+      const config = this.compiledOf(doc).nodes.get(node.id)?.config ?? node.config
+      const name = commandName(config.name)
+      if (!name) return []
+      return [{
+        name,
+        aliases: (Array.isArray(config.aliases) ? config.aliases : []).map(commandName).filter(Boolean),
+        ...(config.description ? { description: String(config.description) } : {}),
+        ...(config.usage ? { usage: String(config.usage) } : {}),
+        ...(config.showInHelp === false ? { hidden: true } : {}),
+        ...(config.permission === 'admin' ? { permission: 'admin' as const } : {}),
+        botId,
+        source: { kind: 'flow' as const, id: doc.id, name: doc.name, nodeId: node.id },
+      }]
+    })
+  }
+
+  /** Commands of the flows that run on a bot, for its `/help` and command list. */
+  commandsOn(botId: string) {
+    return this.flowsOf(botId).flatMap((compiled) => this.commandsOf(compiled.doc, botId))
+  }
+
+  private commandIssues(doc: FlowDocument): FlowIssue[] {
+    const bots = this.home.get('bots')
+    const issues: FlowIssue[] = []
+    const seen = new Set<string>()
+    for (const botId of doc.bots) {
+      const mine = this.commandsOf(doc, botId)
+      if (!mine.length) continue
+      // Other flows on the bot, even ones that cannot run yet, and commands from plugins and the bot itself.
+      const others = [
+        ...[...this.docs.values()].filter((other) => other.id !== doc.id && other.bots.includes(botId)).flatMap((other) => this.commandsOf(other, botId)),
+        ...(bots?.commands(botId).filter((entry) => entry.source.kind !== 'flow' && entry.source.kind !== 'builtin') ?? []),
+      ]
+      for (const entry of mine) {
+        const names = [entry.name, ...(entry.aliases ?? [])]
+        const clash = [...mine.filter((item) => item !== entry), ...others].find((other) => names.some((name) => commandMatches(other, name)))
+        if (!clash) continue
+        const key = `${entry.source.nodeId}|${clash.source.id}|${clash.source.nodeId ?? ''}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        const where = clash.source.kind === 'flow' && clash.source.id === doc.id ? 'another node of this flow' : clash.source.kind === 'flow' ? `the flow "${clash.source.name}"` : `the plugin ${clash.source.name}`
+        issues.push({ severity: 'warning', nodeId: entry.source.nodeId, message: `The command /${entry.name} is also registered by ${where} on the same bot; only one of them answers` })
+      }
+    }
+    return issues
   }
 
   list() {
     return [...this.docs.values()]
       .sort((a, b) => a.createdAt - b.createdAt)
       .map((doc) => {
-        const { issues } = this.compiledOf(doc)
+        const issues = this.issuesOf(doc)
         return {
           id: doc.id,
           name: doc.name,
@@ -570,6 +629,12 @@ export class FlowService extends Service {
     const channel: ChannelInfo = input.event
       ? (data.group_id ? { type: 'group', id: String(data.group_id) } : { type: 'private', id: user.id })
       : input.private ? { type: 'private', id: user.id } : { type: 'group', id: 'test' }
+    const prefixes = (() => {
+      try {
+        return this.home.get('bots')?.get(doc.bots[0])?.commands?.prefixes
+      } catch {}
+    })()
+    const command = text ? splitCommand(text, prefixes?.length ? prefixes : undefined) : undefined
     const session: FlowSession = {
       text,
       segments: text ? [seg.text(text)] : [],
@@ -577,6 +642,8 @@ export class FlowService extends Service {
       channel,
       isDirect: channel.type === 'private',
       mentioned: !!input.mentioned,
+      ...(command ? { command } : {}),
+      isAdmin: !!input.admin,
       send: async () => undefined,
       reply: async () => undefined,
     }
@@ -598,7 +665,7 @@ export class FlowService extends Service {
       },
     })
     this.record(result.trace)
-    return { matched: result.matched, consumed: result.consumed, trace: result.trace, issues: compiled.issues }
+    return { matched: result.matched, consumed: result.consumed, trace: result.trace, issues: this.issuesOf(doc) }
   }
 
   runs(id: string, limit = TRACE_LIMIT) {
@@ -675,6 +742,7 @@ export class FlowService extends Service {
         userName: z.string().optional(),
         private: z.boolean().optional().describe('Pretend the message is a private chat'),
         mentioned: z.boolean().optional().describe('Pretend the message @-mentions the bot'),
+        admin: z.boolean().optional().describe('Pretend the sender is a bot admin, for admin-only commands'),
         nodeId: z.string().optional().describe('Stop after this node: runs the path up to it and nothing after, to check one step'),
       }),
       handler: ({ id, ...input }) => {

@@ -15,6 +15,9 @@ export function apply(ctx: Context) {
     if (!consumed) return next()
   }, { priority: PRIORITY })
 
+  // Command nodes of the flows on this bot show in its /help and command list.
+  ctx.bot.defineCommands(() => ctx.flows.commandsOn(ctx.bot.id))
+
   // Event triggers (a member joins, a poke…) and schedule triggers run through this bot.
   ctx.flows.useRunner(ctx)
   ctx.bot.onEvent((event) => {

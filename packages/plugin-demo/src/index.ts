@@ -34,7 +34,6 @@ export const Config = z.object({
     '使用沙盒适配器的机器人：始终在线，在它的实时对话里你就是测试用户。取消勾选会删除它。',
   ),
   flows: z.object({
-    menu: toggle('Command menu (/help)', '命令菜单（/help）'),
     command: toggle('Command reply (/ping, /echo)', '命令回复（/ping、/echo）'),
     keyword: toggle('Keyword trigger (good morning)', '关键词触发（早上好）'),
     branch: toggle('Condition branch (/score)', '条件分支（/score）'),
@@ -79,7 +78,13 @@ async function reconcile(ctx: Context, config: Config) {
   const botExists = (id?: string) => !!id && ctx.bots.list().some((item) => item.id === id)
   const removedBot = !config.bot && botExists(state.bot) ? state.bot : undefined
   if (config.bot && !botExists(state.bot)) {
-    const record = await ctx.bots.create({ name: '演示机器人', adapter: { type: 'demo', config: {} }, provider: state.provider })
+    const record = await ctx.bots.create({
+      name: '演示机器人',
+      adapter: { type: 'demo', config: {} },
+      provider: state.provider,
+      // The built-in /help lists the demo flows' commands.
+      commands: { helpTitle: '我是演示机器人，可以试试这些指令：' },
+    })
     state.bot = record.id
     logger.info('created the demo bot')
   } else if (config.bot && state.bot) {
@@ -92,6 +97,14 @@ async function reconcile(ctx: Context, config: Config) {
   }
 
   const flowIds = new Set(ctx.flows.list().map((item) => item.id))
+  // Sample flows that no longer exist, such as the old /help menu now that /help is built in.
+  const stored = state.flows as Record<string, string | undefined>
+  for (const key of Object.keys(stored)) {
+    if (key in demoFlows) continue
+    const id = stored[key]
+    if (id && flowIds.has(id)) await ctx.flows.remove(id)
+    delete stored[key]
+  }
   for (const key of Object.keys(demoFlows) as DemoFlowKey[]) {
     const id = state.flows[key]
     const exists = !!id && flowIds.has(id)
