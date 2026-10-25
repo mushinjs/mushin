@@ -1427,7 +1427,13 @@ function selectFromLogs(nodeId: string) {
 }
 
 /** The flow's adapter: the saved one, or the only adapter there is. */
-const currentAdapter = computed(() => adapter.value || (data.adapters.length === 1 ? data.adapters[0].id : undefined))
+/** The flow's adapter: the one set on it, else the one its bots all use, else the only one installed. */
+const currentAdapter = computed(() => {
+  if (adapter.value) return adapter.value
+  const used = new Set(bots.value.map((id) => data.bots.find((bot) => bot.id === id)?.adapter.type).filter(Boolean))
+  if (used.size === 1) return [...used][0]
+  return data.adapters.length === 1 ? data.adapters[0].id : undefined
+})
 const adapterName = (id: string) => localize(data.adapters.find((item) => item.id === id)?.displayName, locale.value) || id
 const adapterOptions = computed(() => data.adapters.map((item) => ({ label: localize(item.displayName, locale.value) || item.id, value: item.id })))
 function setAdapter(value: string | null) {
