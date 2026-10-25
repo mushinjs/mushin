@@ -699,14 +699,36 @@ async function loadCompeting() {
     return
   }
   try {
-    const result = await call<{ triggers: TriggerSlot[]; plugins: string[] }>('flows.triggers', { bot: orderBot.value, flow: flowId.value, node: node.id })
+    // Unsaved edits are previewed: the server orders the triggers as if the flow were saved like this.
+    const { nodes: draftNodes, edges: draftEdges, bots: draftBots } = toDoc()
+    const result = await call<{ triggers: TriggerSlot[]; plugins: string[] }>('flows.triggers', {
+      bot: orderBot.value,
+      flow: flowId.value,
+      node: node.id,
+      ...(dirty.value ? { draft: { nodes: draftNodes, edges: draftEdges, bots: draftBots } } : {}),
+    })
     competing.value = result.triggers
     pluginsAfter.value = result.plugins
+    // The canvas marks this trigger by the same preview, so the two agree before saving too.
+    const own = result.triggers.find((slot) => slot.flowId === flowId.value && slot.nodeId === node.id)
+    const bot = orderBot.value
+    blockedSlots.value = [
+      ...blockedSlots.value.filter((slot) => !(slot.nodeId === node.id && slot.botId === bot)),
+      ...(own?.blockedBy ? [{ ...own, botId: bot }] : []),
+    ]
   } catch {
     competing.value = []
   }
 }
 watch(() => [selectedId.value, orderBot.value, selectedIsTrigger.value], loadCompeting)
+
+// Follow edits (a new priority, a renamed command…) while the order list is open, a moment after typing stops.
+let orderTimer: number | undefined
+watch(() => (selectedIsTrigger.value ? signature() : ''), (next, previous) => {
+  if (!next || next === previous) return
+  window.clearTimeout(orderTimer)
+  orderTimer = window.setTimeout(loadCompeting, 300)
+})
 
 /** Moves a trigger up or down among the competing ones by rewriting their priorities. */
 async function moveTrigger(index: number, by: -1 | 1) {
@@ -1864,7 +1886,7 @@ watch(narrow, (value) => {
                       </ol>
                       <p class="muted small">
                         {{ pluginsAfter.length ? t('flows.afterFlows', { plugins: pluginsAfter.map((name) => name.replace(/^@mushin\/bot-plugin-/, '')).join('、') }) : t('flows.afterFlowsNone') }}
-                        <template v-if="dirty"> {{ t('flows.orderSavedOnly') }}</template>
+                        <template v-if="dirty"> {{ t('flows.orderPreview') }}</template>
                       </p>
                     </template>
                     <p v-else class="muted small">{{ t('flows.orderNoBots') }}</p>

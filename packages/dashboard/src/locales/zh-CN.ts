@@ -375,7 +375,7 @@ const zhCN: typeof en = {
     moveDown: '延后',
     afterFlows: '之后交给：{plugins}',
     afterFlowsNone: '流程之后没有机器人插件处理这条消息。',
-    orderSavedOnly: '顺序按已保存的流程计算。',
+    orderPreview: '正在预览未保存的修改，保存后生效。',
     orderNoBots: '给流程选择机器人后，这里会显示在该机器人上的顺序。',
     blockedTag: '不会生效',
     maybeBlocked: '可能被挡住',

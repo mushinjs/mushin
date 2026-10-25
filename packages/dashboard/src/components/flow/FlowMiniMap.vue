@@ -42,15 +42,16 @@ const boxes = computed(() => getNodes.value
   })))
 
 /**
- * What the minimap shows: the canvas extent. Only when zoomed out so far that the screen shows
- * more than the whole canvas does it grow to take in the screen too.
+ * What the minimap shows: the canvas extent, centered. Where the screen is wider or taller than
+ * the canvas (common for a short, wide flow), that side grows to the screen's size, still
+ * centered on the canvas, so the area depends only on the zoom and never on where the view is.
  */
 const area = computed(() => {
   const [[x0, y0], [x1, y1]] = props.extent
   const v = visible.value
-  const left = Math.min(x0, v.x)
-  const top = Math.min(y0, v.y)
-  return { x: left, y: top, width: Math.max(1, Math.max(x1, v.x + v.width) - left), height: Math.max(1, Math.max(y1, v.y + v.height) - top) }
+  const width = Math.max(1, x1 - x0, v.width)
+  const height = Math.max(1, y1 - y0, v.height)
+  return { x: (x0 + x1) / 2 - width / 2, y: (y0 + y1) / 2 - height / 2, width, height }
 })
 
 /** The dimmed area: the whole extent with the visible window cut out. */
