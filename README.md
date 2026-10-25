@@ -54,7 +54,7 @@ pnpm demo
 
 This starts an instance wired to a mock NapCat and a mock LLM, with a provider, two bots, some chat traffic and an Agent conversation already in place. Sign in with the token `demo`.
 
-To try things inside your own instance instead, enable **Demo** (`@mushin/plugin-demo`) on the **Plugins** page. It adds a *Demo (offline)* provider type that answers without an API key, a *Demo sandbox* bot adapter that is always online, and a *Wait for reply* flow node. Nothing is created until you tick it in the plugin's settings:
+To try things inside your own instance instead, enable **Demo** (`@mushin/plugin-demo`) on the **Plugins** page. It adds a *Demo (offline)* provider type that answers without an API key, a *Demo sandbox* bot adapter that is always online, and a sandbox bot to try flows on. Nothing is created until you tick it in the plugin's settings:
 
 - **Create the demo provider**: a provider of the offline type.
 - **Create the demo bot**: a sandbox bot. In its live conversation view you play the test user: what you send is received by the bot as the test user's message (start with `@` to mention the bot). The Agent can do the same with the `demo.say` action.
@@ -108,13 +108,18 @@ Open **Flows** in the dashboard and create a flow from a template, or ask the Ag
 
 | Category | Nodes |
 | --- | --- |
-| Triggers | On message (any, mentions, private, group), Keyword, Pattern (regular expression) |
-| Logic | If, Compare (branches on true / false), Random chance, Cooldown, Wait |
+| Triggers | On message (any, mentions, private, group), Keyword, Pattern (regular expression), On schedule (daily, every N minutes, cron) |
+| Event triggers (OneBot) | Member joined, Member left, Poke, Message recalled (with the recalled text), Mute changed, Admin changed, File uploaded, New friend, Friend request, Group request / invitation, Group info changed (card, name, title, essence, reactions), Group honor / lucky king, Any OneBot event |
+| Logic | If, Compare (branches on true / false), Random chance, Cooldown, Wait, Wait for reply |
 | Data | Text (with `{a}` `{b}` `{c}` `{user}` `{message}`), Message info, Get variable, Set variable, Add to number |
 | AI | Ask the LLM, Classify intent (one branch per label) |
-| Actions | Reply |
+| Actions | Reply, Send to chat |
+| Group management (OneBot) | Mute, Mute everyone, Remove member, Set admin, Set member card, Set special title, Rename group, Post announcement, Essence message, Group check-in, Leave group |
+| Platform API (OneBot) | Recall message, Get message, Send forward message, Poke, React with emoji, Like profile, Handle request, Member info, User info, Group info, Sender role, Call OneBot API (any OneBot 11 or NapCat action) |
 
-Pick the bots that run a flow at the top of the editor; Mushin.js turns on the flows bot plugin for them. When a flow's trigger matches, the message stops there, so the bot's other plugins, such as LLM chat, don't answer it too. Turn on **Let other plugins answer too** on the trigger to change that. The **Logs** bar under the canvas sends a made-up message through the saved flow without sending anything to a chat (AI nodes do call the LLM) and lists every step with its input and output, as a table or JSON. **Execute step** on a node, or ▶ on its card, runs the same test but stops after that node. Recent live runs appear there too; pick one to highlight its path on the canvas.
+OneBot nodes call NapCat through the bot running the flow and continue on `ok` or `failed`, with the error as an output, so a missing permission does not stop the run. **Wait for reply** holds the run until the next message in the chat (up to an hour; waiting does not count toward the 60-second run limit), and the awaited message does not start other flows. Event and schedule runs reply in the chat the event happened in, or the one set on the schedule trigger.
+
+Pick the bots that run a flow at the top of the editor; Mushin.js turns on the flows bot plugin for them. When a flow's trigger matches, the message stops there, so the bot's other plugins, such as LLM chat, don't answer it too. Turn on **Let other plugins answer too** on the trigger to change that. The **Logs** bar under the canvas sends a made-up message, event or schedule tick through the saved flow without sending anything to a chat or calling NapCat (AI nodes do call the LLM; the platform calls the run would make are listed) and lists every step with its input and output, as a table or JSON. **Execute step** on a node, or ▶ on its card, runs the same test but stops after that node. Recent live runs appear there too; pick one to highlight its path on the canvas.
 
 Variables live in memory and reset when Mushin.js restarts.
 
