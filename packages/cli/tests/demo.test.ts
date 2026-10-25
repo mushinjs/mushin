@@ -8,7 +8,7 @@ const PACKAGE = '@mushin/plugin-demo'
 const allOn = {
   provider: true,
   bot: true,
-  flows: { menu: true, command: true, keyword: true, branch: true, cooldown: true, wait: true, llm: true, classify: true },
+  flows: { command: true, keyword: true, branch: true, cooldown: true, wait: true, llm: true, classify: true },
 }
 
 const outgoing = async () => (await app.call<any[]>('bots.messages', { id: botId, limit: 500 }))
@@ -56,13 +56,22 @@ describe('demo plugin', () => {
     botId = bots[0].id
     await waitFor(async () => (await app.call('bots.get', { id: botId })).status === 'online')
     const flows = await app.call<any[]>('flows.list')
-    expect(flows).toHaveLength(8)
+    expect(flows).toHaveLength(7)
     for (const flow of flows) expect(flow).toMatchObject({ bots: [botId], errors: 0, warnings: 0 })
   })
 
   it('greets with /help so the chat shows up', async () => {
     const reply = await waitFor(async () => (await outgoing())[0])
-    expect(reply).toContain('/quiz')
+    expect(reply).toContain('我是演示机器人，可以试试这些指令：')
+    expect(reply).toContain('/quiz（/答题） —— 答一道题（30 秒内回复）')
+    expect(reply).toContain('/score <分数:number> —— 判断分数是否及格')
+  })
+
+  it('lists the demo commands with their flows', async () => {
+    const { commands, conflicts } = await app.call('commands.list', { bot: botId })
+    expect(commands.map((entry: any) => entry.name).sort()).toEqual(['ai', 'checkin', 'echo', 'help', 'ping', 'quiz', 'score', '客服'])
+    expect(commands.find((entry: any) => entry.name === 'score').source).toMatchObject({ kind: 'flow', name: '演示：条件分支', nodeId: 'score' })
+    expect(conflicts).toEqual([])
   })
 
   it('answers commands, keywords and branches', async () => {
@@ -71,6 +80,8 @@ describe('demo plugin', () => {
     expect(await say('大家早上好')).toBe('Demo user，早上好！☀️ 今天也要元气满满。')
     expect(await say('/score 85')).toBe('85 分，及格了 🎉')
     expect(await say('/score 30')).toBe('30 分，还没及格，继续加油 💪')
+    expect(await say('/score abc')).toBe('用法：/score <分数:number>')
+    expect(await say('/签到', { userId: '10009', userName: 'Eve' })).toBe('签到成功！Eve 现在有 10 积分。')
   })
 
   it('counts per user and cools down', async () => {
@@ -102,7 +113,7 @@ describe('demo plugin', () => {
   it('deletes what gets unchecked, and everything when disabled', async () => {
     await app.call('plugins.configure', { id: 'demo', config: { ...allOn, flows: { ...allOn.flows, llm: false } } })
     const names = (await app.call<any[]>('flows.list')).map((flow) => flow.name)
-    expect(names).toHaveLength(7)
+    expect(names).toHaveLength(6)
     expect(names).not.toContain('演示：大模型回复')
 
     await app.call('plugins.disable', { id: 'demo' })

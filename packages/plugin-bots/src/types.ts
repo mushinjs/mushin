@@ -1,3 +1,4 @@
+import type { CommandSettings } from './commands'
 import type { ChannelInfo, LocalizedText, Plugin, Provenance, Segment, UserInfo, z } from '@mushin/core'
 
 export type BotStatus = 'offline' | 'connecting' | 'online' | 'error'
@@ -16,6 +17,8 @@ export interface BotRecord {
   plugins: BotPluginEntry[]
   /** Default provider id for this bot's LLM plugins. */
   provider?: string
+  /** Command prefixes, the built-in `/help` and admins. */
+  commands?: CommandSettings
   createdAt: number
 }
 

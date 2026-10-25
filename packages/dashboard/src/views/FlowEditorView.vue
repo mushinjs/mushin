@@ -308,6 +308,54 @@ async function updateSelected(patch: Partial<CanvasNodeData>) {
   updateNodeInternals([node.id])
 }
 
+const COMMAND = 'trigger.command'
+const KEYWORD = 'trigger.keyword'
+const unprefixed = (text: string) => text.trim().replace(/^\/+/, '')
+
+/**
+ * Config edits from the settings form. A keyword node given a keyword that starts with `/` becomes
+ * a command node named after it, the other keywords becoming aliases; the node keeps its id, so references to its `rest` output still work.
+ */
+function updateConfig(config: Record<string, any>) {
+  const node = selected.value
+  if (!node) return
+  const keywords: string[] = Array.isArray(config.keywords) ? config.keywords.map((item: unknown) => String(item).trim()) : []
+  const first = keywords.find((item) => item.length > 1 && item.startsWith('/')) ?? ''
+  const command = types.value.get(COMMAND)
+  if (node.data!.typeId === KEYWORD && command && first) {
+    updateSelected({
+      typeId: COMMAND,
+      config: {
+        ...schemaDefaults(command.configSchema),
+        name: unprefixed(first),
+        aliases: [...new Set(keywords.map(unprefixed))].filter((item) => item && item !== unprefixed(first)),
+        passThrough: !!config.passThrough,
+      },
+    })
+    message.info(t('flows.convertedToCommand', { name: `/${unprefixed(first)}` }))
+    return
+  }
+  updateSelected({ config: clone(config) })
+}
+
+/** The command name field, shown with its `/`. Taking the `/` away turns the node back into a keyword node. */
+function updateCommandName(value: string) {
+  const node = selected.value
+  if (!node) return
+  const config = node.data!.config
+  const keyword = types.value.get(KEYWORD)
+  if (value.trim() && !value.trim().startsWith('/') && keyword) {
+    const aliases: string[] = Array.isArray(config.aliases) ? config.aliases : []
+    updateSelected({
+      typeId: KEYWORD,
+      config: { ...schemaDefaults(keyword.configSchema), keywords: [value.trim(), ...aliases], mode: 'startsWith', passThrough: !!config.passThrough },
+    })
+    message.info(t('flows.convertedToKeyword'))
+    return
+  }
+  updateSelected({ config: { ...config, name: unprefixed(value) } })
+}
+
 function deleteSelected() {
   const id = selectedId.value
   if (!id) return
@@ -1323,11 +1371,17 @@ watch(narrow, (value) => {
                     </NForm>
                     <p class="muted small vars-hint">{{ t('flows.varsHint', refExamples) }}</p>
                   </template>
+                  <NForm v-if="selected.data!.typeId === COMMAND" label-placement="top" size="small">
+                    <NFormItem :label="t('flows.commandName')" :feedback="t('flows.commandNameHint')">
+                      <NInput :value="`/${selected.data!.config.name ?? ''}`" @update:value="updateCommandName" />
+                    </NFormItem>
+                  </NForm>
                   <SchemaForm
                     v-if="selectedInfo.configSchema"
                     :model-value="selected.data!.config"
                     :schema="selectedInfo.configSchema"
-                    @update:model-value="(config: Record<string, any>) => updateSelected({ config: clone(config) })"
+                    :hidden="selected.data!.typeId === COMMAND ? ['name'] : []"
+                    @update:model-value="updateConfig"
                   />
                   <NAlert v-for="(issue, index) in issuesByNode.get(selected.id) ?? []" :key="index" :type="issue.severity" :show-icon="false" class="issue">
                     {{ issue.message }}

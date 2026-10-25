@@ -2,6 +2,10 @@ import {
   type ChannelInfo, type Content, Context, type MessageRecord, type Provenance, type Segment, segmentsToText,
   Service, toSegments,
 } from '@mushin/core'
+import {
+  type CommandDef, type CommandEntry, commandMatches, DEFAULT_PREFIXES, parseArgs, type ParsedCommand, parseSignature, splitCommand,
+  usageReply,
+} from './commands'
 import type { BotEvent, BotRecord, BotStatus, IncomingMessage, SourcedContent, Transport } from './types'
 
 export type Sendable = Content | SourcedContent
@@ -23,7 +27,20 @@ export interface MiddlewareOptions {
 export interface BotHooks {
   record(record: Omit<MessageRecord, 'id' | 'type' | 'platforms'>): MessageRecord
   status(bot: Bot): void
+  /** Every command registered on this bot, from flows, plugins and the built-in help. */
+  commands?(bot: Bot): CommandEntry[]
+  /** A message ran a registered command. */
+  commandCalled?(bot: Bot, entry: CommandEntry, session: Session): void
+  /** The answer to a built-in command such as `/help`. */
+  builtinCommand?(bot: Bot, entry: CommandEntry): string | undefined
 }
+
+export type CommandHandler = (session: Session, args: Record<string, string | number>, command: ParsedCommand) => Promise<unknown> | unknown
+
+/** Replies from built-in commands such as `/help` are attributed to the bots plugin. */
+const BUILTIN_PLUGIN = 'bots'
+/** Built-in commands answer after flows (priority 10) and before plugins with the default priority. */
+const BUILTIN_PRIORITY = 5
 
 function isSourced(value: Sendable): value is SourcedContent {
   return typeof value === 'object' && value !== null && !Array.isArray(value) && !('type' in value)
@@ -33,6 +50,7 @@ function isSourced(value: Sendable): value is SourcedContent {
 export class Session {
   /** Name of the plugin whose middleware is handling this session; replies are attributed to it. */
   plugin?: string
+  private parsed?: { value: ParsedCommand | undefined }
 
   constructor(public bot: Bot, public record: MessageRecord) {}
 
@@ -55,6 +73,18 @@ export class Session {
   /** True when the message @-mentions this bot. */
   get mentioned() {
     return this.segments.some((s) => s.type === 'at' && String(s.data.qq) === this.bot.selfId)
+  }
+
+  /** The command this message runs, such as `/score 85`, split by the bot's prefixes. */
+  get command(): ParsedCommand | undefined {
+    // Read once when the message arrives, before plugin views of the session exist, so they share it.
+    this.parsed ??= { value: this.bot.parseCommand(this.text) }
+    return this.parsed.value
+  }
+
+  /** True when the sender is one of the bot's admins, who may run admin-only commands. */
+  get isAdmin() {
+    return !!this.bot.record.commands?.admins?.includes(this.user.id)
   }
 
   /** Plain text with mentions of this bot removed. */
@@ -98,6 +128,8 @@ export class Bot extends Service {
   private transport?: Transport
   private middlewares: MiddlewareEntry[] = []
   private eventHandlers = new Set<(event: BotEvent) => void>()
+  private ownCommands = new Set<{ def: CommandDef; plugin: string }>()
+  private commandProviders = new Set<() => CommandEntry[]>()
 
   constructor(ctx: Context, config: { record: BotRecord; hooks: BotHooks }) {
     super(ctx, 'bot')
@@ -159,6 +191,69 @@ export class Bot extends Service {
     }, 'bot.middleware()')
   }
 
+  get prefixes() {
+    const prefixes = this.record.commands?.prefixes?.filter(Boolean)
+    return prefixes?.length ? prefixes : DEFAULT_PREFIXES
+  }
+
+  /** Splits text into a command by this bot's prefixes, with the registered command it names. */
+  parseCommand(text: string): ParsedCommand | undefined {
+    const parsed = splitCommand(text, this.prefixes)
+    if (!parsed) return
+    const entry = this.hooks.commands?.(this).find((item) => commandMatches(item, parsed.name))
+    return entry ? { ...parsed, entry } : parsed
+  }
+
+  /** Commands that plugins of this bot registered with `bot.command()` or `bot.defineCommands()`. */
+  localCommands(): CommandEntry[] {
+    const entries: CommandEntry[] = [...this.ownCommands].map(({ def, plugin }) => ({ ...def, botId: this.id, source: { kind: 'plugin', id: plugin, name: plugin } }))
+    for (const provider of this.commandProviders) {
+      try {
+        entries.push(...provider())
+      } catch (error) {
+        this.ctx.logger('bot').warn('listing commands failed: %s', error)
+      }
+    }
+    return entries
+  }
+
+  /**
+   * Lists commands that a plugin answers itself, e.g. the command nodes of the flows on this bot,
+   * so they show in `/help` and the command list. Removed when the calling plugin unloads.
+   */
+  defineCommands(provider: () => CommandEntry[]) {
+    return this.ctx.effect(() => {
+      this.commandProviders.add(provider)
+      return () => this.commandProviders.delete(provider)
+    }, 'bot.defineCommands()')
+  }
+
+  /**
+   * Registers a command, e.g. `bot.command({ name: 'roll', usage: '[sides:number]' }, handler)`.
+   * It shows in `/help`, and the handler gets the parsed arguments; when they do not fit the
+   * usage, the bot replies with how to write the command.
+   */
+  command(def: CommandDef, handler: CommandHandler) {
+    const ctx = this.ctx
+    const entry = { def, plugin: ctx.fiber.name }
+    const args = parseSignature(def.usage)
+    ctx.effect(() => {
+      this.ownCommands.add(entry)
+      return () => this.ownCommands.delete(entry)
+    }, `bot.command(${def.name})`)
+    return this.middleware(async (session, next) => {
+      const parsed = session.command
+      if (!parsed || !commandMatches(def, parsed.name)) return next()
+      if (def.permission === 'admin' && !session.isAdmin) return
+      const values = parseArgs(args, parsed.rest)
+      if (!values.ok) {
+        await session.reply(usageReply(def, parsed.prefix))
+        return
+      }
+      await handler(session, values.values, parsed)
+    })
+  }
+
   /** Listens for adapter events that are not messages (notices, requests). */
   onEvent(handler: (event: BotEvent) => void) {
     return this.ctx.effect(() => {
@@ -191,7 +286,26 @@ export class Bot extends Service {
       source: { kind: 'user' },
     })
     const session = new Session(this, record)
+    const entry = session.command?.entry
+    if (entry) {
+      try {
+        this.hooks.commandCalled?.(this, entry, session)
+      } catch {}
+    }
     const chain = [...this.middlewares]
+    if (entry?.source.kind === 'builtin') {
+      // After flows, so a flow that answers the same text (say a keyword trigger on /help) still wins.
+      const builtin: MiddlewareEntry = {
+        plugin: BUILTIN_PLUGIN,
+        priority: BUILTIN_PRIORITY,
+        callback: async (view) => {
+          const answer = this.hooks.builtinCommand?.(this, entry)
+          if (answer !== undefined) await view.reply(answer)
+        },
+      }
+      const index = chain.findIndex((item) => item.priority < builtin.priority)
+      chain.splice(index < 0 ? chain.length : index, 0, builtin)
+    }
     const run = async (index: number): Promise<void> => {
       const entry = chain[index]
       if (!entry) return

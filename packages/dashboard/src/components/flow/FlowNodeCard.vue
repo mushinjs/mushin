@@ -16,7 +16,11 @@ const editor = useFlowEditor()
 
 const info = computed(() => editor.types.value.get(props.data.typeId))
 const ports = computed(() => (info.value ? portsOf(info.value, props.data.config) : undefined))
-const typeTitle = computed(() => localize(info.value?.title, locale.value) || props.data.typeId)
+const typeTitle = computed(() => {
+  // A command node reads as the command it answers, e.g. "Command /checkin".
+  const command = props.data.typeId === 'trigger.command' && props.data.config?.name ? ` /${props.data.config.name}` : ''
+  return `${localize(info.value?.title, locale.value) || props.data.typeId}${command}`
+})
 const issues = computed(() => editor.issuesByNode.value.get(props.id) ?? [])
 const issueLevel = computed(() => (issues.value.some((issue) => issue.severity === 'error') ? 'error' : issues.value.length ? 'warning' : undefined))
 const run = computed(() => editor.highlight.value.nodes.get(props.id))

@@ -1,5 +1,6 @@
 import { type ChannelInfo, field, segmentsToText, z } from '@mushin/core'
-import { FlowError } from './engine'
+import { commandMatches, parseArgs, parseSignature, splitCommand, usageReply } from '@mushin/plugin-bots'
+import { FlowError, TriggerReply } from './engine'
 import type { FlowSession, LlmLike, NodeType, VariableScope } from './types'
 
 const passThrough = z.boolean().default(false).meta(field(
@@ -100,6 +101,62 @@ const keywordTrigger: NodeType = {
       const rest = index >= 0 ? (text.slice(0, index) + text.slice(index + keyword.length)).trim() : ''
       return { ...sessionValues(session), keyword, rest }
     }
+  },
+}
+
+/** A command name as stored: without a leading prefix or spaces. */
+export const commandName = (name: unknown) => String(name ?? '').trim().replace(/^[/#!！]+/, '')
+
+const commandOutputs = [
+  ...sessionOutputs,
+  { name: 'command', type: 'text' as const, title: { en: 'Command', 'zh-CN': '指令' } },
+  { name: 'rest', type: 'text' as const, title: { en: 'Text after command', 'zh-CN': '指令后的内容' } },
+  { name: 'args', type: 'any' as const, title: { en: 'All arguments', 'zh-CN': '全部参数' } },
+]
+const commandOutputNames = new Set(commandOutputs.map((port) => port.name))
+
+export const commandTrigger: NodeType = {
+  kind: 'trigger',
+  type: 'trigger.command',
+  category: 'trigger',
+  title: { en: 'Command', 'zh-CN': '指令' },
+  description: {
+    en: 'Starts on a command such as /checkin. Commands are listed in the bot\'s /help; arguments become outputs.',
+    'zh-CN': '收到 /签到 这样的指令时开始。指令会列在机器人的 /help 里，参数会成为输出。',
+  },
+  config: z.object({
+    name: z.string().min(1).default('hello').meta(field('Command', 'Without the prefix, e.g. checkin', {
+      'zh-CN': { title: '指令名', description: '不带前缀，例如 签到' },
+    })),
+    aliases: z.array(z.string()).default([]).meta(field('Aliases', 'Other names that run the same command', {
+      'zh-CN': { title: '别名', description: '也能触发这条指令的其他名字' },
+    })),
+    description: z.string().default('').meta(field('Description', 'Shown in /help', { 'zh-CN': { title: '说明', description: '显示在 /help 里' } })),
+    usage: z.string().default('').meta(field(
+      'Arguments',
+      'e.g. <score:number> [note]: <> required, [] optional, :number a number; the last text argument takes the rest. Each argument becomes an output of the same name.',
+      { 'zh-CN': { title: '参数', description: '例如 <分数:number> [备注]：<> 必填，[] 可选，:number 表示数字，最后一个文本参数接收剩余内容。每个参数都会成为同名输出。' } },
+    )),
+    usageHint: z.boolean().default(true).meta(field('Reply with usage on wrong arguments', undefined, {
+      'zh-CN': { title: '参数不对时回复用法' },
+    })),
+    showInHelp: z.boolean().default(true).meta(field('Show in /help', undefined, { 'zh-CN': { title: '显示在 /help 里' } })),
+    permission: z.enum(['all', 'admin']).default('all').meta(field('Who can use it', 'admin: only the admins set on the bot', {
+      'zh-CN': { title: '谁可以使用', description: 'admin：仅机器人设置里的管理员' },
+    })),
+    passThrough,
+  }),
+  outputs: commandOutputs,
+  outputsFrom: { key: 'usage', format: 'signature' },
+  match({ config, session }) {
+    const parsed = session.command ?? splitCommand(session.text)
+    const name = commandName(config.name)
+    if (!parsed || !name || !commandMatches({ name, aliases: (config.aliases as string[]).map(commandName) }, parsed.name)) return
+    if (config.permission === 'admin' && !session.isAdmin) return
+    const args = parseArgs(parseSignature(config.usage), parsed.rest)
+    if (!args.ok) return config.usageHint ? new TriggerReply(usageReply({ name, usage: config.usage }, parsed.prefix)) : undefined
+    const named = Object.fromEntries(Object.entries(args.values).filter(([key]) => !commandOutputNames.has(key)))
+    return { ...sessionValues(session), command: name, rest: parsed.rest, args: args.values, ...named }
   },
 }
 
@@ -641,7 +698,7 @@ const scheduleTrigger: NodeType = {
 }
 
 export const builtinNodes: NodeType[] = [
-  messageTrigger, keywordTrigger, regexTrigger, scheduleTrigger,
+  messageTrigger, keywordTrigger, commandTrigger, regexTrigger, scheduleTrigger,
   ifNode, compareNode, randomNode, cooldownNode, delayNode, waitReplyNode,
   templateNode, messageNode, getVarNode, setVarNode, incrementNode,
   chatNode, classifyNode,

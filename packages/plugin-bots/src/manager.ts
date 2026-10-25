@@ -5,6 +5,7 @@ import {
 } from '@mushin/core'
 import type {} from '@mushin/plugin-storage'
 import { Bot, type BotHooks } from './bot'
+import { type CommandEntry, commandConflicts, type CommandSettings, commandMatches, helpText } from './commands'
 import type { AdapterType, BotPluginEntry, BotRecord, BotStatus } from './types'
 
 declare module '@mushin/core' {
@@ -18,6 +19,7 @@ declare module '@mushin/core' {
     'bots/status'(status: BotStatusInfo): void
     'bots/message'(record: MessageRecord): void
     'bots/log'(line: BotLogLine): void
+    'bots/command'(call: CommandCall): void
   }
 }
 
@@ -31,6 +33,19 @@ export interface BotLogLine {
   tag: LogTag
   text: string
 }
+
+/** A message ran a registered command. */
+export interface CommandCall {
+  botId: string
+  name: string
+  source: CommandEntry['source']
+  userId: string
+  channel: ChannelInfo
+  at: number
+}
+
+/** Lists commands a plugin provides on a bot, e.g. the command nodes of the flows attached to it. */
+export type CommandProvider = (botId: string) => CommandEntry[]
 
 export interface BotStatusInfo {
   id: string
@@ -63,6 +78,16 @@ const adapterInput = z.object({
 })
 
 const idInput = z.object({ id: z.string().describe('Bot id from bots.list') })
+const commandSettingsInput = z.object({
+  prefixes: z.array(z.string().min(1)).optional().describe('Command prefixes; default ["/"]'),
+  help: z.boolean().optional().describe('Answer /help with the list of commands; on unless false'),
+  helpTitle: z.string().optional().describe('First line of the /help menu'),
+  admins: z.array(z.string()).optional().describe('User ids allowed to run admin-only commands'),
+})
+
+/** Answers `/help` when nothing else on the bot registers a command called help. */
+const HELP_COMMAND = { name: 'help', description: '列出所有指令' }
+
 const pluginInput = idInput.extend({ package: z.string().describe('Bot plugin package name from bots.plugins.list') })
 
 /**
@@ -83,6 +108,7 @@ export class BotManager extends Service {
   private logs = new Map<string, BotLogLine[]>()
   /** Sequence numbers of recent bot log lines; still recognized after the bot that wrote them stops. */
   private botLogSns = new Set<number>()
+  private commandProviders = new Set<CommandProvider>()
 
   constructor(ctx: Context) {
     super(ctx, 'bots')
@@ -214,7 +240,7 @@ export class BotManager extends Service {
     return result.data as Record<string, any>
   }
 
-  async create(input: { name: string; adapter: { type: string; config: Record<string, any> }; plugins?: { package: string; config?: Record<string, any> }[]; enabled?: boolean; provider?: string }) {
+  async create(input: { name: string; adapter: { type: string; config: Record<string, any> }; plugins?: { package: string; config?: Record<string, any> }[]; enabled?: boolean; provider?: string; commands?: CommandSettings }) {
     const id = randomId()
     const record: BotRecord = {
       id,
@@ -223,6 +249,7 @@ export class BotManager extends Service {
       adapter: { type: input.adapter.type, config: this.validateAdapter(input.adapter.type, input.adapter.config) },
       plugins: [],
       provider: input.provider,
+      ...(input.commands ? { commands: input.commands } : {}),
       createdAt: Date.now(),
     }
     for (const item of input.plugins ?? []) {
@@ -237,8 +264,9 @@ export class BotManager extends Service {
     return this.describe(record)
   }
 
-  async update(id: string, patch: { name?: string; adapter?: { type: string; config: Record<string, any> }; provider?: string | null }) {
+  async update(id: string, patch: { name?: string; adapter?: { type: string; config: Record<string, any> }; provider?: string | null; commands?: CommandSettings }) {
     const record = this.get(id)
+    if (patch.commands !== undefined) record.commands = { ...record.commands, ...patch.commands }
     if (patch.name !== undefined) record.name = patch.name
     if (patch.provider !== undefined) record.provider = patch.provider ?? undefined
     if (patch.adapter) {
@@ -251,7 +279,9 @@ export class BotManager extends Service {
     }
     await this.save()
     this.logger.info('updated bot %s', this.label(record))
-    if (record.enabled) await this.start(id).catch(() => {})
+    // Command settings are read on every message, so changing only them needs no restart.
+    const restart = patch.name !== undefined || patch.adapter !== undefined || patch.provider !== undefined
+    if (record.enabled && restart) await this.start(id).catch(() => {})
     return this.describe(record)
   }
 
@@ -308,6 +338,13 @@ export class BotManager extends Service {
           else this.logger.info('bot %s is %s', this.label(record), bot.status)
         }
         this.emitStatus(id)
+      },
+      commands: (bot) => this.commands(bot.id),
+      commandCalled: (bot, entry, session) => {
+        this.home.emit('bots/command', { botId: bot.id, name: entry.name, source: entry.source, userId: session.user.id, channel: session.channel, at: Date.now() })
+      },
+      builtinCommand: (bot, entry) => {
+        if (entry.name === HELP_COMMAND.name) return helpText(this.commands(bot.id), bot.record.commands)
       },
     }
     this.runtimes.set(id, runtime)
@@ -440,6 +477,43 @@ export class BotManager extends Service {
     runtime.plugins.get(entry.package)?.dispose()
     runtime.pluginErrors.delete(entry.package)
     runtime.plugins.set(entry.package, runtime.ctx.plugin(plugin, entry.config))
+  }
+
+  // ---- commands ----
+
+  /** Adds commands to every bot's list. Removed when the calling plugin unloads. */
+  defineCommands(provider: CommandProvider) {
+    return this.ctx.effect(() => {
+      this.commandProviders.add(provider)
+      return () => this.commandProviders.delete(provider)
+    }, 'bots.defineCommands()')
+  }
+
+  /** Commands registered on one bot: from command providers such as flows, its plugins, and the built-in help. */
+  commands(botId: string): CommandEntry[] {
+    const record = this.records.find((item) => item.id === botId)
+    if (!record) return []
+    const entries: CommandEntry[] = []
+    for (const provider of this.commandProviders) {
+      try {
+        entries.push(...provider(botId))
+      } catch (error) {
+        this.logger.warn('listing commands failed: %s', error)
+      }
+    }
+    entries.push(...(this.runtimes.get(botId)?.bot?.localCommands() ?? []))
+    if (record.commands?.help !== false && !entries.some((entry) => commandMatches(entry, HELP_COMMAND.name))) {
+      entries.push({ ...HELP_COMMAND, botId, source: { kind: 'builtin', id: 'help', name: 'help' } })
+    }
+    return entries
+  }
+
+  /** Commands of one bot or of every bot, with names that more than one source registers. */
+  commandList(botId?: string) {
+    if (botId) this.get(botId)
+    const entries = (botId ? [botId] : this.records.map((record) => record.id)).flatMap((id) => this.commands(id))
+    const conflicts = commandConflicts(entries).map((item) => ({ botId: item.botId, name: item.name, sources: item.entries.map((entry) => entry.source) }))
+    return { commands: entries, conflicts }
   }
 
   // ---- logs ----
@@ -589,20 +663,30 @@ export class BotManager extends Service {
           .describe('Bot plugins to enable right away, e.g. @mushin/bot-plugin-llm-chat'),
         enabled: z.boolean().optional(),
         provider: z.string().optional().describe('Default provider id for this bot\'s LLM plugins'),
+        commands: commandSettingsInput.optional(),
       }),
       handler: (input) => this.create(input),
     })
 
     yield actions.define({
       name: 'bots.update',
-      description: 'Rename a bot, change its adapter connection or default provider. Restarts the bot if it is enabled.',
+      description: 'Rename a bot, change its adapter connection, default provider or command settings. Restarts the bot if it is enabled, unless only command settings change.',
       risk: 'write',
       input: idInput.extend({
         name: z.string().min(1).optional(),
         adapter: adapterInput.optional(),
         provider: z.string().nullable().optional(),
+        commands: commandSettingsInput.optional().describe('Command prefixes, the built-in /help and admins; changing only these does not restart the bot'),
       }),
       handler: ({ id, ...patch }) => this.update(id, patch),
+    })
+
+    yield actions.define({
+      name: 'commands.list',
+      description: 'List the commands (such as /help, /checkin) each bot answers, with where each comes from: a flow\'s command node, a bot plugin or the built-in help. Also lists names that two sources register on the same bot.',
+      risk: 'read',
+      input: z.object({ bot: z.string().optional().describe('Bot id from bots.list; all bots when omitted') }),
+      handler: ({ bot }) => this.commandList(bot),
     })
 
     yield actions.define({

@@ -4,9 +4,10 @@ import type { FlowEdge, FlowNode, FlowSession, NodeType, PortDef, VariableScope 
 /**
  * Variable references: `{{<node id>.<output>}}` reads an output of a node that ran earlier,
  * `{{sys.<name>}}` the incoming message, and `{{chat|user|flow|run.<name>}}` a stored variable.
+ * Output and variable names may be in any script, e.g. a command argument `{{n1.分数}}`.
  */
-export const REF_PATTERN = /\{\{\s*([\w-]+)\.([\w-]+)\s*\}\}/g
-const WHOLE_REF = /^\s*\{\{\s*([\w-]+)\.([\w-]+)\s*\}\}\s*$/
+export const REF_PATTERN = /\{\{\s*([\w-]+)\.([\p{L}\p{N}_-]+)\s*\}\}/gu
+const WHOLE_REF = /^\s*\{\{\s*([\w-]+)\.([\p{L}\p{N}_-]+)\s*\}\}\s*$/u
 
 export const SCOPES: VariableScope[] = ['chat', 'user', 'flow', 'run']
 

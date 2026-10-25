@@ -1,4 +1,5 @@
 import { z } from '@mushin/core'
+import { parseSignature } from '@mushin/plugin-bots'
 import { refsIn, SCOPES } from './refs'
 import type { FlowDocument, FlowIssue, FlowNode, NodeType, PortDef, PortType } from './types'
 
@@ -12,16 +13,30 @@ export interface NodePorts {
   outputs: PortDef[]
 }
 
+/** Outputs a node's config adds, e.g. one per argument of a command; names already taken are left out. */
+export function configOutputs(type: NodeType, config: Record<string, any> | undefined): PortDef[] {
+  const outputs = type.outputs ?? []
+  if (type.outputsFrom?.format !== 'signature') return outputs
+  const taken = new Set(outputs.map((port) => port.name))
+  const extra: PortDef[] = []
+  for (const arg of parseSignature(String(config?.[type.outputsFrom.key] ?? ''))) {
+    if (taken.has(arg.name)) continue
+    taken.add(arg.name)
+    extra.push({ name: arg.name, type: arg.type, title: arg.name })
+  }
+  return [...outputs, ...extra]
+}
+
 /** The ports a node has with a given config; classify nodes grow one exec output per label. */
 export function portsOf(type: NodeType, config: Record<string, any> | undefined): NodePorts {
-  if (type.kind === 'trigger') return { execIn: false, execOut: ['next'], inputs: [], outputs: type.outputs ?? [] }
+  if (type.kind === 'trigger') return { execIn: false, execOut: ['next'], inputs: [], outputs: configOutputs(type, config) }
   let execOut = type.execOut ?? ['next']
   if (type.execOutFrom) {
     const list = config?.[type.execOutFrom.key]
     const names = Array.isArray(list) ? list.filter((item): item is string => typeof item === 'string' && !!item.trim()) : []
     execOut = [...names.map((name) => name.trim()), ...(type.execOutFrom.extra ?? [])]
   }
-  return { execIn: true, execOut: [...new Set(execOut)], inputs: type.inputs ?? [], outputs: type.outputs ?? [] }
+  return { execIn: true, execOut: [...new Set(execOut)], inputs: type.inputs ?? [], outputs: configOutputs(type, config) }
 }
 
 /** Whether an output of one type suits an input of another. Text accepts numbers and booleans. */

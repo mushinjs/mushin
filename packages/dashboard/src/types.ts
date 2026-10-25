@@ -103,11 +103,42 @@ export interface Bot {
   adapter: { type: string; config: Record<string, any> }
   plugins: BotPluginEntry[]
   provider?: string
+  commands?: CommandSettings
   createdAt: number
   status: BotStatus
   error?: string
   selfId?: string
   selfName?: string
+}
+
+export interface CommandSettings {
+  prefixes?: string[]
+  help?: boolean
+  helpTitle?: string
+  admins?: string[]
+}
+
+export interface CommandSource {
+  kind: 'flow' | 'plugin' | 'builtin'
+  id: string
+  name: string
+  nodeId?: string
+}
+
+export interface CommandEntry {
+  name: string
+  aliases?: string[]
+  description?: string
+  usage?: string
+  hidden?: boolean
+  permission?: 'all' | 'admin'
+  botId: string
+  source: CommandSource
+}
+
+export interface CommandList {
+  commands: CommandEntry[]
+  conflicts: { botId: string; name: string; sources: CommandSource[] }[]
 }
 
 export interface BotStatusInfo {
@@ -244,6 +275,8 @@ export interface NodeTypeInfo {
   execIn: boolean
   execOut: string[]
   execOutFrom?: { key: string; extra?: string[] }
+  /** More outputs read from config: `signature` makes one output per command argument. */
+  outputsFrom?: { key: string; format: 'signature' }
   /** Adapter ids the node works with; omitted means every adapter. */
   platforms?: string[]
 }

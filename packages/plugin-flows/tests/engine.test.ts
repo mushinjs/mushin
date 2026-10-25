@@ -364,3 +364,48 @@ describe('layout', () => {
     expect(x.n2).toBeLessThan(x.n3)
   })
 })
+
+describe('command trigger', () => {
+  const scoreFlow = () => flow([
+    { id: 'score', type: 'trigger.command', config: { name: 'score', aliases: ['分数'], usage: '<分数:number> [备注]' } },
+    { id: 'say', type: 'action.reply', config: { text: '{{score.分数}} / {{score.备注}} / {{score.command}}' } },
+  ], [['score', 'exec:next', 'say', 'exec']])
+
+  it('adds an output per argument, with names in any script', () => {
+    const compiled = compile(scoreFlow(), types)
+    expect(compiled.issues).toEqual([])
+    expect(compiled.nodes.get('score')!.ports!.outputs.map((port) => port.name)).toEqual(expect.arrayContaining(['rest', 'args', '分数', '备注']))
+  })
+
+  it('parses arguments by the signature, by name or alias, ignoring case', async () => {
+    expect(replyText((await run(scoreFlow(), '/Score 85 很好 加油')).sent)).toEqual(['85 / 很好 加油 / score'])
+    expect(replyText((await run(scoreFlow(), '/分数 60')).sent)).toEqual(['60 /  / score'])
+    expect((await run(scoreFlow(), '/scores 60')).matched).toBe(false)
+    expect((await run(scoreFlow(), 'score 60')).matched).toBe(false)
+  })
+
+  it('replies with the usage when the arguments do not fit, and does not run', async () => {
+    const result = await run(scoreFlow(), '/score abc')
+    expect(result).toMatchObject({ matched: true, consumed: true })
+    expect(replyText(result.sent)).toEqual(['用法：/score <分数:number> [备注]'])
+    expect(result.trace.steps.map((step) => step.nodeId)).toEqual(['score'])
+  })
+
+  it('uses the prefix the bot parsed, and keeps admin-only commands to admins', async () => {
+    const doc = flow([
+      { id: 'kick', type: 'trigger.command', config: { name: 'kick', permission: 'admin' } },
+      { id: 'say', type: 'action.reply', config: { text: 'kicked' } },
+    ], [['kick', 'exec:next', 'say', 'exec']])
+    const runAs = async (isAdmin: boolean) => {
+      const { value, sent } = session('#kick')
+      const result = await runFlow(compile(doc, types), {
+        session: { ...value, command: { prefix: '#', name: 'kick', rest: '' }, isAdmin },
+        vars: memoryVars().forChat('c'),
+        logger,
+      })
+      return { ...result, sent }
+    }
+    expect((await runAs(false)).matched).toBe(false)
+    expect(replyText((await runAs(true)).sent)).toEqual(['kicked'])
+  })
+})

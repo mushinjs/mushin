@@ -58,7 +58,7 @@ To try things inside your own instance instead, enable **Demo** (`@mushin/plugin
 
 - **Create the demo provider**: a provider of the offline type.
 - **Create the demo bot**: a sandbox bot. In its live conversation view you play the test user: what you send is received by the bot as the test user's message (start with `@` to mention the bot). The Agent can do the same with the `demo.say` action.
-- **Sample flows**: command menu (`/help`), command reply (`/ping`, `/echo`), keyword trigger, condition branch (`/score 85`), cooldown and counter (`/checkin`), wait for a reply with a timeout (`/quiz`), LLM reply (`/ai`) and intent classification (`/客服`). They run on the demo bot when it exists.
+- **Sample flows**: command reply (`/ping`, `/echo`), keyword trigger, condition branch (`/score 85`), cooldown and counter (`/checkin`), wait for a reply with a timeout (`/quiz`), LLM reply (`/ai`) and intent classification (`/客服`). They run on the demo bot when it exists, and the bot's built-in `/help` lists their commands.
 
 Unticking an item deletes it, and disabling the plugin deletes everything it created. Edit a sample flow freely, but untick it before you disable the plugin if you want to keep a copy.
 
@@ -108,7 +108,7 @@ Open **Flows** in the dashboard and create a flow from a template, or ask the Ag
 
 | Category | Nodes |
 | --- | --- |
-| Triggers | On message (any, mentions, private, group), Keyword, Pattern (regular expression), On schedule (daily, every N minutes, cron) |
+| Triggers | On message (any, mentions, private, group), Keyword, Command, Pattern (regular expression), On schedule (daily, every N minutes, cron) |
 | Event triggers (OneBot) | Member joined, Member left, Poke, Message recalled (with the recalled text), Mute changed, Admin changed, File uploaded, New friend, Friend request, Group request / invitation, Group info changed (card, name, title, essence, reactions), Group honor / lucky king, Any OneBot event |
 | Logic | If, Compare (branches on true / false), Random chance, Cooldown, Wait, Wait for reply |
 | Data | Text (with `{a}` `{b}` `{c}` `{user}` `{message}`), Message info, Get variable, Set variable, Add to number |
@@ -122,6 +122,12 @@ OneBot nodes call NapCat through the bot running the flow and continue on `ok` o
 Pick the flow's adapter at the top of the editor (it is chosen for you when only one is installed); nodes made for another adapter, such as the OneBot ones on a Discord flow, are greyed out in the node list, and hovering one says why. Right-click the canvas, a node, a selection or a connection for more: add a node where you clicked, copy and paste (Ctrl+C / Ctrl+V, also between flows), duplicate (Ctrl+D), group selected nodes into a dashed frame that moves and copies as one (Ctrl+G; Ctrl+Shift+G ungroups), or insert a node into a connection. **Skip** a node from the same menu, or with the switch in its settings, to keep it on the canvas without running it: a skipped trigger never fires, and a skipped step passes straight on to its first exit. A group can be collapsed into one box with the button on its frame, and double-clicking the box expands it again. Dropping a connection on empty canvas lists the nodes that can connect there. Then pick the bots that run the flow; Mushin.js turns on the flows bot plugin for them. When a flow's trigger matches, the message stops there, so the bot's other plugins, such as LLM chat, don't answer it too. Turn on **Let other plugins answer too** on the trigger to change that. The **Logs** bar under the canvas sends a made-up message, event or schedule tick through the saved flow without sending anything to a chat or calling NapCat (AI nodes do call the LLM; the platform calls the run would make are listed) and lists every step with its input and output, as a table or JSON. **Execute step** on a node, or ▶ on its card, runs the same test but stops after that node. Recent live runs appear there too; pick one to highlight its path on the canvas. While a run is going, the edge into the running node is a moving dashed line, and edges turn green or red as each node succeeds or fails.
 
 Variables live in memory and reset when Mushin.js restarts.
+
+### Commands
+
+A **Command** trigger answers a command such as `/checkin`: a name, aliases, a description and optional arguments written as a signature, for example `<score:number> [note]` (`<>` required, `[]` optional, `:number` a number, the last text argument takes the rest). Each argument becomes an output of the same name, so `{{n1.score}}` reads it; names may be in any script, such as `{{n1.分数}}`. When the arguments do not fit, the bot replies with the usage instead of running the flow. Typing a keyword that starts with `/` into a Keyword trigger turns it into a Command trigger (it keeps its id, so `{{n1.rest}}` still works), and removing the `/` from a command turns it back.
+
+Every bot has a command list on its **Commands** tab: command nodes from the flows on the bot, commands that bot plugins register with `ctx.bot.command()`, and the built-in `/help`, which answers with the list unless a flow or plugin handles `/help` itself. The same tab sets the bot's prefixes (default `/`; `#` or `!` work too), the first line of `/help`, and the admins allowed to run admin-only commands. Two sources registering the same name on one bot are flagged in the list and as a warning on the flow. The `commands.list` action gives the Agent the same list.
 
 ## Development
 
