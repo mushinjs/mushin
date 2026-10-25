@@ -3,7 +3,7 @@ import { ChevronDownOutline, ChevronUpOutline, OptionsOutline, PlayOutline, Tras
 import { NButton, NCheckbox, NIcon, NInput, NPopover, NRadioButton, NRadioGroup, NSelect, NSpace, NTag } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { categoryColors } from '../../flow'
+import { categoryColors, eventSamples } from '../../flow'
 import type { RunTrace, Segment, TraceStep } from '../../types'
 import { formatTime, pretty, segmentsText } from '../../utils'
 import { useFlowEditor } from './context'
@@ -14,11 +14,22 @@ export interface TestInput {
   userName: string
   private: boolean
   mentioned: boolean
+  /** What starts the test run. */
+  mode: 'message' | 'event' | 'schedule'
+  eventName: string
+  /** The event as JSON text, edited by hand. */
+  eventData: string
+  /** Id of the schedule trigger to fire. */
+  schedule: string
+  /** Answers for "wait for reply", one per line. */
+  replies: string
 }
 
 const props = defineProps<{
   runs: RunTrace[]
   testing: boolean
+  /** Schedule triggers in the flow, for schedule test runs. */
+  schedules: { id: string; name: string }[]
   nodeName: (id: string) => string
   nodeType: (id: string) => string | undefined
 }>()
@@ -82,6 +93,21 @@ function showNode(nodeId: string | undefined) {
   if (index >= 0) stepIndex.value = index
 }
 
+const eventOptions = Object.keys(eventSamples).map((name) => ({ label: name, value: name }))
+const scheduleOptions = computed(() => props.schedules.map((item) => ({ label: item.name, value: item.id })))
+
+function pickEvent(name: string) {
+  test.value.eventName = name
+  test.value.eventData = JSON.stringify(eventSamples[name] ?? {}, null, 2)
+}
+
+/** Whether the test has what its mode needs. */
+const ready = computed(() => {
+  if (test.value.mode === 'event') return !!test.value.eventName.trim()
+  if (test.value.mode === 'schedule') return !!test.value.schedule
+  return !!test.value.text.trim()
+})
+
 function focusInput() {
   open.value = true
   input.value?.focus()
@@ -129,6 +155,7 @@ const iconOf = (nodeId: string) => {
       </button>
       <span class="spacer" />
       <NInput
+        v-if="test.mode === 'message'"
         ref="input"
         v-model:value="test.text"
         size="small"
@@ -137,6 +164,25 @@ const iconOf = (nodeId: string) => {
         :placeholder="t('flows.testPlaceholder')"
         @keyup.enter="emit('run')"
       />
+      <NSelect
+        v-else-if="test.mode === 'event'"
+        :value="test.eventName || null"
+        size="small"
+        class="test-text"
+        filterable
+        tag
+        :options="eventOptions"
+        :placeholder="t('flows.testEvent')"
+        @update:value="pickEvent"
+      />
+      <NSelect
+        v-else
+        v-model:value="test.schedule"
+        size="small"
+        class="test-text"
+        :options="scheduleOptions"
+        :placeholder="schedules.length ? t('flows.testSchedule') : t('flows.testNoSchedule')"
+      />
       <NPopover trigger="click" placement="top-end">
         <template #trigger>
           <NButton size="small" quaternary circle :aria-label="t('flows.testOptions')">
@@ -144,9 +190,23 @@ const iconOf = (nodeId: string) => {
           </NButton>
         </template>
         <NSpace vertical size="small" class="test-options">
-          <NInput v-model:value="test.userName" size="small" :placeholder="`${t('flows.testUser')}: Tester`" />
-          <NCheckbox v-model:checked="test.private">{{ t('flows.testPrivate') }}</NCheckbox>
-          <NCheckbox v-model:checked="test.mentioned">{{ t('flows.testMentioned') }}</NCheckbox>
+          <span class="muted small">{{ t('flows.testMode') }}</span>
+          <NRadioGroup v-model:value="test.mode" size="small">
+            <NRadioButton value="message">{{ t('flows.testModeMessage') }}</NRadioButton>
+            <NRadioButton value="event">{{ t('flows.testModeEvent') }}</NRadioButton>
+            <NRadioButton value="schedule">{{ t('flows.testModeSchedule') }}</NRadioButton>
+          </NRadioGroup>
+          <template v-if="test.mode === 'message'">
+            <NInput v-model:value="test.userName" size="small" :placeholder="`${t('flows.testUser')}: Tester`" />
+            <NCheckbox v-model:checked="test.private">{{ t('flows.testPrivate') }}</NCheckbox>
+            <NCheckbox v-model:checked="test.mentioned">{{ t('flows.testMentioned') }}</NCheckbox>
+          </template>
+          <template v-else-if="test.mode === 'event'">
+            <span class="muted small">{{ t('flows.testEventData') }}</span>
+            <NInput v-model:value="test.eventData" type="textarea" size="small" class="mono" :autosize="{ minRows: 4, maxRows: 10 }" />
+          </template>
+          <span class="muted small">{{ t('flows.testReplyLines') }}</span>
+          <NInput v-model:value="test.replies" type="textarea" size="small" :autosize="{ minRows: 1, maxRows: 4 }" />
           <span class="muted small">{{ t('flows.testHint') }}</span>
         </NSpace>
       </NPopover>
@@ -154,7 +214,7 @@ const iconOf = (nodeId: string) => {
         size="small"
         type="primary"
         :loading="testing"
-        :disabled="!test.text.trim()"
+        :disabled="!ready"
         data-agent-target="flows.test"
         @click="emit('run')"
       >
@@ -193,6 +253,12 @@ const iconOf = (nodeId: string) => {
           <template v-if="run.replies.length">
             <div class="replies-title">{{ t('flows.testReplies') }}</div>
             <div v-for="(reply, index) in run.replies" :key="index" class="reply">{{ reply }}</div>
+          </template>
+          <template v-if="run.calls?.length">
+            <div class="replies-title">{{ run.test ? t('flows.testCalls') : t('flows.testCallsLive') }}</div>
+            <div v-for="(item, index) in run.calls" :key="`c${index}`" class="reply call" :class="{ 'is-error': !!item.error }" :title="item.error">
+              <code>{{ item.action }}</code> {{ JSON.stringify(item.params) }}
+            </div>
           </template>
         </div>
 
@@ -388,6 +454,15 @@ const iconOf = (nodeId: string) => {
   font-size: 11px;
   opacity: 0.55;
   white-space: nowrap;
+}
+
+.call code {
+  font-weight: 600;
+}
+
+.mono :deep(textarea) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
 }
 
 .replies-title {

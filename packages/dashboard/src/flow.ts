@@ -64,10 +64,13 @@ export function schemaDefaults(schema: JsonSchema | undefined) {
 
 export const categoryColors: Record<NodeCategory, string> = {
   trigger: '#3b4a8c',
+  event: '#6a4dbd',
   logic: '#d08a00',
   data: '#18a058',
   ai: '#2080f0',
   action: '#d03050',
+  manage: '#c2410c',
+  platform: '#0f8a8a',
 }
 
 export const portColors: Record<PortType, string> = {
@@ -78,7 +81,33 @@ export const portColors: Record<PortType, string> = {
   any: '#8c8c8c',
 }
 
-export const categories: NodeCategory[] = ['trigger', 'logic', 'data', 'ai', 'action']
+export const categories: NodeCategory[] = ['trigger', 'event', 'logic', 'data', 'ai', 'action', 'manage', 'platform']
+
+/**
+ * Sample OneBot events for test runs, shaped like NapCat sends them. Picking one fills the event
+ * JSON, which the user can then edit.
+ */
+export const eventSamples: Record<string, Record<string, any>> = {
+  group_increase: { post_type: 'notice', notice_type: 'group_increase', sub_type: 'approve', group_id: 123456, user_id: 10000, operator_id: 10001 },
+  group_decrease: { post_type: 'notice', notice_type: 'group_decrease', sub_type: 'leave', group_id: 123456, user_id: 10000, operator_id: 10000 },
+  'notify.poke': { post_type: 'notice', notice_type: 'notify', sub_type: 'poke', group_id: 123456, user_id: 10000, target_id: 0 },
+  group_recall: { post_type: 'notice', notice_type: 'group_recall', group_id: 123456, user_id: 10000, operator_id: 10000, message_id: 1 },
+  friend_recall: { post_type: 'notice', notice_type: 'friend_recall', user_id: 10000, message_id: 1 },
+  group_ban: { post_type: 'notice', notice_type: 'group_ban', sub_type: 'ban', group_id: 123456, user_id: 10000, operator_id: 10001, duration: 600 },
+  group_admin: { post_type: 'notice', notice_type: 'group_admin', sub_type: 'set', group_id: 123456, user_id: 10000 },
+  group_upload: { post_type: 'notice', notice_type: 'group_upload', group_id: 123456, user_id: 10000, file: { id: '/abc', name: 'file.zip', size: 1024, busid: 102 } },
+  friend_add: { post_type: 'notice', notice_type: 'friend_add', user_id: 10000 },
+  'request.friend': { post_type: 'request', request_type: 'friend', user_id: 10000, comment: 'hello', flag: 'test-flag' },
+  'request.group': { post_type: 'request', request_type: 'group', sub_type: 'add', group_id: 123456, user_id: 10000, comment: 'hello', flag: 'test-flag' },
+  group_card: { post_type: 'notice', notice_type: 'group_card', group_id: 123456, user_id: 10000, card_new: 'new', card_old: 'old' },
+  'notify.group_name': { post_type: 'notice', notice_type: 'notify', sub_type: 'group_name', group_id: 123456, user_id: 10001, name_new: 'new name' },
+  'notify.title': { post_type: 'notice', notice_type: 'notify', sub_type: 'title', group_id: 123456, user_id: 10000, title: 'title' },
+  essence: { post_type: 'notice', notice_type: 'essence', sub_type: 'add', group_id: 123456, message_id: 1, sender_id: 10000, operator_id: 10001 },
+  group_msg_emoji_like: { post_type: 'notice', notice_type: 'group_msg_emoji_like', group_id: 123456, user_id: 10000, message_id: 1, likes: [{ emoji_id: '76', count: 1 }], is_add: true },
+  'notify.honor': { post_type: 'notice', notice_type: 'notify', sub_type: 'honor', group_id: 123456, user_id: 10000, honor_type: 'talkative' },
+  'notify.lucky_king': { post_type: 'notice', notice_type: 'notify', sub_type: 'lucky_king', group_id: 123456, user_id: 10001, target_id: 10000 },
+  'notify.profile_like': { post_type: 'notice', notice_type: 'notify', sub_type: 'profile_like', operator_id: 10000, operator_nick: 'Tester', times: 1 },
+}
 
 export interface FlowTemplate {
   id: string
