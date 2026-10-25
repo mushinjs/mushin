@@ -380,3 +380,47 @@ export interface RunStep {
   edgeId?: string
   status: 'running' | 'ok' | 'error' | 'skipped'
 }
+
+export interface PerfSample {
+  t: number
+  /** Percent of one CPU core. */
+  cpu: number
+  rss: number
+  heapUsed: number
+  heapTotal: number
+  /** Event loop delay in ms. */
+  loopMean: number
+  loopMax: number
+}
+
+export interface StatsOverview {
+  bots: { online: number; total: number }
+  appPlugins: { enabled: number; total: number }
+  botPlugins: { enabled: number }
+  flows: { total: number; withErrors: number }
+  commands: number
+  providers: { total: number; passed: number }
+  today: { received: number; sent: number; commands: number; flowRuns: number; flowErrors: number; llmCalls: number; llmTokens: number }
+  versions: { mushin?: string; node: string; cordis?: string; plugins: { package: string; enabled: boolean; version?: string }[] }
+  platform: string
+  startedAt: number
+  uptime: number
+  dataBytes: number
+  sample?: PerfSample
+}
+
+export interface StatsSeries {
+  granularity: 'hour' | 'day'
+  series: { key: string; name: string }[]
+  points: { t: number; values: Record<string, number> }[]
+}
+
+export interface StatsTopRow {
+  key: string
+  name: string
+  count: number
+  bot?: string
+  id?: string
+  errors?: number
+  tokens?: number
+}

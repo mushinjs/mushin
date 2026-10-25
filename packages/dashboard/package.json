@@ -18,6 +18,7 @@
     "@vue-flow/controls": "catalog:",
     "@vue-flow/core": "catalog:",
     "@vue-flow/minimap": "catalog:",
+    "echarts": "catalog:",
     "naive-ui": "catalog:",
     "pinia": "catalog:",
     "vue": "catalog:",

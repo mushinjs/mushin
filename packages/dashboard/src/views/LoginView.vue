@@ -28,7 +28,7 @@ async function submit() {
   error.value = ''
   try {
     if (await login(token.value.trim())) {
-      router.replace(typeof route.query.next === 'string' ? route.query.next : '/bots')
+      router.replace(typeof route.query.next === 'string' ? route.query.next : '/overview')
     } else {
       error.value = t('login.wrong')
     }

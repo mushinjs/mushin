@@ -1,0 +1,33 @@
+{
+  "name": "@mushin/plugin-stats",
+  "version": "0.1.0",
+  "description": "Usage statistics and runtime performance for the overview page",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "displayName": {
+      "en": "Statistics",
+      "zh-CN": "统计"
+    },
+    "description": {
+      "en": "Counts messages, commands, flow runs and model usage by hour, and samples CPU and memory for the overview page",
+      "zh-CN": "按小时统计消息、指令、流程运行和模型用量，并采样 CPU 与内存，供总览页使用"
+    }
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-bots": "workspace:*",
+    "@mushin/plugin-flows": "workspace:*",
+    "@mushin/plugin-providers": "workspace:*",
+    "@mushin/plugin-storage": "workspace:*",
+    "cordis": "catalog:"
+  }
+}

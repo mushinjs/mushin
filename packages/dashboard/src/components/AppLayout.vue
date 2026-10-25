@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  ChatbubblesOutline, DocumentTextOutline, ExtensionPuzzleOutline, GitNetworkOutline, KeyOutline, LanguageOutline, LogOutOutline,
+  ChatbubblesOutline, DocumentTextOutline, GridOutline, ExtensionPuzzleOutline, GitNetworkOutline, KeyOutline, LanguageOutline, LogOutOutline,
   MoonOutline, RocketOutline, SparklesOutline, SunnyOutline,
 } from '@vicons/ionicons5'
 import {
@@ -52,6 +52,7 @@ const link = (to: string, label: string) => () => h(RouterLink, { to }, { defaul
 
 const menu = computed<MenuOption[]>(() => [
   ...(!data.ready ? [{ key: '/setup', label: link('/setup', t('nav.setup')), icon: icon(RocketOutline) }] : []),
+  { key: '/overview', label: link('/overview', t('nav.overview')), icon: icon(GridOutline) },
   { key: '/bots', label: link('/bots', t('nav.bots')), icon: icon(ChatbubblesOutline) },
   { key: '/flows', label: link('/flows', t('nav.flows')), icon: icon(GitNetworkOutline) },
   { key: '/providers', label: link('/providers', t('nav.providers')), icon: icon(KeyOutline) },
