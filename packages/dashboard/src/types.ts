@@ -322,6 +322,8 @@ export interface FlowDoc {
   /** Adapter the flow is built for, e.g. `onebot`. */
   adapter?: string
   bots: string[]
+  /** False when the flow is turned off; missing means on. */
+  enabled?: boolean
   nodes: FlowNodeDoc[]
   edges: FlowEdgeDoc[]
   groups?: FlowGroupDoc[]
@@ -336,9 +338,11 @@ export interface FlowSummary {
   description?: string
   adapter?: string
   bots: string[]
+  enabled: boolean
   nodes: number
   errors: number
   warnings: number
+  createdAt: number
   updatedAt: number
 }
 
@@ -397,7 +401,7 @@ export interface StatsOverview {
   bots: { online: number; total: number }
   appPlugins: { enabled: number; total: number }
   botPlugins: { enabled: number }
-  flows: { total: number; withErrors: number }
+  flows: { total: number; enabled: number; withErrors: number }
   commands: number
   providers: { total: number; passed: number }
   today: { received: number; sent: number; commands: number; flowRuns: number; flowErrors: number; llmCalls: number; llmTokens: number }

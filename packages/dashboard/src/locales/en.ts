@@ -260,6 +260,13 @@ export default {
     empty: 'Nothing logged yet. Connection attempts, adapter errors, plugin warnings and why LLM chat skipped a message show up here.',
   },
   flows: {
+    on: 'On',
+    off: 'Off',
+    enabledHint: 'On: the flow answers on its bots. Turning it off keeps the flow and its bots.',
+    disabledHint: 'Off: the flow answers nothing until turned on again.',
+    enabledNow: 'Flow turned on',
+    disabledNow: 'Flow turned off',
+    disabledTag: 'Off',
     convertedToCommand: 'Turned into the command node {name}',
     convertedToKeyword: 'Turned into a keyword node',
     commandName: 'Command',

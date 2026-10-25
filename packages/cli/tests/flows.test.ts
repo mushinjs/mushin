@@ -117,6 +117,18 @@ describe('flows', () => {
     expect(groupReplies().at(-1)).toBe('pong, user42')
   })
 
+  it('keeps a disabled flow and its bots but stops it from answering', async () => {
+    const off = await app.call('flows.update', { id: flowId, enabled: false })
+    expect(off).toMatchObject({ enabled: false, bots: [botId] })
+    expect((await app.call<any[]>('flows.list')).find((flow) => flow.id === flowId)).toMatchObject({ enabled: false })
+    await say('ping')
+    expect(groupReplies().at(-1)).toBe('LLM chat answered')
+    const on = await app.call('flows.update', { id: flowId, enabled: true })
+    expect(on.enabled).toBeUndefined()
+    await say('ping')
+    expect(groupReplies().at(-1)).toBe('pong, user42')
+  })
+
   it('keeps node groups, dropping missing nodes and groups left with one node', async () => {
     const flow = await app.call('flows.create', {
       ...pingPong,

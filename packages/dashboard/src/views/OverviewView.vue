@@ -102,7 +102,7 @@ const cards = computed(() => {
     { key: 'bots', label: t('overview.botsOnline'), value: `${value.bots.online} / ${value.bots.total}`, to: '/bots' },
     { key: 'messages', label: t('overview.messagesToday'), value: `${number(value.today.received)} / ${number(value.today.sent)}`, hint: t('overview.receivedSent') },
     { key: 'tokens', label: t('overview.tokensToday'), value: number(value.today.llmTokens), hint: t('overview.llmCalls', { n: value.today.llmCalls }) },
-    { key: 'flows', label: t('overview.flows'), value: number(value.flows.total), hint: value.flows.withErrors ? t('overview.flowsWithErrors', { n: value.flows.withErrors }) : t('overview.flowRuns', { n: value.today.flowRuns }), danger: value.flows.withErrors > 0, to: '/flows' },
+    { key: 'flows', label: t('overview.flows'), value: value.flows.enabled === value.flows.total ? number(value.flows.total) : `${value.flows.enabled} / ${value.flows.total}`, hint: value.flows.withErrors ? t('overview.flowsWithErrors', { n: value.flows.withErrors }) : t('overview.flowRuns', { n: value.today.flowRuns }), danger: value.flows.withErrors > 0, to: '/flows' },
     { key: 'commands', label: t('overview.commands'), value: number(value.commands), hint: t('overview.commandCalls', { n: value.today.commands }) },
     { key: 'providers', label: t('overview.providers'), value: number(value.providers.total), hint: t('overview.providersPassed', { n: value.providers.passed }), to: '/providers' },
     { key: 'appPlugins', label: t('overview.appPlugins'), value: `${value.appPlugins.enabled} / ${value.appPlugins.total}`, to: '/plugins' },

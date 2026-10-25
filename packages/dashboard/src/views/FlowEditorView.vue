@@ -51,6 +51,8 @@ const groups = ref<FlowGroupDoc[]>([])
 const name = ref('')
 const description = ref('')
 const bots = ref<string[]>([])
+const enabled = ref(true)
+const toggling = ref(false)
 /** The adapter saved on the flow; see `currentAdapter` for the one in effect. */
 const adapter = ref<string>()
 const issues = ref<FlowIssue[]>([])
@@ -159,6 +161,7 @@ function apply(flow: FlowDoc, fit: boolean) {
   name.value = flow.name
   description.value = flow.description ?? ''
   bots.value = [...flow.bots]
+  enabled.value = flow.enabled !== false
   adapter.value = flow.adapter
   issues.value = flow.issues
   nodes.value = flow.nodes.map((node) => ({
@@ -403,6 +406,21 @@ async function save() {
     message.error((error as Error).message)
   } finally {
     saving.value = false
+  }
+}
+
+/** Turning a flow on or off takes effect at once and leaves unsaved edits alone. */
+async function setEnabled(value: boolean) {
+  toggling.value = true
+  try {
+    const result = await call<FlowDoc>('flows.update', { id: flowId.value, enabled: value })
+    enabled.value = result.enabled !== false
+    savedAt = result.updatedAt
+    message.success(value ? t('flows.enabledNow') : t('flows.disabledNow'))
+  } catch (error) {
+    message.error((error as Error).message)
+  } finally {
+    toggling.value = false
   }
 }
 
@@ -1214,6 +1232,10 @@ watch(narrow, (value) => {
         max-tag-count="responsive"
         data-agent-target="flows.bots"
       />
+      <NSwitch :value="enabled" :loading="toggling" :title="enabled ? t('flows.enabledHint') : t('flows.disabledHint')" data-agent-target="flows.enabled" @update:value="setEnabled">
+        <template #checked>{{ t('flows.on') }}</template>
+        <template #unchecked>{{ t('flows.off') }}</template>
+      </NSwitch>
       <NTag v-if="errorCount" type="error" size="small" :bordered="false">{{ t('flows.errorCount', errorCount) }}</NTag>
       <NTag v-else-if="warningCount" type="warning" size="small" :bordered="false">{{ t('flows.warningCount', warningCount) }}</NTag>
       <span class="spacer" />
