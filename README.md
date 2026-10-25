@@ -102,7 +102,7 @@ A chat also gets only one model call at a time; messages that arrive while a rep
 
 ## Conversation flows
 
-Open **Flows** in the dashboard and create a flow from a template, or ask the Agent ("when someone says hello, greet them and count visitors"). A flow is a graph of nodes:
+Open **Flows** in the dashboard (cards or a compact list, grouped by trigger, adapter, bot or when they were last edited, with filters and sorting that stay in the address bar) and create a flow from a template, or ask the Agent ("when someone says hello, greet them and count visitors"). A flow is a graph of nodes:
 
 - **Connections** only say what runs next. Branching nodes have one output per outcome, listed on the right edge of the node, such as `true`/`false` or one per intent label.
 - **Values** move by reference, as in Dify: a node's input, or any text in its settings, can read `{{<node id>.<output>}}` from a node that ran earlier (for example `{{n1.rest}}` or `{{llm.reply}}`), `{{sys.text}}` / `{{sys.user}}` for the incoming message, and `{{chat.<name>}}`, `{{user.<name>}}`, `{{flow.<name>}}` for stored variables. Press **(x)** next to an input to pick one. Flows saved with the older data connections are converted on load.
