@@ -1,4 +1,4 @@
-import type { ChannelInfo, LocalizedText, Plugin, Provenance, Segment, z } from '@mushin/core'
+import type { ChannelInfo, LocalizedText, Plugin, Provenance, Segment, UserInfo, z } from '@mushin/core'
 
 export type BotStatus = 'offline' | 'connecting' | 'online' | 'error'
 
@@ -43,7 +43,7 @@ export interface AdapterType<C = any> {
 export interface IncomingMessage {
   messageId?: string
   channel: ChannelInfo
-  user: { id: string; name?: string }
+  user: UserInfo
   segments: Segment[]
   timestamp?: number
 }
@@ -55,7 +55,18 @@ export interface SourcedContent {
   source?: Provenance
 }
 
+/** A non-message event from an adapter, such as a notice or a request. */
 export interface BotEvent {
+  /** The adapter's event family, e.g. OneBot's `notice` or `request`. */
   type: string
+  /** The event as the platform sent it. */
   data: any
+  /** A normalized name such as `group_increase` or `notify.poke`; flows only see events that have one. */
+  name?: string
+  /** Where the event happened, so flows can reply there. */
+  channel?: ChannelInfo
+  /** Who the event is about. */
+  user?: UserInfo
+  /** The message the event is about, when it is known (e.g. the text of a recalled message). */
+  message?: { id?: string; text: string; segments: Segment[] }
 }

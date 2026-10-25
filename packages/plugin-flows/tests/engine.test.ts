@@ -147,7 +147,7 @@ describe('runFlow', () => {
     expect(full.trace.steps.map(({ nodeId, inputs, outputs }) => ({ nodeId, inputs, outputs }))).toEqual([
       { nodeId: 'n1', inputs: undefined, outputs: expect.objectContaining({ keyword: 'echo', rest: 'hi' }) },
       { nodeId: 'n2', inputs: { a: 'hi' }, outputs: { text: 'user42 said: hi' } },
-      { nodeId: 'n3', inputs: { text: 'user42 said: hi' }, outputs: {} },
+      { nodeId: 'n3', inputs: { text: 'user42 said: hi' }, outputs: { messageId: '' } },
     ])
 
     const toText = await run(doc, 'echo hi', { stopAt: 'n2' })

@@ -1,12 +1,12 @@
-import { Context, MushinError, randomId, seg, Service, toJsonSchema, z } from '@mushin/core'
-import type {} from '@mushin/plugin-bots'
+import { type ChannelInfo, Context, MushinError, randomId, seg, Service, toJsonSchema, type UserInfo, z } from '@mushin/core'
+import type { BotEvent } from '@mushin/plugin-bots'
 import type {} from '@mushin/plugin-providers'
 import type {} from '@mushin/plugin-storage'
-import { runFlow } from './engine'
+import { FlowError, runFlow, type RunEnvironment } from './engine'
 import { compile, type CompiledFlow, layout } from './graph'
-import { builtinNodes } from './nodes'
+import { builtinNodes, scheduleTarget } from './nodes'
 import { migrateDataEdges } from './refs'
-import type { FlowDocument, FlowEdge, FlowNode, FlowSession, LlmLike, NodeType, RunTrace, Variables, VariableScope } from './types'
+import type { FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowNode, FlowSession, LlmLike, NodeType, RunTrace, Variables, VariableScope, WaitOptions } from './types'
 
 export * from './engine'
 export * from './graph'
@@ -28,6 +28,20 @@ declare module '@mushin/core' {
 /** The bot plugin that runs flows; attaching a flow to a bot enables it there. */
 export const RUNNER_PACKAGE = '@mushin/bot-plugin-flows'
 const TRACE_LIMIT = 20
+/** How often schedule triggers are checked. */
+const TICK = 15_000
+/** Node types that were renamed; flows saved with the old name are updated on load. */
+const RENAMED_TYPES: Record<string, string> = { 'demo.waitReply': 'logic.waitReply' }
+
+interface Waiter {
+  botId: string
+  channel: string
+  /** Only this user's message ends the wait; any user's when unset. */
+  userId?: string
+  resolve(session: FlowSession | undefined): void
+}
+
+const channelKey = (channel: ChannelInfo) => `${channel.type}:${channel.id}`
 
 const nodeInput = z.object({
   id: z.string().optional().describe('Unique within the flow; generated when omitted'),
@@ -56,6 +70,19 @@ const flowFields = {
 }
 
 type NodeInput = z.infer<typeof nodeInput>
+
+export interface TestInput {
+  text?: string
+  userName?: string
+  private?: boolean
+  mentioned?: boolean
+  nodeId?: string
+  /** Pretend an adapter event happened, e.g. `{ name: 'group_increase', data: { group_id: 1, user_id: 2 } }`. */
+  event?: { name: string; data?: Record<string, any> }
+  /** Pretend this schedule trigger fired. */
+  schedule?: string
+  replies?: string[]
+}
 type EdgeInput = z.infer<typeof edgeInput>
 
 /** Gives nodes and edges ids, turns old data connections into references and lays out nodes that have no position. */
@@ -102,6 +129,12 @@ export class FlowService extends Service {
   private compiled = new Map<string, CompiledFlow>()
   private traces = new Map<string, RunTrace[]>()
   private variables = new Map<string, Map<string, unknown>>()
+  /** Bot contexts running the flows bot plugin, by bot id; event and schedule runs use them. */
+  private runners = new Map<string, Context>()
+  private waiters = new Set<Waiter>()
+  /** `${flowId}|${nodeId}|${botId}` → when a schedule trigger last fired, and when it started being watched. */
+  private fired = new Map<string, number>()
+  private watched = new Map<string, number>()
 
   constructor(ctx: Context) {
     super(ctx, 'flows')
@@ -114,15 +147,25 @@ export class FlowService extends Service {
       if (doc?.id) this.docs.set(doc.id, doc)
     }
     for (const type of builtinNodes) yield this.defineNode(type)
-    // Flows saved before references replaced data connections.
+    // Flows saved before references replaced data connections, or with renamed node types.
     for (const doc of this.docs.values()) {
       const migrated = migrateDataEdges(doc.nodes, doc.edges, this.types)
-      if (!migrated.changed) continue
-      const next = { ...doc, nodes: migrated.nodes, edges: migrated.edges }
+      const renamed = migrated.nodes.some((node) => RENAMED_TYPES[node.type])
+      if (!migrated.changed && !renamed) continue
+      const nodes = migrated.nodes.map((node) => (RENAMED_TYPES[node.type] ? { ...node, type: RENAMED_TYPES[node.type] } : node))
+      const next = { ...doc, nodes, edges: migrated.edges }
       this.docs.set(doc.id, next)
       await this.home.storage.set(`flows/${doc.id}`, next)
     }
     yield* this.defineActions()
+    yield this.home.effect(() => {
+      const timer = setInterval(() => this.tick(), TICK)
+      return () => clearInterval(timer)
+    }, 'flows schedule')
+    yield this.home.effect(() => () => {
+      for (const waiter of this.waiters) waiter.resolve(undefined)
+      this.waiters.clear()
+    }, 'flows waiters')
   }
 
   // ---- node types ----
@@ -296,48 +339,188 @@ export class FlowService extends Service {
     this.home.emit('flows/run', trace)
   }
 
-  /** Runs every flow attached to the calling bot. Called by the flows bot plugin from the bot's context. */
-  async dispatch(ctx: Context, session: FlowSession) {
+  /** The bot behind a runner context, as nodes see it. */
+  private flowBot(ctx: Context): FlowBot {
+    const bot = ctx.bot
+    return {
+      id: bot.id,
+      platform: bot.platform,
+      selfId: bot.selfId,
+      call: (action, params) => bot.call(action, params),
+      send: (channel, content) => bot.send(channel, content),
+    }
+  }
+
+  private environment(ctx: Context, docId: string, session: FlowSession): RunEnvironment {
     const botId = ctx.bot.id
-    let consumed = false
-    const flows = [...this.docs.values()]
+    return {
+      session,
+      vars: this.varsFor(docId, botId, session),
+      llm: ctx.get('llm') as LlmLike | undefined,
+      provider: ctx.bot.record.provider,
+      logger: ctx.logger('flows'),
+      botId,
+      bot: this.flowBot(ctx),
+      waitForMessage: (options, origin) => this.waitFor(botId, origin, options),
+    }
+  }
+
+  private flowsOf(botId: string) {
+    return [...this.docs.values()]
       .filter((doc) => doc.bots.includes(botId))
       .sort((a, b) => a.createdAt - b.createdAt)
-    for (const doc of flows) {
-      const compiled = this.compiledOf(doc)
-      if (!compiled.runnable) continue
-      const result = await runFlow(compiled, {
-        session,
-        vars: this.varsFor(doc.id, botId, session),
-        llm: ctx.get('llm') as LlmLike | undefined,
-        provider: ctx.bot.record.provider,
-        logger: ctx.logger('flows'),
+      .map((doc) => this.compiledOf(doc))
+      .filter((compiled) => compiled.runnable)
+  }
+
+  /** Called by the flows bot plugin: event and schedule runs on this bot go through `ctx`. */
+  useRunner(ctx: Context) {
+    const botId = ctx.bot.id
+    return ctx.effect(() => {
+      this.runners.set(botId, ctx)
+      return () => {
+        if (this.runners.get(botId) === ctx) this.runners.delete(botId)
+        for (const waiter of this.waiters) {
+          if (waiter.botId !== botId) continue
+          this.waiters.delete(waiter)
+          waiter.resolve(undefined)
+        }
+      }
+    }, 'flows.useRunner()')
+  }
+
+  /** Resolves with the next matching message in the chat, or nothing after `seconds`. */
+  private waitFor(botId: string, origin: FlowSession, options: WaitOptions) {
+    return new Promise<FlowSession | undefined>((resolve) => {
+      const waiter: Waiter = {
         botId,
-      })
+        channel: channelKey(origin.channel),
+        userId: options.who === 'sender' ? origin.user.id : undefined,
+        resolve: (session) => {
+          clearTimeout(timer)
+          this.waiters.delete(waiter)
+          resolve(session)
+        },
+      }
+      const timer = setTimeout(() => waiter.resolve(undefined), options.seconds * 1000)
+      this.waiters.add(waiter)
+    })
+  }
+
+  /** Hands a message to the oldest run waiting for it. Returns true when one took it. */
+  private deliverToWaiter(botId: string, session: FlowSession) {
+    for (const waiter of this.waiters) {
+      if (waiter.botId !== botId || waiter.channel !== channelKey(session.channel)) continue
+      if (waiter.userId !== undefined && waiter.userId !== session.user.id) continue
+      waiter.resolve(session)
+      return true
+    }
+    return false
+  }
+
+  /**
+   * Runs every flow attached to the calling bot. Called by the flows bot plugin from the bot's context.
+   * A message a waiting run is expecting goes to that run only.
+   */
+  async dispatch(ctx: Context, session: FlowSession) {
+    const botId = ctx.bot.id
+    if (this.deliverToWaiter(botId, session)) return { consumed: true }
+    let consumed = false
+    for (const compiled of this.flowsOf(botId)) {
+      const result = await runFlow(compiled, this.environment(ctx, compiled.doc.id, session))
       if (result.matched) this.record(result.trace)
       if (result.consumed) consumed = true
     }
     return { consumed }
   }
 
-  /** Sends a made-up message through a flow without a bot; replies are collected, not sent. */
-  async test(id: string, input: { text: string; userName?: string; private?: boolean; mentioned?: boolean; nodeId?: string }) {
+  /** A session for a run that no message started; sending goes to `channel`. */
+  private botSession(ctx: Context, channel: ChannelInfo | undefined, user: UserInfo | undefined, messageId?: string): FlowSession {
+    const send = (content: Parameters<FlowSession['send']>[0]) => {
+      if (!channel?.id) throw new FlowError('This run has no chat to send to')
+      return ctx.bot.send(channel, content)
+    }
+    return {
+      text: '',
+      segments: [],
+      user: user ?? { id: '' },
+      channel: channel ?? { type: 'private', id: user?.id ?? '' },
+      isDirect: channel?.type !== 'group',
+      mentioned: false,
+      ...(messageId ? { messageId } : {}),
+      send,
+      reply: send,
+    }
+  }
+
+  /** Runs the event triggers of the calling bot's flows. Events without a normalized name are ignored. */
+  async dispatchEvent(ctx: Context, event: BotEvent) {
+    if (!event.name) return
+    const botId = ctx.bot.id
+    const flowEvent: FlowEvent = { name: event.name, data: event.data ?? {}, ...(event.message ? { message: event.message } : {}) }
+    const channel = event.channel ?? (event.user?.id ? { type: 'private' as const, id: event.user.id } : undefined)
+    const session = this.botSession(ctx, channel, event.user, event.message?.id)
+    for (const compiled of this.flowsOf(botId)) {
+      const result = await runFlow(compiled, { ...this.environment(ctx, compiled.doc.id, session), event: flowEvent })
+      if (result.matched) this.record(result.trace)
+    }
+  }
+
+  /** Fires schedule triggers that are due. Runs on a timer; tests call it with a fixed time. */
+  async tick(now = new Date()) {
+    const runs: Promise<unknown>[] = []
+    for (const [botId, ctx] of this.runners) {
+      if (ctx.bot.status !== 'online') continue
+      for (const compiled of this.flowsOf(botId)) {
+        for (const id of compiled.triggers) {
+          const entry = compiled.nodes.get(id)!
+          if (entry.type?.kind !== 'trigger' || entry.type.source !== 'schedule' || !entry.type.due) continue
+          const key = `${compiled.doc.id}|${id}|${botId}`
+          if (!this.watched.has(key)) this.watched.set(key, now.getTime())
+          if (!entry.type.due(entry.config, { now, last: this.fired.get(key), since: this.watched.get(key)! })) continue
+          this.fired.set(key, now.getTime())
+          const target = scheduleTarget(entry.config)
+          const session = this.botSession(ctx, target, undefined)
+          runs.push(runFlow(compiled, { ...this.environment(ctx, compiled.doc.id, session), scheduled: { nodeId: id, now } })
+            .then((result) => result.matched && this.record(result.trace)))
+        }
+      }
+    }
+    await Promise.all(runs)
+  }
+
+  /**
+   * Sends a made-up message (or event, or schedule tick) through a flow without a bot; replies and
+   * platform calls are collected, not made. `replies` answer the flow's waits for a reply, in order.
+   */
+  async test(id: string, input: TestInput) {
     const doc = this.get(id)
     if (input.nodeId && !doc.nodes.some((node) => node.id === input.nodeId)) {
       throw new MushinError('not_found', `No node with id "${input.nodeId}" in this flow`)
     }
+    if (input.schedule && doc.nodes.find((node) => node.id === input.schedule)?.type !== 'trigger.schedule') {
+      throw new MushinError('not_found', `No schedule trigger with id "${input.schedule}" in this flow`)
+    }
     const compiled = this.compiledOf(doc)
-    const user = { id: '10000', name: input.userName || 'Tester' }
+    const text = input.text ?? ''
+    const data = input.event?.data ?? {}
+    const user: UserInfo = input.event
+      ? { id: String(data.user_id ?? data.operator_id ?? '10000'), name: input.userName || undefined }
+      : { id: '10000', name: input.userName || 'Tester' }
+    const channel: ChannelInfo = input.event
+      ? (data.group_id ? { type: 'group', id: String(data.group_id) } : { type: 'private', id: user.id })
+      : input.private ? { type: 'private', id: user.id } : { type: 'group', id: 'test' }
     const session: FlowSession = {
-      text: input.text,
-      segments: [seg.text(input.text)],
+      text,
+      segments: text ? [seg.text(text)] : [],
       user,
-      channel: input.private ? { type: 'private', id: user.id } : { type: 'group', id: 'test' },
-      isDirect: !!input.private,
+      channel,
+      isDirect: channel.type === 'private',
       mentioned: !!input.mentioned,
       send: async () => undefined,
       reply: async () => undefined,
     }
+    const replies = [...(input.replies ?? [])]
     const result = await runFlow(compiled, {
       session,
       vars: this.varsFor(doc.id, 'test', session),
@@ -345,6 +528,13 @@ export class FlowService extends Service {
       logger: this.home.logger('flows'),
       test: true,
       stopAt: input.nodeId,
+      ...(input.event ? { event: { name: input.event.name, data } } : {}),
+      ...(input.schedule ? { scheduled: { nodeId: input.schedule, now: new Date() } } : {}),
+      waitForMessage: async (_options, origin) => {
+        const reply = replies.shift()
+        if (reply === undefined) return undefined
+        return { ...origin, text: reply, segments: [seg.text(reply)], send: origin.send, reply: origin.reply }
+      },
     })
     this.record(result.trace)
     return { matched: result.matched, consumed: result.consumed, trace: result.trace, issues: compiled.issues }
@@ -411,16 +601,25 @@ export class FlowService extends Service {
 
     yield actions.define({
       name: 'flows.test',
-      description: 'Send a made-up message through a flow and return the path it took, each step\'s inputs and outputs, and the replies it would send. Nothing is sent to any chat, but LLM nodes do call the LLM.',
+      description: 'Send a made-up message through a flow and return the path it took, each step\'s inputs and outputs, the replies it would send and the platform API calls it would make. Nothing is sent to any chat and no platform API is called, but LLM nodes do call the LLM. Pass event instead of text to test event triggers, or schedule to fire a schedule trigger.',
       risk: 'write',
       input: idInput.extend({
-        text: z.string().min(1),
+        text: z.string().optional().describe('The message; required unless event or schedule is set'),
+        event: z.object({
+          name: z.string().describe('Normalized event name, as the event trigger nodes describe, e.g. "group_increase", "notify.poke", "request.friend"'),
+          data: z.record(z.string(), z.any()).optional().describe('The event as the platform sends it, e.g. OneBot fields such as group_id and user_id'),
+        }).optional(),
+        schedule: z.string().optional().describe('Id of a schedule trigger node to fire'),
+        replies: z.array(z.string()).optional().describe('Messages that answer the flow\'s "wait for reply" nodes, in order; a wait with none left times out'),
         userName: z.string().optional(),
         private: z.boolean().optional().describe('Pretend the message is a private chat'),
         mentioned: z.boolean().optional().describe('Pretend the message @-mentions the bot'),
         nodeId: z.string().optional().describe('Stop after this node: runs the path up to it and nothing after, to check one step'),
       }),
-      handler: ({ id, ...input }) => this.test(id, input),
+      handler: ({ id, ...input }) => {
+        if (!input.event && !input.schedule && !input.text) throw new MushinError('invalid_input', 'Give text, event or schedule')
+        return this.test(id, input)
+      },
     })
 
     yield actions.define({

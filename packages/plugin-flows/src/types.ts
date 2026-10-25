@@ -1,4 +1,4 @@
-import type { ChannelInfo, Logger, LocalizedText, Segment, z } from '@mushin/core'
+import type { ChannelInfo, Logger, LocalizedText, Segment, UserInfo, z } from '@mushin/core'
 import type { SourcedContent } from '@mushin/plugin-bots'
 
 type SourcedContentLike = SourcedContent
@@ -12,7 +12,8 @@ export interface PortDef {
   title?: LocalizedText
 }
 
-export type NodeCategory = 'trigger' | 'logic' | 'data' | 'ai' | 'action'
+/** `event`, `manage` and `platform` hold nodes for one chat platform, such as OneBot. */
+export type NodeCategory = 'trigger' | 'event' | 'logic' | 'data' | 'ai' | 'action' | 'manage' | 'platform'
 
 /** Exec outputs taken from a config array, e.g. one branch per intent label plus `other`. */
 export interface ExecOutFromConfig {
@@ -33,11 +34,24 @@ interface NodeTypeBase<C> {
   outputs?: PortDef[]
 }
 
-/** Starts a run when an incoming message matches. Has no exec input and one exec output, `next`. */
+/**
+ * What starts a trigger: an incoming message, an adapter event (a member joins, a poke, a friend
+ * request) or the clock.
+ */
+export type TriggerSource = 'message' | 'event' | 'schedule'
+
+/** Starts a run. Has no exec input and one exec output, `next`. */
 export interface TriggerNodeType<C = any> extends NodeTypeBase<C> {
   kind: 'trigger'
-  /** Returns the trigger's outputs when the message matches, or nothing. */
+  /** Defaults to `message`. */
+  source?: TriggerSource
+  /** Returns the trigger's outputs when the message, event or tick matches, or nothing. */
   match(context: TriggerContext<C>): Record<string, unknown> | undefined
+  /**
+   * Schedule triggers: whether to fire at `now`. `last` is when it last fired, `since` when the
+   * scheduler started watching it (bot start or flow save), so an interval counts from there.
+   */
+  due?(config: C, times: { now: Date; last?: number; since: number }): boolean
 }
 
 /** A step in the execution path: one exec input, named exec outputs. */
@@ -61,13 +75,43 @@ export interface NodeResult {
 export interface FlowSession {
   text: string
   segments: Segment[]
-  user: { id: string; name?: string }
+  user: UserInfo
   channel: ChannelInfo
   isDirect: boolean
   mentioned: boolean
   messageId?: string
-  send(content: string | SourcedContentLike): Promise<unknown>
-  reply(content: string | SourcedContentLike): Promise<unknown>
+  send(content: string | SourcedContentLike): Promise<SentLike | undefined | void>
+  reply(content: string | SourcedContentLike): Promise<SentLike | undefined | void>
+}
+
+/** What sending returns: at least the platform message id, when there is one. */
+export interface SentLike {
+  messageId?: string
+}
+
+/** An adapter event as flows see it; see `BotEvent` in plugin-bots. */
+export interface FlowEvent {
+  name: string
+  data: Record<string, any>
+  message?: { id?: string; text: string; segments: Segment[] }
+}
+
+/** The bot running the flow, for nodes that call the platform directly. */
+export interface FlowBot {
+  id: string
+  /** Adapter type, e.g. `onebot`. */
+  platform: string
+  selfId?: string
+  /** A raw adapter API call, e.g. OneBot's `set_group_ban`. Resolves to the response data. */
+  call(action: string, params?: Record<string, any>): Promise<any>
+  /** Sends to any chat, not only the current one. */
+  send(channel: ChannelInfo, content: string | SourcedContentLike): Promise<SentLike | undefined | void>
+}
+
+export interface WaitOptions {
+  /** `sender`: only the person who started the run. `anyone`: anyone in the chat. */
+  who: 'sender' | 'anyone'
+  seconds: number
 }
 
 export type VariableScope = 'run' | 'chat' | 'user' | 'flow'
@@ -81,6 +125,10 @@ export interface TriggerContext<C> {
   config: C
   session: FlowSession
   vars: Variables
+  /** Set for runs started by an adapter event. */
+  event?: FlowEvent
+  /** Set for runs started by the clock. */
+  now?: Date
 }
 
 export interface LlmLike {
@@ -98,6 +146,13 @@ export interface NodeContext<C> extends TriggerContext<C> {
   signal: AbortSignal
   /** Shared by the nodes of one run: the latest LLM reply, for message provenance. */
   run: RunState
+  /** The bot running the flow. Test runs get a stand-in that records calls instead of making them. */
+  bot?: FlowBot
+  /** The adapter event that started the run, if one did. */
+  event?: FlowEvent
+  /** Waits for the next message in this chat; resolves to nothing on timeout. Waiting does not count toward the run's time limit. */
+  waitForMessage(options: WaitOptions): Promise<FlowSession | undefined>
+  test: boolean
 }
 
 export interface RunState {
@@ -165,6 +220,10 @@ export interface RunTrace {
   /** Edges that carried execution, in order. */
   edges: string[]
   replies: string[]
+  /** Platform API calls nodes made, in order; in test runs they were recorded but not made. */
+  calls?: { action: string; params: Record<string, any>; error?: string }[]
+  /** What started the run, when it was not a message. */
+  event?: string
   /** Set when the run was asked to stop after this node. */
   stopAt?: string
   error?: string

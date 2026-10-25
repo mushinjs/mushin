@@ -1,48 +1,4 @@
-import { type Context, field, segmentsToText, z } from '@mushin/core'
 import type {} from '@mushin/plugin-bots'
-import type { NodeResult, NodeType } from '@mushin/plugin-flows'
-
-/**
- * Waits for the same person's next message in the same chat. It shows how a plugin adds a node
- * type; the run stays open while it waits, so the wait is capped below the 60-second run limit.
- */
-export function waitReplyNode(ctx: Context): NodeType {
-  return {
-    kind: 'action',
-    type: 'demo.waitReply',
-    category: 'logic',
-    title: { en: 'Wait for reply', 'zh-CN': '等待回复' },
-    description: {
-      en: 'Waits for the sender\'s next message in this chat; continues on "reply", or on "timeout" when none arrives in time',
-      'zh-CN': '等待同一个人在当前会话的下一条消息；收到走 reply，超时走 timeout',
-    },
-    config: z.object({
-      seconds: z.number().int().min(1).max(55).default(30).meta(field('Timeout (seconds)', 'At most 55: a flow run stops after 60 seconds', {
-        'zh-CN': { title: '超时（秒）', description: '最多 55：一次流程运行最长 60 秒' },
-      })),
-    }),
-    outputs: [{ name: 'text', type: 'text', title: { en: 'Reply', 'zh-CN': '回复内容' } }],
-    execOut: ['reply', 'timeout'],
-    run: ({ config, session, signal }) => new Promise<NodeResult>((resolve) => {
-      let done = false
-      const finish = (result: NodeResult) => {
-        if (done) return
-        done = true
-        clearTimeout(timer)
-        off()
-        resolve(result)
-      }
-      const off = ctx.on('bots/message', (record) => {
-        if (record.direction !== 'in' || record.user.id !== session.user.id) return
-        if (record.channel.type !== session.channel.type || record.channel.id !== session.channel.id) return
-        const text = segmentsToText(record.segments.filter((s) => s.type !== 'at'), false).trim()
-        finish({ exec: 'reply', outputs: { text } })
-      })
-      const timer = setTimeout(() => finish({ exec: 'timeout', outputs: { text: '' } }), config.seconds * 1000)
-      signal.addEventListener('abort', () => finish({ exec: 'timeout', outputs: { text: '' } }), { once: true })
-    }),
-  }
-}
 
 interface DemoNode {
   id: string
@@ -139,7 +95,7 @@ export const demoFlows: Record<DemoFlowKey, DemoFlow> = {
     nodes: [
       { id: 'quiz', type: 'trigger.keyword', label: '/quiz', config: { keywords: ['/quiz', '答题'], mode: 'exact' } },
       reply('ask', '出题', '一年有几个季节？30 秒内回复数字。'),
-      { id: 'answer', type: 'demo.waitReply', label: '等待回答', config: { seconds: 30 } },
+      { id: 'answer', type: 'logic.waitReply', label: '等待回答', config: { seconds: 30 } },
       { id: 'judge', type: 'logic.compare', label: '答案是 4 吗', config: { op: 'equals', value: '4' }, inputs: { a: '{{answer.text}}' } },
       reply('right', '答对', '答对了！🎯'),
       reply('wrong', '答错', '「{{answer.text}}」不对哦，答案是 4。'),
