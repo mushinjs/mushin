@@ -6,7 +6,7 @@ import { FlowError, runFlow, type RunEnvironment } from './engine'
 import { compile, type CompiledFlow, layout } from './graph'
 import { builtinNodes, scheduleTarget } from './nodes'
 import { migrateDataEdges } from './refs'
-import type { FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowNode, FlowSession, LlmLike, NodeType, RunTrace, Variables, VariableScope, WaitOptions } from './types'
+import type { FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowNode, FlowSession, LlmLike, NodeType, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
 
 export * from './engine'
 export * from './graph'
@@ -22,6 +22,7 @@ declare module '@mushin/core' {
   interface Events {
     'flows/changed'(): void
     'flows/run'(trace: RunTrace): void
+    'flows/step'(step: RunStep): void
   }
 }
 
@@ -64,6 +65,7 @@ const edgeInput = z.object({
 const flowFields = {
   name: z.string().min(1),
   description: z.string().optional(),
+  adapter: z.string().optional().describe('Adapter type id from bots.adapters the flow is built for, e.g. "onebot"; node types list the adapters they need in platforms'),
   bots: z.array(z.string()).optional().describe('Bot ids that run this flow'),
   nodes: z.array(nodeInput).optional(),
   edges: z.array(edgeInput).optional(),
@@ -195,6 +197,7 @@ export class FlowService extends Service {
       configSchema: type.config ? toJsonSchema(type.config) : undefined,
       inputs: type.inputs ?? [],
       outputs: type.outputs ?? [],
+      platforms: type.platforms,
       execIn: type.kind === 'action',
       execOut: type.kind === 'trigger' ? ['next'] : type.kind === 'action' ? type.execOut ?? ['next'] : [],
       execOutFrom: type.kind === 'action' ? type.execOutFrom : undefined,
@@ -236,6 +239,7 @@ export class FlowService extends Service {
           id: doc.id,
           name: doc.name,
           description: doc.description,
+          adapter: doc.adapter,
           bots: doc.bots,
           nodes: doc.nodes.length,
           errors: issues.filter((issue) => issue.severity === 'error').length,
@@ -265,13 +269,14 @@ export class FlowService extends Service {
     }
   }
 
-  async create(input: { name: string; description?: string; bots?: string[]; nodes?: NodeInput[]; edges?: EdgeInput[] }) {
+  async create(input: { name: string; description?: string; adapter?: string; bots?: string[]; nodes?: NodeInput[]; edges?: EdgeInput[] }) {
     const { nodes, edges } = normalize(input.nodes ?? [], input.edges ?? [], this.types)
     const now = Date.now()
     const doc: FlowDocument = {
       id: randomId(),
       name: input.name,
       ...(input.description ? { description: input.description } : {}),
+      ...(input.adapter ? { adapter: input.adapter } : {}),
       bots: input.bots ?? [],
       nodes,
       edges,
@@ -283,10 +288,14 @@ export class FlowService extends Service {
     return this.describe(doc)
   }
 
-  async update(id: string, patch: Partial<{ name: string; description: string; bots: string[]; nodes: NodeInput[]; edges: EdgeInput[] }>) {
+  async update(id: string, patch: Partial<{ name: string; description: string; adapter: string; bots: string[]; nodes: NodeInput[]; edges: EdgeInput[] }>) {
     const doc = { ...this.get(id) }
     if (patch.name !== undefined) doc.name = patch.name
     if (patch.description !== undefined) doc.description = patch.description
+    if (patch.adapter !== undefined) {
+      if (patch.adapter) doc.adapter = patch.adapter
+      else delete doc.adapter
+    }
     if (patch.nodes !== undefined || patch.edges !== undefined) {
       const normalized = normalize(patch.nodes ?? doc.nodes, patch.edges ?? doc.edges, this.types)
       doc.nodes = normalized.nodes
@@ -362,8 +371,11 @@ export class FlowService extends Service {
       botId,
       bot: this.flowBot(ctx),
       waitForMessage: (options, origin) => this.waitFor(botId, origin, options),
+      onStep: this.onStep,
     }
   }
+
+  private onStep = (step: RunStep) => this.home.emit('flows/step', step)
 
   private flowsOf(botId: string) {
     return [...this.docs.values()]
@@ -528,6 +540,7 @@ export class FlowService extends Service {
       logger: this.home.logger('flows'),
       test: true,
       stopAt: input.nodeId,
+      onStep: this.onStep,
       ...(input.event ? { event: { name: input.event.name, data } } : {}),
       ...(input.schedule ? { scheduled: { nodeId: input.schedule, now: new Date() } } : {}),
       waitForMessage: async (_options, origin) => {

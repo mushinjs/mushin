@@ -242,6 +242,8 @@ export interface NodeTypeInfo {
   execIn: boolean
   execOut: string[]
   execOutFrom?: { key: string; extra?: string[] }
+  /** Adapter ids the node works with; omitted means every adapter. */
+  platforms?: string[]
 }
 
 export interface FlowNodeDoc {
@@ -272,6 +274,8 @@ export interface FlowDoc {
   id: string
   name: string
   description?: string
+  /** Adapter the flow is built for, e.g. `onebot`. */
+  adapter?: string
   bots: string[]
   nodes: FlowNodeDoc[]
   edges: FlowEdgeDoc[]
@@ -284,6 +288,7 @@ export interface FlowSummary {
   id: string
   name: string
   description?: string
+  adapter?: string
   bots: string[]
   nodes: number
   errors: number
@@ -316,4 +321,14 @@ export interface RunTrace {
   event?: string
   stopAt?: string
   error?: string
+}
+
+/** Live progress of a run, sent as each node starts and finishes. */
+export interface RunStep {
+  runId: string
+  flowId: string
+  test: boolean
+  nodeId: string
+  edgeId?: string
+  status: 'running' | 'ok' | 'error'
 }

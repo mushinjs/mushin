@@ -32,6 +32,8 @@ interface NodeTypeBase<C> {
   inputs?: PortDef[]
   /** Outputs, which later nodes reference as `{{<node id>.<output>}}`. */
   outputs?: PortDef[]
+  /** Adapter ids the node works with, e.g. `['onebot']`; omitted means every adapter. */
+  platforms?: string[]
 }
 
 /**
@@ -182,6 +184,8 @@ export interface FlowDocument {
   id: string
   name: string
   description?: string
+  /** Adapter the flow is built for, e.g. `onebot`; nodes for other adapters are flagged. */
+  adapter?: string
   /** Bots that run this flow. */
   bots: string[]
   nodes: FlowNode[]
@@ -227,4 +231,15 @@ export interface RunTrace {
   /** Set when the run was asked to stop after this node. */
   stopAt?: string
   error?: string
+}
+
+/** Live progress of a run, sent as each node starts and finishes. */
+export interface RunStep {
+  runId: string
+  flowId: string
+  test: boolean
+  nodeId: string
+  /** The edge that led to the node, for nodes after the trigger. */
+  edgeId?: string
+  status: 'running' | 'ok' | 'error'
 }

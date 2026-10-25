@@ -37,6 +37,19 @@ describe('OneBot flow nodes', () => {
     expect(types).toEqual(expect.arrayContaining(['onebot.memberJoin', 'onebot.mute', 'onebot.call', 'trigger.schedule', 'logic.waitReply', 'action.send']))
   })
 
+  it('marks OneBot nodes as needing the OneBot adapter and keeps the flow\'s adapter', async () => {
+    const types = await app.call<any[]>('flows.nodeTypes')
+    expect(types.find((type) => type.type === 'onebot.mute').platforms).toEqual(['onebot'])
+    expect(types.find((type) => type.type === 'action.reply').platforms).toBeUndefined()
+    const created = await app.call('flows.create', { name: 'Adapter', adapter: 'onebot', nodes: [{ type: 'trigger.message' }, { type: 'onebot.mute' }], edges: [edge('n1', 'next', 'n2')] })
+    expect(created.adapter).toBe('onebot')
+    expect(created.issues.some((issue: any) => issue.message.includes('needs a onebot bot'))).toBe(false)
+    const moved = await app.call('flows.update', { id: created.id, adapter: 'demo' })
+    expect(moved.issues).toEqual(expect.arrayContaining([expect.objectContaining({ nodeId: 'n2', severity: 'warning' })]))
+    expect((await app.call('flows.update', { id: created.id, adapter: '' })).adapter).toBeUndefined()
+    await app.call('flows.delete', { id: created.id })
+  })
+
   it('welcomes a new member and mutes them, through a real NapCat connection', async () => {
     await flow('Welcome', [
       { id: 'join', type: 'onebot.memberJoin' },

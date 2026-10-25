@@ -1,9 +1,12 @@
 import { type ComputedRef, inject, type InjectionKey, type Ref } from 'vue'
 import type { FlowIssue, NodeTypeInfo } from '../../types'
 
+export type RunStatus = 'running' | 'ok' | 'error'
+
+/** A run shown on the canvas: each node's and edge's state, live while it runs. */
 export interface FlowHighlight {
-  nodes: Map<string, 'ok' | 'error'>
-  edges: Set<string>
+  nodes: Map<string, RunStatus>
+  edges: Map<string, RunStatus>
 }
 
 /** Shared by the editor and its node cards. */
