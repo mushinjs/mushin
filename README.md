@@ -86,7 +86,7 @@ Set NapCat's message format to `array` and use the same access token on both sid
 { "name": "HttpClient", "enable": true, "url": "http://127.0.0.1:5160/onebot/<bot id>", "messagePostFormat": "array", "token": "your-token", "secret": "your-secret" }
 ```
 
-The bots list shows each bot's connection mode and address.
+The bots list shows each bot's connection mode and address, with a switch to start or stop it. A bot's **Flow overview** tab lists, in order, everything a message passes on that bot: the flow triggers by priority, the built-in commands and the bot plugins. Type a message there and pick who sends it (group member, admin, owner, the bot's admin, or a private chat) to see which triggers it starts, the path each run takes, what it replies and which plugins never see it, all in test mode; LLM nodes answer with a placeholder unless you allow real calls. The Agent can do the same with `flows.route`.
 
 If Mushin.js and NapCat run on different machines, bind Mushin.js to a reachable address (`host` in the server entry) and keep the admin token private.
 

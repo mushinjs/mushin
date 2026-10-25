@@ -7,6 +7,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { call } from '../api'
 import BotCommands from '../components/BotCommands.vue'
 import BotConnection from '../components/BotConnection.vue'
+import BotFlowOverview from '../components/BotFlowOverview.vue'
 import BotLogs from '../components/BotLogs.vue'
 import BotPlugins from '../components/BotPlugins.vue'
 import LiveConversation from '../components/LiveConversation.vue'
@@ -85,6 +86,9 @@ function remove() {
       </NTabPane>
       <NTabPane name="plugins" :tab="t('bot.plugins')" data-agent-target="bot.plugins">
         <BotPlugins :bot-id="bot.id" />
+      </NTabPane>
+      <NTabPane name="overview" :tab="t('bot.flowOverview')" data-agent-target="bot.overview">
+        <BotFlowOverview :bot="bot" />
       </NTabPane>
       <NTabPane name="commands" :tab="t('bot.commands')" data-agent-target="bot.commands">
         <BotCommands :bot="bot" />

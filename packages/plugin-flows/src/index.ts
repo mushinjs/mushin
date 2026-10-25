@@ -1,5 +1,5 @@
 import { type ChannelInfo, Context, MushinError, randomId, seg, Service, toJsonSchema, type UserInfo, z } from '@mushin/core'
-import { type BotEvent, type CommandEntry, commandMatches, splitCommand } from '@mushin/plugin-bots'
+import { type BotEvent, BUILTIN_PRIORITY, type CommandEntry, commandMatches, helpText, splitCommand } from '@mushin/plugin-bots'
 import type {} from '@mushin/plugin-providers'
 import type {} from '@mushin/plugin-storage'
 import { FlowError, matchTriggers, runFlow, type RunEnvironment, type TriggerMatch } from './engine'
@@ -100,6 +100,16 @@ function normalizeGroups(groups: GroupInput[], nodes: FlowNode[]): FlowGroup[] {
     result.push({ id: group.id ?? `g-${randomId(5)}`, ...(group.label ? { label: group.label } : {}), nodes: members, ...(group.collapsed ? { collapsed: true } : {}) })
   }
   return result
+}
+
+/** A message to trace through a bot without sending it. */
+export interface RouteInput {
+  text: string
+  /** Group roles come from the platform; `botAdmin` is in the bot's admin list; `private` is a private chat. */
+  role?: 'member' | 'admin' | 'owner' | 'botAdmin' | 'private'
+  mentioned?: boolean
+  /** Call the model for LLM nodes instead of answering with a placeholder. */
+  useLlm?: boolean
 }
 
 export interface TestInput {
@@ -791,6 +801,105 @@ export class FlowService extends Service {
     return { matched: result.matched, consumed: result.consumed, trace: result.trace, issues: this.issuesOf(doc) }
   }
 
+  /**
+   * Where a message would go on a bot, without sending anything: the triggers it starts across
+   * the bot's flows (run in test mode, in order, until one keeps the message), then the built-in
+   * commands and the bot plugins that would still see it. LLM nodes get a stand-in answer unless
+   * `useLlm` is set.
+   */
+  async route(botId: string, input: RouteInput) {
+    const bots = this.home.get('bots')
+    if (!bots) throw new MushinError('unavailable', 'The bots plugin is not running')
+    const record = bots.get(botId)
+    const prefixes = record.commands?.prefixes?.filter(Boolean)
+    const command = splitCommand(input.text, prefixes?.length ? prefixes : undefined)
+    const isDirect = input.role === 'private'
+    const groupRole = input.role === 'owner' || input.role === 'admin' || input.role === 'member' ? input.role : undefined
+    const user: UserInfo = { id: '10000', name: 'Tester', ...(groupRole ? { role: groupRole } : {}) }
+    const channel: ChannelInfo = isDirect ? { type: 'private', id: user.id } : { type: 'group', id: 'route-test' }
+    const session: FlowSession = {
+      text: input.text,
+      segments: [seg.text(input.text)],
+      user,
+      channel,
+      isDirect,
+      mentioned: !!input.mentioned,
+      ...(command ? { command } : {}),
+      isAdmin: input.role === 'botAdmin',
+      send: async () => undefined,
+      reply: async () => undefined,
+    }
+    const llm: LlmLike | undefined = input.useLlm
+      ? this.home.get('llm') as LlmLike | undefined
+      : { chat: async () => ({ text: '[LLM skipped in this preview]', source: { provider: 'preview', model: 'none' } }) }
+
+    // A preview starts from empty variables and leaves the real ones alone, so cooldowns and counters do not move.
+    const scratch = new Map<string, unknown>()
+    const varsOf = (flowId: string): Pick<Variables, 'get' | 'set'> => ({
+      get: (scope, name) => scratch.get(`${flowId}|${scope}|${name}`),
+      set: (scope, name, value) => void scratch.set(`${flowId}|${scope}|${name}`, value),
+    })
+
+    // Every trigger on the bot, in order, with whether this message starts it.
+    const flows = this.flowsOf(botId)
+    const slots = triggerOrder(flows)
+    const matches = new Map<string, TriggerMatch & { compiled: CompiledFlow }>()
+    for (const compiled of flows) {
+      const env = { session, vars: varsOf(compiled.doc.id) }
+      for (const match of matchTriggers(compiled, env)) matches.set(`${compiled.doc.id}|${match.nodeId}`, { ...match, compiled })
+    }
+    let consumed = false
+    const triggers = []
+    for (const slot of slots.filter((item) => item.source === 'message')) {
+      const match = matches.get(`${slot.flowId}|${slot.nodeId}`)
+      if (!match) {
+        triggers.push({ ...slot, state: 'no-match' as const })
+        continue
+      }
+      if (consumed) {
+        triggers.push({ ...slot, state: 'blocked' as const })
+        continue
+      }
+      const result = await runFlow(match.compiled, {
+        session,
+        vars: varsOf(match.compiled.doc.id),
+        llm,
+        logger: this.home.logger('flows'),
+        test: true,
+        matched: match,
+        waitForMessage: async () => undefined,
+      })
+      const keeps = !passesOn(match.compiled.nodes.get(match.nodeId)!)
+      const labels = Object.fromEntries(match.compiled.doc.nodes.flatMap((node) => (node.label ? [[node.id, node.label]] : [])))
+      triggers.push({ ...slot, state: 'ran' as const, keeps, trace: result.trace, labels })
+      if (keeps) consumed = true
+    }
+
+    // After the flows: built-in commands and plugins, in the bot's middleware order.
+    const after: { kind: 'builtin' | 'plugin'; name: string; state: 'answers' | 'receives' | 'not-reached' | 'ignores'; reply?: string }[] = []
+    const builtin = command && bots.commands(botId).find((entry) => entry.source.kind === 'builtin' && commandMatches(entry, command.name))
+    const order = [
+      ...(bots.bot(botId)?.middlewareOrder() ?? []).filter((entry) => entry.plugin !== 'flows'),
+      ...(builtin ? [{ plugin: `/${builtin.name}`, priority: BUILTIN_PRIORITY, builtin: true }] : []),
+    ].sort((a, b) => b.priority - a.priority)
+    for (const entry of order) {
+      if ('builtin' in entry) {
+        after.push({ kind: 'builtin', name: entry.plugin, state: consumed ? 'not-reached' : 'answers', ...(!consumed && builtin?.name === 'help' ? { reply: helpText(bots.commands(botId), record.commands) } : {}) })
+        if (!consumed) consumed = true
+        continue
+      }
+      after.push({ kind: 'plugin', name: entry.plugin, state: consumed ? 'not-reached' : 'receives' })
+    }
+    return {
+      text: input.text,
+      role: input.role ?? 'member',
+      running: !!bots.bot(botId),
+      triggers,
+      after,
+      replies: triggers.flatMap((item) => ('trace' in item && item.trace ? item.trace.replies.map((text) => ({ from: item.flowName, text })) : [])),
+    }
+  }
+
   runs(id: string, limit = TRACE_LIMIT) {
     this.get(id)
     return (this.traces.get(id) ?? []).slice(-limit)
@@ -884,6 +993,20 @@ export class FlowService extends Service {
         node: z.string().optional(),
       }),
       handler: ({ bot, flow, node }) => (flow && node ? this.competing(bot, flow, node) : { triggers: this.triggersOn(bot), plugins: this.pluginsAfter(bot) }),
+    })
+
+    yield actions.define({
+      name: 'flows.route',
+      description: 'Show where a message would go on a bot without sending anything: which triggers it starts across the bot\'s flows (each run in test mode, in order, until one keeps the message), their steps and replies, then which built-in commands and bot plugins would still see it. LLM nodes answer with a placeholder unless useLlm is true.',
+      risk: 'read',
+      input: z.object({
+        bot: z.string().describe('Bot id from bots.list'),
+        text: z.string().min(1),
+        role: z.enum(['member', 'admin', 'owner', 'botAdmin', 'private']).optional().describe('Who sends it: a group member, group admin or owner, someone in the bot\'s admin list, or a private chat'),
+        mentioned: z.boolean().optional(),
+        useLlm: z.boolean().optional(),
+      }),
+      handler: ({ bot, ...input }) => this.route(bot, input),
     })
 
     yield actions.define({
