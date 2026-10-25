@@ -6,7 +6,7 @@ import { FlowError, runFlow, type RunEnvironment } from './engine'
 import { compile, type CompiledFlow, layout } from './graph'
 import { builtinNodes, scheduleTarget } from './nodes'
 import { migrateDataEdges } from './refs'
-import type { FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowNode, FlowSession, LlmLike, NodeType, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
+import type { FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowNode, FlowSession, LlmLike, NodeType, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
 
 export * from './engine'
 export * from './graph'
@@ -62,6 +62,12 @@ const edgeInput = z.object({
   targetHandle: z.string().describe('Always "exec"'),
 })
 
+const groupInput = z.object({
+  id: z.string().optional(),
+  label: z.string().optional(),
+  nodes: z.array(z.string()).describe('Ids of the nodes in the group'),
+})
+
 const flowFields = {
   name: z.string().min(1),
   description: z.string().optional(),
@@ -69,9 +75,25 @@ const flowFields = {
   bots: z.array(z.string()).optional().describe('Bot ids that run this flow'),
   nodes: z.array(nodeInput).optional(),
   edges: z.array(edgeInput).optional(),
+  groups: z.array(groupInput).optional().describe('Nodes framed together in the editor so they move and copy as one; no effect on runs'),
 }
 
 type NodeInput = z.infer<typeof nodeInput>
+type GroupInput = z.infer<typeof groupInput>
+
+/** Keeps groups of nodes that exist, each node in one group only; groups need two nodes. */
+function normalizeGroups(groups: GroupInput[], nodes: FlowNode[]): FlowGroup[] {
+  const known = new Set(nodes.map((node) => node.id))
+  const taken = new Set<string>()
+  const result: FlowGroup[] = []
+  for (const group of groups) {
+    const members = [...new Set(group.nodes)].filter((id) => known.has(id) && !taken.has(id))
+    if (members.length < 2) continue
+    for (const id of members) taken.add(id)
+    result.push({ id: group.id ?? `g-${randomId(5)}`, ...(group.label ? { label: group.label } : {}), nodes: members })
+  }
+  return result
+}
 
 export interface TestInput {
   text?: string
@@ -269,8 +291,9 @@ export class FlowService extends Service {
     }
   }
 
-  async create(input: { name: string; description?: string; adapter?: string; bots?: string[]; nodes?: NodeInput[]; edges?: EdgeInput[] }) {
+  async create(input: { name: string; description?: string; adapter?: string; bots?: string[]; nodes?: NodeInput[]; edges?: EdgeInput[]; groups?: GroupInput[] }) {
     const { nodes, edges } = normalize(input.nodes ?? [], input.edges ?? [], this.types)
+    const groups = normalizeGroups(input.groups ?? [], nodes)
     const now = Date.now()
     const doc: FlowDocument = {
       id: randomId(),
@@ -280,6 +303,7 @@ export class FlowService extends Service {
       bots: input.bots ?? [],
       nodes,
       edges,
+      ...(groups.length ? { groups } : {}),
       createdAt: now,
       updatedAt: now,
     }
@@ -288,7 +312,7 @@ export class FlowService extends Service {
     return this.describe(doc)
   }
 
-  async update(id: string, patch: Partial<{ name: string; description: string; adapter: string; bots: string[]; nodes: NodeInput[]; edges: EdgeInput[] }>) {
+  async update(id: string, patch: Partial<{ name: string; description: string; adapter: string; bots: string[]; nodes: NodeInput[]; edges: EdgeInput[]; groups: GroupInput[] }>) {
     const doc = { ...this.get(id) }
     if (patch.name !== undefined) doc.name = patch.name
     if (patch.description !== undefined) doc.description = patch.description
@@ -300,6 +324,11 @@ export class FlowService extends Service {
       const normalized = normalize(patch.nodes ?? doc.nodes, patch.edges ?? doc.edges, this.types)
       doc.nodes = normalized.nodes
       doc.edges = normalized.edges
+    }
+    if (patch.groups !== undefined || patch.nodes !== undefined) {
+      const groups = normalizeGroups(patch.groups ?? doc.groups ?? [], doc.nodes)
+      if (groups.length) doc.groups = groups
+      else delete doc.groups
     }
     if (patch.bots !== undefined) {
       await this.attach(patch.bots.filter((bot) => !doc.bots.includes(bot)))
