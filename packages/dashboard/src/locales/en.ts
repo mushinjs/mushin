@@ -152,6 +152,13 @@ export default {
     noErrors: 'No errors or warnings.',
   },
   bots: {
+    napcatHttp: 'In NapCat, add an HTTP server (Mushin calls it; put its address above) and an HTTP client that posts events to the address below, with message format "array". Use the same token, and the same secret if you set one.',
+    httpTo: 'Calls {url}; events arrive at {path}',
+    mode: {
+      'ws': 'WebSocket',
+      'ws-reverse': 'Reverse WebSocket',
+      'http': 'HTTP',
+    },
     lead: 'Each bot has its own connection and its own plugins.',
     add: 'Add bot',
     empty: 'No bots yet. Add one, or ask the Agent to set one up.',

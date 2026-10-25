@@ -154,6 +154,13 @@ const zhCN: typeof en = {
     noErrors: '没有错误或警告。',
   },
   bots: {
+    napcatHttp: '在 NapCat 中添加一个 HTTP 服务器（Mushin 调用它，把地址填在上面），以及一个 HTTP 客户端，把事件上报到下方地址，消息格式选择 "array"。令牌保持一致；设置了上报密钥的话也要一致。',
+    httpTo: '调用 {url}；事件上报到 {path}',
+    mode: {
+      'ws': 'WebSocket',
+      'ws-reverse': 'WebSocket 反向',
+      'http': 'HTTP',
+    },
     lead: '每个机器人都有自己的连接和插件。',
     add: '添加机器人',
     empty: '还没有机器人。添加一个，或让智能体帮你设置。',

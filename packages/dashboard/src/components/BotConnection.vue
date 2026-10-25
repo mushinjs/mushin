@@ -29,7 +29,8 @@ watch(() => props.bot.id, () => {
 
 const adapter = computed(() => data.adapters.find((item) => item.id === props.bot.adapter.type))
 const mode = computed(() => config.value.mode ?? 'forward')
-const hidden = computed(() => (mode.value === 'reverse' ? ['url'] : ['path']))
+// Fields each connection mode does not use.
+const hidden = computed(() => (mode.value === 'reverse' ? ['url', 'secret'] : mode.value === 'http' ? [] : ['path', 'secret']))
 const reverseUrl = computed(() => {
   const base = (serverUrl.value || location.origin).replace(/^http/, 'ws')
   return `${base}${config.value.path || `/onebot/${props.bot.id}`}`
@@ -67,6 +68,10 @@ async function save() {
       <template v-if="mode === 'reverse'">
         {{ t('bots.napcatReverse') }}
         <div class="url mono">{{ reverseUrl }}</div>
+      </template>
+      <template v-else-if="mode === 'http'">
+        {{ t('bots.napcatHttp') }}
+        <div class="url mono">{{ reverseUrl.replace(/^ws/, 'http') }}</div>
       </template>
       <template v-else>{{ t('bots.napcatForward') }}</template>
     </NAlert>

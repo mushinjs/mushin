@@ -37,8 +37,19 @@ function toOneBotSegment(segment: Segment) {
 }
 
 /**
- * One OneBot v11 universal connection: API calls matched by `echo`, events turned into sessions.
- * Forward and reverse modes share this; they differ only in who opens the socket.
+ * How a connection reaches NapCat. Over WebSocket, `send` writes a frame and the answer comes back
+ * through `receive` matched by `echo`; over HTTP, `request` answers directly.
+ */
+export interface OneBotLink {
+  send?(frame: string, done: (error?: Error) => void): void
+  request?(action: string, params: Record<string, any>): Promise<OneBotResponse>
+  /** Drops the link, e.g. after missed heartbeats. */
+  close(): void
+}
+
+/**
+ * One OneBot v11 connection: API calls, and events turned into sessions. Forward and reverse
+ * WebSocket modes and HTTP mode share this; they differ in how frames travel.
  */
 export class OneBotConnection {
   private pending = new Map<string, { resolve: (value: any) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>()
@@ -52,19 +63,33 @@ export class OneBotConnection {
   private accountOffline?: string
   private logger
 
-  constructor(private ctx: Context, private socket: WebSocket, private onDead: () => void) {
+  /**
+   * `watch`: treat the link as dead after two missed heartbeats. HTTP has no lasting link, and
+   * NapCat may not post heartbeats there, so HTTP mode turns it off.
+   */
+  constructor(private ctx: Context, private link: OneBotLink, private onDead: () => void, private watch = true) {
     this.logger = ctx.logger('onebot')
-    socket.on('message', (data) => this.handle(data.toString()))
-    socket.on('close', () => this.dispose(new Error('connection closed')))
     this.touch()
+  }
+
+  /** A connection over an open WebSocket: frames in, and the socket closing ends it. */
+  static overSocket(ctx: Context, socket: WebSocket, onDead: () => void) {
+    const connection = new OneBotConnection(ctx, {
+      send: (frame, done) => socket.send(frame, done),
+      close: () => socket.terminate(),
+    }, onDead)
+    socket.on('message', (data) => connection.receive(data.toString()))
+    socket.on('close', () => connection.dispose(new Error('connection closed')))
+    return connection
   }
 
   /** Resets the heartbeat watchdog; a silent connection is treated as dead after two missed beats. */
   private touch() {
+    if (!this.watch) return
     clearTimeout(this.watchdog)
     this.watchdog = setTimeout(() => {
       this.logger.warn('no heartbeat from %s for %ds, reconnecting', this.ctx.bot.record.name, (this.heartbeatInterval * 2) / 1000)
-      this.socket.terminate()
+      this.link.close()
       this.onDead()
     }, this.heartbeatInterval * 2)
   }
@@ -80,6 +105,12 @@ export class OneBotConnection {
   }
 
   call(action: string, params: Record<string, any> = {}): Promise<any> {
+    if (this.link.request) {
+      return this.link.request(action, params).then((response) => {
+        if (response.status === 'failed' || (response.retcode !== 0 && response.retcode !== 1)) throw new OneBotError(action, response)
+        return response.data
+      })
+    }
     const echo = `${Date.now().toString(36)}-${++this.counter}`
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -97,7 +128,7 @@ export class OneBotConnection {
         reject,
         timer,
       })
-      this.socket.send(JSON.stringify({ action, params, echo }), (error) => {
+      this.link.send!(JSON.stringify({ action, params, echo }), (error) => {
         if (!error) return
         clearTimeout(timer)
         this.pending.delete(echo)
@@ -134,7 +165,8 @@ export class OneBotConnection {
     this.ctx.bot.setStatus('online')
   }
 
-  private handle(text: string) {
+  /** Handles one frame or posted event from NapCat. */
+  receive(text: string) {
     if (this.disposed) return
     this.touch()
     let payload: any
