@@ -1,0 +1,51 @@
+{
+  "name": "@mushin/plugin-personas",
+  "version": "0.1.0",
+  "description": "Personas shared by bots, LLM chat and flows: a character, a voice and example exchanges, chosen per chat",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "category": "ai",
+    "displayName": {
+      "en": "Personas",
+      "zh-CN": "人格"
+    },
+    "description": {
+      "en": "Characters with a voice, background and example exchanges; bots pick one per group, user or time of day, and LLM chat and flows speak as it",
+      "zh-CN": "带有性格、说话风格、背景和示例对话的人格；机器人可按群、用户或时间段选择，大模型对话和流程以它的口吻说话"
+    },
+    "provides": [
+      "personas"
+    ],
+    "requires": {
+      "mushin": ">=0.1.0",
+      "plugins": {
+        "@mushin/plugin-bots": "*",
+        "@mushin/plugin-storage": "*"
+      }
+    },
+    "optional": {
+      "plugins": {
+        "@mushin/plugin-flows": "*",
+        "@mushin/plugin-permissions": "*"
+      }
+    },
+    "nodes": [
+      "persona.use"
+    ]
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-bots": "workspace:*",
+    "@mushin/plugin-flows": "workspace:*",
+    "@mushin/plugin-storage": "workspace:*"
+  }
+}

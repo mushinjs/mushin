@@ -2,6 +2,7 @@ import { type Context, field, z } from '@mushin/core'
 import type { Session } from '@mushin/plugin-bots'
 import type { LlmMessage } from '@mushin/plugin-providers'
 import type {} from '@mushin/plugin-storage'
+import type { PersonaLike } from '@mushin/plugin-flows'
 import { type DailyCounts, DailyUsage, RateWindow } from './limits'
 
 export * from './limits'
@@ -17,8 +18,8 @@ export const Config = z.object({
   )),
   systemPrompt: z.string().default('You are a friendly chat bot in a QQ chat. Keep replies short and natural, and answer in the language the user writes in.').meta(field(
     'System prompt',
-    'Instructions given to the model before the conversation',
-    { 'zh-CN': { title: '系统提示词', description: '在对话开始前交给模型的指令' } },
+    'Instructions given to the model before the conversation. When the bot has a persona (Personas plugin), the persona speaks and this is kept only if changed, as extra rules.',
+    { 'zh-CN': { title: '系统提示词', description: '在对话开始前交给模型的指令。机器人有人格时（人格插件）由人格说话，这里只有改过时才作为补充规则保留。' } },
   )),
   provider: z.string().optional().meta(field('Provider', 'Provider id; empty uses the bot\'s or the global default', {
     'zh-CN': { title: '提供商', description: '提供商 id；留空使用机器人或全局默认' },
@@ -71,6 +72,28 @@ export const Config = z.object({
 })
 
 type Config = z.infer<typeof Config>
+
+const DEFAULT_PROMPT = Config.shape.systemPrompt.parse(undefined)
+/** The plugin's own rules, kept after a persona's prompt. */
+const CHAT_RULES = 'You are chatting in a QQ chat. Keep replies short and natural, and answer in the language the user writes in.'
+
+/** The system prompt and example exchanges: the persona's, then the plugin's rules; the configured prompt without a persona. */
+export function systemMessages(persona: PersonaLike | undefined, systemPrompt: string): LlmMessage[] {
+  if (!persona) return [{ role: 'system', content: systemPrompt }]
+  const rules = systemPrompt && systemPrompt !== DEFAULT_PROMPT ? systemPrompt : CHAT_RULES
+  return [
+    { role: 'system', content: `${persona.prompt}\n\n${rules}` },
+    ...(persona.examples ?? []).flatMap((example): LlmMessage[] => [
+      { role: 'user', content: example.user },
+      { role: 'assistant', content: example.assistant },
+    ]),
+  ]
+}
+
+/** The persona plugin, when it runs: its persona for this chat. */
+interface PersonaSource {
+  forSession(botId: string, session: Pick<Session, 'user' | 'channel'>): PersonaLike | undefined
+}
 
 /** Why a message got no reply, for debug logs and tests. */
 export type SkipReason = 'not-triggered' | 'private-off' | 'group-not-allowed' | 'ignored-user' | 'busy' | 'cooldown' | 'user-limit' | 'daily-replies' | 'daily-tokens'
@@ -142,16 +165,19 @@ export function apply(ctx: Context, config: Config) {
     lastReply.set(key, Date.now())
     userRate.record(session.user.id)
     try {
+      const persona = (ctx.get('personas') as PersonaSource | undefined)?.forSession(ctx.bot.id, session)
       const result = await ctx.llm.chat({
-        provider: config.provider ?? ctx.bot.record.provider,
-        model: config.model,
+        provider: config.provider ?? persona?.provider ?? ctx.bot.record.provider,
+        model: config.model ?? persona?.model,
         maxTokens: config.maxTokens,
+        ...(persona?.temperature !== undefined ? { temperature: persona.temperature } : {}),
         messages: [
-          { role: 'system', content: config.systemPrompt },
+          ...systemMessages(persona, config.systemPrompt),
           ...(histories.get(key) ?? []),
           userMessage,
         ],
       })
+      if (persona) result.source.persona = persona.name
       remember(key, userMessage)
       await usage.add(result.usage ? result.usage.inputTokens + result.usage.outputTokens : 0)
       if (!result.text.trim()) return

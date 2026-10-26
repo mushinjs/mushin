@@ -232,8 +232,8 @@ export interface Segment {
 export type Provenance =
   | { kind: 'user' }
   | { kind: 'plugin'; plugin: string }
-  | { kind: 'llm'; plugin?: string; provider: string; model: string; latencyMs: number; tokens?: number }
-  | { kind: 'flow'; flow: string; node: string; provider?: string; model?: string }
+  | { kind: 'llm'; plugin?: string; provider: string; model: string; latencyMs: number; tokens?: number; persona?: string }
+  | { kind: 'flow'; flow: string; node: string; provider?: string; model?: string; persona?: string }
   | { kind: 'agent'; session: string }
   | { kind: 'manual' }
 
@@ -516,4 +516,44 @@ export interface StatsTopRow {
   id?: string
   errors?: number
   tokens?: number
+}
+
+export interface PersonaExample {
+  user: string
+  assistant: string
+}
+
+export interface Persona {
+  id: string
+  name: string
+  avatar?: string
+  description?: string
+  prompt: string
+  examples: PersonaExample[]
+  avoid?: string
+  provider?: string
+  model?: string
+  temperature?: number
+  tags: string[]
+  createdAt: number
+  updatedAt: number
+}
+
+export type PersonaDraft = Omit<Persona, 'id' | 'createdAt' | 'updatedAt'>
+
+export interface PersonaRule {
+  id?: string
+  when: 'group' | 'user' | 'private' | 'time'
+  ids?: string[]
+  from?: string
+  to?: string
+  persona: string
+}
+
+export interface BotPersonaSettings {
+  personas: string[]
+  default?: string
+  rules: PersonaRule[]
+  command: { enabled: boolean; role: 'user' | 'admin' | 'master' }
+  chats: { chat: string; persona: { id: string; name: string } }[]
 }

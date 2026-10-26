@@ -23,6 +23,7 @@ const sourceDetail = computed(() => {
         [t('hover.model'), s.model],
         [t('hover.latency'), `${s.latencyMs} ms`],
         ...(s.tokens !== undefined ? [[t('hover.tokens'), String(s.tokens)]] : []),
+        ...(s.persona ? [[t('hover.persona'), s.persona]] : []),
         ...(s.plugin ? [[t('hover.viaPlugin'), s.plugin]] : []),
       ]
     case 'plugin':
@@ -32,6 +33,7 @@ const sourceDetail = computed(() => {
         [t('hover.flow'), s.flow],
         [t('hover.node'), s.node],
         ...(s.model ? [[t('hover.provider'), s.provider ?? ''], [t('hover.model'), s.model]] : []),
+        ...(s.persona ? [[t('hover.persona'), s.persona]] : []),
       ]
     case 'agent':
       return [[t('hover.session'), s.session]]

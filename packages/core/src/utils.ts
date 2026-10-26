@@ -82,6 +82,11 @@ export interface FieldDisplay {
   widget?: 'checkbox' | 'switch'
   /** Compact forms fold descriptions into a hint icon; `inline` keeps this one visible. */
   hint?: 'inline'
+  /**
+   * A read action that lists the values a text field can take, as `{ value, label }[]`, such as
+   * `personas.choices`. Forms show a searchable select that still accepts other text.
+   */
+  choices?: string
 }
 
 /**
@@ -96,6 +101,7 @@ export function field(title: string, description?: string, translations: Record<
     ...(display.options ? { 'x-options': display.options } : {}),
     ...(display.widget ? { 'x-widget': display.widget } : {}),
     ...(display.hint ? { 'x-hint': display.hint } : {}),
+    ...(display.choices ? { 'x-choices': display.choices } : {}),
   }
 }
 

@@ -4,6 +4,7 @@ import { NCheckbox, NDynamicTags, NFormItem, NIcon, NInput, NInputNumber, NRadio
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { JsonSchema } from '../types'
+import { choicesOf } from '../choices'
 import { humanize } from '../utils'
 import SchemaForm from './SchemaForm.vue'
 
@@ -41,6 +42,7 @@ const schema = computed<JsonSchema>(() => {
 const kind = computed(() => {
   const s = schema.value
   if (Array.isArray(s.enum)) return 'enum'
+  if (s.type === 'string' && (s['x-choices'] ?? props.schema['x-choices'])) return 'choices'
   if (s.type === 'string') return /prompt|template/i.test(props.name) || (s.maxLength ?? 0) > 200 ? 'text' : 'string'
   if (s.type === 'integer' || s.type === 'number') return 'number'
   if (s.type === 'boolean') return 'boolean'
@@ -58,6 +60,13 @@ const hintInline = computed(() => (schema.value['x-hint'] ?? props.schema['x-hin
 /** An enum value's label: translated, then the plugin's English label, then the value itself. */
 const optionLabel = (option: string) => translated.value.options?.[option] ?? (schema.value['x-options'] ?? props.schema['x-options'])?.[option] ?? String(option)
 const options = computed(() => (schema.value.enum ?? []).map((option: string) => ({ label: optionLabel(option), value: option })))
+/** Values from the field's `x-choices` action, after its fixed `x-options` (such as "none"). Typing other text is allowed. */
+const choiceOptions = computed(() => {
+  const action = schema.value['x-choices'] ?? props.schema['x-choices']
+  if (!action) return []
+  const fixed = Object.keys(schema.value['x-options'] ?? props.schema['x-options'] ?? {}).map((option) => ({ label: optionLabel(option), value: option }))
+  return [...fixed, ...choicesOf(action).filter((choice) => !fixed.some((item) => item.value === choice.value))]
+})
 /** In compact forms, up to four choices show as buttons. */
 const asButtons = computed(() => props.compact && kind.value === 'enum' && options.value.length <= 4)
 const widget = computed(() => schema.value['x-widget'] ?? props.schema['x-widget'] ?? 'checkbox')
@@ -123,6 +132,14 @@ function onJson(text: string) {
       v-model:value="value"
       :options="options"
       :clearable="!required"
+    />
+    <NSelect
+      v-else-if="kind === 'choices'"
+      :value="value ?? ''"
+      :options="choiceOptions"
+      filterable
+      tag
+      @update:value="(next: string | null) => (value = next ?? '')"
     />
     <NInput
       v-else-if="kind === 'string'"

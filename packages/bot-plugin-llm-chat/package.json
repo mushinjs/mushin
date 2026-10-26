@@ -31,12 +31,18 @@
         "@mushin/plugin-providers": "*",
         "@mushin/plugin-storage": "*"
       }
+    },
+    "optional": {
+      "plugins": {
+        "@mushin/plugin-personas": "*"
+      }
     }
   },
   "dependencies": {
     "@mushin/core": "workspace:*",
     "@mushin/plugin-bots": "workspace:*",
     "@mushin/plugin-providers": "workspace:*",
-    "@mushin/plugin-storage": "workspace:*"
+    "@mushin/plugin-storage": "workspace:*",
+    "@mushin/plugin-flows": "workspace:*"
   }
 }

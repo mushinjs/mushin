@@ -52,3 +52,13 @@ export function humanize(key: string) {
 export function clone<T>(value: T): T {
   return value === undefined ? value : JSON.parse(JSON.stringify(value))
 }
+
+/** Saves a value as a JSON file through the browser. */
+export function downloadJson(name: string, value: unknown) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = name
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}

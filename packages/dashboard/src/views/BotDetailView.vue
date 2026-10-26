@@ -10,6 +10,7 @@ import BotConnection from '../components/BotConnection.vue'
 import BotFlowOverview from '../components/BotFlowOverview.vue'
 import BotLogs from '../components/BotLogs.vue'
 import BotPermissions from '../components/BotPermissions.vue'
+import BotPersonas from '../components/BotPersonas.vue'
 import BotPlugins from '../components/BotPlugins.vue'
 import LiveConversation from '../components/LiveConversation.vue'
 import StatusBadge from '../components/StatusBadge.vue'
@@ -96,6 +97,9 @@ function remove() {
       </NTabPane>
       <NTabPane name="permissions" :tab="t('bot.permissions')" data-agent-target="bot.permissions">
         <BotPermissions :bot="bot" />
+      </NTabPane>
+      <NTabPane name="personas" :tab="t('bot.personas')" data-agent-target="bot.personas">
+        <BotPersonas :bot="bot" />
       </NTabPane>
       <NTabPane name="live" :tab="t('bot.live')" data-agent-target="bot.live">
         <LiveConversation :bot-id="bot.id" />
