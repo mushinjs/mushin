@@ -203,6 +203,13 @@ Nodes that only work on one chat platform set `platforms` to the adapter ids the
 
 Reply through `session.send()` or `session.reply()` with a `source` of `{ kind: 'flow', flow: flow.name, node: node.label }` so the dashboard shows which node answered; see `action.reply` in `packages/plugin-flows/src/nodes.ts`. During a test run the session only records what would be sent, so nodes behave the same in tests. A node whose exec outputs depend on its settings, like Classify intent with one branch per label, sets `execOutFrom: { key: 'labels', extra: ['other'] }` instead of `execOut`.
 
+References in config strings are filled in as plain text. When a config string is code that another program reads, such as a shell command, set `escapeConfig` so each filled-in value is escaped for it; it gets the value as text and the node's saved config. Nodes that reach outside the chat, such as ones that run commands, also set `restricted: true`: the Agent then cannot add them to a flow or change their config and inputs, only people in the editor can. A shell command node might do both:
+
+```ts
+escapeConfig: { command: (value) => `'${value.replace(/'/g, `'\\''`)}'` },
+restricted: true,
+```
+
 Write `title`, `description` and config field descriptions for both the user and the Agent: they are what the palette, the inspector and `flows.nodeTypes` show.
 
 ## Agent skills

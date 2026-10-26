@@ -43,6 +43,17 @@ interface NodeTypeBase<C> {
   outputsFrom?: OutputsFromConfig
   /** Adapter ids the node works with, e.g. `['onebot']`; omitted means every adapter. */
   platforms?: string[]
+  /**
+   * Config strings whose references are escaped as they are filled in, by config key: a shell
+   * command quotes each value, so a chat message cannot add commands of its own. Gets each value
+   * as text and the node's config as saved.
+   */
+  escapeConfig?: Record<string, (value: string, config: C) => string>
+  /**
+   * Only people in the flow editor may add these nodes or change their config and inputs; the
+   * Agent cannot. For nodes that reach outside the chat, such as running commands.
+   */
+  restricted?: boolean
 }
 
 /**

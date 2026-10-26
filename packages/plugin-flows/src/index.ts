@@ -44,6 +44,15 @@ interface Waiter {
   resolve(session: FlowSession | undefined): void
 }
 
+/** JSON with object keys sorted, to compare configs regardless of key order. */
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson((value as any)[key])}`).join(',')}}`
+  }
+  return JSON.stringify(value) ?? 'null'
+}
+
 const channelKey = (channel: ChannelInfo) => `${channel.type}:${channel.id}`
 /** Daily counters of the daily quota nodes. */
 const USAGE_KEY = 'flows-usage'
@@ -309,7 +318,23 @@ export class FlowService extends Service {
       execIn: type.kind === 'action',
       execOut: type.kind === 'trigger' ? ['next'] : type.kind === 'action' ? type.execOut ?? ['next'] : [],
       execOutFrom: type.kind === 'action' ? type.execOutFrom : undefined,
+      ...(type.restricted ? { restricted: true } : {}),
     }))
+  }
+
+  /**
+   * Refuses Agent changes to restricted nodes (such as terminal commands): new ones, and changed
+   * config or inputs of existing ones. Removing them and moving them is fine.
+   */
+  private checkRestricted(nodes: NodeInput[] | undefined, before: FlowNode[]) {
+    const same = (a: unknown, b: unknown) => stableJson(a ?? {}) === stableJson(b ?? {})
+    for (const node of nodes ?? []) {
+      const type = this.types.get(node.type)
+      if (!type?.restricted) continue
+      const old = node.id ? before.find((item) => item.id === node.id) : undefined
+      if (old && old.type === node.type && same(old.config, node.config) && same(old.inputs, node.inputs)) continue
+      throw new MushinError('forbidden', `The Agent cannot add or change "${node.type}" nodes${node.id ? ` (${node.id})` : ''}; ask the user to do it in the flow editor`)
+    }
   }
 
   private recompile() {
@@ -1063,10 +1088,13 @@ export class FlowService extends Service {
 
     yield actions.define({
       name: 'flows.create',
-      description: 'Create a conversation flow. Every flow starts at a trigger node. Edges only say what runs next: from a node\'s "exec:<output>" handle (e.g. "exec:next", "exec:true", "exec:other") to the next node\'s "exec" handle. Values move by reference instead: set a node\'s inputs (or text in its config) to "{{<node id>.<output>}}" of a node that ran before it, or "{{sys.text}}" for the message. Take types, inputs, outputs and config from flows.nodeTypes. Set bots to run it on those bots, then check it with flows.test. Returns the flow with any validation issues.',
+      description: 'Create a conversation flow. Every flow starts at a trigger node. Edges only say what runs next: from a node\'s "exec:<output>" handle (e.g. "exec:next", "exec:true", "exec:other") to the next node\'s "exec" handle. Values move by reference instead: set a node\'s inputs (or text in its config) to "{{<node id>.<output>}}" of a node that ran before it, or "{{sys.text}}" for the message. Take types, inputs, outputs and config from flows.nodeTypes. Set bots to run it on those bots, then check it with flows.test. Node types marked restricted (such as terminal commands) can only be added or changed by the user in the flow editor. Returns the flow with any validation issues.',
       risk: 'write',
       input: z.object(flowFields),
-      handler: (input, caller) => this.create({ ...input, source: { kind: caller.kind === 'agent' ? 'agent' : 'user' } }),
+      handler: (input, caller) => {
+        if (caller.kind === 'agent') this.checkRestricted(input.nodes, [])
+        return this.create({ ...input, source: { kind: caller.kind === 'agent' ? 'agent' : 'user' } })
+      },
     })
 
     yield actions.define({
@@ -1074,7 +1102,10 @@ export class FlowService extends Service {
       description: 'Change a flow. Passing nodes or edges replaces the whole list, so send every node and edge that should remain. Returns the flow with validation issues.',
       risk: 'write',
       input: idInput.extend(z.object(flowFields).partial().shape),
-      handler: ({ id, ...patch }) => this.update(id, patch),
+      handler: ({ id, ...patch }, caller) => {
+        if (caller.kind === 'agent') this.checkRestricted(patch.nodes, this.get(id).nodes)
+        return this.update(id, patch)
+      },
     })
 
     yield actions.define({
