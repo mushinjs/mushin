@@ -1,5 +1,5 @@
 import {
-  type ChannelInfo, Context, type LogTag, logTag, type Exporter, type Fiber, fiberError, fiberStatus, isMasked, Logger, mask, type Message,
+  type ChannelInfo, Context, describeMissing, dependencyReport, type LogTag, type MissingDependency, logTag, type Exporter, type Fiber, fiberError, fiberStatus, isMasked, Logger, mask, type Message,
   type MessageRecord, messageType, MushinError, type Plugin, pluginSchema, randomId, type Segment, Service, toJsonSchema,
   validatePluginConfig, z,
 } from '@mushin/core'
@@ -411,7 +411,8 @@ export class BotManager extends Service {
   async plugins(id: string) {
     const record = this.get(id)
     const runtime = this.runtimes.get(id)
-    const catalog = (await this.home.manager.catalog()).filter((entry) => entry.manifest.kind === 'bot')
+    const graph = await this.home.manager.graph()
+    const catalog = graph.catalog.filter((entry) => entry.manifest.kind === 'bot')
     return Promise.all(catalog.map(async (entry) => {
       const configured = record.plugins.find((item) => item.package === entry.package)
       let configSchema
@@ -419,6 +420,10 @@ export class BotManager extends Service {
         configSchema = pluginSchema(await this.home.manager.loadPlugin(entry.package))
       } catch {}
       const fiber = runtime?.plugins.get(entry.package)
+      const report = dependencyReport(graph, entry.package)
+      const missing = this.missingApps(report.requires)
+      let status: string = configured?.enabled ? (runtime ? fiberStatus(fiber) : 'disabled') : 'disabled'
+      if (status === 'pending' && missing.length) status = 'missing'
       return {
         package: entry.package,
         version: entry.version,
@@ -426,15 +431,28 @@ export class BotManager extends Service {
         enabled: !!configured?.enabled,
         config: configured?.config ?? {},
         configSchema,
-        status: configured?.enabled ? (runtime ? fiberStatus(fiber) : 'disabled') : 'disabled',
-        error: runtime?.pluginErrors.get(entry.package) ?? fiberError(fiber),
+        status,
+        error: runtime?.pluginErrors.get(entry.package) ?? (status === 'missing' ? describeMissing(missing) : fiberError(fiber)),
+        dependencies: { requires: report.requires, optional: report.optional },
+        ...(missing.length ? { missing } : {}),
       }
     }))
+  }
+
+  /** Required app plugins that are not installed, do not fit or are disabled. */
+  private missingApps(requires: ReturnType<typeof dependencyReport>['requires']): MissingDependency[] {
+    return requires
+      .filter((dep) => dep.problem === 'not-installed' || dep.problem === 'version' || dep.problem === 'disabled')
+      .map((dep) => ({ package: dep.package, range: dep.range, reason: dep.problem as MissingDependency['reason'], ...(dep.version ? { version: dep.version } : {}) }))
   }
 
   async enablePlugin(id: string, name: string, config?: Record<string, any>) {
     const record = this.get(id)
     const plugin = await this.loadBotPlugin(name)
+    const missing = this.missingApps(dependencyReport(await this.home.manager.graph(), name).requires)
+    if (missing.length) {
+      throw new MushinError('unavailable', `${name} cannot run on this bot yet. ${describeMissing(missing)}; enable them on the plugins page`, { missing })
+    }
     let entry = record.plugins.find((item) => item.package === name)
     const nextConfig = config ?? entry?.config ?? {}
     validatePluginConfig(plugin, nextConfig)

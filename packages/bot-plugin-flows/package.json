@@ -24,6 +24,12 @@
     "description": {
       "en": "Runs the flows attached to this bot, before other plugins see the message",
       "zh-CN": "运行绑定到此机器人的流程，先于其他插件处理消息"
+    },
+    "requires": {
+      "plugins": {
+        "@mushin/plugin-bots": "*",
+        "@mushin/plugin-flows": "*"
+      }
     }
   },
   "dependencies": {

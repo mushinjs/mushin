@@ -184,6 +184,36 @@ Write `title`, `description` and config field descriptions for both the user and
 - A provider type calls `ctx.llm.defineType({ id, displayName, config, secrets, presets, create })`. `create` returns a client with `chat()` and, optionally, `stream()` and `listModels()`. See `packages/plugin-provider-openai`.
 - An adapter calls `ctx.bots.defineAdapter({ id, displayName, config, secrets, segments, plugin })`. `plugin` is loaded inside each bot's context; it opens the connection, calls `ctx.bot.useTransport()` to send, and `ctx.bot.receive()` for each incoming message. See `packages/plugin-adapter-onebot`.
 
+## Declaring dependencies
+
+`inject` tells Cordis which services to wait for, but not which package provides them. Declare that in the manifest, so the dashboard, the plugin manager and the Agent can explain what is missing and offer to enable it:
+
+```json
+{
+  "mushin": {
+    "kind": "app",
+    "provides": ["permissions"],
+    "requires": {
+      "mushin": ">=0.1.0",
+      "plugins": { "@mushin/plugin-bots": "*" }
+    },
+    "optional": {
+      "plugins": { "@mushin/plugin-flows": "*" }
+    },
+    "nodes": ["logic.permission"]
+  }
+}
+```
+
+- `provides`: the service names the plugin registers (`super(ctx, 'permissions')`). They map `inject` names to packages.
+- `requires`: what the plugin cannot run without. Enabling it refuses when a required plugin is not installed or its version does not fit the range, and asks before enabling required plugins that are installed but off (`plugins.enable` with `cascade: true` does both). Disabling a plugin asks before disabling the enabled plugins that require it. `mushin` is a range of the Mushin.js version.
+- `optional`: what makes the plugin better. It runs without them; use `ctx.inject(['flows'], (ctx) => …)` for the parts that need them, and say in the dashboard what the missing plugin would add.
+- `nodes`: flow node types the plugin adds; a trailing `*` covers a prefix, such as `onebot.*`. When a flow uses one of them while the plugin is off, the editor says which plugin to enable.
+
+Ranges accept `*`, `1.2.3`, `>=0.2.0`, `^1.2`, `~1.2.3`, `1.x`, ranges joined by spaces (all must hold) and `||`. Bot plugins declare the app plugins they need the same way; a bot cannot enable one while those are off.
+
+At startup, plugins load after the plugins they require. A dependency cycle is reported in the log with the chain (`a → b → a`), and the plugins in it do not start. A plugin whose required plugin is off shows **Missing dependency** with the package it waits for, instead of waiting without a reason. Your npm dependencies still go in `dependencies` as usual. Run the plugin as a local plugin while you work on it: a service it injects without declaring the providing plugin is logged as a warning.
+
 ## Local plugins
 
 Put a plugin folder (with its `package.json`) in `<instance>/plugins/<name>/`, for example `instance/plugins/weather/`. Mushin.js loads TypeScript sources directly. Click **Rescan installed plugins** on the Plugins page, or ask the Agent to rescan (`plugins.catalog` with `refresh: true`), and the plugin appears in the catalog.

@@ -254,6 +254,8 @@ export interface FlowIssue {
   message: string
   nodeId?: string
   edgeId?: string
+  /** For a node type no loaded plugin provides: the installed package that adds it. */
+  plugin?: string
 }
 
 export interface TraceStep {

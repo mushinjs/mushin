@@ -20,6 +20,11 @@
     "description": {
       "en": "OpenAI, DeepSeek, Moonshot, Qwen, SiliconFlow, OpenRouter, Ollama",
       "zh-CN": "支持 OpenAI、DeepSeek、Moonshot、通义千问、硅基流动、OpenRouter、Ollama"
+    },
+    "requires": {
+      "plugins": {
+        "@mushin/plugin-providers": "*"
+      }
     }
   },
   "dependencies": {

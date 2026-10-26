@@ -20,6 +20,20 @@
     "description": {
       "en": "Build bot behavior visually from nodes; other plugins can add node types",
       "zh-CN": "用节点可视化地编排机器人行为；其他插件可以添加节点类型"
+    },
+    "provides": [
+      "flows"
+    ],
+    "requires": {
+      "plugins": {
+        "@mushin/plugin-storage": "*"
+      }
+    },
+    "optional": {
+      "plugins": {
+        "@mushin/plugin-bots": "*",
+        "@mushin/plugin-providers": "*"
+      }
     }
   },
   "dependencies": {

@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
+import { validRange } from './semver'
 
 export type LocalizedText = string | Record<string, string>
 
@@ -12,6 +14,66 @@ export interface PluginManifest {
   essential?: boolean
   platforms?: string[]
   category?: string
+  /** Service names this plugin provides, such as `flows`; maps `inject` names to packages. */
+  provides?: string[]
+  /** Needed to run: without them the plugin cannot be enabled. */
+  requires?: DependencySpec
+  /** Used when present: without them the plugin runs, and the features that need them say so. */
+  optional?: DependencySpec
+  /** Flow node types this plugin adds, such as `logic.permission` or `onebot.*`, so the editor can say which plugin to enable for an unknown node. */
+  nodes?: string[]
+}
+
+export interface DependencySpec {
+  /** A version range of Mushin.js, such as `>=0.2.0`. */
+  mushin?: string
+  /** Package name → version range, such as `{ "@mushin/plugin-bots": "*" }`. */
+  plugins?: Record<string, string>
+}
+
+/** The running Mushin.js version: the version of `@mushin/core`. */
+export const MUSHIN_VERSION: string = (() => {
+  try {
+    return JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version ?? '0.0.0'
+  } catch {
+    return '0.0.0'
+  }
+})()
+
+/** Problems with the dependency fields of a manifest, in words a plugin author can act on. */
+export function manifestProblems(manifest: PluginManifest): string[] {
+  const problems: string[] = []
+  if (manifest.provides !== undefined && (!Array.isArray(manifest.provides) || manifest.provides.some((item) => typeof item !== 'string'))) {
+    problems.push('"provides" should be a list of service names')
+  }
+  for (const key of ['requires', 'optional'] as const) {
+    const spec = manifest[key]
+    if (spec === undefined) continue
+    if (!spec || typeof spec !== 'object' || Array.isArray(spec)) {
+      problems.push(`"${key}" should be an object with "mushin" and "plugins"`)
+      continue
+    }
+    if (spec.mushin !== undefined && (typeof spec.mushin !== 'string' || !validRange(spec.mushin))) {
+      problems.push(`"${key}.mushin" is not a version range: ${JSON.stringify(spec.mushin)}`)
+    }
+    if (spec.plugins !== undefined) {
+      if (!spec.plugins || typeof spec.plugins !== 'object' || Array.isArray(spec.plugins)) {
+        problems.push(`"${key}.plugins" should map package names to version ranges`)
+        continue
+      }
+      for (const [name, range] of Object.entries(spec.plugins)) {
+        if (typeof range !== 'string' || !validRange(range)) problems.push(`"${key}.plugins.${name}" is not a version range: ${JSON.stringify(range)}`)
+      }
+    }
+  }
+  return problems
+}
+
+/** Package name → range of the plugins a manifest lists under `requires` or `optional`. */
+export function dependencyPlugins(manifest: PluginManifest | undefined, key: 'requires' | 'optional'): [string, string][] {
+  const plugins = manifest?.[key]?.plugins
+  if (!plugins || typeof plugins !== 'object') return []
+  return Object.entries(plugins).filter(([, range]) => typeof range === 'string')
 }
 
 export interface CatalogEntry {

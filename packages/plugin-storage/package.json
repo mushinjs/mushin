@@ -21,7 +21,10 @@
     "description": {
       "en": "Stores providers, bots and sessions as JSON files",
       "zh-CN": "以 JSON 文件保存提供商、机器人与会话"
-    }
+    },
+    "provides": [
+      "storage"
+    ]
   },
   "dependencies": {
     "@mushin/core": "workspace:*"

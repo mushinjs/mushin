@@ -21,9 +21,57 @@ export interface PluginManifest {
   essential?: boolean
   platforms?: string[]
   category?: string
+  provides?: string[]
+  requires?: { mushin?: string; plugins?: Record<string, string> }
+  optional?: { mushin?: string; plugins?: Record<string, string> }
+  nodes?: string[]
 }
 
-export type PluginStatus = 'disabled' | 'pending' | 'loading' | 'active' | 'failed' | 'unloading'
+export type PluginStatus = 'disabled' | 'pending' | 'loading' | 'active' | 'failed' | 'unloading' | 'missing'
+
+export type DependencyProblem = 'not-installed' | 'version' | 'disabled' | 'not-app'
+
+export interface DependencyState {
+  package: string
+  range: string
+  optional: boolean
+  installed: boolean
+  version?: string
+  kind?: 'app' | 'bot'
+  enabled: boolean
+  entry?: string
+  problem?: DependencyProblem
+}
+
+export interface DependentState {
+  package: string
+  kind: 'app' | 'bot'
+  optional: boolean
+  enabled: boolean
+  entry?: string
+}
+
+export interface MissingDependency {
+  package?: string
+  service?: string
+  range?: string
+  reason: 'not-installed' | 'version' | 'disabled' | 'inactive' | 'mushin' | 'cycle'
+  version?: string
+}
+
+export interface PluginDependencies {
+  requires: DependencyState[]
+  optional: DependencyState[]
+  dependents?: DependentState[]
+  mushin?: { range: string; version: string; ok: boolean }
+}
+
+export interface DependencyPlan extends PluginDependencies {
+  package: string
+  dependents: DependentState[]
+  enable: { enable: string[]; blocked: DependencyState[]; mushin: { package: string; range: string; version: string }[] }
+  disable: { disable: { id: string; package: string }[]; botPlugins: string[]; degraded: string[] }
+}
 
 export interface AppPlugin {
   id: string
@@ -35,6 +83,8 @@ export interface AppPlugin {
   version?: string
   status: PluginStatus
   error?: string
+  dependencies?: PluginDependencies
+  missing?: MissingDependency[]
 }
 
 export interface CatalogEntry {
@@ -168,6 +218,8 @@ export interface BotPluginInfo {
   configSchema?: JsonSchema
   status: PluginStatus
   error?: string
+  dependencies?: PluginDependencies
+  missing?: MissingDependency[]
 }
 
 export interface Segment {
@@ -330,6 +382,8 @@ export interface FlowIssue {
   message: string
   nodeId?: string
   edgeId?: string
+  /** The installed plugin that adds an unknown node type. */
+  plugin?: string
 }
 
 /** Nodes the editor frames together; no effect on runs. */

@@ -21,6 +21,14 @@
     "description": {
       "en": "Manages LLM providers and exposes ctx.llm",
       "zh-CN": "管理大模型提供商并提供 ctx.llm 服务"
+    },
+    "provides": [
+      "llm"
+    ],
+    "requires": {
+      "plugins": {
+        "@mushin/plugin-storage": "*"
+      }
     }
   },
   "dependencies": {

@@ -20,7 +20,21 @@
     "description": {
       "en": "Connects bots to NapCat and other OneBot v11 implementations",
       "zh-CN": "将机器人连接到 NapCat 等 OneBot v11 实现"
-    }
+    },
+    "requires": {
+      "plugins": {
+        "@mushin/plugin-bots": "*",
+        "@cordisjs/plugin-server": "*"
+      }
+    },
+    "optional": {
+      "plugins": {
+        "@mushin/plugin-flows": "*"
+      }
+    },
+    "nodes": [
+      "onebot.*"
+    ]
   },
   "dependencies": {
     "@mushin/core": "workspace:*",

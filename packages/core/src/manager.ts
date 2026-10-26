@@ -2,8 +2,12 @@ import { pathToFileURL } from 'node:url'
 import { Context, type Fiber, type Plugin, Service } from 'cordis'
 import { z } from 'zod'
 import { toJsonSchema, type JsonSchema } from './actions'
+import {
+  type DependencyGraph, dependencyReport, type DependencyState, loadOrder, planDisable, planEnable, providerOf, undeclaredServices, unmet,
+  injectedServices,
+} from './dependencies'
 import { MushinError } from './errors'
-import { type CatalogEntry, type PluginManifest, readPackageJson, resolvePackageEntry, scanCatalog } from './manifest'
+import { type CatalogEntry, manifestProblems, MUSHIN_VERSION, type PluginManifest, readPackageJson, resolvePackageEntry, scanCatalog } from './manifest'
 import { writeJsonAtomic } from './utils'
 
 declare module 'cordis' {
@@ -38,7 +42,18 @@ export interface ManagerOptions {
   importer: (specifier: string) => Promise<any>
 }
 
-export type PluginStatus = 'disabled' | 'pending' | 'loading' | 'active' | 'failed' | 'unloading'
+/** `missing`: waiting for a dependency that is not installed, not enabled or not running. */
+export type PluginStatus = 'disabled' | 'pending' | 'loading' | 'active' | 'failed' | 'unloading' | 'missing'
+
+/** A required dependency that keeps a plugin from running, or a service nothing provides yet. */
+export interface MissingDependency {
+  package?: string
+  service?: string
+  range?: string
+  /** `inactive`: enabled, but not running yet (or failed). */
+  reason: 'not-installed' | 'version' | 'disabled' | 'inactive' | 'mushin' | 'cycle'
+  version?: string
+}
 
 // Mirrors cordis FiberState, a const enum that cannot be imported under isolatedModules.
 const fiberStates: PluginStatus[] = ['pending', 'loading', 'active', 'failed', 'disabled', 'unloading']
@@ -84,6 +99,7 @@ const knownManifests: Record<string, PluginManifest> = {
   '@cordisjs/plugin-server': {
     kind: 'app',
     essential: true,
+    provides: ['server'],
     displayName: { en: 'HTTP server', 'zh-CN': 'HTTP 服务器' },
     description: { en: 'Serves the dashboard, the API and OneBot reverse connections', 'zh-CN': '提供控制台、API 和 OneBot 反向连接' },
   },
@@ -104,6 +120,10 @@ export class PluginManager extends Service {
   private home: Context
   private fibers = new Map<string, Fiber>()
   private catalogCache?: Promise<CatalogEntry[]>
+  /** The last catalog read, for status checks that cannot wait. */
+  private catalogList: CatalogEntry[] = []
+  /** Entries that were not started because a dependency is missing or they form a cycle. */
+  private blocked = new Map<string, MissingDependency[]>()
 
   constructor(ctx: Context, public options: ManagerOptions) {
     super(ctx, 'manager')
@@ -130,8 +150,17 @@ export class PluginManager extends Service {
       }
     })
     yield* this.defineActions()
-    for (const entry of this.entries) {
-      if (entry.enabled === false) continue
+    const graph = await this.graph()
+    for (const entry of this.catalogList) {
+      for (const problem of manifestProblems(entry.manifest)) this.logger.warn('%s: %s in its package.json "mushin" field', entry.package, problem)
+    }
+    // Dependencies first, so a plugin finds what it needs already loading.
+    const { order, cycles } = loadOrder(graph, this.entries.filter((entry) => entry.enabled !== false))
+    for (const cycle of cycles) {
+      this.logger.error('dependency cycle: %s; these plugins do not start', cycle.chain.join(' → '))
+      for (const entry of cycle.entries) this.blocked.set(entry.id, [{ reason: 'cycle', package: cycle.chain.join(' → ') }])
+    }
+    for (const entry of order) {
       await this.start(entry).catch((error) => {
         this.logger.error('failed to load %s: %s', entry.package, error)
       })
@@ -141,10 +170,42 @@ export class PluginManager extends Service {
   catalog(refresh = false) {
     if (refresh || !this.catalogCache) {
       this.catalogCache = scanCatalog(this.options.nodeModules, this.options.localDirs)
+      this.catalogCache.then((list) => (this.catalogList = list), () => {})
     }
     return this.catalogCache
   }
 
+  /** The installed packages as last scanned, without waiting for a rescan. */
+  get catalogSnapshot(): readonly CatalogEntry[] {
+    return this.catalogList
+  }
+
+  /** The package whose manifest says it adds this flow node type, e.g. `onebot.*` covers `onebot.kick`. */
+  packageForNode(type: string) {
+    return this.catalogList.find((entry) => entry.manifest.nodes?.some((pattern) => (pattern.endsWith('*') ? type.startsWith(pattern.slice(0, -1)) : pattern === type)))
+  }
+
+  /** The catalog and entries, for dependency questions. */
+  async graph(refresh = false): Promise<DependencyGraph> {
+    this.catalogList = await this.catalog(refresh)
+    return this.graphNow()
+  }
+
+  private graphNow(): DependencyGraph {
+    return { catalog: this.catalogList, entries: this.entries, known: knownManifest }
+  }
+
+  /** Dependencies, dependents and what enabling or disabling the package would take. */
+  async dependencies(name: string) {
+    const graph = await this.graph()
+    const entry = this.entries.find((item) => item.package === name)
+    return {
+      ...dependencyReport(graph, name),
+      enable: planEnable(graph, name),
+      disable: planDisable(graph, name),
+      ...(entry ? { missing: this.missingOf(entry) } : {}),
+    }
+  }
   async findPackage(name: string) {
     return (await this.catalog()).find((entry) => entry.package === name)
   }
@@ -162,14 +223,81 @@ export class PluginManager extends Service {
     return this.entries.find((entry) => entry.id === id)
   }
 
-  status(id: string) {
+  status(id: string): { status: PluginStatus; error?: string; missing?: MissingDependency[] } {
+    const blocked = this.blocked.get(id)
+    if (blocked) return { status: 'missing', error: describeMissing(blocked), missing: blocked }
     const fiber = this.fibers.get(id)
-    return { status: fiberStatus(fiber), error: fiberError(fiber) }
+    const status = fiberStatus(fiber)
+    const entry = this.get(id)
+    if (status === 'pending' && entry) {
+      const missing = this.missingOf(entry)
+      if (missing.length) return { status: 'missing', error: describeMissing(missing), missing }
+    }
+    return { status, error: fiberError(fiber) }
+  }
+
+  /** What keeps an enabled entry from running: required plugins that are absent or stopped, and injected services nobody provides. */
+  private missingOf(entry: PluginEntry): MissingDependency[] {
+    const graph = this.graphNow()
+    const missing: MissingDependency[] = []
+    for (const dep of dependencyReport(graph, entry.package).requires) {
+      if (dep.kind === 'bot') continue
+      const reason = this.depReason(dep)
+      if (reason) missing.push({ package: dep.package, range: dep.range, reason, ...(dep.version ? { version: dep.version } : {}) })
+    }
+    const fiber = this.fibers.get(entry.id)
+    for (const service of injectedServices({ inject: fiber?.inject }).required) {
+      if (this.home.get(service as any) !== undefined) continue
+      const provider = providerOf(graph, service)
+      if (provider && missing.some((item) => item.package === provider)) continue
+      const providerEntry = provider ? this.entries.find((item) => item.package === provider) : undefined
+      missing.push({
+        service,
+        ...(provider ? { package: provider } : {}),
+        reason: !provider ? 'not-installed' : !providerEntry || providerEntry.enabled === false ? 'disabled' : 'inactive',
+      })
+    }
+    return missing
+  }
+
+  private depReason(dep: DependencyState): MissingDependency['reason'] | undefined {
+    if (dep.problem === 'not-installed' || dep.problem === 'version' || dep.problem === 'disabled') return dep.problem
+    if (dep.entry && fiberStatus(this.fibers.get(dep.entry)) !== 'active' && !knownManifest(dep.package)) return 'inactive'
+  }
+
+  /** Requirements checked before starting: the Mushin.js version and required plugins that are installed, fit and enabled. */
+  private async preflight(entry: PluginEntry): Promise<MissingDependency[]> {
+    const graph = await this.graph()
+    const report = dependencyReport(graph, entry.package)
+    const missing: MissingDependency[] = []
+    if (report.mushin && !report.mushin.ok) missing.push({ reason: 'mushin', range: report.mushin.range, version: MUSHIN_VERSION })
+    for (const dep of report.requires) {
+      if (dep.kind === 'bot') continue
+      if (dep.problem === 'not-installed' || dep.problem === 'version' || dep.problem === 'disabled') {
+        missing.push({ package: dep.package, range: dep.range, reason: dep.problem, ...(dep.version ? { version: dep.version } : {}) })
+      }
+    }
+    return missing
   }
 
   private async start(entry: PluginEntry) {
     this.logger.debug('starting %s (%s)', entry.id, entry.package)
+    const missing = await this.preflight(entry)
+    if (missing.length) {
+      await this.fibers.get(entry.id)?.dispose()
+      this.fibers.delete(entry.id)
+      this.blocked.set(entry.id, missing)
+      this.logger.warn('%s does not start: %s', entry.id, describeMissing(missing))
+      this.home.emit('manager/changed', entry.id)
+      return
+    }
+    this.blocked.delete(entry.id)
     const plugin = await this.loadPlugin(entry.package)
+    for (const { service, provider } of undeclaredServices(this.graphNow(), entry.package, plugin)) {
+      const local = this.catalogList.find((item) => item.package === entry.package)?.local
+      // Mostly useful to plugin authors, whose plugins are usually local while they work on them.
+      this.logger[local ? 'warn' : 'debug']('%s injects "%s" but does not declare %s in its manifest\'s requires or optional', entry.package, service, provider)
+    }
     // Let the old instance release its resources (e.g. the server's port) before the new one starts.
     await this.fibers.get(entry.id)?.dispose()
     const fiber = this.home.plugin(plugin, entry.config ?? {})
@@ -180,6 +308,7 @@ export class PluginManager extends Service {
 
   private async stop(id: string) {
     const fiber = this.fibers.get(id)
+    if (this.blocked.delete(id)) this.home.emit('manager/changed', id)
     if (!fiber) return
     this.fibers.delete(id)
     await fiber.dispose()
@@ -191,7 +320,30 @@ export class PluginManager extends Service {
     return writeJsonAtomic(this.options.configPath, this.options.config)
   }
 
-  async enable(name: string, id?: string) {
+  /**
+   * Enables a plugin. Required plugins that are installed but disabled are refused unless
+   * `cascade` is set, in which case they are enabled first; missing or mismatched ones always are.
+   */
+  async enable(name: string, id?: string, options: { cascade?: boolean } = {}) {
+    const plan = planEnable(await this.graph(), name)
+    if (plan.mushin.length) {
+      const item = plan.mushin[0]
+      throw new MushinError('unavailable', `${item.package} needs Mushin.js ${item.range}; this is ${item.version}`, { plan })
+    }
+    if (plan.blocked.length) {
+      const list = plan.blocked.map((dep) => (dep.problem === 'version' ? `${dep.package}@${dep.range} (installed: ${dep.version})` : `${dep.package} (not installed)`))
+      throw new MushinError('unavailable', `${name} needs ${list.join(', ')}`, { plan })
+    }
+    if (plan.enable.length && !options.cascade) {
+      throw new MushinError('conflict', `${name} needs ${plan.enable.join(', ')}, which ${plan.enable.length > 1 ? 'are' : 'is'} disabled; enable ${plan.enable.length > 1 ? 'them' : 'it'} too with cascade: true`, { plan })
+    }
+    for (const dep of plan.enable) await this.enableOne(dep)
+    const entry = await this.enableOne(name, id)
+    await this.retryBlocked()
+    return entry
+  }
+
+  private async enableOne(name: string, id?: string) {
     let entry = id ? this.get(id) : this.entries.find((item) => item.package === name)
     if (!entry) {
       const base = id ?? name.replace(/^@[^/]+\//, '').replace(/^(mushin-)?plugin-/, '')
@@ -207,17 +359,48 @@ export class PluginManager extends Service {
     return entry
   }
 
-  async disable(id: string) {
+  /**
+   * Disables a plugin. Enabled plugins that require it are refused unless `cascade` is set, in
+   * which case they are disabled first.
+   */
+  async disable(id: string, options: { cascade?: boolean } = {}) {
     const entry = this.require(id)
+    await this.assertNotEssential(entry)
+    // Another enabled entry of the same package keeps its dependents running.
+    const twin = this.entries.some((item) => item !== entry && item.package === entry.package && item.enabled !== false)
+    const plan = twin ? { disable: [], botPlugins: [], degraded: [] } : planDisable(await this.graph(), entry.package)
+    if (plan.disable.length && !options.cascade) {
+      throw new MushinError('conflict', `${plan.disable.map((item) => item.package).join(', ')} need${plan.disable.length > 1 ? '' : 's'} ${entry.package}; disable ${plan.disable.length > 1 ? 'them' : 'it'} too with cascade: true`, { plan })
+    }
+    for (const item of plan.disable) await this.assertNotEssential(this.require(item.id))
+    for (const item of plan.disable) await this.disableOne(this.require(item.id))
+    return this.disableOne(entry)
+  }
+
+  private async assertNotEssential(entry: PluginEntry) {
     const manifest = (await this.findPackage(entry.package))?.manifest ?? knownManifests[entry.package]
     if (manifest?.essential) {
       throw new MushinError('forbidden', `${entry.package} is essential and cannot be disabled`)
     }
+  }
+
+  private async disableOne(entry: PluginEntry) {
+    const id = entry.id
     entry.enabled = false
     await this.save()
     this.logger.info('disabled %s', id)
     await this.stop(id)
     return entry
+  }
+
+  /** Starts entries that were held back for a missing dependency, once it is there. */
+  private async retryBlocked() {
+    for (const id of [...this.blocked.keys()]) {
+      const entry = this.get(id)
+      if (!entry || entry.enabled === false || this.blocked.get(id)?.some((item) => item.reason === 'cycle')) continue
+      if ((await this.preflight(entry)).length) continue
+      await this.start(entry).catch((error) => this.logger.error('failed to load %s: %s', entry.package, error))
+    }
   }
 
   async configure(id: string, config: Record<string, any>) {
@@ -252,6 +435,7 @@ export class PluginManager extends Service {
     try {
       configSchema = pluginSchema(await this.loadPlugin(entry.package))
     } catch {}
+    const report = dependencyReport(this.graphNow(), entry.package)
     return {
       id: entry.id,
       package: entry.package,
@@ -260,6 +444,7 @@ export class PluginManager extends Service {
       configSchema,
       manifest: catalog?.manifest ?? knownManifests[entry.package],
       version: catalog?.version,
+      dependencies: { requires: report.requires, optional: report.optional, dependents: report.dependents, ...(report.mushin ? { mushin: report.mushin } : {}) },
       ...this.status(entry.id),
     }
   }
@@ -296,19 +481,27 @@ export class PluginManager extends Service {
     })
 
     yield actions.define({
+      name: 'plugins.dependencies',
+      description: 'What a plugin package needs and what needs it: required and optional plugins with whether each is installed, fits the version range and is enabled; the plugins that depend on it; the app plugins enabling it would also enable; and the ones disabling it would also disable. Read this before enabling or disabling a plugin.',
+      risk: 'read',
+      input: z.object({ package: z.string().describe('Package name, e.g. @mushin/plugin-flows') }),
+      handler: ({ package: name }) => this.dependencies(name),
+    })
+
+    yield actions.define({
       name: 'plugins.enable',
-      description: 'Enable an app plugin by package name. Adds it to the config if it is not there yet.',
+      description: 'Enable an app plugin by package name. Adds it to the config if it is not there yet. If it requires plugins that are disabled, this fails and names them unless cascade is true, which enables them first; tell the user which ones before doing that.',
       risk: 'write',
-      input: z.object({ package: z.string(), id: z.string().optional() }),
-      handler: async (input) => this.describe(await this.enable(input.package, input.id)),
+      input: z.object({ package: z.string(), id: z.string().optional(), cascade: z.boolean().optional().describe('Also enable the disabled plugins it requires') }),
+      handler: async (input) => this.describe(await this.enable(input.package, input.id, { cascade: input.cascade })),
     })
 
     yield actions.define({
       name: 'plugins.disable',
-      description: 'Disable an app plugin entry. Essential plugins cannot be disabled.',
+      description: 'Disable an app plugin entry. Essential plugins cannot be disabled. If enabled plugins require it, this fails and names them unless cascade is true, which disables them too; tell the user which ones before doing that.',
       risk: 'write',
-      input: entryInput,
-      handler: async ({ id }) => this.describe(await this.disable(id)),
+      input: entryInput.extend({ cascade: z.boolean().optional().describe('Also disable the plugins that require it') }),
+      handler: async ({ id, cascade }) => this.describe(await this.disable(id, { cascade })),
     })
 
     yield actions.define({
@@ -327,4 +520,19 @@ export class PluginManager extends Service {
       handler: async ({ id }) => this.describe(await this.reload(id)),
     })
   }
+}
+
+/** One line naming what keeps a plugin from running, for logs and status tooltips. */
+export function describeMissing(missing: MissingDependency[]) {
+  return 'Missing dependencies: ' + missing.map((item) => {
+    const name = item.package ?? `service "${item.service}"`
+    switch (item.reason) {
+      case 'not-installed': return item.package ? `${name} (not installed)` : `${name} (no installed plugin provides it)`
+      case 'version': return `${name}@${item.range} (installed: ${item.version})`
+      case 'disabled': return `${name} (disabled)`
+      case 'inactive': return `${name} (not running)`
+      case 'mushin': return `Mushin.js ${item.range} (this is ${item.version})`
+      case 'cycle': return `a dependency cycle: ${item.package}`
+    }
+  }).join(', ')
 }
