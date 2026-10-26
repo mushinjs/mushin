@@ -32,14 +32,17 @@
     "optional": {
       "plugins": {
         "@mushin/plugin-bots": "*",
-        "@mushin/plugin-providers": "*"
+        "@mushin/plugin-providers": "*",
+        "@mushin/plugin-database": "*"
       }
     }
   },
   "dependencies": {
     "@mushin/core": "workspace:*",
     "@mushin/plugin-bots": "workspace:*",
+    "@mushin/plugin-database": "workspace:*",
     "@mushin/plugin-providers": "workspace:*",
-    "@mushin/plugin-storage": "workspace:*"
+    "@mushin/plugin-storage": "workspace:*",
+    "minato": "catalog:"
   }
 }

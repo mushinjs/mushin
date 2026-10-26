@@ -21,9 +21,9 @@ export async function waitFor<T>(check: () => T | Promise<T>, timeout = 8000, in
   throw new Error(`timed out waiting${last ? `: ${last}` : ''}`)
 }
 
-/** Boots a real Mushin.js instance in a temp directory on a free port. */
-export async function startInstance() {
-  const baseDir = await mkdtemp(join(tmpdir(), 'mushin-test-'))
+/** Boots a real Mushin.js instance on a free port, in a temp directory unless `baseDir` names one to reuse. */
+export async function startInstance(options: { baseDir?: string } = {}) {
+  const baseDir = options.baseDir ?? await mkdtemp(join(tmpdir(), 'mushin-test-'))
   process.env.MUSHIN_ADMIN_TOKEN = TOKEN
   const instance = await start({ baseDir, port: 0, quiet: true })
   const { ctx } = instance
@@ -91,9 +91,10 @@ export async function startInstance() {
     baseDir,
     call,
     connect,
-    async stop() {
+    /** Stops the instance and deletes its directory, unless `keep` is set to start it again. */
+    async stop(stopOptions: { keep?: boolean } = {}) {
       await instance.stop()
-      await rm(baseDir, { recursive: true, force: true }).catch(() => {})
+      if (!stopOptions.keep) await rm(baseDir, { recursive: true, force: true }).catch(() => {})
     },
   }
 }

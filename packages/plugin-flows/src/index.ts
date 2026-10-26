@@ -7,6 +7,7 @@ import { compile, type CompiledFlow, FLOW_FORMAT, interceptOf, layout, migrateIn
 import { builtinNodes, commandName, scheduleTarget } from './nodes'
 import { overlap, triggerOrder, triggerSummary, type TriggerSlot } from './order'
 import { migrateDataEdges } from './refs'
+import { VariableStore } from './variables'
 import type { ChatLine, DailyCounter, FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, FlowSource, Intercept, FlowSession, LlmLike, NodeType, PersonaResolver, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
 
 export * from './engine'
@@ -15,6 +16,7 @@ export * from './nodes'
 export * from './order'
 export * from './refs'
 export * from './types'
+export * from './variables'
 
 declare module '@mushin/core' {
   interface Context {
@@ -204,7 +206,8 @@ export class FlowService extends Service {
   private docs = new Map<string, FlowDocument>()
   private compiled = new Map<string, CompiledFlow>()
   private traces = new Map<string, RunTrace[]>()
-  private variables = new Map<string, Map<string, unknown>>()
+  /** Chat, user and flow variables; saved in the database when the database plugin runs. */
+  private variables = new VariableStore((error) => this.logger.warn('saving flow variables failed: %s', error))
   /** Bot contexts running the flows bot plugin, by bot id; event and schedule runs use them. */
   private runners = new Map<string, Context>()
   private waiters = new Set<Waiter>()
@@ -261,6 +264,10 @@ export class FlowService extends Service {
       this.logger.info('migrated flow "%s" to the current format', doc.name)
     }
     this.logger.info('loaded %d flow(s)', this.docs.size)
+    this.home.inject(['model', 'database'], async (ctx) => {
+      const detach = await this.variables.attach(ctx)
+      ctx.effect(() => detach, 'flows variables')
+    })
     yield* this.defineActions()
     yield this.home.effect(() => {
       const timer = setInterval(() => this.tick(), TICK)
@@ -650,6 +657,7 @@ export class FlowService extends Service {
     this.compiled.delete(id)
     this.traces.delete(id)
     await this.home.storage.delete(`flows/${id}`)
+    await this.variables.removeFlow(id).catch((error) => this.logger.warn('removing the variables of flow %s failed: %s', id, error))
     this.home.emit('flows/changed')
     this.logger.info('deleted flow %s', this.label(doc))
     return { deleted: id }
@@ -668,21 +676,15 @@ export class FlowService extends Service {
   // ---- running ----
 
   private varsFor(flowId: string, botId: string, session: FlowSession): Pick<Variables, 'get' | 'set'> {
-    const keyOf = (scope: VariableScope) => {
-      switch (scope) {
-        case 'chat': return `${flowId}|${botId}|chat|${session.channel.type}:${session.channel.id}`
-        case 'user': return `${flowId}|${botId}|user|${session.user.id}`
-        default: return `${flowId}|${botId}|flow`
-      }
-    }
+    const slotOf = (scope: VariableScope) => ({
+      flow: flowId,
+      bot: botId,
+      scope: scope === 'run' ? 'flow' as const : scope,
+      target: scope === 'chat' ? channelKey(session.channel) : scope === 'user' ? session.user.id : '',
+    })
     return {
-      get: (scope, name) => this.variables.get(keyOf(scope))?.get(name),
-      set: (scope, name, value) => {
-        const key = keyOf(scope)
-        let store = this.variables.get(key)
-        if (!store) this.variables.set(key, store = new Map())
-        store.set(name, value)
-      },
+      get: (scope, name) => this.variables.get(slotOf(scope), name),
+      set: (scope, name, value) => this.variables.set(slotOf(scope), name, value),
     }
   }
 
