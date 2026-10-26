@@ -20,6 +20,7 @@
     "@cordisjs/plugin-server": "catalog:",
     "tsx": "catalog:",
     "@mushin/plugin-storage": "workspace:*",
+    "@mushin/plugin-database": "workspace:*",
     "@mushin/plugin-providers": "workspace:*",
     "@mushin/plugin-provider-openai": "workspace:*",
     "@mushin/plugin-provider-anthropic": "workspace:*",

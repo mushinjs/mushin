@@ -23,7 +23,7 @@ The plugin marketplace is designed but not built yet; see [docs/architecture.md]
 
 ## Quick start
 
-You need Node.js 22.12 or later and pnpm.
+You need Node.js 22.13 or later and pnpm.
 
 ```sh
 pnpm install
@@ -167,6 +167,7 @@ pnpm typecheck    # TypeScript for all packages, vue-tsc for the dashboard
 | `@mushin/core` | Action registry, plugin manager, message and provenance types |
 | `@mushin/cli` | `mushin start` and `mushin token reset` |
 | `@mushin/plugin-storage` | JSON documents in the data directory |
+| `@mushin/plugin-database` | The database service (minato; SQLite in `data/mushin.db` by default) and the actions behind the Database page |
 | `@mushin/plugin-providers` | Provider records and the `llm` service |
 | `@mushin/plugin-provider-openai`, `@mushin/plugin-provider-anthropic` | Provider types |
 | `@mushin/plugin-bots` | Bot records, per-bot runtimes, sessions, message records |

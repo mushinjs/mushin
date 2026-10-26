@@ -17,6 +17,10 @@ catalog:
   '@anthropic-ai/sdk': ^0.134.0
   ws: ^8.22.0
   ssh2: ^1.17.0
+  # minato and its drivers follow Cordis release candidates; upgrade them together with cordis.
+  minato: 4.0.1
+  '@minatojs/driver-sqlite': 5.0.3
+  '@minatojs/driver-memory': 4.0.0
   tsx: ^4.23.15
   typescript: 6.0.3
   vitest: ^5.0.4
