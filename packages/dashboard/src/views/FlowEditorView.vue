@@ -26,6 +26,7 @@ import RunLogs, { type TestInput } from '../components/flow/RunLogs.vue'
 import VarInput from '../components/flow/VarInput.vue'
 import SchemaForm from '../components/SchemaForm.vue'
 import { categoryColors, execOutHandle, parseHandle, portColors, portsOf, refOf, refsIn, schemaDefaults, supports, sysPorts } from '../flow'
+import { useAgentSceneStore } from '../stores/agentScene'
 import { useDataStore } from '../stores/data'
 import { useTheme } from '../theme'
 import type { FlowDoc, FlowGroupDoc, FlowIssue, Intercept, NodeTypeInfo, RunStep, RunTrace, TriggerSlot } from '../types'
@@ -58,6 +59,18 @@ const toggling = ref(false)
 const adapter = ref<string>()
 const issues = ref<FlowIssue[]>([])
 const blockedSlots = ref<NonNullable<FlowDoc['blocked']>>([])
+
+// Tells the Agent which flow is open and how many problems it has.
+const agentScene = useAgentSceneStore()
+watch([name, issues, flowId], () => agentScene.publish({
+  label: name.value,
+  state: {
+    errors: issues.value.filter((issue) => issue.severity === 'error').length,
+    warnings: issues.value.filter((issue) => issue.severity !== 'error').length,
+  },
+  resource: `flow:${flowId.value}`,
+}), { immediate: true })
+onBeforeUnmount(() => agentScene.publish(undefined))
 const runs = ref<RunTrace[]>([])
 const loaded = ref(false)
 const saving = ref(false)

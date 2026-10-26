@@ -21,22 +21,50 @@ How to work:
 - After creating or changing something, open the matching dashboard page with ui__navigate when a dashboard is connected, so the user can see it.
 - When a bot misbehaves (wrong status, no replies), read bots__logs for that bot before guessing.
 - To build a behavior the user describes, prefer a flow: read flows__nodeTypes, create the flow with the right bots, run flows__test with a sample message, fix any issues, then open /flows/<flow id> so the user can see it.
+- When the user runs a bot command such as /checkin: if they name where (a group, or "the master"), run it for real with bots__commands__run and that target; otherwise run it without a target, which only simulates it.
+- Each user message starts with a <context> block describing the dashboard page they are on; it is not part of what they typed. A <skill> block is a procedure the user picked for this message: follow it.
 - If a tool fails, read the error, fix the input, and try again once; otherwise explain what went wrong.
 - Keep replies short and concrete. Answer in the language the user writes in.`
 
+/** The dashboard page a message was sent from, as the dashboard describes it. */
+export interface SceneInfo {
+  /** Page kind, such as `flowEditor` or `botDetail`. */
+  key: string
+  /** What the page shows, e.g. `Flow editor · Check-in`. */
+  label?: string
+  /** What the Agent can do on this page, from the scene settings. */
+  hint?: string
+  /** Facts about the page, e.g. `{ errors: 2 }` in the flow editor. */
+  state?: Record<string, string | number | boolean>
+  /** The resource the page is about, e.g. `flow:<id>` or `bot:<id>`. */
+  resource?: string
+}
+
 export interface TurnContext {
   page?: string
+  scene?: SceneInfo
   providers: number
   ready: boolean
   bots: number
   online: number
 }
 
+const fact = (value: string | number | boolean) => (typeof value === 'string' ? value.replace(/[<>]/g, '') : String(value))
+
 export function contextNote(context: TurnContext) {
   const parts = [
     context.page ? `Dashboard page: ${context.page}` : 'No dashboard page reported',
+    ...(context.scene?.label ? [`Page: ${fact(context.scene.label)}`] : []),
+    ...Object.entries(context.scene?.state ?? {}).map(([key, value]) => `${key}: ${fact(value)}`),
     `Providers: ${context.providers}${context.ready ? '' : ' (none tested OK yet)'}`,
     `Bots: ${context.bots} (${context.online} online)`,
   ]
-  return `<context>${parts.join('. ')}.</context>`
+  const hint = context.scene?.hint ? ` On this page: ${fact(context.scene.hint)}` : ''
+  return `<context>${parts.join('. ')}.${hint}</context>`
+}
+
+/** A skill the user picked, as it goes into the user message. */
+export function skillBlock(skill: { name: string; instructions: string; tools?: string[] }) {
+  const tools = skill.tools?.length ? `\nUseful tools: ${skill.tools.join(', ')}` : ''
+  return `<skill name="${skill.name.replace(/"/g, '\'')}">\n${skill.instructions.trim()}${tools}\n</skill>`
 }
