@@ -31,6 +31,7 @@ describe('terminal plugin', () => {
     const types = await app.call<any[]>('flows.nodeTypes')
     expect(types.filter((type) => type.type.startsWith('terminal.')).map((type) => [type.type, type.restricted])).toEqual([
       ['terminal.local', true],
+      ['terminal.ssh', true],
     ])
   })
 

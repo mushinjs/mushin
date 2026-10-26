@@ -4,6 +4,9 @@ packages:
 allowBuilds:
   esbuild: true
   vue-demi: true
+  # ssh2 falls back to pure JavaScript without its optional native bindings.
+  cpu-features: false
+  ssh2: false
 
 catalog:
   # Cordis 4 is a release candidate; pin exact versions until it is stable.
@@ -13,11 +16,13 @@ catalog:
   openai: ^7.34.0
   '@anthropic-ai/sdk': ^0.134.0
   ws: ^8.22.0
+  ssh2: ^1.17.0
   tsx: ^4.23.15
   typescript: 6.0.3
   vitest: ^5.0.4
   '@types/node': ^24.0.0
   '@types/ws': ^8.18.2
+  '@types/ssh2': ^1.15.5
   vue: ^3.5.44
   vite: ^8.3.4
   '@vitejs/plugin-vue': ^6.0.10

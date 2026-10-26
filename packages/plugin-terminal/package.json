@@ -1,7 +1,7 @@
 {
   "name": "@mushin/plugin-terminal",
   "version": "0.1.0",
-  "description": "Flow nodes that run commands in a local terminal",
+  "description": "Flow nodes that run commands in a local terminal or over SSH",
   "type": "module",
   "license": "MIT",
   "exports": {
@@ -18,13 +18,14 @@
       "zh-CN": "终端"
     },
     "description": {
-      "en": "A flow node that runs commands on this machine; only you can add it, not the Agent",
-      "zh-CN": "在本机运行命令的流程节点；只能由你添加，智能体不能"
+      "en": "Flow nodes that run commands on this machine or on servers over SSH; only you can add them, not the Agent",
+      "zh-CN": "在本机或通过 SSH 在服务器上运行命令的流程节点；只能由你添加，智能体不能"
     },
     "requires": {
       "mushin": ">=0.1.0",
       "plugins": {
-        "@mushin/plugin-flows": "*"
+        "@mushin/plugin-flows": "*",
+        "@mushin/plugin-storage": "*"
       }
     },
     "nodes": [
@@ -33,6 +34,11 @@
   },
   "dependencies": {
     "@mushin/core": "workspace:*",
-    "@mushin/plugin-flows": "workspace:*"
+    "@mushin/plugin-flows": "workspace:*",
+    "@mushin/plugin-storage": "workspace:*",
+    "ssh2": "catalog:"
+  },
+  "devDependencies": {
+    "@types/ssh2": "catalog:"
   }
 }
