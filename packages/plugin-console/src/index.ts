@@ -58,7 +58,7 @@ const CLIENT_CALL_TIMEOUT = 15_000
 const FORWARDED_EVENTS = [
   'actions/changed', 'manager/changed', 'providers/changed',
   'bots/changed', 'bots/status', 'bots/message', 'bots/log', 'agent/event',
-  'flows/changed', 'flows/run', 'flows/step', 'stats/sample',
+  'flows/changed', 'flows/run', 'flows/step', 'stats/sample', 'permissions/changed', 'personas/changed',
 ] as const
 
 const plainExporter: Exporter = { colors: false, export() {} }

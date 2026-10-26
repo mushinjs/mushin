@@ -58,8 +58,8 @@ export function messageType(segments: Segment[]): MessageType {
 export type Provenance =
   | { kind: 'user' }
   | { kind: 'plugin'; plugin: string }
-  | { kind: 'llm'; plugin?: string; provider: string; model: string; latencyMs: number; tokens?: number }
-  | { kind: 'flow'; flow: string; node: string; provider?: string; model?: string }
+  | { kind: 'llm'; plugin?: string; provider: string; model: string; latencyMs: number; tokens?: number; persona?: string }
+  | { kind: 'flow'; flow: string; node: string; provider?: string; model?: string; persona?: string }
   | { kind: 'agent'; session: string }
   | { kind: 'manual' }
 

@@ -1,7 +1,7 @@
 import { type Logger, randomId, seg } from '@mushin/core'
 import { type CompiledFlow, interceptOf, triggerPriority } from './graph'
 import { interpolate, interpolateConfig, SCOPES, sysValues, toText } from './refs'
-import type { FlowBot, FlowEvent, FlowSession, LlmLike, PortType, RunState, RunStep, RunTrace, TriggerSource, Variables, VariableScope, WaitOptions } from './types'
+import type { FlowBot, FlowEvent, FlowSession, LlmLike, PersonaLike, PortType, RunState, RunStep, RunTrace, TriggerSource, Variables, VariableScope, WaitOptions } from './types'
 
 export const MAX_STEPS = 200
 /** How long a run may work; time spent waiting for a reply does not count. */
@@ -63,6 +63,8 @@ export interface RunEnvironment {
   onStep?(step: RunStep): void
   /** Run only this trigger, already matched by the caller (which ordered triggers across flows). */
   matched?: TriggerMatch
+  /** The persona the bot's rules give this message, looked up when a node first asks. */
+  persona?(): Promise<PersonaLike | undefined> | PersonaLike | undefined
 }
 
 /** A trigger that the message (or event, or tick) starts, with what it matched. */
@@ -212,6 +214,17 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
       budget?.resume()
     }
   }
+  const persona = async () => {
+    if (state.persona === undefined) {
+      try {
+        state.persona = (await env.persona?.()) ?? null
+      } catch (error) {
+        env.logger.warn('finding the persona failed: %s', error)
+        state.persona = null
+      }
+    }
+    return state.persona ?? undefined
+  }
   let steps = 0
   let matched = false
   let consumed = false
@@ -253,6 +266,7 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
       bot,
       event: env.event,
       waitForMessage,
+      persona,
       test: !!env.test,
     }
   }

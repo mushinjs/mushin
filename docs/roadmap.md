@@ -49,6 +49,7 @@
 | 20. 样式细节 | 已完成 | 新增 `IconAction` 组件；提供商、插件、Bot 插件、日志和流程列表的操作改为图标。 |
 | 14. 插件依赖声明 | 已完成 | 版本范围用自带的简化 semver（`*`、`>=`、`^`、`~`、`1.x`、空格与 `||`），没有引入 `semver` 包。“启用 / 停用时列出并确认”由 `plugins.dependencies` 给出计划，`plugins.enable` / `plugins.disable` 带 `cascade: true` 才连带处理，否则报 `conflict` 并列出名单。清单新增 `nodes` 字段（如 `onebot.*`），流程编辑器据此提示“启用 xx 插件后可用”。插件市场未实现，所以“一键安装依赖”暂缺。 |
 | 13. 权限插件第一阶段 | 已完成 | 新插件 `@mushin/plugin-permissions`，名单存在插件自己的存储里，按机器人分 master / admin；原指令设置里的管理员名单会自动迁移过来。为了让 App 插件也能注册带权限的指令（后面的 `/persona` 要用），plugin-bots 新增 `ctx.bots.defineCommand()` 和 `usePermissions()`；指令权限新增 `master`，`/help` 可按身份只列能用的指令。群身份由适配器声明 `groupRoles` 并提供查询（OneBot 用 `get_group_member_info`，缓存 5 分钟）。流程测试可模拟 master / admin / user 和群身份。插件可用 `defineSource()` 追加其他权限来源，第二阶段的数据库规则会走这里。 |
+| 6. 人格 | 已完成 | 新插件 `@mushin/plugin-personas`，人格存在 `personas/items/<id>`，机器人设置和 `/persona` 切换记录分别存在 `personas/bots`、`personas/chats`。服务方法叫 `forSession(botId, session)`（路线图写的是 `resolve`），流程通过 `ctx.flows.usePersonas()` 接入。`/persona` 由第 13 项新增的 `ctx.bots.defineCommand()` 注册，只在有人格的机器人上出现，切换身份默认要求管理员。`ai.chat` 的系统提示默认改为空：有人格时作为补充规则接在人格提示后，旧流程里原来的默认提示视为空。`ai.classify` 不使用人格（分类不需要语气）。“改写回复”只改写回复、发送节点的固定文本。导入支持本项目导出的 JSON 和 SillyTavern 角色卡（v1/v2/v3 的 JSON 和 PNG），开场白不导入。字段选择器新增通用的 `x-choices`（`field()` 的 `choices` 选项），人格节点用它列出人格。 |
 | 其余各项 | 未开始 | — |
 
 ### 依赖关系
@@ -389,8 +390,8 @@ Agent 现在只在用户消息里收到一句“当前页面是 /flows/xxx”，
 
 ### 待讨论
 
-- Q6-1 人格放在顶级导航还是 Bots 下？建议顶级导航，因为多个 Bot 共享。
-- Q6-2 是否需要兼容 SillyTavern 角色卡（PNG/JSON）导入？
+- ~~Q6-1 人格放在顶级导航还是 Bots 下？~~ 已定：顶级导航；每个机器人另有「人格」标签页设置规则。
+- ~~Q6-2 是否需要兼容 SillyTavern 角色卡（PNG/JSON）导入？~~ 已定：支持 v1/v2/v3 的 JSON 和 PNG，开场白（first_mes）不导入，示例对话转为人格示例。
 
 ---
 

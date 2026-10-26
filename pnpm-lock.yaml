@@ -135,6 +135,9 @@ importers:
       '@mushin/plugin-bots':
         specifier: workspace:*
         version: link:../plugin-bots
+      '@mushin/plugin-flows':
+        specifier: workspace:*
+        version: link:../plugin-flows
       '@mushin/plugin-providers':
         specifier: workspace:*
         version: link:../plugin-providers
@@ -180,6 +183,9 @@ importers:
       '@mushin/plugin-permissions':
         specifier: workspace:*
         version: link:../plugin-permissions
+      '@mushin/plugin-personas':
+        specifier: workspace:*
+        version: link:../plugin-personas
       '@mushin/plugin-provider-anthropic':
         specifier: workspace:*
         version: link:../plugin-provider-anthropic
@@ -367,6 +373,21 @@ importers:
         version: link:../plugin-storage
 
   packages/plugin-permissions:
+    dependencies:
+      '@mushin/core':
+        specifier: workspace:*
+        version: link:../core
+      '@mushin/plugin-bots':
+        specifier: workspace:*
+        version: link:../plugin-bots
+      '@mushin/plugin-flows':
+        specifier: workspace:*
+        version: link:../plugin-flows
+      '@mushin/plugin-storage':
+        specifier: workspace:*
+        version: link:../plugin-storage
+
+  packages/plugin-personas:
     dependencies:
       '@mushin/core':
         specifier: workspace:*

@@ -33,7 +33,8 @@
     "@mushin/bot-plugin-flows": "workspace:*",
     "@mushin/plugin-demo": "workspace:*",
     "@mushin/plugin-stats": "workspace:*",
-    "@mushin/plugin-permissions": "workspace:*"
+    "@mushin/plugin-permissions": "workspace:*",
+    "@mushin/plugin-personas": "workspace:*"
   },
   "devDependencies": {
     "ws": "catalog:"

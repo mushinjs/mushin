@@ -7,7 +7,7 @@ import { compile, type CompiledFlow, FLOW_FORMAT, interceptOf, layout, migrateIn
 import { builtinNodes, commandName, scheduleTarget } from './nodes'
 import { overlap, triggerOrder, triggerSummary, type TriggerSlot } from './order'
 import { migrateDataEdges } from './refs'
-import type { FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, FlowSource, Intercept, FlowSession, LlmLike, NodeType, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
+import type { FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, FlowSource, Intercept, FlowSession, LlmLike, NodeType, PersonaResolver, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
 
 export * from './engine'
 export * from './graph'
@@ -200,6 +200,7 @@ export class FlowService extends Service {
   /** `${flowId}|${nodeId}|${botId}` → when a schedule trigger last fired, and when it started being watched. */
   private fired = new Map<string, number>()
   private watched = new Map<string, number>()
+  private personas?: PersonaResolver
 
   constructor(ctx: Context) {
     super(ctx, 'flows')
@@ -256,6 +257,20 @@ export class FlowService extends Service {
         this.recompile()
       }
     }, `flows.defineNode(${type.type})`)
+  }
+
+  /** Lets the personas plugin say which persona a message gets, for LLM nodes. Removed when the caller unloads. */
+  usePersonas(resolver: PersonaResolver) {
+    return this.ctx.effect(() => {
+      this.personas = resolver
+      return () => {
+        if (this.personas === resolver) this.personas = undefined
+      }
+    }, 'flows.usePersonas()')
+  }
+
+  private personaFor(botId: string | undefined, session: FlowSession) {
+    return () => this.personas?.forRun(botId, session)
   }
 
   nodeTypes() {
@@ -652,6 +667,7 @@ export class FlowService extends Service {
       bot: this.flowBot(ctx),
       waitForMessage: (options, origin) => this.waitFor(botId, origin, options),
       onStep: this.onStep,
+      persona: this.personaFor(botId, session),
     }
   }
 
@@ -852,6 +868,7 @@ export class FlowService extends Service {
       test: true,
       stopAt: input.nodeId,
       onStep: this.onStep,
+      persona: this.personaFor(doc.bots[0], session),
       ...(input.event ? { event: { name: input.event.name, data } } : {}),
       ...(input.schedule ? { scheduled: { nodeId: input.schedule, now: new Date() } } : {}),
       waitForMessage: async (_options, origin) => {
@@ -933,6 +950,7 @@ export class FlowService extends Service {
         test: true,
         matched: match,
         waitForMessage: async () => undefined,
+        persona: this.personaFor(botId, session),
       })
       const intercept = interceptOf(match.compiled.nodes.get(match.nodeId)!)
       const labels = Object.fromEntries(match.compiled.doc.nodes.flatMap((node) => (node.label ? [[node.id, node.label]] : [])))

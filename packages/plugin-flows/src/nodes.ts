@@ -1,7 +1,7 @@
 import { type ChannelInfo, field, segmentsToText, z } from '@mushin/core'
 import { commandMatches, parseArgs, parseSignature, roleAtLeast, splitCommand, usageReply } from '@mushin/plugin-bots'
 import { FlowError, TriggerReply } from './engine'
-import type { FlowSession, LlmLike, NodeType, VariableScope } from './types'
+import type { FlowSession, LlmLike, NodeContext, NodeType, PersonaLike, VariableScope } from './types'
 
 const scopeField = z.enum(['chat', 'user', 'flow', 'run']).default('chat').meta(field(
   'Scope',
@@ -405,39 +405,87 @@ function requireLlm(context: { llm?: LlmLike }): LlmLike {
   return context.llm
 }
 
+/** The system prompt ai.chat used to fill in; nodes saved with it now let the persona speak instead. */
+const OLD_CHAT_PROMPT = 'You are a friendly chat bot. Keep replies short.'
+const DEFAULT_CHAT_PROMPT = 'You are a friendly chat bot. Keep replies short and natural, and answer in the language the user writes in.'
+
+/** The system prompt and example exchanges for a persona, followed by the node's own rules. */
+export function personaMessages(persona: PersonaLike | undefined, own: string) {
+  if (!persona) return [{ role: 'system', content: own || DEFAULT_CHAT_PROMPT }]
+  return [
+    { role: 'system', content: own ? `${persona.prompt}\n\n${own}` : persona.prompt },
+    ...(persona.examples ?? []).flatMap((example) => [
+      { role: 'user', content: example.user },
+      { role: 'assistant', content: example.assistant },
+    ]),
+  ]
+}
+
 const chatNode: NodeType = {
   kind: 'action',
   type: 'ai.chat',
   category: 'ai',
   title: { en: 'Ask the LLM', 'zh-CN': '询问大模型' },
-  description: { en: 'Sends the prompt (or the message) to an LLM and outputs its reply', 'zh-CN': '把提示词（或消息）发给大模型并输出回复' },
+  description: {
+    en: 'Sends the prompt (or the message) to an LLM and outputs its reply. Speaks as the run\'s persona when there is one (a persona node, or the bot\'s persona rules).',
+    'zh-CN': '把提示词（或消息）发给大模型并输出回复。有人格时（人格节点，或机器人的人格规则）以该人格说话。',
+  },
   config: z.object({
-    systemPrompt: z.string().default('You are a friendly chat bot. Keep replies short.').meta(field('System prompt', undefined, {
-      'zh-CN': { title: '系统提示词' },
+    usePersona: z.boolean().default(true).meta(field('Speak as the persona', 'Uses the persona chosen by a persona node, or by the bot\'s persona rules', {
+      'zh-CN': { title: '使用人格', description: '使用人格节点选择的人格，没有时按机器人的人格规则' },
+    }, { widget: 'switch' })),
+    systemPrompt: z.string().default('').meta(field('System prompt', 'With a persona, added after its prompt as extra rules; without one, empty uses a short default', {
+      'zh-CN': { title: '系统提示词', description: '有人格时作为补充规则接在人格提示之后；没有人格时，留空使用简短的默认提示' },
     })),
-    provider: z.string().optional().meta(field('Provider', 'Provider id; empty uses the bot\'s or the global default', {
-      'zh-CN': { title: '提供商', description: '提供商 id；留空使用机器人或全局默认' },
+    provider: z.string().optional().meta(field('Provider', 'Provider id; empty uses the persona\'s, then the bot\'s or the global default', {
+      'zh-CN': { title: '提供商', description: '提供商 id；留空依次使用人格、机器人或全局默认' },
     })),
-    model: z.string().optional().meta(field('Model', undefined, { 'zh-CN': { title: '模型' } })),
+    model: z.string().optional().meta(field('Model', 'Empty uses the persona\'s, then the provider\'s default', { 'zh-CN': { title: '模型', description: '留空依次使用人格、提供商的默认模型' } })),
     maxTokens: z.number().int().min(64).max(64000).default(1000).meta(field('Max tokens', undefined, { 'zh-CN': { title: '最大 Token 数' } })),
   }),
   inputs: [{ name: 'prompt', type: 'text', title: { en: 'Prompt', 'zh-CN': '提示词' } }],
   outputs: [{ name: 'reply', type: 'text', title: { en: 'Reply', 'zh-CN': '回复' } }],
   async run(context) {
     const { config, inputs, session, provider, run, signal } = context
+    const persona = config.usePersona === false ? undefined : await context.persona()
+    const own = config.systemPrompt === OLD_CHAT_PROMPT ? '' : String(config.systemPrompt ?? '')
     const result = await requireLlm(context).chat({
-      provider: config.provider ?? provider,
-      model: config.model,
+      provider: config.provider || persona?.provider || provider,
+      model: config.model || persona?.model,
       maxTokens: config.maxTokens,
+      ...(persona?.temperature !== undefined ? { temperature: persona.temperature } : {}),
       signal,
       messages: [
-        ...(config.systemPrompt ? [{ role: 'system', content: config.systemPrompt }] : []),
+        ...personaMessages(persona, own),
         { role: 'user', content: inputs.prompt || session.text },
       ],
     })
-    run.llm = { provider: result.source.provider, model: result.source.model }
+    run.llm = { provider: result.source.provider, model: result.source.model, ...(persona ? { persona: persona.name } : {}) }
     return { outputs: { reply: result.text } }
   },
+}
+
+/** Fixed reply text, rewritten in the persona's voice when a persona node asked for it. */
+async function inVoice(context: NodeContext<any>, text: string) {
+  const persona = context.run.persona
+  if (!persona?.rewrite || !context.llm || !text.trim()) return text
+  try {
+    const result = await context.llm.chat({
+      provider: persona.provider || context.provider,
+      model: persona.model,
+      maxTokens: 1000,
+      signal: context.signal,
+      messages: [
+        ...personaMessages(persona, 'Rewrite the message the user gives you in your own voice. Keep its meaning, facts, numbers, names and links. Answer with the rewritten message only.'),
+        { role: 'user', content: text },
+      ],
+    })
+    context.run.llm = { provider: result.source.provider, model: result.source.model, persona: persona.name }
+    return result.text.trim() || text
+  } catch (error) {
+    context.logger.warn('rewriting a reply as %s failed: %s', persona.name, error)
+    return text
+  }
 }
 
 const classifyNode: NodeType = {
@@ -497,10 +545,11 @@ const replyNode: NodeType = {
   }),
   inputs: [{ name: 'text', type: 'text', title: { en: 'Text', 'zh-CN': '文本' } }],
   outputs: [{ name: 'messageId', type: 'text', title: { en: 'Sent message id', 'zh-CN': '发出的消息 ID' } }],
-  async run({ config, inputs, session, flow, node, run }) {
+  async run(context) {
+    const { config, inputs, session, flow, node, run } = context
     const text = inputs.text !== undefined && inputs.text !== ''
       ? String(inputs.text)
-      : fillTemplate(config.text, { user: session.user.name ?? session.user.id, message: session.text })
+      : await inVoice(context, fillTemplate(config.text, { user: session.user.name ?? session.user.id, message: session.text }))
     if (!text.trim()) return { outputs: { messageId: '' } }
     const content = { text, source: { kind: 'flow' as const, flow: flow.name, node: node.label, ...(run.llm ?? {}) } }
     const sent = await (config.quote ? session.reply(content) : session.send(content))
@@ -545,8 +594,9 @@ const sendNode: NodeType = {
   inputs: [{ name: 'text', type: 'text', title: { en: 'Text', 'zh-CN': '文本' } }],
   outputs: [{ name: 'messageId', type: 'text', title: { en: 'Sent message id', 'zh-CN': '发出的消息 ID' } }],
   execOut: ['next', 'failed'],
-  async run({ config, inputs, session, bot, flow, node, run, logger }) {
-    const text = inputs.text !== undefined && inputs.text !== '' ? String(inputs.text) : String(config.text ?? '')
+  async run(context) {
+    const { config, inputs, session, bot, flow, node, run, logger } = context
+    const text = inputs.text !== undefined && inputs.text !== '' ? String(inputs.text) : await inVoice(context, String(config.text ?? ''))
     const channel = resolveTarget(config, session.channel)
     if (!channel) throw new FlowError('Set the group or user id to send to')
     if (!text.trim()) return { outputs: { messageId: '' } }

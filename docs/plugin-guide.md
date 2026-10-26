@@ -106,6 +106,17 @@ ctx.bot.middleware(async (session, next) => {
 
 See `packages/bot-plugin-llm-chat` for a complete version with per-chat history.
 
+To speak as the bot's persona for this chat (when `@mushin/plugin-personas` runs), ask it at reply time and put its prompt and examples first. Declare the plugin under `optional` in your manifest:
+
+```ts
+const persona = ctx.get('personas')?.forSession(ctx.bot.id, session)
+const messages = persona
+  ? [{ role: 'system', content: persona.prompt }, ...persona.examples.flatMap((e) => [{ role: 'user', content: e.user }, { role: 'assistant', content: e.assistant }])]
+  : [{ role: 'system', content: 'You are a friendly chat bot.' }]
+```
+
+Flow nodes get the same through `context.persona()`.
+
 ## An app plugin with actions
 
 Actions are how features reach both the dashboard and the Agent. Define one and it appears as `POST /api/actions/<name>` and as an Agent tool, with its zod schema as the tool's parameters:

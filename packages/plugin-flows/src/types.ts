@@ -175,11 +175,39 @@ export interface NodeContext<C> extends TriggerContext<C> {
   event?: FlowEvent
   /** Waits for the next message in this chat; resolves to nothing on timeout. Waiting does not count toward the run's time limit. */
   waitForMessage(options: WaitOptions): Promise<FlowSession | undefined>
+  /** The run's persona: the one a persona node chose, else the bot's rules for this chat; nothing without one. */
+  persona(): Promise<PersonaLike | undefined>
   test: boolean
 }
 
 export interface RunState {
-  llm?: { provider: string; model: string }
+  /** The latest LLM reply's provider, model and persona, copied into the provenance of later replies. */
+  llm?: { provider: string; model: string; persona?: string }
+  /**
+   * The persona for the rest of the run: set by a persona node, or looked up from the bot's rules
+   * the first time a node asks. `null` means none.
+   */
+  persona?: PersonaLike | null
+}
+
+/** A persona as nodes use it, with its variables already filled in. Kept by the personas plugin. */
+export interface PersonaLike {
+  id: string
+  name: string
+  /** System prompt: character, voice, background and things to avoid. */
+  prompt: string
+  /** Example exchanges, sent before the conversation. */
+  examples?: { user: string; assistant: string }[]
+  provider?: string
+  model?: string
+  temperature?: number
+  /** Rewrite fixed reply text in the persona's voice (one extra LLM call per reply). */
+  rewrite?: boolean
+}
+
+/** Finds the persona a message gets on a bot. The personas plugin provides it with `flows.usePersonas()`. */
+export interface PersonaResolver {
+  forRun(botId: string | undefined, session: FlowSession): Promise<PersonaLike | undefined> | PersonaLike | undefined
 }
 
 export interface FlowNode {
