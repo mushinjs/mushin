@@ -110,13 +110,15 @@ async function reconcile(ctx: Context, config: Config) {
     const exists = !!id && flowIds.has(id)
     if (config.flows[key]) {
       if (!exists) {
-        const doc = await ctx.flows.create({ ...demoFlows[key], bots: state.bot ? [state.bot] : [] })
+        const doc = await ctx.flows.create({ ...demoFlows[key], bots: state.bot ? [state.bot] : [], source: { kind: 'plugin', plugin: PACKAGE } })
         state.flows[key] = doc.id
       } else {
         const doc = ctx.flows.get(id)
         const bots = doc.bots.filter((bot) => bot !== removedBot)
         if (state.bot && !bots.includes(state.bot)) bots.push(state.bot)
         if (bots.length !== doc.bots.length || bots.some((bot, i) => bot !== doc.bots[i])) await ctx.flows.update(id, { bots })
+        // Sample flows made before flows recorded their source.
+        if (doc.source?.plugin !== PACKAGE) await ctx.flows.update(id, { source: { kind: 'plugin', plugin: PACKAGE } })
       }
     } else if (id) {
       if (exists) await ctx.flows.remove(id)

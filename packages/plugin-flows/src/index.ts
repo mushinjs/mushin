@@ -7,7 +7,7 @@ import { compile, type CompiledFlow, FLOW_FORMAT, interceptOf, layout, migrateIn
 import { builtinNodes, commandName, scheduleTarget } from './nodes'
 import { overlap, triggerOrder, triggerSummary, type TriggerSlot } from './order'
 import { migrateDataEdges } from './refs'
-import type { FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, Intercept, FlowSession, LlmLike, NodeType, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
+import type { FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, FlowSource, Intercept, FlowSession, LlmLike, NodeType, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
 
 export * from './engine'
 export * from './graph'
@@ -471,6 +471,7 @@ export class FlowService extends Service {
           adapter: doc.adapter,
           bots: doc.bots,
           enabled: doc.enabled !== false,
+          source: doc.source,
           nodes: doc.nodes.length,
           errors: issues.filter((issue) => issue.severity === 'error').length,
           warnings: issues.filter((issue) => issue.severity === 'warning').length,
@@ -506,7 +507,7 @@ export class FlowService extends Service {
     }
   }
 
-  async create(input: { name: string; description?: string; adapter?: string; bots?: string[]; enabled?: boolean; nodes?: NodeInput[]; edges?: EdgeInput[]; groups?: GroupInput[] }) {
+  async create(input: { name: string; description?: string; adapter?: string; bots?: string[]; enabled?: boolean; nodes?: NodeInput[]; edges?: EdgeInput[]; groups?: GroupInput[]; source?: FlowSource }) {
     const { nodes, edges } = normalize(input.nodes ?? [], input.edges ?? [], this.types)
     const groups = normalizeGroups(input.groups ?? [], nodes)
     const now = Date.now()
@@ -517,6 +518,7 @@ export class FlowService extends Service {
       ...(input.adapter ? { adapter: input.adapter } : {}),
       bots: input.bots ?? [],
       ...(input.enabled === false ? { enabled: false } : {}),
+      ...(input.source ? { source: input.source } : {}),
       nodes,
       edges,
       ...(groups.length ? { groups } : {}),
@@ -530,7 +532,7 @@ export class FlowService extends Service {
     return this.describe(doc)
   }
 
-  async update(id: string, patch: Partial<{ name: string; description: string; adapter: string; bots: string[]; enabled: boolean; nodes: NodeInput[]; edges: EdgeInput[]; groups: GroupInput[] }>) {
+  async update(id: string, patch: Partial<{ name: string; description: string; adapter: string; bots: string[]; enabled: boolean; source: FlowSource; nodes: NodeInput[]; edges: EdgeInput[]; groups: GroupInput[] }>) {
     const doc: FlowDocument = { ...this.get(id), format: FLOW_FORMAT }
     if (patch.name !== undefined) doc.name = patch.name
     if (patch.description !== undefined) doc.description = patch.description
@@ -548,6 +550,7 @@ export class FlowService extends Service {
       if (groups.length) doc.groups = groups
       else delete doc.groups
     }
+    if (patch.source !== undefined) doc.source = patch.source
     if (patch.enabled !== undefined) {
       if (patch.enabled) delete doc.enabled
       else doc.enabled = false
@@ -985,7 +988,7 @@ export class FlowService extends Service {
       description: 'Create a conversation flow. Every flow starts at a trigger node. Edges only say what runs next: from a node\'s "exec:<output>" handle (e.g. "exec:next", "exec:true", "exec:other") to the next node\'s "exec" handle. Values move by reference instead: set a node\'s inputs (or text in its config) to "{{<node id>.<output>}}" of a node that ran before it, or "{{sys.text}}" for the message. Take types, inputs, outputs and config from flows.nodeTypes. Set bots to run it on those bots, then check it with flows.test. Returns the flow with any validation issues.',
       risk: 'write',
       input: z.object(flowFields),
-      handler: (input) => this.create(input),
+      handler: (input, caller) => this.create({ ...input, source: { kind: caller.kind === 'agent' ? 'agent' : 'user' } }),
     })
 
     yield actions.define({
@@ -998,10 +1001,16 @@ export class FlowService extends Service {
 
     yield actions.define({
       name: 'flows.delete',
-      description: 'Delete a flow.',
+      description: 'Delete a flow. Flows a plugin made cannot be deleted this way; turn them off in that plugin\'s settings.',
       risk: 'dangerous',
       input: idInput,
-      handler: ({ id }) => this.remove(id),
+      handler: ({ id }) => {
+        const doc = this.get(id)
+        if (doc.source?.kind === 'plugin') {
+          throw new MushinError('forbidden', `The flow "${doc.name}" belongs to the plugin ${doc.source.plugin}; remove it from that plugin's settings`)
+        }
+        return this.remove(id)
+      },
     })
 
     yield actions.define({

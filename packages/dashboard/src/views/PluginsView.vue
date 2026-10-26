@@ -2,8 +2,9 @@
 import { RefreshOutline, SettingsOutline } from '@vicons/ionicons5'
 import IconAction from '../components/IconAction.vue'
 import { NButton, NCard, NInput, NList, NListItem, NModal, NSpace, NSpin, NSwitch, NTag, NThing, NTooltip, useMessage } from 'naive-ui'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { call, on } from '../api'
 import SchemaForm from '../components/SchemaForm.vue'
 import StatusBadge from '../components/StatusBadge.vue'
@@ -12,6 +13,8 @@ import { clone, localize } from '../utils'
 
 const { t, locale } = useI18n()
 const message = useMessage()
+const route = useRoute()
+
 
 const plugins = ref<AppPlugin[]>([])
 const appCatalog = ref<CatalogEntry[]>([])
@@ -22,6 +25,16 @@ const editing = ref<AppPlugin>()
 const draft = ref<Record<string, any>>({})
 const jsonDraft = ref('')
 const saving = ref(false)
+
+/** /plugins?highlight=<package> scrolls to that plugin and makes it stand out for a moment. */
+const highlighted = ref<string>()
+watch(() => [route.query.highlight, plugins.value.length] as const, async ([target]) => {
+  if (typeof target !== 'string' || !plugins.value.length) return
+  highlighted.value = target
+  await nextTick()
+  document.getElementById(`plugin-${target}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  window.setTimeout(() => (highlighted.value = undefined), 2500)
+})
 
 async function refresh(rescan = false) {
   try {
@@ -124,7 +137,7 @@ async function save() {
     <NSpin :show="loading">
       <NCard :title="t('plugins.appPlugins')" class="section">
         <NList hoverable>
-          <NListItem v-for="plugin in appPlugins" :key="keyOf(plugin)">
+          <NListItem v-for="plugin in appPlugins" :id="`plugin-${plugin.package}`" :key="keyOf(plugin)" :class="{ highlighted: highlighted === plugin.package }">
             <NThing>
               <template #header>
                 <NSpace align="center" :size="8">
@@ -201,6 +214,11 @@ async function save() {
 </template>
 
 <style scoped>
+.highlighted {
+  background: rgba(32, 128, 240, 0.12) !important;
+  transition: background-color 0.4s;
+}
+
 .section {
   margin-bottom: 16px;
 }

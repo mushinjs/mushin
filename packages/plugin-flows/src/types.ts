@@ -203,6 +203,12 @@ export interface FlowNode {
 
 export type Intercept = 'none' | 'flow' | 'flows' | 'global'
 
+/** `user`: made in the dashboard or the API. `agent`: made by the Agent. `plugin`: made by the plugin `plugin` (its package). */
+export interface FlowSource {
+  kind: 'user' | 'agent' | 'plugin'
+  plugin?: string
+}
+
 /** An edge means "run next": from an exec output `exec:<name>` to a node's exec input `exec`. */
 export interface FlowEdge {
   id: string
@@ -235,6 +241,8 @@ export interface FlowDocument {
   nodes: FlowNode[]
   edges: FlowEdge[]
   groups?: FlowGroup[]
+  /** Who made the flow. A plugin's flows belong to it: only the plugin removes them. Missing: unknown (older flows). */
+  source?: FlowSource
   /** Storage format; flows saved before interception scopes (format 2) are migrated on load. */
   format?: number
   createdAt: number
