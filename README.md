@@ -122,7 +122,7 @@ Open **Flows** in the dashboard (cards or a compact list, grouped by bot by defa
 | Data | Text (with `{a}` `{b}` `{c}` `{user}` `{message}`), Message info, Get variable, Set variable, Add to number |
 | AI | Ask the LLM (speaks as the persona, with chat history; `error` exit), Classify intent (one branch per label), Use a persona (Personas plugin) |
 | Actions | Reply, Send to chat |
-| Terminal (Terminal plugin) | Run command (on this machine) |
+| Terminal (Terminal plugin) | Run command (on this machine), Run over SSH |
 | Group management (OneBot) | Mute, Mute everyone, Remove member, Set admin, Set member card, Set special title, Rename group, Post announcement, Essence message, Group check-in, Leave group |
 | Platform API (OneBot) | Recall message, Get message, Send forward message, Poke, React with emoji, Like profile, Handle request, Member info, User info, Group info, Sender role, Call OneBot API (any OneBot 11 or NapCat action) |
 
@@ -134,13 +134,15 @@ When one message starts several triggers on a bot, across all of its flows, they
 
 ### Terminal commands
 
-Enable **Terminal** on the Plugins page to get the **Run command** node, which runs a command on the machine running Mushin.js (PowerShell on Windows and `sh` elsewhere, or pick bash, pwsh or cmd). It passes `stdin` in, puts `stdout`, `stderr`, `code` and `error` out, and continues on `ok` when the command exits with 0, else on `failed`. The node has a timeout (30 s by default, stopping the command and everything it started), and output is cut at the plugin's limit (64 KB per stream).
+Enable **Terminal** on the Plugins page to get two nodes: **Run command** runs a command on the machine running Mushin.js (PowerShell on Windows and `sh` elsewhere, or pick bash, pwsh or cmd), and **Run over SSH** signs in to a server and runs it there. Both pass `stdin` in, put `stdout`, `stderr`, `code` and `error` out, and continue on `ok` when the command exits with 0, else on `failed`. Each node has a timeout (30 s by default, stopping the command and everything it started), and output is cut at the plugin's limit (64 KB per stream).
 
 Because a command can do anything your account can:
 
 - A reference in the command, such as `ping -c 3 {{n1.rest}}`, is inserted as one quoted argument, so a chat message cannot end the argument and add commands of its own. cmd cannot quote `"`, `%`, `!` or line breaks safely, so values containing them stop the run; prefer PowerShell on Windows.
-- Only people can add the node or change its command, in the flow editor. The Agent cannot add it or change its settings, though it can still edit the rest of a flow that has it.
-- Test runs from the **Logs** bar or the Agent show the command they would run instead of running it, unless you turn on **Run commands in test runs** in the plugin settings. **Allow local commands** turns the node off.
+- Only people can add terminal nodes or change their command, in the flow editor. The Agent cannot add them or change their settings, though it can still edit the rest of a flow that has them.
+- Test runs from the **Logs** bar or the Agent show the command they would run instead of running it, unless you turn on **Run commands in test runs** in the plugin settings. **Allow local commands** turns the local node off while keeping SSH.
+
+SSH servers are listed in the plugin settings: a name the nodes pick, address, port, user and the remote shell (posix, or powershell / cmd for Windows servers). Passwords are never stored: point **Private key file** at a key such as `~/.ssh/id_ed25519` (its passphrase, and any password, are read from environment variables you name), or use the running ssh-agent. Paste the server's fingerprint (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server) to pin it; left empty, the key seen on the first connection is remembered and a different key is refused later. The Agent can list the servers (`terminal.hosts.list`) and test a sign-in (`terminal.hosts.check`).
 
 Turn a flow off with the switch on its card or at the top of the editor: it keeps its content and bots but answers no messages, events or schedules, and its commands leave `/help`, until it is turned on again.
 
@@ -173,7 +175,7 @@ pnpm typecheck    # TypeScript for all packages, vue-tsc for the dashboard
 | `@mushin/plugin-mcp` | MCP client (stdio and Streamable HTTP); each MCP tool becomes an action |
 | `@mushin/plugin-console` | HTTP API, WebSocket, admin token, dashboard hosting |
 | `@mushin/plugin-flows` | Flow documents, node types, validation and the execution engine |
-| `@mushin/plugin-terminal` | A flow node that runs commands locally (opt-in) |
+| `@mushin/plugin-terminal` | Flow nodes that run commands locally or over SSH (opt-in) |
 | `@mushin/plugin-stats` | Hourly counts of messages, commands, flow runs and model usage (kept hourly for 30 days, daily for a year, in `data/stats/`) and process samples for the overview |
 | `@mushin/bot-plugin-echo`, `@mushin/bot-plugin-llm-chat`, `@mushin/bot-plugin-flows` | Bot plugins |
 | `@mushin/plugin-demo` | Offline demo provider, sandbox bot adapter and sample flows (opt-in) |

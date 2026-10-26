@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { seg } from '@mushin/core'
 import { builtinNodes, compile, type FlowDocument, type FlowSession, type NodeType, runFlow } from '@mushin/plugin-flows'
-import { Config, OutputBuffer, quote, runLocal, terminalNodes } from '../src'
+import { Server, utils } from 'ssh2'
+import { Config, fingerprint, type HostCheck, OutputBuffer, quote, remoteCommand, runLocal, terminalNodes } from '../src'
 
 const logger = { info() {}, warn() {}, debug() {}, error() {} } as any
 const posix = process.platform !== 'win32'
@@ -32,9 +33,9 @@ function session(text: string): FlowSession {
 }
 
 /** Runs one terminal node after a message trigger and returns its step. */
-async function runNode(node: { type: string; config?: any; inputs?: any }, options: { text?: string; config?: any; test?: boolean } = {}) {
+async function runNode(node: { type: string; config?: any; inputs?: any }, options: { text?: string; config?: any; test?: boolean; checkHost?: HostCheck; env?: NodeJS.ProcessEnv } = {}) {
   const config = Config.parse(options.config ?? {})
-  const types = new Map<string, NodeType>([...builtinNodes, ...terminalNodes({ config, baseDir: process.cwd() })].map((type) => [type.type, type]))
+  const types = new Map<string, NodeType>([...builtinNodes, ...terminalNodes({ config, baseDir: process.cwd(), checkHost: () => options.checkHost ?? (() => true), env: options.env })].map((type) => [type.type, type]))
   const compiled = compile(doc([{ id: 't', type: 'trigger.message' }, { id: 'n', ...node }], [['t', 'next', 'n']]), types)
   expect(compiled.issues.filter((issue) => issue.severity === 'error')).toEqual([])
   const result = await runFlow(compiled, { session: session(options.text ?? 'hi'), vars: { get() {}, set() {} }, logger, test: options.test })
@@ -60,6 +61,14 @@ describe('quoting', () => {
   it('cmd refuses what it cannot quote', () => {
     expect(quote('a & b | c', 'cmd')).toBe('"a & b | c"')
     for (const value of ['"', '%PATH%', '!x!', 'a\nb']) expect(() => quote(value, 'cmd')).toThrow(/cmd cannot/)
+  })
+
+  it('remote commands get the working directory and PowerShell wrapping', () => {
+    expect(remoteCommand('ls', 'posix', "/srv/it's")).toBe(`cd '/srv/it'\\''s' && ls`)
+    expect(remoteCommand('dir', 'cmd', 'C:\\app')).toBe('cd /d "C:\\app" && dir')
+    const wrapped = remoteCommand('Get-Date', 'powershell', 'C:\\app')
+    const script = Buffer.from(wrapped.split(' ').pop()!, 'base64').toString('utf16le')
+    expect(script).toContain("Set-Location -LiteralPath 'C:\\app'\nGet-Date")
   })
 
   it('keeps output within the limit', () => {
@@ -104,9 +113,85 @@ describe.runIf(posix)('local command node', () => {
 })
 
 describe('node registry', () => {
-  it('marks the node restricted', () => {
-    const nodes = terminalNodes({ config: Config.parse({}), baseDir: '.' })
-    expect(nodes.map((node) => [node.type, node.restricted])).toEqual([['terminal.local', true]])
+  it('marks both nodes restricted and offers the configured servers', () => {
+    const config = Config.parse({ hosts: [{ id: 'web', host: 'example.com', username: 'deploy', agent: true }] })
+    const nodes = terminalNodes({ config, baseDir: '.', checkHost: () => () => true })
+    expect(nodes.map((node) => [node.type, node.restricted])).toEqual([['terminal.local', true], ['terminal.ssh', true]])
+    const ssh = nodes.find((node) => node.type === 'terminal.ssh')!
+    expect(ssh.config!.parse({ command: 'ls' })).toMatchObject({ host: 'web', timeout: 30 })
+    expect(ssh.config!.safeParse({ host: 'other', command: 'ls' }).success).toBe(false)
+  })
+})
+
+/** An SSH server that answers each command with the command it received, as `got:<command>`. */
+async function sshServer(password: string) {
+  const hostKey = utils.generateKeyPairSync('ed25519')
+  const server = new Server({ hostKeys: [hostKey.private] }, (client) => {
+    client.on('authentication', (context) => {
+      if (context.method === 'password' && context.username === 'deploy' && context.password === password) context.accept()
+      else context.reject(['password'])
+    })
+    client.on('session', (accept) => {
+      accept().on('exec', (accept, _reject, info) => {
+        const stream = accept()
+        if (info.command.startsWith('exit ')) {
+          stream.exit(Number(info.command.slice(5)))
+          return stream.end()
+        }
+        let input = ''
+        stream.on('data', (chunk: Buffer) => { input += chunk })
+        stream.on('end', () => {
+          stream.write(`got:${info.command}${input ? ` stdin:${input}` : ''}`)
+          stream.stderr.write('warn')
+          stream.exit(0)
+          stream.end()
+        })
+      })
+    })
+    client.on('error', () => {})
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = (server.address() as { port: number }).port
+  const publicKey = utils.parseKey(hostKey.public)
+  const key = (Array.isArray(publicKey) ? publicKey[0] : publicKey) as { getPublicSSH(): Buffer }
+  return { port, fingerprint: fingerprint(key.getPublicSSH()), close: () => server.close() }
+}
+
+describe('SSH node', () => {
+  it('signs in with a password from the environment and runs the quoted command', async () => {
+    const server = await sshServer('s3cret')
+    try {
+      const config = { hosts: [{ id: 'web', host: '127.0.0.1', port: server.port, username: 'deploy', passwordEnv: 'WEB_PASSWORD' }] }
+      const seen: string[] = []
+      const { step } = await runNode(
+        { type: 'terminal.ssh', config: { host: 'web', command: 'grep -r {{sys.text}} .', cwd: '/srv/app' }, inputs: { stdin: 'data' } },
+        { text: "x'; reboot", config, env: { WEB_PASSWORD: 's3cret' }, checkHost: (value) => (seen.push(value), true) },
+      )
+      expect(step.exec).toBe('ok')
+      expect(step.outputs).toMatchObject({ stdout: `got:cd '/srv/app' && grep -r 'x'\\''; reboot' . stdin:data`, stderr: 'warn', code: 0 })
+      expect(seen).toEqual([server.fingerprint])
+    } finally {
+      server.close()
+    }
+  })
+
+  it('refuses a host key it does not trust, and a wrong password', async () => {
+    const server = await sshServer('s3cret')
+    try {
+      const config = { hosts: [{ id: 'web', host: '127.0.0.1', port: server.port, username: 'deploy', passwordEnv: 'PW' }] }
+      const node = { type: 'terminal.ssh', config: { host: 'web', command: 'ls' } }
+      const refused = await runNode(node, { config, env: { PW: 's3cret' }, checkHost: () => 'The host key changed' })
+      expect(refused.step.outputs).toMatchObject({ error: 'The host key changed' })
+      const wrong = await runNode(node, { config, env: { PW: 'nope' } })
+      expect(wrong.step.exec).toBe('failed')
+      expect(wrong.step.outputs?.error).toMatch(/Authentication failed/)
+      const exit = await runNode({ type: 'terminal.ssh', config: { host: 'web', command: 'exit 4' } }, { config, env: { PW: 's3cret' } })
+      expect(exit.step.outputs).toMatchObject({ code: 4, error: 'Exited with code 4' })
+      const missing = await runNode(node, { config, env: {} })
+      expect(missing.trace.error).toMatch(/PW .*is not set/)
+    } finally {
+      server.close()
+    }
   })
 })
 
