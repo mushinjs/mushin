@@ -39,7 +39,7 @@ Each bot runs in `ctx.isolate('bot')`, so `ctx.bot` in a bot plugin is always th
 - Sending an `LlmResult` (from `ctx.llm.chat()`) records provider, model, latency and tokens.
 - Any sender can pass an explicit `source`, which is how flows report the flow and node that replied (plus the provider and model when an LLM node wrote the text).
 
-Records go to a 500-entry memory buffer per bot, a daily JSONL log in `data/messages/<bot>/`, and the `bots/message` event that the console forwards to dashboards.
+Records go to a 500-entry memory buffer per bot, a daily JSONL log in `data/messages/<bot>/`, and the `bots/message` event that the console forwards to dashboards. With the database plugin running they also go to the `bots_message` table, and `bots.messages` reads a chat's history and older pages (`before`) from there. The first time the table exists, the JSONL logs are imported; after that, only lines newer than the newest stored message of each bot (written while the database plugin was off). The JSONL files are never removed.
 
 ## Flows
 

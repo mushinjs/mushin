@@ -4,6 +4,7 @@ import {
   validatePluginConfig, z,
 } from '@mushin/core'
 import type {} from '@mushin/plugin-storage'
+import { MessageArchive } from './archive'
 import { Bot, type BotHooks, type Session } from './bot'
 import { type CommandDef, type CommandEntry, commandConflicts, type CommandSettings, commandMatches, helpText, requiredRole } from './commands'
 import { type AdapterType, type BotPluginEntry, type BotRecord, type BotStatus, type PermissionProvider, roleAtLeast } from './types'
@@ -120,6 +121,8 @@ export class BotManager extends Service {
   private runtimes = new Map<string, Runtime>()
   private startErrors = new Map<string, string>()
   private buffers = new Map<string, MessageRecord[]>()
+  /** Messages in the database, when the database plugin runs. */
+  private archive?: MessageArchive
   /** Runtime fiber of each running bot, to attribute log lines to the bot that wrote them. */
   private runtimeFibers = new Map<Fiber, string>()
   private logs = new Map<string, BotLogLine[]>()
@@ -152,6 +155,20 @@ export class BotManager extends Service {
       export: (message) => this.captureLog(message),
     })
     yield* this.defineActions()
+    this.home.inject(['model', 'database'], async (ctx) => {
+      const archive = new MessageArchive(ctx, (error) => this.logger.warn('saving a message to the database failed: %s', error))
+      this.archive = archive
+      ctx.effect(() => () => {
+        if (this.archive === archive) this.archive = undefined
+      }, 'bots message archive')
+      try {
+        const imported = await archive.start()
+        if (imported) this.logger.info('imported %d message(s) from the message logs into the database', imported)
+      } catch (error) {
+        this.logger.warn('importing the message logs into the database failed: %s', error)
+        if (this.archive === archive) this.archive = undefined
+      }
+    })
     for (const record of this.records) {
       if (record.enabled && this.adapterStore.has(record.adapter.type)) this.startSafely(record.id)
     }
@@ -722,19 +739,32 @@ export class BotManager extends Service {
     this.home.storage.append(`messages/${record.botId}/${day}`, record).catch((error) => {
       this.logger.warn('failed to write message log: %s', error)
     })
+    this.archive?.add(record)
     this.home.emit('bots/message', record)
     return record
   }
 
-  async messages(id: string, options: { limit?: number; channel?: string } = {}) {
+  /**
+   * Recent messages of a bot, oldest first. With the database plugin, a channel's history and
+   * older pages (`before`) come from the database; otherwise from today's log and memory.
+   */
+  async messages(id: string, options: { limit?: number; channel?: string; before?: number } = {}) {
     this.get(id)
     const limit = options.limit ?? 100
+    const archive = this.archive?.ready ? this.archive : undefined
+    if (archive && (options.channel || options.before)) return archive.query(id, { ...options, limit })
     let buffer = this.buffers.get(id)
     if (!buffer) {
       const day = new Date().toISOString().slice(0, 10)
-      buffer = await this.home.storage.tail<MessageRecord>(`messages/${id}/${day}`, BUFFER_SIZE)
+      buffer = archive
+        ? await archive.query(id, { limit: BUFFER_SIZE })
+        : await this.home.storage.tail<MessageRecord>(`messages/${id}/${day}`, BUFFER_SIZE)
+      // Messages recorded while loading are already in the buffer that `record` made.
+      const current = this.buffers.get(id)
+      if (current) buffer = [...buffer.filter((item) => !current.some((record) => record.id === item.id)), ...current].slice(-BUFFER_SIZE)
       this.buffers.set(id, buffer)
     }
+    if (options.before) buffer = buffer.filter((record) => record.timestamp < options.before!)
     const list = options.channel ? buffer.filter((record) => record.channel.id === options.channel) : buffer
     return list.slice(-limit)
   }
@@ -894,11 +924,12 @@ export class BotManager extends Service {
 
     yield actions.define({
       name: 'bots.messages',
-      description: 'Recent messages of a bot, oldest first, with type, supported platforms and source.',
+      description: 'Recent messages of a bot, oldest first, with type, supported platforms and source. Without a channel or `before`, the last 500 the bot saw.',
       risk: 'read',
       input: idInput.extend({
         limit: z.number().int().min(1).max(BUFFER_SIZE).optional(),
         channel: z.string().optional().describe('Group or user id to filter by'),
+        before: z.number().optional().describe('Only messages sent before this time (ms since 1970), to page back through older messages; with the database plugin the history goes back to the first message'),
       }),
       handler: ({ id, ...options }) => this.messages(id, options),
     })

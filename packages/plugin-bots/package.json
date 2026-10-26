@@ -30,10 +30,17 @@
       "plugins": {
         "@mushin/plugin-storage": "*"
       }
+    },
+    "optional": {
+      "plugins": {
+        "@mushin/plugin-database": "*"
+      }
     }
   },
   "dependencies": {
     "@mushin/core": "workspace:*",
-    "@mushin/plugin-storage": "workspace:*"
+    "@mushin/plugin-database": "workspace:*",
+    "@mushin/plugin-storage": "workspace:*",
+    "minato": "catalog:"
   }
 }
