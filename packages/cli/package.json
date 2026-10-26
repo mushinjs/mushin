@@ -8,7 +8,7 @@
     "mushin": "./bin/mushin.js"
   },
   "scripts": {
-    "dev": "tsx watch --clear-screen=false src/cli.ts start --dir ../../instance",
+    "dev": "tsx watch --clear-screen=false src/dev.ts start --dir ../../instance",
     "demo": "tsx tests/helpers/demo.ts"
   },
   "exports": {
@@ -38,6 +38,7 @@
     "@mushin/plugin-mcp": "workspace:*"
   },
   "devDependencies": {
+    "vite": "catalog:",
     "ws": "catalog:"
   }
 }
