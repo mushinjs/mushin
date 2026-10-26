@@ -335,7 +335,7 @@ export class Bot extends Service {
   }
 
   /** Called by adapters for each incoming message: records it, then runs the middleware chain. */
-  async receive(message: IncomingMessage) {
+  async receive(message: IncomingMessage, options: { source?: Provenance } = {}) {
     const record = this.hooks.record({
       botId: this.id,
       messageId: message.messageId,
@@ -344,7 +344,7 @@ export class Bot extends Service {
       user: message.user,
       segments: message.segments,
       timestamp: message.timestamp ?? Date.now(),
-      source: { kind: 'user' },
+      source: options.source ?? { kind: 'user' },
     })
     const session = new Session(this, record)
     const entry = session.command?.entry

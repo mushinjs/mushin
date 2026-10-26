@@ -3,9 +3,11 @@ import {
 } from '@mushin/core'
 import type { LlmMessage, LlmResult, ToolCall, ToolDefinition } from '@mushin/plugin-providers'
 import type {} from '@mushin/plugin-storage'
-import { contextNote, SYSTEM_PROMPT, type TurnContext } from './prompt'
+import { contextNote, type SceneInfo, skillBlock, SYSTEM_PROMPT, type TurnContext } from './prompt'
+import { type AgentSkill, BUILTIN_SKILLS, type SkillDefinition } from './skills'
 
 export * from './prompt'
+export * from './skills'
 
 declare module '@mushin/core' {
   interface Context {
@@ -27,8 +29,18 @@ export type AgentEvent = { session: string } & (
   | { type: 'error'; error: string }
 )
 
-/** A stored message; `display` holds the user's own words when the content carries a context note. */
-export type AgentMessage = LlmMessage & { display?: string; at: number }
+/**
+ * A stored message; `display` holds the user's own words when the content carries a context note,
+ * and `skills` the names of the skills picked for it.
+ */
+export type AgentMessage = LlmMessage & { display?: string; skills?: string[]; at: number }
+
+/** Where a conversation was started, for the history list. */
+export interface SessionScene {
+  key: string
+  label?: string
+  page?: string
+}
 
 export interface AgentSession {
   id: string
@@ -38,13 +50,33 @@ export interface AgentSession {
   /** Tool list frozen at creation, so every request in the session sends identical tools. */
   tools: ToolDefinition[]
   messages: AgentMessage[]
+  /** The page the conversation was started on. */
+  scene?: SessionScene
+  /** What it touched, for search: `scene:<key>`, `skill:<id>`, `command:<name>`, `resource:<kind>:<id>`. */
+  tags?: string[]
 }
 
 export interface SendOptions {
   /** Dashboard connection id; client actions such as ui.navigate are routed back to it. */
   client?: string
   page?: string
+  /** The page as the dashboard describes it; its hint and state go into the context note. */
+  scene?: SceneInfo
+  /** Ids of skills whose instructions go into this message. */
+  skills?: string[]
 }
+
+/** Commands the dashboard runs itself, without asking the model. */
+export const BUILTIN_COMMANDS = [
+  { name: 'new', description: 'Start a new conversation', 'zh-CN': '开始新对话' },
+  { name: 'history', description: 'Open the full conversation history', 'zh-CN': '打开完整历史' },
+  { name: 'model', description: 'Switch the Agent\'s model', 'zh-CN': '切换模型' },
+  { name: 'status', description: 'Show how much context this conversation uses', 'zh-CN': '查看上下文用量' },
+  { name: 'clear', description: 'Clear the input and close the conversation', 'zh-CN': '清空当前对话视图' },
+  { name: 'help', description: 'Show what you can type', 'zh-CN': '查看可用的指令和技能' },
+]
+
+const SKILL_SETTINGS = 'agent/settings/skills'
 
 const MAX_RESULT_CHARS = 16_000
 
@@ -77,6 +109,7 @@ export class Agent extends Service {
 
   private home: Context
   private running = new Map<string, Running>()
+  private pluginSkills = new Map<string, AgentSkill>()
 
   constructor(ctx: Context, public config: Config) {
     super(ctx, 'agent')
@@ -105,13 +138,101 @@ export class Agent extends Service {
     this.home.emit('agent/event', event)
   }
 
-  async sessions() {
+  private async allSessions() {
     const keys = await this.home.storage.list('agent')
     const sessions = await Promise.all(keys.map((key) => this.home.storage.get<AgentSession>(key)))
     return sessions
-      .filter((session): session is AgentSession => !!session)
-      .map(({ id, title, createdAt, updatedAt }) => ({ id, title, createdAt, updatedAt, running: this.running.has(id) }))
+      .filter((session): session is AgentSession => !!session && Array.isArray(session.messages))
       .sort((a, b) => b.updatedAt - a.updatedAt)
+  }
+
+  private summary({ id, title, createdAt, updatedAt, scene, tags }: AgentSession) {
+    return { id, title, createdAt, updatedAt, scene, tags: tags ?? [], running: this.running.has(id) }
+  }
+
+  async sessions() {
+    return (await this.allSessions()).map((session) => this.summary(session))
+  }
+
+  /**
+   * Conversations matching every tag (`scene:flowEditor`, `skill:<id>`, `status:running`, …) and
+   * containing the query in the title or in what the user or the Agent wrote.
+   */
+  async search(options: { query?: string; tags?: string[]; limit?: number } = {}) {
+    const query = options.query?.trim().toLowerCase()
+    const results = []
+    for (const session of await this.allSessions()) {
+      const summary = this.summary(session)
+      const tags = [...summary.tags, `status:${summary.running ? 'running' : 'idle'}`]
+      if (options.tags?.some((tag) => !tags.includes(tag))) continue
+      let snippet: string | undefined
+      if (query) {
+        if (!session.title.toLowerCase().includes(query)) {
+          const texts = session.messages
+            .filter((message) => message.role === 'user' || message.role === 'assistant')
+            .map((message) => (message.role === 'user' ? message.display ?? message.content : message.content))
+          const hit = texts.find((text): text is string => typeof text === 'string' && text.toLowerCase().includes(query))
+          if (!hit) continue
+          const at = hit.toLowerCase().indexOf(query)
+          snippet = `${at > 30 ? '…' : ''}${hit.slice(Math.max(0, at - 30), at + query.length + 50).replace(/\s+/g, ' ')}`
+        }
+      }
+      results.push({ ...summary, ...(snippet ? { snippet } : {}) })
+      if (results.length >= (options.limit ?? 50)) break
+    }
+    return results
+  }
+
+  // ---- skills ----
+
+  /** Adds a skill from a plugin; removed when the plugin unloads. */
+  defineSkill(definition: SkillDefinition) {
+    const ctx = this.ctx
+    const skill: AgentSkill = { ...definition, source: 'plugin', plugin: ctx.fiber.name, enabled: true }
+    return ctx.effect(() => {
+      this.pluginSkills.set(skill.id, skill)
+      return () => {
+        if (this.pluginSkills.get(skill.id) === skill) this.pluginSkills.delete(skill.id)
+      }
+    }, `agent.defineSkill(${definition.id})`)
+  }
+
+  /** Built-in, plugin and user skills; user skills win on the same id. */
+  async skills(): Promise<AgentSkill[]> {
+    const disabled = new Set((await this.home.storage.get<{ disabled?: string[] }>(SKILL_SETTINGS))?.disabled ?? [])
+    const byId = new Map<string, AgentSkill>()
+    for (const skill of BUILTIN_SKILLS) byId.set(skill.id, { ...skill, source: 'builtin', enabled: true })
+    for (const skill of this.pluginSkills.values()) byId.set(skill.id, { ...skill })
+    const keys = await this.home.storage.list('agent/skills')
+    for (const skill of await Promise.all(keys.map((key) => this.home.storage.get<AgentSkill>(key)))) {
+      if (skill?.id) byId.set(skill.id, { ...skill, source: 'user', enabled: skill.enabled !== false })
+    }
+    return [...byId.values()].map((skill) => (skill.source !== 'user' && disabled.has(skill.id) ? { ...skill, enabled: false } : skill))
+  }
+
+  async skill(id: string) {
+    const skill = (await this.skills()).find((item) => item.id === id)
+    if (!skill) throw new MushinError('not_found', `No skill "${id}"`)
+    return skill
+  }
+
+  /** Agent commands and the commands of every bot, for the `/` picker. */
+  commands() {
+    const bots = this.home.get('bots')
+    const names = new Map<string, string>((bots?.list() ?? []).map((bot: { id: string; name: string }) => [bot.id, bot.name]))
+    const listed = bots?.commandList().commands ?? []
+    return {
+      builtin: BUILTIN_COMMANDS,
+      bots: listed.filter((entry: { hidden?: boolean }) => !entry.hidden).map((entry: any) => ({
+        name: entry.name,
+        description: entry.description,
+        usage: entry.usage,
+        permission: entry.permission ?? entry.role,
+        bot: entry.botId,
+        botName: names.get(entry.botId),
+        source: entry.source,
+      })),
+    }
   }
 
   async session(id: string) {
@@ -138,11 +259,12 @@ export class Agent extends Service {
     return this.home.storage.set(`agent/${session.id}`, session)
   }
 
-  private turnContext(page?: string): TurnContext {
+  private turnContext(page?: string, scene?: SceneInfo): TurnContext {
     const providers = this.home.llm.list()
     const bots = this.home.get('bots')?.list() ?? []
     return {
       page,
+      scene,
       providers: providers.length,
       ready: this.home.llm.isReady(),
       bots: bots.length,
@@ -159,11 +281,17 @@ export class Agent extends Service {
     if (this.running.has(session.id)) throw new MushinError('conflict', 'The Agent is still working on this conversation')
     const running: Running = { abort: new AbortController(), confirms: new Map() }
     this.running.set(session.id, running)
-    if (!session.title) session.title = text.replace(/\s+/g, ' ').slice(0, 48)
+    const skills = options.skills?.length ? await Promise.all(options.skills.map((id) => this.skill(id))) : []
+    if (!session.title) session.title = (text || skills.map((skill) => skill.name).join(', ')).replace(/\s+/g, ' ').slice(0, 48)
+    if (!session.messages.length && options.scene) {
+      session.scene = { key: options.scene.key, ...(options.scene.label ? { label: options.scene.label } : {}), ...(options.page ? { page: options.page } : {}) }
+    }
+    session.tags = [...new Set([...session.tags ?? [], ...turnTags(text, options, skills)])]
     session.messages.push({
       role: 'user',
-      content: `${contextNote(this.turnContext(options.page))}\n\n${text}`,
+      content: [contextNote(this.turnContext(options.page, options.scene)), ...skills.map(skillBlock), text].filter(Boolean).join('\n\n'),
       display: text,
+      ...(skills.length ? { skills: skills.map((skill) => skill.name) } : {}),
       at: Date.now(),
     })
     await this.save(session)
@@ -332,8 +460,52 @@ export class Agent extends Service {
       name: 'agent.send',
       description: 'Send a message to the Agent. Omit session to start a new conversation. Progress streams over the WebSocket.',
       risk: 'write',
-      input: z.object({ session: z.string().optional(), text: z.string().min(1), page: z.string().optional() }),
-      handler: ({ session, text, page }, caller) => this.send(session, text, { client: caller.client, page }),
+      input: z.object({
+        session: z.string().optional(),
+        text: z.string(),
+        page: z.string().optional(),
+        scene: z.object({
+          key: z.string(),
+          label: z.string().max(200).optional(),
+          hint: z.string().max(1000).optional(),
+          state: z.record(z.string(), z.union([z.string().max(200), z.number(), z.boolean()])).optional(),
+          resource: z.string().max(200).optional(),
+        }).optional().describe('The dashboard page as the dashboard describes it'),
+        skills: z.array(z.string()).max(5).optional().describe('Skill ids to apply to this message'),
+      }).refine((input) => input.text.trim() || input.skills?.length, 'Send some text or pick a skill'),
+      handler: ({ session, text, ...options }, caller) => this.send(session, text, { client: caller.client, ...options }),
+    })
+
+    yield actions.define({
+      name: 'agent.search',
+      description: 'Search Agent conversations by text and tags (scene:<page kind>, skill:<id>, command:<name>, resource:<kind>:<id>, status:running).',
+      risk: 'read',
+      input: z.object({ query: z.string().optional(), tags: z.array(z.string()).optional(), limit: z.number().int().min(1).max(200).optional() }),
+      handler: (input) => this.search(input),
+    })
+
+    yield actions.define({
+      name: 'agent.commands',
+      description: 'Commands for the Agent\'s "/" picker: its own (new, history, …) and every bot\'s commands.',
+      risk: 'read',
+      input: z.object({}),
+      handler: () => this.commands(),
+    })
+
+    yield actions.define({
+      name: 'agent.skills.list',
+      description: 'List the Agent\'s skills: built in, from plugins, and written by the user.',
+      risk: 'read',
+      input: z.object({}),
+      handler: () => this.skills(),
+    })
+
+    yield actions.define({
+      name: 'agent.skills.get',
+      description: 'Get one Agent skill with its instructions.',
+      risk: 'read',
+      input: z.object({ id: z.string() }),
+      handler: ({ id }) => this.skill(id),
     })
 
     yield actions.define({
@@ -369,8 +541,19 @@ function describeTool(action: ActionInfo) {
   return [action.description, ...notes].join(' ')
 }
 
+/** Search tags for one message: its scene, skills, a leading command, and the page's resource. */
+function turnTags(text: string, options: SendOptions, skills: AgentSkill[]) {
+  const tags: string[] = []
+  if (options.scene) tags.push(`scene:${options.scene.key}`)
+  if (options.scene?.resource) tags.push(`resource:${options.scene.resource}`)
+  for (const skill of skills) tags.push(`skill:${skill.id}`)
+  const command = /^\s*\/([\p{L}\p{N}_-]+)/u.exec(text)
+  if (command) tags.push(`command:${command[1]}`)
+  return tags
+}
+
 function stripMeta(message: AgentMessage): LlmMessage {
-  const { display, at, ...rest } = message
+  const { display, skills, at, ...rest } = message
   return rest as LlmMessage
 }
 

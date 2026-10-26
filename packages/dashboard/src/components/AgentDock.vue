@@ -1,15 +1,20 @@
 <script setup lang="ts">
 import {
-  AddOutline, AlertCircleOutline, CheckmarkCircle, CloseCircleOutline, CloseOutline, HandLeftOutline, SendOutline,
-  SparklesOutline, StopCircleOutline, TrashOutline,
+  AddOutline, AlertCircleOutline, CheckmarkCircle, CloseCircleOutline, CloseOutline, ExtensionPuzzleOutline, HandLeftOutline,
+  InformationCircleOutline, SendOutline, SparklesOutline, StopCircleOutline, TrashOutline,
 } from '@vicons/ionicons5'
-import { NButton, NIcon, NInput, NPopselect, NSpin, NTag, NTooltip } from 'naive-ui'
+import { NButton, NIcon, NInput, NModal, NPopover, NPopselect, NSelect, NSpin, NTag, NTooltip } from 'naive-ui'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { call } from '../api'
 import { useAgentStore } from '../stores/agent'
+import { type Recommendation, useAgentSceneStore } from '../stores/agentScene'
 import { useDataStore } from '../stores/data'
+import type { AgentSkill } from '../types'
 import { pretty } from '../utils'
+import CommandPalette, { type PaletteItem } from './agent/CommandPalette.vue'
+import HistoryDrawer from './agent/HistoryDrawer.vue'
 
 defineProps<{ closable?: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -17,27 +22,160 @@ const emit = defineEmits<{ close: [] }>()
 const { t } = useI18n()
 const router = useRouter()
 const agent = useAgentStore()
+const scenes = useAgentSceneStore()
 const data = useDataStore()
 
 const input = ref('')
 const list = ref<HTMLElement>()
 const expanded = ref(new Set<string>())
+const picked = ref<AgentSkill[]>([])
+/** The bot of a bot command picked with `/`, told to the Agent with the next message. */
+const commandBot = ref<{ name: string; bot: string }>()
+const palette = ref<InstanceType<typeof CommandPalette>>()
+const paletteClosed = ref(false)
+const showHistory = ref(false)
 
-const suggestions = computed(() => [t('agent.suggest.connect'), t('agent.suggest.status'), t('agent.suggest.provider')])
+const ALL = '__all__'
+const sessionOptions = computed(() => [
+  ...agent.sessions.slice(0, 8).map((session) => ({ label: session.title || t('agent.untitled'), value: session.id })),
+  ...(agent.sessions.length ? [{ label: t('agentHistory.all'), value: ALL }] : []),
+])
 
-const sessionOptions = computed(() => agent.sessions.map((session) => ({
-  label: session.title || t('agent.untitled'),
-  value: session.id,
-})))
+function pickSession(id: string) {
+  if (id === ALL) showHistory.value = true
+  else agent.load(id)
+}
+
+/** `/` at the start of the input lists commands; `$` after a space lists skills. */
+const trigger = computed(() => {
+  if (paletteClosed.value) return
+  const slash = /^\/([^\s/]*)$/.exec(input.value)
+  if (slash) return { mode: '/' as const, query: slash[1], from: 0 }
+  const dollar = /(^|\s)\$([^\s$]*)$/.exec(input.value)
+  if (dollar) return { mode: '$' as const, query: dollar[2], from: dollar.index + dollar[1].length }
+  return undefined
+})
+
+watch(input, () => (paletteClosed.value = false))
 
 async function send(text = input.value) {
-  if (!text.trim() || agent.running) return
+  if ((!text.trim() && !picked.value.length) || agent.running) return
+  const skills = picked.value
+  const scene = { ...scenes.scene }
+  const bot = commandBot.value
+  if (bot && text.trim().startsWith(`/${bot.name}`)) scene.state = { ...scene.state, commandBot: bot.bot }
   input.value = ''
-  await agent.send(text.trim())
+  picked.value = []
+  commandBot.value = undefined
+  await agent.send(text.trim(), { skills, scene })
+}
+
+async function sendRecommendation(item: Recommendation) {
+  const skill = item.skill ? agent.skills.find((entry) => entry.id === item.skill && entry.enabled) : undefined
+  scenes.dismiss(item.id)
+  if (agent.running) return
+  await agent.send(item.prompt, { skills: skill ? [skill] : [], scene: scenes.scene })
+}
+
+function onPick(item: PaletteItem) {
+  const at = trigger.value
+  if (item.kind === 'skill') {
+    if (!picked.value.some((skill) => skill.id === item.skill.id)) picked.value = [...picked.value, item.skill]
+    input.value = at ? input.value.slice(0, at.from).trimEnd() : input.value
+    if (input.value) input.value += ' '
+  } else if (item.kind === 'bot') {
+    input.value = `/${item.name} `
+    commandBot.value = { name: item.name, bot: item.command.bot }
+  } else {
+    input.value = ''
+    runBuiltin(item.name)
+  }
+  paletteClosed.value = item.kind !== 'bot'
+}
+
+const showModel = ref(false)
+const modelForm = ref<{ provider?: string; model?: string }>({})
+
+function runBuiltin(name: string) {
+  switch (name) {
+    case 'new':
+    case 'clear':
+      agent.newChat()
+      picked.value = []
+      break
+    case 'history':
+      showHistory.value = true
+      break
+    case 'model':
+      openModel().catch(() => {})
+      break
+    case 'status': {
+      const chars = agent.items.reduce((sum, item) => sum + ('text' in item ? item.text.length : JSON.stringify(item.input ?? '').length + JSON.stringify(item.result ?? '').length), 0)
+      agent.note(t('agentPalette.statusText', {
+        messages: agent.items.filter((item) => item.kind === 'user' || item.kind === 'assistant').length,
+        chars,
+        input: agent.usage?.inputTokens ?? '—',
+        output: agent.usage?.outputTokens ?? '—',
+        scene: scenes.scene.label,
+      }))
+      break
+    }
+    case 'help':
+      agent.note(t('agentPalette.helpText', {
+        commands: agent.commands.builtin.map((command) => `/${command.name}`).join(' '),
+        bots: agent.commands.bots.length,
+        skills: agent.skills.filter((skill) => skill.enabled).length,
+      }))
+      break
+  }
+}
+
+const providerOptions = computed(() => data.providers.map((provider) => ({ label: provider.name, value: provider.id })))
+const modelOptions = computed(() => {
+  const provider = data.providers.find((item) => item.id === modelForm.value.provider) ?? data.providers.find((item) => item.isDefault)
+  return (provider?.models ?? []).map((model) => ({ label: model, value: model }))
+})
+
+async function openModel() {
+  const plugins = await call<{ id: string; package: string; config: Record<string, any> }[]>('plugins.list')
+  const entry = plugins.find((plugin) => plugin.package === '@mushin/plugin-agent')
+  modelForm.value = { provider: entry?.config.provider, model: entry?.config.model }
+  showModel.value = true
+}
+
+async function saveModel() {
+  const plugins = await call<{ id: string; package: string; config: Record<string, any> }[]>('plugins.list')
+  const entry = plugins.find((plugin) => plugin.package === '@mushin/plugin-agent')
+  if (!entry) return
+  const config = { ...entry.config, provider: modelForm.value.provider || undefined, model: modelForm.value.model || undefined }
+  await call('plugins.configure', { id: entry.id, config })
+  showModel.value = false
+  agent.note(t('agentPalette.modelSaved', { model: modelForm.value.model || t('common.default') }))
 }
 
 function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+  if (event.isComposing) return
+  if (trigger.value && palette.value?.count()) {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      palette.value.move(event.key === 'ArrowDown' ? 1 : -1)
+      return
+    }
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault()
+      palette.value.choose()
+      return
+    }
+  }
+  if (event.key === 'Escape' && trigger.value) {
+    paletteClosed.value = true
+    return
+  }
+  if (event.key === 'Backspace' && !input.value && picked.value.length) {
+    picked.value = picked.value.slice(0, -1)
+    return
+  }
+  if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
     send()
   }
@@ -64,15 +202,25 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
       <div class="dock-title">
         <NIcon size="18"><SparklesOutline /></NIcon>
         <span>{{ t('nav.agent') }}</span>
+        <NPopover trigger="click" placement="bottom-start" :style="{ maxWidth: '300px' }">
+          <template #trigger>
+            <button type="button" class="scene-tag" :title="t('agentScene.whatHere')" data-agent-target="agent.scene">
+              {{ scenes.scene.label }}
+            </button>
+          </template>
+          <div class="scene-pop">
+            <div class="scene-pop-title">{{ t('agentScene.whatHere') }}</div>
+            <p>{{ scenes.scene.hint }}</p>
+          </div>
+        </NPopover>
       </div>
       <div class="dock-actions">
         <NPopselect
-          v-if="sessionOptions.length"
+          v-if="agent.sessions.length"
           :value="agent.current"
           :options="sessionOptions"
-          scrollable
           trigger="click"
-          @update:value="(id: string) => agent.load(id)"
+          @update:value="pickSession"
         >
           <NButton size="small" quaternary>{{ t('agent.history') }}</NButton>
         </NPopselect>
@@ -106,14 +254,27 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
 
       <div v-else-if="!agent.items.length && !agent.running" class="dock-empty">
         <p class="dock-hello">{{ t('agent.hello') }}</p>
-        <button v-for="text in suggestions" :key="text" class="suggestion" type="button" @click="send(text)">
-          {{ text }}
+        <button v-for="item in scenes.recommendations" :key="item.id" class="suggestion" :class="{ urgent: item.urgent }" type="button" @click="sendRecommendation(item)">
+          <span>{{ item.text }}</span>
+          <NTag v-if="item.skill" size="tiny" :bordered="false" class="suggestion-skill">
+            <template #icon><NIcon><ExtensionPuzzleOutline /></NIcon></template>
+            {{ agent.skills.find((skill) => skill.id === item.skill)?.name ?? item.skill }}
+          </NTag>
         </button>
+        <p class="dock-tip">{{ t('agentPalette.tip') }}</p>
       </div>
 
       <template v-for="(item, index) in agent.items" :key="index">
-        <div v-if="item.kind === 'user'" class="msg user">{{ item.text }}</div>
+        <div v-if="item.kind === 'user'" class="msg user">
+          <div v-if="item.skills?.length" class="msg-skills">
+            <span v-for="name in item.skills" :key="name" class="msg-skill"><NIcon><ExtensionPuzzleOutline /></NIcon>{{ name }}</span>
+          </div>
+          {{ item.text }}
+        </div>
         <div v-else-if="item.kind === 'assistant'" class="msg assistant">{{ item.text }}</div>
+        <div v-else-if="item.kind === 'note'" class="msg note">
+          <NIcon><InformationCircleOutline /></NIcon><span>{{ item.text }}</span>
+        </div>
         <div v-else-if="item.kind === 'error'" class="msg error">
           <NIcon><AlertCircleOutline /></NIcon> {{ item.text }}
         </div>
@@ -150,22 +311,56 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
       <div v-else-if="agent.running" class="thinking"><NSpin :size="14" /> {{ t('agent.thinking') }}</div>
     </div>
 
+    <div v-if="agent.items.length && scenes.banner && !agent.running" class="banner">
+      <NIcon color="#f0a020"><InformationCircleOutline /></NIcon>
+      <button type="button" class="banner-text" @click="sendRecommendation(scenes.banner!)">{{ scenes.banner.text }}</button>
+      <NButton size="tiny" quaternary circle :aria-label="t('agent.close')" @click="scenes.dismiss(scenes.banner!.id)">
+        <template #icon><NIcon><CloseOutline /></NIcon></template>
+      </NButton>
+    </div>
+
     <footer class="dock-input" data-agent-target="agent.input">
-      <NInput
-        v-model:value="input"
-        type="textarea"
-        :autosize="{ minRows: 1, maxRows: 6 }"
-        :placeholder="t('agent.placeholder')"
-        :disabled="!data.providers.length"
-        @keydown="onKeydown"
+      <CommandPalette
+        v-if="trigger"
+        ref="palette"
+        class="dock-palette"
+        :mode="trigger.mode"
+        :query="trigger.query"
+        :scene="scenes.key"
+        @pick="onPick"
       />
+      <div class="input-box">
+        <div v-if="picked.length" class="chips">
+          <NTag v-for="skill in picked" :key="skill.id" size="small" type="success" closable :bordered="false" @close="picked = picked.filter((item) => item.id !== skill.id)">
+            <template #icon><NIcon><ExtensionPuzzleOutline /></NIcon></template>
+            {{ skill.name }}
+          </NTag>
+        </div>
+        <NInput
+          v-model:value="input"
+          type="textarea"
+          :autosize="{ minRows: 1, maxRows: 6 }"
+          :placeholder="t('agent.placeholder')"
+          :disabled="!data.providers.length"
+          @keydown="onKeydown"
+        />
+      </div>
       <NButton v-if="agent.running" type="warning" secondary :aria-label="t('agent.stop')" @click="agent.cancel()">
         <template #icon><NIcon><StopCircleOutline /></NIcon></template>
       </NButton>
-      <NButton v-else type="primary" :disabled="!input.trim()" :aria-label="t('agent.send')" @click="send()">
+      <NButton v-else type="primary" :disabled="!input.trim() && !picked.length" :aria-label="t('agent.send')" @click="send()">
         <template #icon><NIcon><SendOutline /></NIcon></template>
       </NButton>
     </footer>
+
+    <HistoryDrawer v-model:show="showHistory" />
+    <NModal v-model:show="showModel" preset="card" :title="t('agentPalette.modelTitle')" :style="{ width: '400px' }">
+      <div class="model-form">
+        <NSelect v-model:value="modelForm.provider" clearable :options="providerOptions" :placeholder="t('agentPalette.defaultProvider')" />
+        <NSelect v-model:value="modelForm.model" clearable filterable tag :options="modelOptions" :placeholder="t('agentPalette.defaultModel')" />
+        <NButton type="primary" @click="saveModel">{{ t('common.save') }}</NButton>
+      </div>
+    </NModal>
   </div>
 </template>
 
@@ -238,6 +433,146 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
 
 .suggestion:hover {
   border-color: #7c8bd9;
+}
+
+.suggestion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.suggestion.urgent {
+  border-color: rgba(240, 160, 32, 0.6);
+}
+
+.suggestion-skill {
+  flex: none;
+}
+
+.dock-tip {
+  font-size: 12px;
+  opacity: 0.5;
+  margin: 4px 0 0;
+}
+
+.scene-tag {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  padding: 1px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(127, 127, 127, 0.3);
+  background: transparent;
+  color: inherit;
+  opacity: 0.8;
+  cursor: pointer;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scene-tag:hover {
+  border-color: #7c8bd9;
+  opacity: 1;
+}
+
+.scene-pop-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.scene-pop p {
+  margin: 0;
+  line-height: 1.6;
+  font-size: 13px;
+}
+
+.msg-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.msg-skill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.msg.note {
+  align-self: stretch;
+  max-width: none;
+  font-size: 13px;
+  background: rgba(124, 139, 217, 0.1);
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.msg.note .n-icon {
+  margin-top: 4px;
+  flex: none;
+}
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 12px;
+  padding: 6px 8px 6px 10px;
+  border-radius: 8px;
+  background: rgba(240, 160, 32, 0.1);
+  font-size: 13px;
+}
+
+.banner-text {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.banner-text:hover {
+  text-decoration: underline;
+}
+
+.input-box {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dock-palette {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(100% - 4px);
+  z-index: 10;
+}
+
+.model-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .msg {
@@ -350,6 +685,7 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
 }
 
 .dock-input {
+  position: relative;
   display: flex;
   gap: 8px;
   align-items: flex-end;

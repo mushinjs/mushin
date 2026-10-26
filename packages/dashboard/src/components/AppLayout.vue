@@ -37,6 +37,7 @@ onMounted(() => {
   data.refreshProviders().catch(() => {})
   data.refreshBots().catch(() => {})
   agent.refreshSessions().catch(() => {})
+  agent.refreshPickers().catch(() => {})
 })
 
 // First visit with nothing configured: start at the setup page.

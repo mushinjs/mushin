@@ -205,6 +205,27 @@ Reply through `session.send()` or `session.reply()` with a `source` of `{ kind: 
 
 Write `title`, `description` and config field descriptions for both the user and the Agent: they are what the palette, the inspector and `flows.nodeTypes` show.
 
+## Agent skills
+
+A skill is a written procedure the user can pick with `$` in the Agent dock; its instructions go into that one message as a `<skill>` block, so the system prompt never changes. A plugin that wants the Agent to know how to do something with it adds a skill while the Agent is running:
+
+```ts
+export function apply(ctx: Context) {
+  ctx.inject(['agent'], (ctx) => {
+    ctx.agent.defineSkill({
+      id: 'weather-setup',
+      name: 'Set up weather replies',
+      description: 'Answer "weather in <city>" in a group',
+      instructions: '1. Ask which bot and groups.\n2. Create a flow with flows.create …',
+      tools: ['flows.create', 'flows.test'],
+      scenes: ['flows', 'botDetail'],
+    })
+  })
+}
+```
+
+`scenes` lists the dashboard pages where the skill is recommended (`overview`, `providers`, `bots`, `botDetail`, `flows`, `flowEditor`, `personas`, `plugins`, `logs`). The skill goes away when the plugin is disabled. `agent.skills.list` shows every skill with its source.
+
 ## Provider types and adapters
 
 - A provider type calls `ctx.llm.defineType({ id, displayName, config, secrets, presets, create })`. `create` returns a client with `chat()` and, optionally, `stream()` and `listModels()`. See `packages/plugin-provider-openai`.

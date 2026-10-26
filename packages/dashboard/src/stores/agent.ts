@@ -1,15 +1,17 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { call, on } from '../api'
-import type { AgentEvent, AgentMessage, AgentSessionSummary, Risk } from '../types'
+import type { AgentCommands, AgentEvent, AgentMessage, AgentScene, AgentSessionSummary, AgentSkill, Risk } from '../types'
 
 export type ToolState = 'running' | 'confirm' | 'ok' | 'error' | 'declined'
 
 export type ChatItem =
-  | { kind: 'user'; text: string }
+  | { kind: 'user'; text: string; skills?: string[] }
   | { kind: 'assistant'; text: string }
   | { kind: 'tool'; id: string; action: string; input: unknown; risk?: Risk; state: ToolState; result?: unknown; error?: string }
   | { kind: 'error'; text: string }
+  /** Shown by the dashboard itself, e.g. for /status; never sent to the model. */
+  | { kind: 'note'; text: string }
 
 function parseArgs(json: string) {
   try {
@@ -26,7 +28,7 @@ function toItems(messages: AgentMessage[]): ChatItem[] {
   for (const message of messages) {
     if (message.role === 'user') {
       const text = message.display ?? (typeof message.content === 'string' ? message.content : '')
-      if (text) items.push({ kind: 'user', text })
+      if (text || message.skills?.length) items.push({ kind: 'user', text, ...(message.skills?.length ? { skills: message.skills } : {}) })
     } else if (message.role === 'assistant') {
       if (message.content) items.push({ kind: 'assistant', text: message.content })
       for (const call of message.toolCalls ?? []) {
@@ -79,8 +81,23 @@ export const useAgentStore = defineStore('agent', () => {
   const running = ref(false)
   let adopting = false
 
+  /** Token use of the last reply in this conversation, for /status. */
+  const usage = ref<{ inputTokens: number; outputTokens: number }>()
+  const skills = ref<AgentSkill[]>([])
+  const commands = ref<AgentCommands>({ builtin: [], bots: [] })
+
   async function refreshSessions() {
     sessions.value = await call<AgentSessionSummary[]>('agent.sessions')
+  }
+
+  /** Skills and commands for the `$` and `/` pickers. */
+  async function refreshPickers() {
+    const [skillList, commandList] = await Promise.all([
+      call<AgentSkill[]>('agent.skills.list'),
+      call<AgentCommands>('agent.commands'),
+    ])
+    skills.value = skillList
+    commands.value = commandList
   }
 
   async function load(id: string) {
@@ -89,10 +106,16 @@ export const useAgentStore = defineStore('agent', () => {
     items.value = toItems(session.messages)
     running.value = session.running
     streaming.value = ''
+    usage.value = undefined
+  }
+
+  function note(text: string) {
+    items.value.push({ kind: 'note', text })
   }
 
   function newChat() {
     current.value = undefined
+    usage.value = undefined
     items.value = []
     streaming.value = ''
     running.value = false
@@ -146,6 +169,7 @@ export const useAgentStore = defineStore('agent', () => {
         if (!streaming.value && event.text) streaming.value = event.text
         flush()
         running.value = false
+        if (event.usage) usage.value = event.usage
         refreshSessions().catch(() => {})
         break
       case 'error':
@@ -157,13 +181,19 @@ export const useAgentStore = defineStore('agent', () => {
     }
   }
 
-  async function send(text: string) {
-    if (running.value || !text.trim()) return
-    items.value.push({ kind: 'user', text })
+  async function send(text: string, options: { skills?: AgentSkill[]; scene?: AgentScene } = {}) {
+    const picked = options.skills ?? []
+    if (running.value || (!text.trim() && !picked.length)) return
+    items.value.push({ kind: 'user', text, ...(picked.length ? { skills: picked.map((skill) => skill.name) } : {}) })
     running.value = true
     adopting = !current.value
     try {
-      const result = await call<{ session: string }>('agent.send', { session: current.value, text })
+      const result = await call<{ session: string }>('agent.send', {
+        session: current.value,
+        text,
+        ...(options.scene ? { scene: options.scene } : {}),
+        ...(picked.length ? { skills: picked.map((skill) => skill.id) } : {}),
+      })
       current.value ??= result.session
     } catch (error) {
       items.value.push({ kind: 'error', text: (error as Error).message })
@@ -194,14 +224,22 @@ export const useAgentStore = defineStore('agent', () => {
     if (bound) return
     bound = true
     on('agent/event', handle)
+    // Command nodes, bots and plugin skills come and go with these.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const later = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => refreshPickers().catch(() => {}), 500)
+    }
+    for (const name of ['flows/changed', 'bots/changed', 'actions/changed']) on(name, later)
     on('connected', () => {
       refreshSessions().catch(() => {})
+      refreshPickers().catch(() => {})
       if (current.value && !items.value.length) load(current.value).catch(() => newChat())
     })
   }
 
   return {
-    open, sessions, current, items, streaming, running,
-    refreshSessions, load, newChat, send, confirm, cancel, remove, bind,
+    open, sessions, current, items, streaming, running, usage, skills, commands,
+    refreshSessions, refreshPickers, load, newChat, note, send, confirm, cancel, remove, bind,
   }
 })

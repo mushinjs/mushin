@@ -1,6 +1,6 @@
 import {
   type ChannelInfo, Context, describeMissing, dependencyReport, type LogTag, type MissingDependency, logTag, type Exporter, type Fiber, fiberError, fiberStatus, isMasked, Logger, mask, type Message,
-  type MessageRecord, messageType, MushinError, type Plugin, pluginSchema, randomId, type Segment, Service, toJsonSchema,
+  type MessageRecord, messageType, MushinError, type Plugin, type Provenance, pluginSchema, randomId, type Segment, segmentsToText, Service, toJsonSchema,
   validatePluginConfig, z,
 } from '@mushin/core'
 import type {} from '@mushin/plugin-storage'
@@ -42,6 +42,14 @@ export interface CommandCall {
   userId: string
   channel: ChannelInfo
   at: number
+}
+
+export interface RunCommandInput {
+  bot: string
+  command: string
+  target?: 'master' | 'group'
+  group?: string
+  user?: string
 }
 
 /** Lists commands a plugin provides on a bot, e.g. the command nodes of the flows attached to it. */
@@ -601,6 +609,46 @@ export class BotManager extends Service {
     return { commands: entries, conflicts }
   }
 
+  /**
+   * Runs a command as if a master sent it. With a target it really runs on the bot: in that group,
+   * or in the master's private chat, and the replies are sent. Without one it only previews where
+   * the message would go (through flows), so nothing is sent.
+   */
+  async runCommand(input: RunCommandInput, source?: Provenance) {
+    const record = this.get(input.bot)
+    const prefix = record.commands?.prefixes?.find(Boolean) ?? '/'
+    const text = /^\p{L}/u.test(input.command) && !input.command.startsWith(prefix) ? `${prefix}${input.command}` : input.command
+    if (!input.target) {
+      const flows = this.home.get('flows') as { route(botId: string, input: { text: string; role?: string }): Promise<unknown> } | undefined
+      if (!flows) throw new MushinError('unavailable', 'Previewing a command needs the flows plugin; give a target to run it for real')
+      return { simulated: true, text, route: await flows.route(record.id, { text, role: 'master' }) }
+    }
+    const bot = this.bot(record.id)
+    if (!bot || this.status(record.id).status !== 'online') throw new MushinError('unavailable', `Bot "${record.name}" is not online`)
+    const permissions = this.home.get('permissions') as { get(botId: string): { masters: string[] } } | undefined
+    const userId = input.user ?? permissions?.get(record.id).masters[0]
+    if (!userId) throw new MushinError('invalid_input', `Bot "${record.name}" has no master; add one with permissions.update or pass user`)
+    if (input.target === 'group' && !input.group) throw new MushinError('invalid_input', 'Pass the group id to run a command in a group')
+    const channel: ChannelInfo = input.target === 'group' ? { type: 'group', id: input.group! } : { type: 'private', id: userId }
+    const replies: MessageRecord[] = []
+    const collect = (message: MessageRecord) => {
+      if (message.botId === record.id && message.direction === 'out' && message.channel.id === channel.id) replies.push(message)
+    }
+    const stop = this.home.on('bots/message', collect)
+    try {
+      await bot.receive({ channel, user: { id: userId }, segments: [{ type: 'text', data: { text } }] }, { source })
+    } finally {
+      stop()
+    }
+    return {
+      simulated: false,
+      text,
+      channel,
+      user: userId,
+      replies: replies.map((reply) => segmentsToText(reply.segments)),
+    }
+  }
+
   // ---- logs ----
 
   /** Finds the bot whose context wrote a log message, by walking up from the writing fiber. */
@@ -772,6 +820,20 @@ export class BotManager extends Service {
       risk: 'read',
       input: z.object({ bot: z.string().optional().describe('Bot id from bots.list; all bots when omitted') }),
       handler: ({ bot }) => this.commandList(bot),
+    })
+
+    yield actions.define({
+      name: 'bots.commands.run',
+      description: 'Run a bot command such as /checkin as the bot\'s master. With target "group" (and the group id) or "master" (the master\'s private chat) it runs for real and the bot sends its replies there; without a target it only previews which flow or plugin would answer, and sends nothing.',
+      risk: 'write',
+      input: z.object({
+        bot: z.string().describe('Bot id from bots.list'),
+        command: z.string().min(1).describe('The command with its arguments, e.g. "/checkin" or "/score 85"'),
+        target: z.enum(['master', 'group']).optional().describe('Where to run it for real; omit to only preview'),
+        group: z.string().optional().describe('Group id, with target "group"'),
+        user: z.string().optional().describe('Run as this user id instead of the first master'),
+      }),
+      handler: (input, caller) => this.runCommand(input, caller.kind === 'agent' && caller.session ? { kind: 'agent', session: caller.session } : undefined),
     })
 
     yield actions.define({

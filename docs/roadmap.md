@@ -51,6 +51,7 @@
 | 13. 权限插件第一阶段 | 已完成 | 新插件 `@mushin/plugin-permissions`，名单存在插件自己的存储里，按机器人分 master / admin；原指令设置里的管理员名单会自动迁移过来。为了让 App 插件也能注册带权限的指令（后面的 `/persona` 要用），plugin-bots 新增 `ctx.bots.defineCommand()` 和 `usePermissions()`；指令权限新增 `master`，`/help` 可按身份只列能用的指令。群身份由适配器声明 `groupRoles` 并提供查询（OneBot 用 `get_group_member_info`，缓存 5 分钟）。流程测试可模拟 master / admin / user 和群身份。插件可用 `defineSource()` 追加其他权限来源，第二阶段的数据库规则会走这里。 |
 | 6. 人格 | 已完成 | 新插件 `@mushin/plugin-personas`，人格存在 `personas/items/<id>`，机器人设置和 `/persona` 切换记录分别存在 `personas/bots`、`personas/chats`。服务方法叫 `forSession(botId, session)`（路线图写的是 `resolve`），流程通过 `ctx.flows.usePersonas()` 接入。`/persona` 由第 13 项新增的 `ctx.bots.defineCommand()` 注册，只在有人格的机器人上出现，切换身份默认要求管理员。`ai.chat` 的系统提示默认改为空：有人格时作为补充规则接在人格提示后，旧流程里原来的默认提示视为空。`ai.classify` 不使用人格（分类不需要语气）。“改写回复”只改写回复、发送节点的固定文本。导入支持本项目导出的 JSON 和 SillyTavern 角色卡（v1/v2/v3 的 JSON 和 PNG），开场白不导入。字段选择器新增通用的 `x-choices`（`field()` 的 `choices` 选项），人格节点用它列出人格。 |
 | 21. 大模型对话改由流程控制 | 已完成 | 插件启用时在机器人上创建流程「大模型对话 · 机器人名」（来源为插件，优先级 −100，跳过已知指令），停用时删除；没有任何设置项（Q21-1）。旧参数仍可通过 API 传入，插件会据此重写流程，机器人重启不会覆盖画布上的修改。新增“频率限制”（`first` 输出用于只提示一次）和“每日额度”节点（计数存于 `flows-usage`，测试运行用临时计数）；“询问大模型”新增上下文轮数（本节点记忆或整个会话的消息记录，后者包含没回复的消息）、消息长度上限、超时、`tokens`/`model`/`error` 输出和 `error` 出口。收到消息触发器新增“群里@我”“仅限这些群”“忽略用户”“跳过指令”。没有保留“同一会话一次只回一条”（busy）；每日额度的“次数”在放行时计数，而不是模型成功后。会话历史存在内存（Q21-2）。 |
+| 2. Agent 智能场景识别 | 已完成 | 场景由前端根据路由和页面数据计算（`stores/agentScene.ts`），流程编辑器会补充流程名和错误数；场景提示、本页状态随 `agent.send` 的 `scene` 参数进入 `<context>`，系统提示不变。推荐规则全部写在前端，暂未提供插件贡献规则的 `agent.recommendations`，管理页覆盖文案留给第 1 项。技能先有 4 个内置技能和插件的 `ctx.agent.defineSkill()`，`agent.skills.list` / `agent.skills.get` 可查询，新建和导入在第 1 项。`bots.commands.run` 放在 plugin-bots：不给目标时用 `flows.route` 预览（不发消息，没有使用演示沙盒机器人）；给目标时以第一个主人的身份在主人私聊或指定群里真实执行，消息来源记为智能体。“主人”沿用第 13 项权限插件的名单，没有在 Bot 设置里另加字段。`/model` 暂时是一个选择提供商和模型的小窗口，`/status` 显示消息数、字符数和上次的 Token 用量。历史搜索支持全文和 `scene:` `skill:` `command:` `resource:` `status:` 标签。 |
 | 其余各项 | 未开始 | — |
 
 ### 依赖关系
@@ -233,7 +234,7 @@ Agent 现在只在用户消息里收到一句“当前页面是 /flows/xxx”，
 ### 待讨论
 
 - ~~Q2-1 在 Agent 里调用 Bot 指令时，用哪个 Bot 执行？~~ 已定：按用户描述，指定了主人或某个群就真实执行，否则模拟试跑。
-- Q2-2 页面推荐是否允许“可选的 LLM 生成推荐”（更聪明但耗 Token）？建议默认关闭。
+- ~~Q2-2 页面推荐是否允许“可选的 LLM 生成推荐”（更聪明但耗 Token）？~~ 已定：不做 LLM 推荐，只用本地规则。
 
 ---
 

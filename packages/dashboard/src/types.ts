@@ -273,6 +273,8 @@ export interface AgentMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: any
   display?: string
+  /** Names of the skills picked for this message. */
+  skills?: string[]
   toolCalls?: ToolCall[]
   toolCallId?: string
   isError?: boolean
@@ -285,6 +287,37 @@ export interface AgentSessionSummary {
   createdAt: number
   updatedAt: number
   running: boolean
+  scene?: { key: string; label?: string; page?: string }
+  tags: string[]
+  /** From a search: the text around the match. */
+  snippet?: string
+}
+
+/** The dashboard page, as the Agent is told about it. */
+export interface AgentScene {
+  key: string
+  label?: string
+  hint?: string
+  state?: Record<string, string | number | boolean>
+  resource?: string
+}
+
+export interface AgentSkill {
+  id: string
+  name: string
+  description: string
+  instructions: string
+  whenToUse?: string
+  tools?: string[]
+  scenes?: string[]
+  source: 'builtin' | 'plugin' | 'user'
+  plugin?: string
+  enabled: boolean
+}
+
+export interface AgentCommands {
+  builtin: { name: string; description: string; 'zh-CN'?: string }[]
+  bots: { name: string; description?: string; usage?: string; permission?: string; bot: string; botName?: string; source: { kind: string; id: string; name: string } }[]
 }
 
 export type AgentEvent = { session: string } & (
@@ -293,7 +326,7 @@ export type AgentEvent = { session: string } & (
   | { type: 'tool-call'; id: string; action: string; input: unknown; risk: Risk }
   | { type: 'confirm'; id: string; action: string; input: unknown }
   | { type: 'tool-result'; id: string; ok: boolean; result?: unknown; error?: string }
-  | { type: 'done'; text: string }
+  | { type: 'done'; text: string; usage?: { inputTokens: number; outputTokens: number } }
   | { type: 'error'; error: string }
 )
 
