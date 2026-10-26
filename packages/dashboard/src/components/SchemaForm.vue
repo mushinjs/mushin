@@ -11,6 +11,8 @@ const props = defineProps<{
   secrets?: string[]
   /** Property names to leave out of the form. */
   hidden?: string[]
+  /** Dense layout for the flow editor; see SchemaField. */
+  compact?: boolean
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [value: Record<string, any>] }>()
@@ -51,6 +53,7 @@ function update(name: string, next: any) {
       :model-value="modelValue?.[name]"
       :required="required.has(name)"
       :secret="secrets?.includes(name)"
+      :compact="compact"
       @update:model-value="(next: any) => update(name, next)"
     />
   </NForm>
