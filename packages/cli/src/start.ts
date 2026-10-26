@@ -20,6 +20,7 @@ export function defaultConfig(): InstanceConfig {
       { id: 'adapter-onebot', package: '@mushin/plugin-adapter-onebot', config: {} },
       { id: 'flows', package: '@mushin/plugin-flows', config: {} },
       { id: 'agent', package: '@mushin/plugin-agent', config: {} },
+      { id: 'mcp', package: '@mushin/plugin-mcp', config: {} },
       { id: 'stats', package: '@mushin/plugin-stats', config: {} },
       { id: 'console', package: '@mushin/plugin-console', config: {} },
     ],

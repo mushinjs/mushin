@@ -34,7 +34,8 @@
     "@mushin/plugin-demo": "workspace:*",
     "@mushin/plugin-stats": "workspace:*",
     "@mushin/plugin-permissions": "workspace:*",
-    "@mushin/plugin-personas": "workspace:*"
+    "@mushin/plugin-personas": "workspace:*",
+    "@mushin/plugin-mcp": "workspace:*"
   },
   "devDependencies": {
     "ws": "catalog:"

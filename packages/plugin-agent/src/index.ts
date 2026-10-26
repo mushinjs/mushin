@@ -4,9 +4,14 @@ import {
 import type { LlmMessage, LlmResult, ToolCall, ToolDefinition } from '@mushin/plugin-providers'
 import type {} from '@mushin/plugin-storage'
 import { contextNote, type SceneInfo, skillBlock, SYSTEM_PROMPT, type TurnContext } from './prompt'
-import { type AgentSkill, BUILTIN_SKILLS, type SkillDefinition } from './skills'
+import {
+  type AgentSettings, defaultPolicy, formatSkillMarkdown, parseSkillMarkdown, policyInput, profileInput, SCENE_KEYS, type SceneProfile, today,
+  type TokenUsage, type ToolPolicy,
+} from './settings'
+import { type AgentSkill, BUILTIN_SKILLS, type SkillDefinition, skillFields, skillInput } from './skills'
 
 export * from './prompt'
+export * from './settings'
 export * from './skills'
 
 declare module '@mushin/core' {
@@ -16,6 +21,8 @@ declare module '@mushin/core' {
 
   interface Events {
     'agent/event'(event: AgentEvent): void
+    /** Skills, page profiles or tool policies changed. */
+    'agent/changed'(): void
   }
 }
 
@@ -76,7 +83,8 @@ export const BUILTIN_COMMANDS = [
   { name: 'help', description: 'Show what you can type', 'zh-CN': '查看可用的指令和技能' },
 ]
 
-const SKILL_SETTINGS = 'agent/settings/skills'
+const SETTINGS_KEY = 'agent/settings/main'
+const USAGE_KEY = 'agent/settings/usage'
 
 const MAX_RESULT_CHARS = 16_000
 
@@ -93,6 +101,9 @@ export const Config = z.object({
   confirmTimeout: z.number().int().min(10).default(600).meta(field('Approval timeout', 'Seconds to wait for approval of a dangerous action', {
     'zh-CN': { title: '确认超时', description: '等待用户批准危险操作的秒数' },
   })),
+  dailyTokens: z.number().int().min(0).default(0).meta(field('Daily token budget', 'Input and output tokens the Agent may use per day; 0 means no limit', {
+    'zh-CN': { title: '每日 Token 预算', description: '智能体每天最多使用的输入和输出 Token；0 表示不限制' },
+  })),
 })
 
 export type Config = z.infer<typeof Config>
@@ -100,6 +111,8 @@ export type Config = z.infer<typeof Config>
 interface Running {
   abort: AbortController
   confirms: Map<string, (approved: boolean) => void>
+  /** Tokens of every request in this turn. */
+  usage: { inputTokens: number; outputTokens: number }
 }
 
 /** Runs conversations in which the LLM operates Mushin.js through the action registry. */
@@ -110,6 +123,7 @@ export class Agent extends Service {
   private home: Context
   private running = new Map<string, Running>()
   private pluginSkills = new Map<string, AgentSkill>()
+  private settingsCache?: AgentSettings
 
   constructor(ctx: Context, public config: Config) {
     super(ctx, 'agent')
@@ -123,15 +137,89 @@ export class Agent extends Service {
     }
   }
 
-  /** Tools offered to the model: every action except the Agent's own. */
-  tools(): ToolDefinition[] {
+  /** Tools offered to the model: every action except the Agent's own and those turned off. */
+  async tools(): Promise<ToolDefinition[]> {
+    const settings = await this.settings()
     return this.home.actions.list()
-      .filter((action) => !action.name.startsWith('agent.'))
+      .filter((action) => !action.name.startsWith('agent.') && this.policyOf(settings, action) !== 'off')
       .map((action) => ({
         name: toToolName(action.name),
         description: describeTool(action),
         parameters: action.inputSchema,
       }))
+  }
+
+  // ---- settings ----
+
+  async settings(): Promise<AgentSettings> {
+    if (!this.settingsCache) {
+      const saved = await this.home.storage.get<Partial<AgentSettings>>(SETTINGS_KEY)
+      this.settingsCache = { profiles: {}, toolPolicy: {}, disabledSkills: [], ...saved }
+    }
+    return this.settingsCache
+  }
+
+  private async updateSettings(change: (settings: AgentSettings) => void) {
+    const settings = await this.settings()
+    change(settings)
+    await this.home.storage.set(SETTINGS_KEY, settings)
+    this.home.emit('agent/changed')
+    return settings
+  }
+
+  private policyOf(settings: AgentSettings, action: Pick<ActionInfo, 'name' | 'risk'>): ToolPolicy {
+    return settings.toolPolicy[action.name] ?? defaultPolicy(action.risk)
+  }
+
+  /** Every action with its policy, for the tool policy table. */
+  async policies() {
+    const settings = await this.settings()
+    return this.home.actions.list()
+      .filter((action) => !action.name.startsWith('agent.'))
+      .map((action) => ({
+        name: action.name,
+        description: action.description,
+        plugin: action.plugin,
+        risk: action.risk,
+        client: action.client,
+        policy: this.policyOf(settings, action),
+        custom: action.name in settings.toolPolicy,
+      }))
+  }
+
+  /** Sets the policy of some actions; `null` goes back to the default for the action's risk. */
+  async setPolicy(changes: Record<string, ToolPolicy | null>) {
+    await this.updateSettings((settings) => {
+      for (const [name, policy] of Object.entries(changes)) {
+        if (policy === null) delete settings.toolPolicy[name]
+        else settings.toolPolicy[name] = policy
+      }
+    })
+    return this.policies()
+  }
+
+  async profiles() {
+    return (await this.settings()).profiles
+  }
+
+  async setProfile(scene: string, profile: SceneProfile | null) {
+    const settings = await this.updateSettings((settings) => {
+      if (profile === null) delete settings.profiles[scene]
+      else settings.profiles[scene] = profile
+    })
+    return settings.profiles[scene] ?? {}
+  }
+
+  /** Tokens used today and the daily budget. */
+  async usage() {
+    const saved = await this.home.storage.get<TokenUsage>(USAGE_KEY)
+    const used = saved?.day === today() ? saved : { day: today(), input: 0, output: 0 }
+    return { ...used, budget: this.config.dailyTokens }
+  }
+
+  private async addUsage(usage: { inputTokens: number; outputTokens: number }) {
+    const current = await this.usage()
+    await this.home.storage.set(USAGE_KEY, { day: current.day, input: current.input + usage.inputTokens, output: current.output + usage.outputTokens })
   }
 
   private emit(event: AgentEvent) {
@@ -199,7 +287,7 @@ export class Agent extends Service {
 
   /** Built-in, plugin and user skills; user skills win on the same id. */
   async skills(): Promise<AgentSkill[]> {
-    const disabled = new Set((await this.home.storage.get<{ disabled?: string[] }>(SKILL_SETTINGS))?.disabled ?? [])
+    const disabled = new Set((await this.settings()).disabledSkills)
     const byId = new Map<string, AgentSkill>()
     for (const skill of BUILTIN_SKILLS) byId.set(skill.id, { ...skill, source: 'builtin', enabled: true })
     for (const skill of this.pluginSkills.values()) byId.set(skill.id, { ...skill })
@@ -214,6 +302,50 @@ export class Agent extends Service {
     const skill = (await this.skills()).find((item) => item.id === id)
     if (!skill) throw new MushinError('not_found', `No skill "${id}"`)
     return skill
+  }
+
+  /** Saves a user skill. With the id of a built-in or plugin skill it replaces that one until deleted. */
+  async saveSkill(input: SkillDefinition & { enabled?: boolean }) {
+    const skill: AgentSkill = { ...input, source: 'user', enabled: input.enabled !== false }
+    await this.home.storage.set(`agent/skills/${skill.id}`, skill)
+    this.home.emit('agent/changed')
+    return this.skill(skill.id)
+  }
+
+  async createSkill(input: Omit<SkillDefinition, 'id'> & { id?: string }) {
+    const taken = new Set((await this.skills()).map((skill) => skill.id))
+    let id = input.id ?? (input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || randomId(6).toLowerCase())
+    if (taken.has(id) && !input.id) id = `${id}-${randomId(4).toLowerCase()}`
+    else if (taken.has(id)) throw new MushinError('conflict', `A skill with id "${id}" already exists`)
+    return this.saveSkill({ ...input, id })
+  }
+
+  async updateSkill(id: string, patch: Partial<Omit<SkillDefinition, 'id'>>) {
+    const current = await this.skill(id)
+    const { source, plugin, enabled, ...rest } = current
+    return this.saveSkill({ ...rest, ...patch, id, enabled })
+  }
+
+  /** Deletes a user skill; a built-in or plugin skill it replaced comes back. */
+  async deleteSkill(id: string) {
+    const current = await this.skill(id)
+    if (current.source !== 'user') throw new MushinError('forbidden', 'Built-in and plugin skills cannot be deleted; turn them off instead')
+    await this.home.storage.delete(`agent/skills/${id}`)
+    this.home.emit('agent/changed')
+    return { deleted: id, restored: (await this.skills()).some((skill) => skill.id === id) }
+  }
+
+  async setSkillEnabled(id: string, enabled: boolean) {
+    const current = await this.skill(id)
+    if (current.source === 'user') {
+      await this.home.storage.set(`agent/skills/${id}`, { ...current, enabled })
+      this.home.emit('agent/changed')
+      return this.skill(id)
+    }
+    await this.updateSettings((settings) => {
+      settings.disabledSkills = enabled ? settings.disabledSkills.filter((item) => item !== id) : [...new Set([...settings.disabledSkills, id])]
+    })
+    return this.skill(id)
   }
 
   /** Agent commands and the commands of every bot, for the `/` picker. */
@@ -243,7 +375,7 @@ export class Agent extends Service {
 
   async createSession(): Promise<AgentSession> {
     const now = Date.now()
-    const session: AgentSession = { id: randomId(), title: '', createdAt: now, updatedAt: now, tools: this.tools(), messages: [] }
+    const session: AgentSession = { id: randomId(), title: '', createdAt: now, updatedAt: now, tools: await this.tools(), messages: [] }
     await this.save(session)
     return session
   }
@@ -277,9 +409,13 @@ export class Agent extends Service {
     if (!this.home.llm.list().length) {
       throw new MushinError('unavailable', 'Add an LLM provider before using the Agent')
     }
+    const usage = await this.usage()
+    if (usage.budget && usage.input + usage.output >= usage.budget) {
+      throw new MushinError('unavailable', `The Agent used its daily budget of ${usage.budget} tokens; raise it in the Agent settings or wait until tomorrow`)
+    }
     const session = sessionId ? await this.session(sessionId) : await this.createSession()
     if (this.running.has(session.id)) throw new MushinError('conflict', 'The Agent is still working on this conversation')
-    const running: Running = { abort: new AbortController(), confirms: new Map() }
+    const running: Running = { abort: new AbortController(), confirms: new Map(), usage: { inputTokens: 0, outputTokens: 0 } }
     this.running.set(session.id, running)
     const skills = options.skills?.length ? await Promise.all(options.skills.map((id) => this.skill(id))) : []
     if (!session.title) session.title = (text || skills.map((skill) => skill.name).join(', ')).replace(/\s+/g, ' ').slice(0, 48)
@@ -298,7 +434,7 @@ export class Agent extends Service {
     this.emit({ session: session.id, type: 'start' })
     try {
       const final = await this.loop(session, running, options)
-      this.emit({ session: session.id, type: 'done', text: final?.text ?? '', usage: final?.usage })
+      this.emit({ session: session.id, type: 'done', text: final?.text ?? '', usage: running.usage })
     } catch (error) {
       const message = running.abort.signal.aborted ? 'Stopped' : error instanceof Error ? error.message : String(error)
       this.emit({ session: session.id, type: 'error', error: message })
@@ -326,6 +462,11 @@ export class Agent extends Service {
       }
       if (!result) throw new Error('The provider returned no result')
       last = result
+      if (result.usage) {
+        running.usage.inputTokens += result.usage.inputTokens
+        running.usage.outputTokens += result.usage.outputTokens
+        await this.addUsage(result.usage)
+      }
       session.messages.push({
         role: 'assistant',
         content: result.text,
@@ -373,9 +514,15 @@ export class Agent extends Service {
       return reply(`The tool ${call.name} is not available right now.`, true)
     }
 
+    const policy = this.policyOf(await this.settings(), info)
+    if (policy === 'off') {
+      this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: false, error: 'Turned off in the Agent settings' })
+      return reply(`The user turned ${call.name} off for the Agent. Do not use it; tell them if it is needed.`, true)
+    }
+
     this.emit({ session: session.id, type: 'tool-call', id: call.id, action: name, input, risk: info.risk })
 
-    if (info.risk === 'dangerous') {
+    if (policy === 'confirm') {
       this.emit({ session: session.id, type: 'confirm', id: call.id, action: name, input })
       const approved = await this.waitForApproval(running, call.id)
       if (!approved) {
@@ -452,7 +599,9 @@ export class Agent extends Service {
       input: z.object({ id: z.string() }),
       handler: async ({ id }) => {
         const { tools, ...session } = await this.session(id)
-        return { ...session, messages: session.messages.map(({ raw, ...message }: any) => message), running: this.running.has(id) }
+        const now = new Set((await this.tools()).map((tool) => tool.name))
+        const toolsStale = tools.length !== now.size || tools.some((tool) => !now.has(tool.name))
+        return { ...session, messages: session.messages.map(({ raw, ...message }: any) => message), running: this.running.has(id), toolsStale }
       },
     })
 
@@ -506,6 +655,114 @@ export class Agent extends Service {
       risk: 'read',
       input: z.object({ id: z.string() }),
       handler: ({ id }) => this.skill(id),
+    })
+
+    const skillId = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/).describe('Lowercase letters, digits and dashes')
+
+    yield actions.define({
+      name: 'agent.skills.create',
+      description: 'Create a user skill. Omit id to make one from the name.',
+      risk: 'write',
+      input: skillInput.extend({ id: skillId.optional() }),
+      handler: (input) => this.createSkill(input),
+    })
+
+    yield actions.define({
+      name: 'agent.skills.update',
+      description: 'Change a skill. Changing a built-in or plugin skill saves your own copy that replaces it until deleted.',
+      risk: 'write',
+      input: z.object({
+        id: z.string(),
+        name: skillFields.name.optional(),
+        description: z.string().trim().max(300).optional(),
+        instructions: skillFields.instructions.optional(),
+        whenToUse: skillFields.whenToUse,
+        tools: skillFields.tools,
+        scenes: skillFields.scenes,
+      }),
+      handler: ({ id, ...patch }) => this.updateSkill(id, patch),
+    })
+
+    yield actions.define({
+      name: 'agent.skills.delete',
+      description: 'Delete a user skill. A built-in or plugin skill it replaced comes back.',
+      risk: 'write',
+      input: z.object({ id: z.string() }),
+      handler: ({ id }) => this.deleteSkill(id),
+    })
+
+    yield actions.define({
+      name: 'agent.skills.setEnabled',
+      description: 'Turn a skill on or off; off skills are not offered with $.',
+      risk: 'write',
+      input: z.object({ id: z.string(), enabled: z.boolean() }),
+      handler: ({ id, enabled }) => this.setSkillEnabled(id, enabled),
+    })
+
+    yield actions.define({
+      name: 'agent.skills.import',
+      description: 'Import a skill from a SKILL.md file (YAML frontmatter with name and description, then Markdown instructions), as used by Claude and Codex skills.',
+      risk: 'write',
+      input: z.object({ markdown: z.string().min(1).max(40_000), replace: z.boolean().optional().describe('Overwrite a skill with the same id') }),
+      handler: async ({ markdown, replace }) => {
+        let parsed: ReturnType<typeof parseSkillMarkdown>
+        try {
+          parsed = parseSkillMarkdown(markdown)
+        } catch (error) {
+          throw new MushinError('invalid_input', error instanceof Error ? error.message : String(error))
+        }
+        const input = skillInput.extend({ id: skillId.optional() }).parse(parsed)
+        if (replace && input.id) return this.saveSkill({ ...input, id: input.id })
+        return this.createSkill(input)
+      },
+    })
+
+    yield actions.define({
+      name: 'agent.skills.export',
+      description: 'A skill as a SKILL.md file.',
+      risk: 'read',
+      input: z.object({ id: z.string() }),
+      handler: async ({ id }) => ({ fileName: 'SKILL.md', markdown: formatSkillMarkdown(await this.skill(id)) }),
+    })
+
+    yield actions.define({
+      name: 'agent.profiles.list',
+      description: 'What the Agent says and offers on each dashboard page, as the user changed it: hint, welcome line, own suggestions, hidden built-in suggestions, recommended skills.',
+      risk: 'read',
+      input: z.object({}),
+      handler: async () => ({ scenes: SCENE_KEYS, profiles: await this.profiles() }),
+    })
+
+    yield actions.define({
+      name: 'agent.profiles.update',
+      description: 'Change what the Agent says and offers on one dashboard page. Send the whole profile; null goes back to the defaults.',
+      risk: 'write',
+      input: z.object({ scene: z.enum(SCENE_KEYS), profile: profileInput.nullable() }),
+      handler: ({ scene, profile }) => this.setProfile(scene, profile),
+    })
+
+    yield actions.define({
+      name: 'agent.policy.list',
+      description: 'Every tool the Agent can use, with its plugin, risk and policy: auto (runs), confirm (asks the user first) or off (not offered).',
+      risk: 'read',
+      input: z.object({}),
+      handler: () => this.policies(),
+    })
+
+    yield actions.define({
+      name: 'agent.policy.set',
+      description: 'Set the policy of tools by action name: auto, confirm, or off; null goes back to the default (dangerous actions ask, others run). Off tools leave new conversations only.',
+      risk: 'dangerous',
+      input: z.object({ policies: z.record(z.string(), policyInput.nullable()) }),
+      handler: ({ policies }) => this.setPolicy(policies),
+    })
+
+    yield actions.define({
+      name: 'agent.usage',
+      description: 'Tokens the Agent used today and its daily budget (0 means no limit).',
+      risk: 'read',
+      input: z.object({}),
+      handler: () => this.usage(),
     })
 
     yield actions.define({

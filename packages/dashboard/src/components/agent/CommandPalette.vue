@@ -4,6 +4,7 @@ import { NIcon, NTag, useThemeVars } from 'naive-ui'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAgentStore } from '../../stores/agent'
+import { useAgentSceneStore } from '../../stores/agentScene'
 import type { AgentCommands, AgentSkill } from '../../types'
 
 /** One row: an Agent command, a bot command or a skill. */
@@ -24,6 +25,7 @@ const emit = defineEmits<{ pick: [item: PaletteItem] }>()
 const { t, locale } = useI18n()
 const theme = useThemeVars()
 const agent = useAgentStore()
+const scenes = useAgentSceneStore()
 const active = ref(0)
 const listEl = ref<HTMLElement>()
 
@@ -34,7 +36,7 @@ const matches = (...texts: (string | undefined)[]) => {
 
 const skillItems = computed<PaletteItem[]>(() => agent.skills
   .filter((skill) => skill.enabled && matches(skill.id, skill.name, skill.description))
-  .map((skill) => ({ kind: 'skill' as const, key: `skill:${skill.id}`, name: skill.name, description: skill.description, skill, recommended: !!skill.scenes?.includes(props.scene) }))
+  .map((skill) => ({ kind: 'skill' as const, key: `skill:${skill.id}`, name: skill.name, description: skill.description, skill, recommended: !!skill.scenes?.includes(props.scene) || scenes.skills.includes(skill.id) }))
   .sort((a, b) => Number(b.recommended) - Number(a.recommended)))
 
 const groups = computed(() => {

@@ -31,6 +31,8 @@ export interface ActionDefinition<S extends z.ZodType = z.ZodType, R = unknown> 
   /** Written for the Agent: what the action does and what it returns. */
   description: string
   input: S
+  /** JSON Schema shown instead of the one made from `input`, for tools described elsewhere (such as MCP tools). */
+  inputSchema?: JsonSchema
   risk: Risk
   /** Client actions run in the dashboard; the server relays them to the caller's tab. */
   client?: boolean
@@ -129,7 +131,7 @@ export class Actions extends Service {
   }
 
   private info(action: StoredAction): ActionInfo {
-    action.schema ??= toJsonSchema(action.input)
+    action.schema ??= action.inputSchema ?? toJsonSchema(action.input)
     return {
       name: action.name,
       description: action.description,
