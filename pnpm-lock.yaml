@@ -12,6 +12,12 @@ catalogs:
     '@cordisjs/plugin-server':
       specifier: 1.7.0
       version: 1.7.0
+    '@minatojs/driver-memory':
+      specifier: 4.0.0
+      version: 4.0.0
+    '@minatojs/driver-sqlite':
+      specifier: 5.0.3
+      version: 5.0.3
     '@types/markdown-it':
       specifier: ^14.2.0
       version: 14.2.0
@@ -57,6 +63,9 @@ catalogs:
     mermaid:
       specifier: ^12.1.0
       version: 12.2.0
+    minato:
+      specifier: 4.0.1
+      version: 4.0.1
     naive-ui:
       specifier: ^2.45.3
       version: 2.45.3
@@ -192,6 +201,9 @@ importers:
       '@mushin/plugin-console':
         specifier: workspace:*
         version: link:../plugin-console
+      '@mushin/plugin-database':
+        specifier: workspace:*
+        version: link:../plugin-database
       '@mushin/plugin-demo':
         specifier: workspace:*
         version: link:../plugin-demo
@@ -377,6 +389,24 @@ importers:
       ws:
         specifier: 'catalog:'
         version: 8.22.0
+
+  packages/plugin-database:
+    dependencies:
+      '@minatojs/driver-memory':
+        specifier: 'catalog:'
+        version: 4.0.0(cordis@4.0.0-rc.11)(minato@4.0.1(cordis@4.0.0-rc.11))
+      '@minatojs/driver-sqlite':
+        specifier: 'catalog:'
+        version: 5.0.3(cordis@4.0.0-rc.11)(minato@4.0.1(cordis@4.0.0-rc.11))
+      '@mushin/core':
+        specifier: workspace:*
+        version: link:../core
+      cordis:
+        specifier: 'catalog:'
+        version: 4.0.0-rc.11
+      minato:
+        specifier: 'catalog:'
+        version: 4.0.1(cordis@4.0.0-rc.11)
 
   packages/plugin-demo:
     dependencies:
@@ -817,6 +847,23 @@ packages:
   '@mermaid-js/parser@2.0.1':
     resolution: {integrity: sha512-j37dj/h6p6pots1L7pLPPNuABEEu9WP4OYg9pW1g+nYG331j0+3canE9OagtYdytYvdSAMG+2fKU5cxep6LgjA==}
     engines: {node: '>=22.12.0'}
+
+  '@minatojs/driver-memory@4.0.0':
+    resolution: {integrity: sha512-GQUsIUVdeuwIuT9XqgkzaPKa5JIgNVmo09t/gwoE0fCZ9XlAhyaAhrUr0NJfPjzV+jNpCAPiZyjvlEatjwwtUg==}
+    peerDependencies:
+      cordis: ^4.0.0-rc.1
+      minato: ^4.0.0
+
+  '@minatojs/driver-sqlite@5.0.3':
+    resolution: {integrity: sha512-YCXQpSiYkprq9VbS4yFXfXaNRfslevykE/cQ6CE+vZhdRcMCk907ltr0QJD6AjH6ouHaTbJfcqdrZg2IRWJSwg==}
+    peerDependencies:
+      cordis: ^4.0.0-rc.3
+      minato: ^4.0.1
+
+  '@minatojs/sql-utils@6.0.0':
+    resolution: {integrity: sha512-iKJEexHCwUO6J78pqmqKlh3NL5ojkOZxzBz0enhmzmIBqlsgmLojzzJVi8127LsQ15zCFFVH7lVyOmzSTAbzDg==}
+    peerDependencies:
+      minato: ^4.0.0
 
   '@opentelemetry/api@1.9.1':
     resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
@@ -1696,6 +1743,11 @@ packages:
     resolution: {integrity: sha512-ZDY+bPm5zTTF+YpCrAU9nK0UgICYPT0QtT1NZWFv4s++TNkcgVaT0g6+4R2uI4MjQjzysHB1zxuWL50hzaeXiw==}
     engines: {node: '>= 0.6'}
 
+  minato@4.0.1:
+    resolution: {integrity: sha512-Auvlgp80eS+dy1J4X/uk6HfGcRMHEAlrbz+UNzdfoy5v08p/x2Y4yevXwWizAgKCKrazFcb63IQuDVolOVJoYQ==}
+    peerDependencies:
+      cordis: ^4.0.0-rc.3
+
   mlly@1.8.2:
     resolution: {integrity: sha512-d+ObxMQFmbt10sretNDytwt85VrbkhhUA/JBGm1MPaWJ65Cl4wOgLaB1NYvJSZ0Ef03MMEU/0xpPMXUIQ29UfA==}
 
@@ -2345,6 +2397,26 @@ snapshots:
   '@mermaid-js/parser@2.0.1':
     dependencies:
       '@chevrotain/types': 13.2.0
+
+  '@minatojs/driver-memory@4.0.0(cordis@4.0.0-rc.11)(minato@4.0.1(cordis@4.0.0-rc.11))':
+    dependencies:
+      cordis: 4.0.0-rc.11
+      cosmokit: 1.8.1
+      minato: 4.0.1(cordis@4.0.0-rc.11)
+      schemastery: 3.18.0
+
+  '@minatojs/driver-sqlite@5.0.3(cordis@4.0.0-rc.11)(minato@4.0.1(cordis@4.0.0-rc.11))':
+    dependencies:
+      '@minatojs/sql-utils': 6.0.0(minato@4.0.1(cordis@4.0.0-rc.11))
+      cordis: 4.0.0-rc.11
+      cosmokit: 1.8.1
+      minato: 4.0.1(cordis@4.0.0-rc.11)
+      schemastery: 3.18.0
+
+  '@minatojs/sql-utils@6.0.0(minato@4.0.1(cordis@4.0.0-rc.11))':
+    dependencies:
+      cosmokit: 1.8.1
+      minato: 4.0.1(cordis@4.0.0-rc.11)
 
   '@opentelemetry/api@1.9.1': {}
 
@@ -3253,6 +3325,11 @@ snapshots:
   mime-types@2.1.35:
     dependencies:
       mime-db: 1.52.0
+
+  minato@4.0.1(cordis@4.0.0-rc.11):
+    dependencies:
+      cordis: 4.0.0-rc.11
+      cosmokit: 1.8.1
 
   mlly@1.8.2:
     dependencies:

@@ -11,6 +11,7 @@ export function defaultConfig(): InstanceConfig {
     plugins: [
       { id: 'server', package: '@cordisjs/plugin-server', config: { host: '127.0.0.1', port: DEFAULT_PORT } },
       { id: 'storage', package: '@mushin/plugin-storage', config: {} },
+      { id: 'database', package: '@mushin/plugin-database', config: {} },
       { id: 'providers', package: '@mushin/plugin-providers', config: {} },
       { id: 'provider-openai', package: '@mushin/plugin-provider-openai', config: {} },
       { id: 'provider-anthropic', package: '@mushin/plugin-provider-anthropic', config: {} },

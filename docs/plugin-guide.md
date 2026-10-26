@@ -233,6 +233,35 @@ export function apply(ctx: Context) {
 
 `scenes` lists the dashboard pages where the skill is recommended (`overview`, `providers`, `bots`, `botDetail`, `flows`, `flowEditor`, `personas`, `plugins`, `logs`). The skill goes away when the plugin is disabled. `agent.skills.list` shows every skill with its source.
 
+## Database tables
+
+`@mushin/plugin-database` runs [minato](https://github.com/cordiverse/minato), Koishi's database layer, with SQLite (`data/mushin.db`) by default. Declare it under `optional` (or `requires`) and add your tables in a context that injects both `model` and `database`; with only one of them the table is never created:
+
+```ts
+import type {} from '@mushin/plugin-database'
+
+declare module 'minato' {
+  interface Tables {
+    checkin_record: { bot: string; user: string; day: string; points: number }
+  }
+}
+
+export function apply(ctx: Context) {
+  ctx.inject(['model', 'database'], (ctx) => {
+    ctx.model.extend('checkin_record', {
+      bot: 'string', user: 'string', day: 'string', points: 'integer',
+    }, { primary: ['bot', 'user', 'day'] })
+
+    ctx.actions.define({ /* … */ handler: () => ctx.database.get('checkin_record', { bot: 'x' }) })
+  })
+}
+```
+
+- Start table names with your plugin's name and an underscore (`checkin_record`): the Database page groups tables by that prefix.
+- Columns are added to existing tables when you extend them again; removing or renaming one needs `ctx.model.migrate()`.
+- `ctx.database` offers `get`, `create`, `upsert`, `set`, `remove`, `select(...).orderBy().limit().execute()` and aggregates such as `$.count()` (import `$` from `minato`).
+- Without the database plugin the callback does not run, so keep a fallback (memory or `ctx.storage`) when the plugin is optional.
+
 ## Provider types and adapters
 
 - A provider type calls `ctx.llm.defineType({ id, displayName, config, secrets, presets, create })`. `create` returns a client with `chat()` and, optionally, `stream()` and `listModels()`. See `packages/plugin-provider-openai`.

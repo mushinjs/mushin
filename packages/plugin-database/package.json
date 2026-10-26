@@ -1,0 +1,39 @@
+{
+  "name": "@mushin/plugin-database",
+  "version": "0.1.0",
+  "description": "A database for plugins, SQLite by default",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "displayName": {
+      "en": "Database",
+      "zh-CN": "数据库"
+    },
+    "description": {
+      "en": "Keeps flow variables, messages and other plugins' tables in a database (SQLite by default), with a page to browse them",
+      "zh-CN": "把流程变量、消息和其他插件的数据表存进数据库（默认 SQLite），并提供浏览页面"
+    },
+    "provides": [
+      "database",
+      "model"
+    ],
+    "requires": {
+      "mushin": ">=0.1.0"
+    }
+  },
+  "dependencies": {
+    "@minatojs/driver-memory": "catalog:",
+    "@minatojs/driver-sqlite": "catalog:",
+    "@mushin/core": "workspace:*",
+    "cordis": "catalog:",
+    "minato": "catalog:"
+  }
+}
