@@ -12,6 +12,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { connection, logout } from '../api'
 import { setLocale } from '../i18n'
 import { useAgentStore } from '../stores/agent'
+import { useAgentSceneStore } from '../stores/agentScene'
 import { useDataStore } from '../stores/data'
 import { themeMode, useTheme } from '../theme'
 import AgentDock from './AgentDock.vue'
@@ -21,6 +22,7 @@ const route = useRoute()
 const router = useRouter()
 const data = useDataStore()
 const agent = useAgentStore()
+const agentScene = useAgentSceneStore()
 const { isDark } = useTheme()
 
 const width = ref(window.innerWidth)
@@ -33,6 +35,7 @@ if (window.innerWidth < 1100) agent.open = false
 
 data.bind()
 agent.bind()
+agentScene.bind()
 onMounted(() => {
   data.refreshProviders().catch(() => {})
   data.refreshBots().catch(() => {})
@@ -58,6 +61,7 @@ const menu = computed<MenuOption[]>(() => [
   { key: '/flows', label: link('/flows', t('nav.flows')), icon: icon(GitNetworkOutline) },
   { key: '/personas', label: link('/personas', t('nav.personas')), icon: icon(PersonCircleOutline) },
   { key: '/providers', label: link('/providers', t('nav.providers')), icon: icon(KeyOutline) },
+  { key: '/agent', label: link('/agent', t('nav.agent')), icon: icon(SparklesOutline) },
   { key: '/plugins', label: link('/plugins', t('nav.plugins')), icon: icon(ExtensionPuzzleOutline) },
   { key: '/logs', label: link('/logs', t('nav.logs')), icon: icon(DocumentTextOutline) },
 ])

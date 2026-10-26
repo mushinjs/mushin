@@ -9,7 +9,8 @@ Mushin.js is built on [Cordis](https://github.com/cordiverse/cordis). The MVP sh
 | Area | What you get |
 | --- | --- |
 | Plugin architecture | Every feature is a Cordis plugin. App plugins extend Mushin.js; bot plugins run per bot, each bot in its own isolated context. |
-| Agent | A chat dock on every page. It operates the instance through the same actions the dashboard uses, asks before dangerous ones, and can open pages and point at controls. |
+| Agent | A chat dock on every page. It operates the instance through the same actions the dashboard uses, asks before dangerous ones, and can open pages and point at controls. It knows which page you are on and suggests what to do there; type `/` for commands (its own and every bot's) and `$` for skills. Replies render Markdown, code, cards, checklists and Mermaid diagrams. |
+| Agent page | Per-page hints and suggestions, skills (write your own or import a `SKILL.md`), MCP servers whose tools the Agent can use, a policy per tool (auto, ask first, off), the model and a daily token budget. |
 | Providers | OpenAI-compatible endpoints (OpenAI, DeepSeek, Moonshot, Qwen, SiliconFlow, OpenRouter, Ollama) and Anthropic. Keys are masked everywhere. |
 | Overview | The start page: bots online, today's messages and model tokens, flows with errors, commands, providers and plugins; a message chart for 24 hours or 7 days per bot; the busiest chats, users, commands, flows and models; live CPU, memory and event loop delay; versions, uptime and data directory size. |
 | Bots | Create, start, stop and configure bots; enable bot plugins per bot; each bot's commands and `/help`. |
@@ -157,7 +158,8 @@ pnpm typecheck    # TypeScript for all packages, vue-tsc for the dashboard
 | `@mushin/plugin-provider-openai`, `@mushin/plugin-provider-anthropic` | Provider types |
 | `@mushin/plugin-bots` | Bot records, per-bot runtimes, sessions, message records |
 | `@mushin/plugin-adapter-onebot` | OneBot v11 adapter |
-| `@mushin/plugin-agent` | The Agent's tool loop |
+| `@mushin/plugin-agent` | The Agent's tool loop, skills, page profiles, tool policy and token budget |
+| `@mushin/plugin-mcp` | MCP client (stdio and Streamable HTTP); each MCP tool becomes an action |
 | `@mushin/plugin-console` | HTTP API, WebSocket, admin token, dashboard hosting |
 | `@mushin/plugin-flows` | Flow documents, node types, validation and the execution engine |
 | `@mushin/plugin-stats` | Hourly counts of messages, commands, flow runs and model usage (kept hourly for 30 days, daily for a year, in `data/stats/`) and process samples for the overview |

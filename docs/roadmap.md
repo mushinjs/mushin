@@ -52,6 +52,7 @@
 | 6. 人格 | 已完成 | 新插件 `@mushin/plugin-personas`，人格存在 `personas/items/<id>`，机器人设置和 `/persona` 切换记录分别存在 `personas/bots`、`personas/chats`。服务方法叫 `forSession(botId, session)`（路线图写的是 `resolve`），流程通过 `ctx.flows.usePersonas()` 接入。`/persona` 由第 13 项新增的 `ctx.bots.defineCommand()` 注册，只在有人格的机器人上出现，切换身份默认要求管理员。`ai.chat` 的系统提示默认改为空：有人格时作为补充规则接在人格提示后，旧流程里原来的默认提示视为空。`ai.classify` 不使用人格（分类不需要语气）。“改写回复”只改写回复、发送节点的固定文本。导入支持本项目导出的 JSON 和 SillyTavern 角色卡（v1/v2/v3 的 JSON 和 PNG），开场白不导入。字段选择器新增通用的 `x-choices`（`field()` 的 `choices` 选项），人格节点用它列出人格。 |
 | 21. 大模型对话改由流程控制 | 已完成 | 插件启用时在机器人上创建流程「大模型对话 · 机器人名」（来源为插件，优先级 −100，跳过已知指令），停用时删除；没有任何设置项（Q21-1）。旧参数仍可通过 API 传入，插件会据此重写流程，机器人重启不会覆盖画布上的修改。新增“频率限制”（`first` 输出用于只提示一次）和“每日额度”节点（计数存于 `flows-usage`，测试运行用临时计数）；“询问大模型”新增上下文轮数（本节点记忆或整个会话的消息记录，后者包含没回复的消息）、消息长度上限、超时、`tokens`/`model`/`error` 输出和 `error` 出口。收到消息触发器新增“群里@我”“仅限这些群”“忽略用户”“跳过指令”。没有保留“同一会话一次只回一条”（busy）；每日额度的“次数”在放行时计数，而不是模型成功后。会话历史存在内存（Q21-2）。 |
 | 2. Agent 智能场景识别 | 已完成 | 场景由前端根据路由和页面数据计算（`stores/agentScene.ts`），流程编辑器会补充流程名和错误数；场景提示、本页状态随 `agent.send` 的 `scene` 参数进入 `<context>`，系统提示不变。推荐规则全部写在前端，暂未提供插件贡献规则的 `agent.recommendations`，管理页覆盖文案留给第 1 项。技能先有 4 个内置技能和插件的 `ctx.agent.defineSkill()`，`agent.skills.list` / `agent.skills.get` 可查询，新建和导入在第 1 项。`bots.commands.run` 放在 plugin-bots：不给目标时用 `flows.route` 预览（不发消息，没有使用演示沙盒机器人）；给目标时以第一个主人的身份在主人私聊或指定群里真实执行，消息来源记为智能体。“主人”沿用第 13 项权限插件的名单，没有在 Bot 设置里另加字段。`/model` 暂时是一个选择提供商和模型的小窗口，`/status` 显示消息数、字符数和上次的 Token 用量。历史搜索支持全文和 `scene:` `skill:` `command:` `resource:` `status:` 标签。 |
+| 1. Agent 管理页 | 已完成 | 页面在 `/agent/<标签页>`，左侧导航“智能体”。场景配置（`agent.profiles.*`）可改场景提示、欢迎语、关闭内置推荐、添加自定义推荐（可带技能）、推荐技能和是否在对话中显示紧急推荐。技能、场景配置和工具策略存在 `data/agent/settings/main.json` 和 `data/agent/skills/<id>.json`；修改内置或插件技能会保存一份用户副本，删除副本即恢复（Q1-1：导入导出兼容 `SKILL.md`，只读取 name、description、when_to_use、tools/allowed-tools、scenes、id 这些简单字段）。工具策略的“自动”也能让危险操作不再确认（由用户自己设置）；禁用的工具不进新会话，旧会话调用会被拒绝，并提示“工具已更新，开新对话可用”。新插件 `@mushin/plugin-mcp` 同时支持 stdio 和 Streamable HTTP（Q1-2），工具注册为 `mcp.<服务器>.<工具>`（工具名转成驼峰），风险按工具的 readOnlyHint / destructiveHint 推断，可逐个开关和改风险；暂不支持 MCP 的 resources、prompts、sampling，也还没有 `action.call` 流程节点。模型与限制直接编辑插件配置，新增每日 Token 预算（用量存在 `agent/settings/usage`）。消息渲染抽成 `AgentMessage.vue`：markdown-it（不允许 HTML）、highlight.js（只注册常用语言）、`mushin-card`、`mushin-steps`，mermaid 在第一次遇到图表时才加载（Q1-3）。`ui.ask` 是新的 client action，等待用户最多 15 分钟。系统提示新增一段固定的消息样式说明。顺带修复：控制台 WebSocket 在令牌校验完成前收到其他消息会被当成令牌错误而登出。 |
 | 其余各项 | 未开始 | — |
 
 ### 依赖关系
@@ -160,9 +161,9 @@
 
 ### 待讨论
 
-- Q1-1 技能格式是否直接兼容 Claude/Codex 的 `SKILL.md`（frontmatter + Markdown），以便导入社区技能？建议兼容。
-- Q1-2 MCP 先支持 stdio 还是 HTTP（Streamable HTTP）？建议两者都做，stdio 优先。
-- Q1-3 Mermaid 体积较大（约 1MB+），是否接受按需懒加载？
+- ~~Q1-1 技能格式是否直接兼容 Claude/Codex 的 `SKILL.md`（frontmatter + Markdown），以便导入社区技能？建议兼容。~~ 已定：兼容，可导入导出。
+- ~~Q1-2 MCP 先支持 stdio 还是 HTTP（Streamable HTTP）？建议两者都做，stdio 优先。~~ 已定：两者都支持。
+- ~~Q1-3 Mermaid 体积较大（约 1MB+），是否接受按需懒加载？~~ 已定：按需懒加载。
 
 ---
 

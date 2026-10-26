@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import { call } from '../api'
+import { call, on } from '../api'
 import { i18n } from '../i18n'
 import { router } from '../router'
 import type { AgentScene } from '../types'
@@ -16,11 +16,39 @@ export interface Recommendation {
   urgent?: boolean
 }
 
+/** What the user changed for one page on the Agent page. */
+export interface SceneProfile {
+  hint?: string
+  welcome?: string
+  recommendations?: { text: string; prompt?: string; skill?: string }[]
+  hidden?: string[]
+  skills?: string[]
+  autoShow?: boolean
+}
+
 /** Facts a page knows better than the route, such as the open flow's name and error count. */
 export interface PageFacts {
   label?: string
   state?: Record<string, string | number | boolean>
   resource?: string
+}
+
+/** Pages the Agent knows, in the order the Agent page lists them. */
+export const SCENES = ['overview', 'setup', 'providers', 'bots', 'botDetail', 'flows', 'flowEditor', 'personas', 'plugins', 'logs', 'agent'] as const
+
+/** The built-in suggestions each page can show (each only when its condition holds), for the Agent page. */
+export const SCENE_RECOMMENDATIONS: Record<string, string[]> = {
+  overview: ['connect', 'status', 'provider'],
+  setup: ['connectDeepSeek', 'connectOllama', 'providerFailed'],
+  providers: ['connectDeepSeek', 'connectOllama', 'providerFailed'],
+  bots: ['connectQQ', 'tryDemo', 'botsFailing'],
+  botDetail: ['botOffline', 'enableChat', 'flowTemplate', 'botCommands'],
+  flows: ['flowCheckin', 'flowKeyword', 'flowService', 'flowNew'],
+  flowEditor: ['flowFix', 'flowExplain', 'flowTests'],
+  personas: ['connect', 'status', 'provider'],
+  plugins: ['pluginsFailed'],
+  logs: ['connect', 'status', 'provider'],
+  agent: ['connect', 'status', 'provider'],
 }
 
 const t = (key: string, values: Record<string, unknown> = {}) => i18n.global.t(key, values)
@@ -30,7 +58,7 @@ export function sceneKey(path: string) {
   const [, first, id] = path.split('/')
   if (first === 'bots') return id ? 'botDetail' : 'bots'
   if (first === 'flows') return id ? 'flowEditor' : 'flows'
-  return ['overview', 'setup', 'providers', 'personas', 'plugins', 'logs', 'agent'].includes(first) ? first : 'overview'
+  return (SCENES as readonly string[]).includes(first) ? first : 'overview'
 }
 
 /**
@@ -45,6 +73,20 @@ export const useAgentSceneStore = defineStore('agentScene', () => {
   /** Counts loaded for the page: flows on /flows, failed plugins on /plugins. */
   const counts = ref<{ flows?: number; failedPlugins?: string[] }>({})
   const dismissed = ref(new Set<string>())
+  const profiles = ref<Record<string, SceneProfile>>({})
+  const profile = computed<SceneProfile>(() => profiles.value[key.value] ?? {})
+
+  async function refreshProfiles() {
+    profiles.value = (await call<{ profiles: Record<string, SceneProfile> }>('agent.profiles.list')).profiles
+  }
+
+  let bound = false
+  function bind() {
+    if (bound) return
+    bound = true
+    on('agent/changed', () => refreshProfiles().catch(() => {}))
+    refreshProfiles().catch(() => {})
+  }
 
   watch(key, async (scene) => {
     try {
@@ -77,7 +119,7 @@ export const useAgentSceneStore = defineStore('agentScene', () => {
     } else if (facts.value?.label) {
       label = `${name} · ${facts.value.label}`
     }
-    return { key: key.value, label, hint: t(`agentScene.hint.${key.value}`), ...(Object.keys(state).length ? { state } : {}), ...(resource ? { resource } : {}) }
+    return { key: key.value, label, hint: profile.value.hint?.trim() || t(`agentScene.hint.${key.value}`), ...(Object.keys(state).length ? { state } : {}), ...(resource ? { resource } : {}) }
   })
 
   const recommendations = computed<Recommendation[]>(() => {
@@ -137,15 +179,27 @@ export const useAgentSceneStore = defineStore('agentScene', () => {
       add('status', '')
       add('provider', '')
     }
-    return list
+    const hidden = new Set(profile.value.hidden ?? [])
+    const custom = (profile.value.recommendations ?? []).map((item, index): Recommendation => ({
+      id: `custom-${index}`, text: item.text, prompt: item.prompt?.trim() || item.text, skill: item.skill || undefined,
+    }))
+    return [...custom, ...list.filter((item) => !hidden.has(item.id))]
   })
 
+  /** Skills recommended on this page by the user's profile, besides the skills' own scenes. */
+  const skills = computed(() => profile.value.skills ?? [])
+
   /** The first urgent recommendation not yet dismissed on this page, for the bar above the input. */
-  const banner = computed(() => recommendations.value.find((item) => item.urgent && !dismissed.value.has(`${path.value}|${item.id}`)))
+  const banner = computed(() => (profile.value.autoShow === false
+    ? undefined
+    : recommendations.value.find((item) => item.urgent && !dismissed.value.has(`${path.value}|${item.id}`))))
 
   function dismiss(id: string) {
     dismissed.value = new Set([...dismissed.value, `${path.value}|${id}`])
   }
 
-  return { key, scene, recommendations, banner, publish, dismiss }
+  /** The welcome line of an empty conversation, when the user set one for this page. */
+  const welcome = computed(() => profile.value.welcome?.trim() || undefined)
+
+  return { key, scene, recommendations, banner, welcome, skills, profiles, publish, dismiss, bind, refreshProfiles }
 })

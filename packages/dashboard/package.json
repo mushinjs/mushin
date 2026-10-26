@@ -19,6 +19,9 @@
     "@vue-flow/core": "catalog:",
     "@vue-flow/minimap": "catalog:",
     "echarts": "catalog:",
+    "highlight.js": "catalog:",
+    "markdown-it": "catalog:",
+    "mermaid": "catalog:",
     "naive-ui": "catalog:",
     "pinia": "catalog:",
     "vue": "catalog:",
@@ -26,6 +29,7 @@
     "vue-router": "catalog:"
   },
   "devDependencies": {
+    "@types/markdown-it": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",

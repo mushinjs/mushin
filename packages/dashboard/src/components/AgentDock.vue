@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
   AddOutline, AlertCircleOutline, CheckmarkCircle, CloseCircleOutline, CloseOutline, ExtensionPuzzleOutline, HandLeftOutline,
-  InformationCircleOutline, SendOutline, SparklesOutline, StopCircleOutline, TrashOutline,
+  HelpCircleOutline, InformationCircleOutline, SendOutline, SparklesOutline, StopCircleOutline, TrashOutline,
 } from '@vicons/ionicons5'
 import { NButton, NIcon, NInput, NModal, NPopover, NPopselect, NSelect, NSpin, NTag, NTooltip } from 'naive-ui'
 import { computed, nextTick, ref, watch } from 'vue'
@@ -13,6 +13,7 @@ import { type Recommendation, useAgentSceneStore } from '../stores/agentScene'
 import { useDataStore } from '../stores/data'
 import type { AgentSkill } from '../types'
 import { pretty } from '../utils'
+import AgentMessage from './agent/AgentMessage.vue'
 import CommandPalette, { type PaletteItem } from './agent/CommandPalette.vue'
 import HistoryDrawer from './agent/HistoryDrawer.vue'
 
@@ -253,7 +254,7 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
       </div>
 
       <div v-else-if="!agent.items.length && !agent.running" class="dock-empty">
-        <p class="dock-hello">{{ t('agent.hello') }}</p>
+        <p class="dock-hello">{{ scenes.welcome ?? t('agent.hello') }}</p>
         <button v-for="item in scenes.recommendations" :key="item.id" class="suggestion" :class="{ urgent: item.urgent }" type="button" @click="sendRecommendation(item)">
           <span>{{ item.text }}</span>
           <NTag v-if="item.skill" size="tiny" :bordered="false" class="suggestion-skill">
@@ -271,7 +272,7 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
           </div>
           {{ item.text }}
         </div>
-        <div v-else-if="item.kind === 'assistant'" class="msg assistant">{{ item.text }}</div>
+        <div v-else-if="item.kind === 'assistant'" class="msg assistant"><AgentMessage :text="item.text" /></div>
         <div v-else-if="item.kind === 'note'" class="msg note">
           <NIcon><InformationCircleOutline /></NIcon><span>{{ item.text }}</span>
         </div>
@@ -307,8 +308,37 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
         </div>
       </template>
 
-      <div v-if="agent.streaming" class="msg assistant streaming">{{ agent.streaming }}</div>
+      <div v-for="ask in agent.asks" :key="ask.id" class="ask">
+        <div class="ask-question"><NIcon><HelpCircleOutline /></NIcon>{{ ask.question }}</div>
+        <button
+          v-for="(option, optionIndex) in ask.options"
+          :key="optionIndex"
+          type="button"
+          class="ask-option"
+          :class="{ recommended: ask.recommended === optionIndex }"
+          @click="agent.answer(ask.id, { choice: optionIndex })"
+        >
+          <span class="ask-label">
+            {{ option.label }}
+            <NTag v-if="ask.recommended === optionIndex" size="tiny" type="success" :bordered="false">{{ t('agentPalette.recommended') }}</NTag>
+          </span>
+          <span v-if="option.description" class="ask-desc">{{ option.description }}</span>
+        </button>
+        <NInput
+          v-if="ask.allowOther"
+          size="small"
+          :placeholder="t('agentMessage.other')"
+          @keydown.enter="(event: KeyboardEvent) => { const value = (event.target as HTMLInputElement).value.trim(); if (value) agent.answer(ask.id, { other: value }) }"
+        />
+      </div>
+
+      <div v-if="agent.streaming" class="msg assistant streaming"><AgentMessage :text="agent.streaming" streaming /></div>
       <div v-else-if="agent.running" class="thinking"><NSpin :size="14" /> {{ t('agent.thinking') }}</div>
+    </div>
+
+    <div v-if="agent.toolsStale && agent.items.length" class="stale">
+      <span>{{ t('agentMessage.toolsStale') }}</span>
+      <NButton size="tiny" secondary @click="agent.newChat()">{{ t('agent.newChat') }}</NButton>
     </div>
 
     <div v-if="agent.items.length && scenes.banner && !agent.running" class="banner">
@@ -521,6 +551,63 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
   flex: none;
 }
 
+.ask {
+  border: 1px solid rgba(124, 139, 217, 0.5);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ask-question {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-weight: 500;
+}
+
+.ask-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ask-option:hover,
+.ask-option.recommended {
+  border-color: #7c8bd9;
+}
+
+.ask-label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.ask-desc {
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.stale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 12px 6px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
 .banner {
   display: flex;
   align-items: center;
@@ -598,7 +685,11 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
   border-bottom-left-radius: 4px;
 }
 
-.msg.streaming::after {
+.msg.assistant {
+  white-space: normal;
+}
+
+.msg.streaming :deep(.agent-md > :last-child)::after {
   content: '▍';
   opacity: 0.6;
   animation: blink 1s steps(2) infinite;

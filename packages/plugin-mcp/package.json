@@ -1,0 +1,39 @@
+{
+  "name": "@mushin/plugin-mcp",
+  "version": "0.1.0",
+  "description": "Connects to MCP servers and offers their tools as actions for the Agent and flows",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "category": "ai",
+    "displayName": {
+      "en": "MCP",
+      "zh-CN": "MCP 工具"
+    },
+    "description": {
+      "en": "Connect MCP servers (a local command over stdio, or Streamable HTTP); each of their tools becomes an action the Agent can use",
+      "zh-CN": "接入 MCP 服务器（本地命令 stdio 或 Streamable HTTP），它们的每个工具都成为智能体可以使用的操作"
+    },
+    "provides": [
+      "mcp"
+    ],
+    "requires": {
+      "mushin": ">=0.1.0",
+      "plugins": {
+        "@mushin/plugin-storage": "*"
+      }
+    }
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-storage": "workspace:*"
+  }
+}

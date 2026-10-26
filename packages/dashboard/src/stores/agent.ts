@@ -54,6 +54,16 @@ function toItems(messages: AgentMessage[]): ChatItem[] {
   return items
 }
 
+/** A question the Agent asked with ui.ask, waiting for the user's pick. */
+export interface AskItem {
+  id: number
+  question: string
+  options: { label: string; description?: string }[]
+  recommended?: number
+  allowOther?: boolean
+  resolve: (answer: unknown) => void
+}
+
 const SESSION_KEY = 'mushin.agent.session'
 
 function readSession() {
@@ -84,6 +94,10 @@ export const useAgentStore = defineStore('agent', () => {
   /** Token use of the last reply in this conversation, for /status. */
   const usage = ref<{ inputTokens: number; outputTokens: number }>()
   const skills = ref<AgentSkill[]>([])
+  /** The open conversation's tools differ from what a new one would get (new MCP tools, changed policies). */
+  const toolsStale = ref(false)
+  const asks = ref<AskItem[]>([])
+  let askSeq = 0
   const commands = ref<AgentCommands>({ builtin: [], bots: [] })
 
   async function refreshSessions() {
@@ -101,7 +115,8 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   async function load(id: string) {
-    const session = await call<{ id: string; messages: AgentMessage[]; running: boolean }>('agent.session', { id })
+    const session = await call<{ id: string; messages: AgentMessage[]; running: boolean; toolsStale?: boolean }>('agent.session', { id })
+    toolsStale.value = !!session.toolsStale
     current.value = session.id
     items.value = toItems(session.messages)
     running.value = session.running
@@ -113,7 +128,30 @@ export const useAgentStore = defineStore('agent', () => {
     items.value.push({ kind: 'note', text })
   }
 
+  /** Shows a ui.ask question; resolves with the user's answer. */
+  function ask(input: Omit<AskItem, 'id' | 'resolve'>) {
+    return new Promise<unknown>((resolve) => {
+      asks.value.push({ ...input, id: ++askSeq, resolve })
+      open.value = true
+    })
+  }
+
+  function answer(id: number, result: { choice: number } | { other: string }) {
+    const item = asks.value.find((entry) => entry.id === id)
+    if (!item) return
+    asks.value = asks.value.filter((entry) => entry !== item)
+    item.resolve('choice' in result ? { choice: result.choice, label: item.options[result.choice]?.label } : result)
+  }
+
+  /** Questions nobody can answer any more, after the turn ended or was stopped. */
+  function dropAsks() {
+    for (const item of asks.value) item.resolve({ cancelled: true })
+    asks.value = []
+  }
+
   function newChat() {
+    dropAsks()
+    toolsStale.value = false
     current.value = undefined
     usage.value = undefined
     items.value = []
@@ -170,12 +208,14 @@ export const useAgentStore = defineStore('agent', () => {
         flush()
         running.value = false
         if (event.usage) usage.value = event.usage
+        dropAsks()
         refreshSessions().catch(() => {})
         break
       case 'error':
         flush()
         items.value.push({ kind: 'error', text: event.error })
         running.value = false
+        dropAsks()
         refreshSessions().catch(() => {})
         break
     }
@@ -230,7 +270,7 @@ export const useAgentStore = defineStore('agent', () => {
       clearTimeout(timer)
       timer = setTimeout(() => refreshPickers().catch(() => {}), 500)
     }
-    for (const name of ['flows/changed', 'bots/changed', 'actions/changed']) on(name, later)
+    for (const name of ['flows/changed', 'bots/changed', 'actions/changed', 'agent/changed']) on(name, later)
     on('connected', () => {
       refreshSessions().catch(() => {})
       refreshPickers().catch(() => {})
@@ -239,7 +279,7 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   return {
-    open, sessions, current, items, streaming, running, usage, skills, commands,
-    refreshSessions, refreshPickers, load, newChat, note, send, confirm, cancel, remove, bind,
+    open, sessions, current, items, streaming, running, usage, skills, commands, toolsStale, asks,
+    refreshSessions, refreshPickers, load, newChat, note, ask, answer, send, confirm, cancel, remove, bind,
   }
 })

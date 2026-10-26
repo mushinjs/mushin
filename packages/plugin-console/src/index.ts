@@ -53,11 +53,13 @@ export interface LogLine {
 }
 
 const CLIENT_CALL_TIMEOUT = 15_000
+/** Client actions that wait for the user get longer. */
+const CLIENT_CALL_TIMEOUTS: Record<string, number> = { 'ui.ask': 15 * 60_000 }
 
 /** Events forwarded to every signed-in dashboard. */
 const FORWARDED_EVENTS = [
   'actions/changed', 'manager/changed', 'providers/changed',
-  'bots/changed', 'bots/status', 'bots/message', 'bots/log', 'agent/event',
+  'bots/changed', 'bots/status', 'bots/message', 'bots/log', 'agent/event', 'agent/changed',
   'flows/changed', 'flows/run', 'flows/step', 'stats/sample', 'permissions/changed', 'personas/changed',
 ] as const
 
@@ -250,6 +252,9 @@ export class Console extends Service {
       }
     })
 
+    // Messages can arrive while the token is still being checked (the tab reports its page as soon
+    // as the socket opens); they wait for the check instead of failing it.
+    let authenticating: Promise<boolean> | undefined
     socket.on('message', async (raw) => {
       let message: any
       try {
@@ -259,15 +264,23 @@ export class Console extends Service {
       }
       client.lastActive = Date.now()
       if (!client.authed) {
-        if (message.type === 'auth' && await this.authenticate(message.token)) {
-          client.authed = true
-          client.page = message.page
-          clearTimeout(authTimer)
-          send({ type: 'ready', client: client.id })
-        } else {
-          socket.close(4401, 'wrong admin token')
+        if (message.type === 'auth' && !authenticating) {
+          authenticating = this.authenticate(message.token)
+          if (await authenticating) {
+            client.authed = true
+            client.page = message.page
+            clearTimeout(authTimer)
+            send({ type: 'ready', client: client.id })
+          } else {
+            socket.close(4401, 'wrong admin token')
+          }
+          return
         }
-        return
+        if (!authenticating) {
+          socket.close(4401, 'authenticate first')
+          return
+        }
+        if (!await authenticating) return
       }
       switch (message.type) {
         case 'page':
@@ -309,7 +322,7 @@ export class Console extends Service {
       const timer = setTimeout(() => {
         target.calls.delete(id)
         reject(new MushinError('unavailable', 'The dashboard did not answer'))
-      }, CLIENT_CALL_TIMEOUT)
+      }, CLIENT_CALL_TIMEOUTS[name] ?? CLIENT_CALL_TIMEOUT)
       target.calls.set(id, { resolve, reject, timer })
       target.socket.send(JSON.stringify({ type: 'client-call', id, action: name, input }))
     })
@@ -334,6 +347,22 @@ export class Console extends Service {
       input: z.object({
         target: z.string().describe('Highlight target id'),
         message: z.string().optional().describe('Short hint shown next to the control'),
+      }),
+    })
+
+    yield actions.define({
+      name: 'ui.ask',
+      description: 'Ask the user a multiple-choice question in the Agent panel and wait for the answer. Use it when a choice is theirs to make (which bot, which provider, whether to overwrite). Returns { choice, label } or { other } when they type their own answer.',
+      risk: 'read',
+      client: true,
+      input: z.object({
+        question: z.string().min(1).max(300),
+        options: z.array(z.object({
+          label: z.string().min(1).max(80),
+          description: z.string().max(200).optional(),
+        })).min(2).max(6),
+        recommended: z.number().int().min(0).optional().describe('Index of the option you recommend'),
+        allowOther: z.boolean().optional().describe('Let the user type their own answer'),
       }),
     })
 
