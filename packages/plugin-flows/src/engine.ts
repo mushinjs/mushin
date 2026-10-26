@@ -1,7 +1,7 @@
 import { type Logger, randomId, seg } from '@mushin/core'
 import { type CompiledFlow, interceptOf, triggerPriority } from './graph'
 import { interpolate, interpolateConfig, SCOPES, sysValues, toText } from './refs'
-import type { FlowBot, FlowEvent, FlowSession, LlmLike, PersonaLike, PortType, RunState, RunStep, RunTrace, TriggerSource, Variables, VariableScope, WaitOptions } from './types'
+import type { DailyCounter, FlowBot, FlowEvent, FlowSession, LlmLike, PersonaLike, PortType, RunState, RunStep, RunTrace, TriggerSource, UsageStore, Variables, VariableScope, WaitOptions } from './types'
 
 export const MAX_STEPS = 200
 /** How long a run may work; time spent waiting for a reply does not count. */
@@ -65,6 +65,36 @@ export interface RunEnvironment {
   matched?: TriggerMatch
   /** The persona the bot's rules give this message, looked up when a node first asks. */
   persona?(): Promise<PersonaLike | undefined> | PersonaLike | undefined
+  /** Daily counters that survive restarts; a scratch store when not given (tests and previews). */
+  usage?: UsageStore
+}
+
+/** Local calendar day, `YYYY-MM-DD`; daily counters reset at local midnight. */
+export function localDay(date = new Date()) {
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+/** Daily counters in memory. `onChange` is told about every change, e.g. to save them. */
+export class MemoryUsage implements UsageStore {
+  counters = new Map<string, DailyCounter>()
+
+  constructor(private onChange?: () => void) {}
+
+  get(key: string): DailyCounter {
+    const today = localDay()
+    const counter = this.counters.get(key)
+    return counter?.day === today ? { ...counter } : { day: today, count: 0, tokens: 0 }
+  }
+
+  add(key: string, delta: { count?: number; tokens?: number }) {
+    const counter = this.get(key)
+    counter.count += delta.count ?? 0
+    counter.tokens += delta.tokens ?? 0
+    this.counters.set(key, counter)
+    this.onChange?.()
+    return { ...counter }
+  }
 }
 
 /** A trigger that the message (or event, or tick) starts, with what it matched. */
@@ -196,8 +226,10 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
         if (env.test || !real) return undefined
         return real.send(channel, content)
       },
+      ...(real?.history ? { history: real.history } : {}),
     }
   }
+  const usage = env.usage ?? new MemoryUsage()
 
   const state: RunState = {}
   const outputs = new Map<string, Record<string, unknown>>()
@@ -267,6 +299,7 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
       event: env.event,
       waitForMessage,
       persona,
+      usage,
       test: !!env.test,
     }
   }

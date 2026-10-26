@@ -1,7 +1,7 @@
 {
   "name": "@mushin/bot-plugin-llm-chat",
   "version": "0.1.0",
-  "description": "LLM chat bot plugin",
+  "description": "LLM chat bot plugin: makes an editable chat flow on each bot",
   "type": "module",
   "license": "MIT",
   "exports": {
@@ -22,12 +22,13 @@
       "zh-CN": "大模型对话"
     },
     "description": {
-      "en": "Replies with an LLM when mentioned or in private chat",
-      "zh-CN": "被 @ 或私聊时使用大模型回复"
+      "en": "Makes a flow that replies with an LLM when mentioned or in private chat; edit it on the canvas",
+      "zh-CN": "创建一个被 @ 或私聊时用大模型回复的流程，可以在画布上调整"
     },
     "requires": {
       "plugins": {
         "@mushin/plugin-bots": "*",
+        "@mushin/plugin-flows": "*",
         "@mushin/plugin-providers": "*",
         "@mushin/plugin-storage": "*"
       }

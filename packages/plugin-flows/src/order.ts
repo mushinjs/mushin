@@ -57,7 +57,10 @@ export function overlap(earlier: CompiledNode, later: CompiledNode): 'always' | 
   }
   const types = `${earlier.node.type}>${later.node.type}`
   if (earlier.node.type === 'trigger.message') {
-    if (a.when === 'any' || (later.node.type === 'trigger.message' && a.when === b.when)) return 'always'
+    // Messages that run a known command never start it.
+    if (a.skipCommands && later.node.type === 'trigger.command') return
+    const filtered = !!a.groups?.length || !!a.ignoreUsers?.length || !!a.skipCommands
+    if (!filtered && (a.when === 'any' || (later.node.type === 'trigger.message' && a.when === b.when))) return 'always'
     return 'maybe'
   }
   if (types === 'trigger.command>trigger.command') {

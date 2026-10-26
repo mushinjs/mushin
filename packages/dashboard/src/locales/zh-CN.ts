@@ -754,6 +754,10 @@ const zhCN: typeof en = {
     noPersonas: '先新建人格，再到这里选择。',
     openPersonas: '前往人格',
   },
+  botPlugins: {
+    madeFlows: '它创建的流程：',
+    llmChatHint: '何时回复、怎么回复都在流程里调整；停用插件会删除这个流程。',
+  },
 }
 
 export default zhCN

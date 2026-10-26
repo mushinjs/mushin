@@ -47,12 +47,21 @@ const messageTrigger: NodeType = {
   title: { en: 'On message', 'zh-CN': '收到消息' },
   description: { en: 'Starts when a message arrives', 'zh-CN': '收到消息时开始' },
   config: z.object({
-    when: z.enum(['any', 'mention', 'private', 'group']).default('any').meta(field(
+    when: z.enum(['any', 'mention', 'groupMention', 'private', 'group']).default('any').meta(field(
       'Which messages',
-      '@ me or private: @-mentions in groups and every private message.',
-      { 'zh-CN': { title: '哪些消息', description: '@我或私聊：群里 @ 机器人的消息，以及所有私聊。', options: { any: '所有消息', mention: '@我或私聊', private: '仅私聊', group: '仅群聊' } } },
-      { options: { any: 'All', mention: '@ me or private', private: 'Private only', group: 'Groups only' } },
+      '@ me or private: @-mentions in groups and every private message. @ me in groups: only @-mentions in groups.',
+      { 'zh-CN': { title: '哪些消息', description: '@我或私聊：群里 @ 机器人的消息，以及所有私聊。群里@我：只有群里 @ 机器人的消息。', options: { any: '所有消息', mention: '@我或私聊', groupMention: '群里@我', private: '仅私聊', group: '仅群聊' } } },
+      { options: { any: 'All', mention: '@ me or private', groupMention: '@ me in groups', private: 'Private only', group: 'Groups only' } },
     )),
+    groups: z.array(z.string()).default([]).meta(field('Only these groups', 'Group ids; empty means every group. Private chats are not affected.', {
+      'zh-CN': { title: '仅限这些群', description: '群号；留空表示所有群。不影响私聊。' },
+    })),
+    ignoreUsers: z.array(z.string()).default([]).meta(field('Ignore users', 'User ids that never start it, such as other bots', {
+      'zh-CN': { title: '忽略用户', description: '永远不会触发的 QQ 号，例如其他机器人' },
+    })),
+    skipCommands: z.boolean().default(false).meta(field('Skip commands', 'Messages that run a command the bot knows (such as /help) do not start it', {
+      'zh-CN': { title: '跳过指令', description: '运行机器人已知指令（如 /help）的消息不会触发' },
+    })),
   }),
   outputs: [...sessionOutputs, { name: 'isPrivate', type: 'boolean', title: { en: 'Private chat', 'zh-CN': '是私聊' } }],
   match({ config, session }) {
@@ -60,7 +69,12 @@ const messageTrigger: NodeType = {
       || (config.when === 'private' && session.isDirect)
       || (config.when === 'group' && !session.isDirect)
       || (config.when === 'mention' && (session.isDirect || session.mentioned))
-    if (ok) return { ...sessionValues(session), isPrivate: session.isDirect }
+      || (config.when === 'groupMention' && !session.isDirect && session.mentioned)
+    if (!ok) return
+    if (!session.isDirect && config.groups?.length && !config.groups.includes(session.channel.id)) return
+    if (config.ignoreUsers?.includes(session.user.id)) return
+    if (config.skipCommands && session.command?.entry) return
+    return { ...sessionValues(session), isPrivate: session.isDirect }
   },
 }
 
@@ -276,6 +290,95 @@ const cooldownNode: NodeType = {
   },
 }
 
+const perField = (fallback: 'user' | 'chat' | 'flow') => z.enum(['user', 'chat', 'flow']).default(fallback).meta(field(
+  'Count',
+  'Per user: each person has their own count. Per chat: each group or private chat. Shared: one count for everyone on the bot.',
+  { 'zh-CN': { title: '计数方式', description: '每个用户：每人单独计数。每个会话：每个群或私聊单独计数。全体共享：机器人上所有人共用一个计数。', options: { user: '每个用户', chat: '每个会话', flow: '全体共享' } } },
+  { options: { user: 'Per user', chat: 'Per chat', flow: 'Shared' } },
+))
+
+/** The key a per-user, per-chat or shared counter of a node uses. */
+function counterKey(context: NodeContext<any>, per: string) {
+  const who = per === 'user' ? `user:${context.session.user.id}` : per === 'chat' ? `${context.session.channel.type}:${context.session.channel.id}` : 'all'
+  return `${context.flow.id}|${context.bot?.id ?? ''}|${context.node.id}|${who}`
+}
+
+const rateLimitNode: NodeType = {
+  kind: 'action',
+  type: 'logic.rateLimit',
+  category: 'logic',
+  title: { en: 'Rate limit', 'zh-CN': '频率限制' },
+  description: {
+    en: 'Continues on "ok" at most this many times within the window (per user, per chat or shared), otherwise on "limited". "first" is true for the first limited message in the window, to send a notice only once.',
+    'zh-CN': '时间窗口内最多走这么多次 ok（按用户、会话或全体计数），超出走 limited。窗口内第一次被限制时 first 为 true，可以只提示一次。',
+  },
+  config: z.object({
+    limit: z.number().int().min(1).default(5).meta(field('Times', undefined, { 'zh-CN': { title: '次数' } })),
+    seconds: z.number().min(1).default(60).meta(field('Window (seconds)', undefined, { 'zh-CN': { title: '时间窗口（秒）' } })),
+    per: perField('user'),
+  }),
+  outputs: [
+    { name: 'remaining', type: 'number', title: { en: 'Times left', 'zh-CN': '剩余次数' } },
+    { name: 'retryAfter', type: 'number', title: { en: 'Seconds until the next is allowed', 'zh-CN': '距下次可用的秒数' } },
+    { name: 'first', type: 'boolean', title: { en: 'First time limited in this window', 'zh-CN': '本窗口内第一次被限制' } },
+  ],
+  execOut: ['ok', 'limited'],
+  run(context) {
+    const { config, vars } = context
+    const key = `__rate:${counterKey(context, config.per)}`
+    const now = Date.now()
+    const window = config.seconds * 1000
+    const state = (vars.get('flow', key) as { hits: number[]; noticed?: number } | undefined) ?? { hits: [] }
+    const hits = state.hits.filter((at) => now - at < window)
+    if (hits.length >= config.limit) {
+      const first = !state.noticed || now - state.noticed >= window
+      vars.set('flow', key, { hits, noticed: first ? now : state.noticed })
+      return { exec: 'limited', outputs: { remaining: 0, retryAfter: Math.ceil((hits[0] + window - now) / 1000), first } }
+    }
+    hits.push(now)
+    vars.set('flow', key, { hits, ...(state.noticed && now - state.noticed < window ? { noticed: state.noticed } : {}) })
+    return { exec: 'ok', outputs: { remaining: config.limit - hits.length, retryAfter: 0, first: false } }
+  },
+}
+
+const dailyQuotaNode: NodeType = {
+  kind: 'action',
+  type: 'logic.dailyQuota',
+  category: 'logic',
+  title: { en: 'Daily quota', 'zh-CN': '每日额度' },
+  description: {
+    en: 'Continues on "ok" until today\'s count or the tokens of the LLM replies after it reach the limit, then on "exhausted" until local midnight. Each "ok" counts once; LLM nodes later in the run add their tokens. Counts survive restarts.',
+    'zh-CN': '今天的次数或之后大模型回复用掉的 Token 达到上限前走 ok，之后到本地零点前都走 exhausted。每走一次 ok 计一次；之后的大模型节点会累加 Token。重启后计数仍保留。',
+  },
+  config: z.object({
+    times: z.number().int().min(0).default(300).meta(field('Times per day', '0 means no limit', { 'zh-CN': { title: '每日次数', description: '0 表示不限制' } })),
+    tokens: z.number().int().min(0).default(0).meta(field('Tokens per day', 'As reported by the provider; 0 means no limit', { 'zh-CN': { title: '每日 Token', description: '以提供商报告为准；0 表示不限制' } })),
+    per: perField('flow'),
+  }),
+  outputs: [
+    { name: 'used', type: 'number', title: { en: 'Times used today', 'zh-CN': '今日已用次数' } },
+    { name: 'tokens', type: 'number', title: { en: 'Tokens used today', 'zh-CN': '今日已用 Token' } },
+  ],
+  execOut: ['ok', 'exhausted'],
+  run(context) {
+    const { config, usage, run, logger } = context
+    const key = counterKey(context, config.per)
+    const today = usage.get(key)
+    if ((config.times > 0 && today.count >= config.times) || (config.tokens > 0 && today.tokens >= config.tokens)) {
+      return { exec: 'exhausted', outputs: { used: today.count, tokens: today.tokens } }
+    }
+    const counted = usage.add(key, { count: 1 })
+    ;(run.onTokens ??= []).push((tokens) => {
+      const after = usage.add(key, { tokens })
+      if (config.tokens > 0 && after.tokens >= config.tokens && after.tokens - tokens < config.tokens) {
+        logger.warn('daily token quota of "%s" used up; it continues on "exhausted" until midnight', context.node.label)
+      }
+    })
+    if (config.times > 0 && counted.count === config.times) logger.warn('daily quota of "%s" used up; it continues on "exhausted" until midnight', context.node.label)
+    return { exec: 'ok', outputs: { used: counted.count, tokens: counted.tokens } }
+  },
+}
+
 const delayNode: NodeType = {
   kind: 'action',
   type: 'logic.delay',
@@ -421,14 +524,41 @@ export function personaMessages(persona: PersonaLike | undefined, own: string) {
   ]
 }
 
+/** Most messages kept per chat for an ai.chat node's own history. */
+const MAX_HISTORY = 50
+
+interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+/** Earlier messages for ai.chat: the node's own exchanges in this chat, or the chat as the bot's message log has it. */
+async function chatHistory(context: NodeContext<any>, rounds: number, source: string, prefixed: boolean): Promise<ChatMessage[]> {
+  if (rounds <= 0) return []
+  if (source === 'chat') {
+    const { session, bot } = context
+    const lines = await bot?.history?.(session.channel, rounds * 2 + 1).catch(() => []) ?? []
+    // The message being answered is in the log already; it goes last, after the history.
+    const current = lines.findLastIndex((line) => line.direction === 'in' && (session.messageId ? line.messageId === session.messageId : line.user.id === session.user.id))
+    return lines
+      .filter((line, index) => index !== current && line.text)
+      .slice(-rounds * 2)
+      .map((line) => line.direction === 'out'
+        ? { role: 'assistant', content: line.text }
+        : { role: 'user', content: prefixed ? `${line.user.name ?? line.user.id}: ${line.text}` : line.text })
+  }
+  const saved = context.vars.get('chat', `__history:${context.node.id}`) as ChatMessage[] | undefined
+  return (saved ?? []).slice(-rounds * 2)
+}
+
 const chatNode: NodeType = {
   kind: 'action',
   type: 'ai.chat',
   category: 'ai',
   title: { en: 'Ask the LLM', 'zh-CN': '询问大模型' },
   description: {
-    en: 'Sends the prompt (or the message) to an LLM and outputs its reply. Speaks as the run\'s persona when there is one (a persona node, or the bot\'s persona rules).',
-    'zh-CN': '把提示词（或消息）发给大模型并输出回复。有人格时（人格节点，或机器人的人格规则）以该人格说话。',
+    en: 'Sends the prompt (or the message) to an LLM and outputs its reply, with earlier messages of the chat when history is on. Speaks as the run\'s persona when there is one (a persona node, or the bot\'s persona rules). Continues on "error" when the model fails or times out.',
+    'zh-CN': '把提示词（或消息）发给大模型并输出回复；开启历史时带上会话之前的消息。有人格时（人格节点，或机器人的人格规则）以该人格说话。模型出错或超时时走 error。',
   },
   config: z.object({
     usePersona: z.boolean().default(true).meta(field('Speak as the persona', 'Uses the persona chosen by a persona node, or by the bot\'s persona rules', {
@@ -437,31 +567,73 @@ const chatNode: NodeType = {
     systemPrompt: z.string().default('').meta(field('System prompt', 'With a persona, added after its prompt as extra rules; without one, empty uses a short default', {
       'zh-CN': { title: '系统提示词', description: '有人格时作为补充规则接在人格提示之后；没有人格时，留空使用简短的默认提示' },
     })),
+    history: z.number().int().min(0).max(MAX_HISTORY).default(0).meta(field('History (rounds)', 'Earlier rounds of the chat sent as context; 0 sends only this message', {
+      'zh-CN': { title: '上下文轮数', description: '作为上下文带上的之前几轮对话；0 表示只发这条消息' },
+    })),
+    historySource: z.enum(['node', 'chat']).default('node').meta(field(
+      'History from',
+      'This node: only what it was asked and answered. The chat: recent messages of the chat from the bot\'s message log, including ones it did not answer.',
+      { 'zh-CN': { title: '历史来源', description: '本节点：只记录问过它、它回答过的消息。整个会话：机器人消息记录里这个会话的最近消息，包括没有回复的。', options: { node: '本节点', chat: '整个会话' } } },
+      { options: { node: 'This node', chat: 'The chat' } },
+    )),
     provider: z.string().optional().meta(field('Provider', 'Provider id; empty uses the persona\'s, then the bot\'s or the global default', {
       'zh-CN': { title: '提供商', description: '提供商 id；留空依次使用人格、机器人或全局默认' },
     })),
     model: z.string().optional().meta(field('Model', 'Empty uses the persona\'s, then the provider\'s default', { 'zh-CN': { title: '模型', description: '留空依次使用人格、提供商的默认模型' } })),
     maxTokens: z.number().int().min(64).max(64000).default(1000).meta(field('Max tokens', undefined, { 'zh-CN': { title: '最大 Token 数' } })),
+    maxInputChars: z.number().int().min(0).default(0).meta(field('Max message length', 'Longer messages are cut to this many characters; 0 means no limit', {
+      'zh-CN': { title: '消息长度上限', description: '超过此字数的消息会被截断；0 表示不限制' },
+    })),
+    timeout: z.number().min(5).max(55).default(45).meta(field('Timeout (seconds)', 'A whole run may work for 60 seconds at most', { 'zh-CN': { title: '超时（秒）', description: '一次运行最多工作 60 秒' } })),
   }),
   inputs: [{ name: 'prompt', type: 'text', title: { en: 'Prompt', 'zh-CN': '提示词' } }],
-  outputs: [{ name: 'reply', type: 'text', title: { en: 'Reply', 'zh-CN': '回复' } }],
+  outputs: [
+    { name: 'reply', type: 'text', title: { en: 'Reply', 'zh-CN': '回复' } },
+    { name: 'tokens', type: 'number', title: { en: 'Tokens used', 'zh-CN': '用掉的 Token' } },
+    { name: 'model', type: 'text', title: { en: 'Model', 'zh-CN': '模型' } },
+    { name: 'error', type: 'text', title: { en: 'Error', 'zh-CN': '错误' } },
+  ],
+  execOut: ['next', 'error'],
   async run(context) {
-    const { config, inputs, session, provider, run, signal } = context
+    const { config, inputs, session, provider, run, signal, logger } = context
+    const llm = requireLlm(context)
     const persona = config.usePersona === false ? undefined : await context.persona()
     const own = config.systemPrompt === OLD_CHAT_PROMPT ? '' : String(config.systemPrompt ?? '')
-    const result = await requireLlm(context).chat({
-      provider: config.provider || persona?.provider || provider,
-      model: config.model || persona?.model,
-      maxTokens: config.maxTokens,
-      ...(persona?.temperature !== undefined ? { temperature: persona.temperature } : {}),
-      signal,
-      messages: [
-        ...personaMessages(persona, own),
-        { role: 'user', content: inputs.prompt || session.text },
-      ],
-    })
-    run.llm = { provider: result.source.provider, model: result.source.model, ...(persona ? { persona: persona.name } : {}) }
-    return { outputs: { reply: result.text } }
+    const rounds = Number(config.history ?? 0)
+    // In groups with history, each message says who wrote it.
+    const prefixed = rounds > 0 && !session.isDirect
+    let text = String(inputs.prompt || session.text)
+    const limit = Number(config.maxInputChars ?? 0)
+    if (limit > 0 && text.length > limit) text = `${text.slice(0, limit)}…`
+    const asked: ChatMessage = { role: 'user', content: prefixed && !inputs.prompt ? `${session.user.name ?? session.user.id}: ${text}` : text }
+    try {
+      const result = await llm.chat({
+        provider: config.provider || persona?.provider || provider,
+        model: config.model || persona?.model,
+        maxTokens: config.maxTokens,
+        ...(persona?.temperature !== undefined ? { temperature: persona.temperature } : {}),
+        signal: AbortSignal.any([signal, AbortSignal.timeout(Number(config.timeout ?? 45) * 1000)]),
+        messages: [
+          ...personaMessages(persona, own),
+          ...await chatHistory(context, rounds, config.historySource, prefixed),
+          asked,
+        ],
+      })
+      const tokens = result.source.tokens ?? 0
+      run.llm = { provider: result.source.provider, model: result.source.model, ...(persona ? { persona: persona.name } : {}) }
+      for (const listener of run.onTokens ?? []) listener(tokens)
+      if (rounds > 0 && config.historySource !== 'chat') {
+        const key = `__history:${context.node.id}`
+        const saved = [...(context.vars.get('chat', key) as ChatMessage[] | undefined ?? []), asked, ...(result.text.trim() ? [{ role: 'assistant' as const, content: result.text }] : [])]
+        context.vars.set('chat', key, saved.slice(-MAX_HISTORY * 2))
+      }
+      return { outputs: { reply: result.text, tokens, model: result.source.model, error: '' } }
+    } catch (error) {
+      if (signal.aborted) throw error
+      const message = (error as Error)?.name === 'TimeoutError' ? `The model did not answer within ${config.timeout} seconds` : String((error as Error)?.message ?? error)
+      logger.warn('%s failed: %s', context.node.label, message)
+      return { exec: 'error', outputs: { reply: '', tokens: 0, model: '', error: message } }
+    }
   },
 }
 
@@ -749,7 +921,7 @@ const scheduleTrigger: NodeType = {
 
 export const builtinNodes: NodeType[] = [
   messageTrigger, keywordTrigger, commandTrigger, regexTrigger, scheduleTrigger,
-  ifNode, compareNode, randomNode, cooldownNode, delayNode, waitReplyNode,
+  ifNode, compareNode, randomNode, cooldownNode, rateLimitNode, dailyQuotaNode, delayNode, waitReplyNode,
   templateNode, messageNode, getVarNode, setVarNode, incrementNode,
   chatNode, classifyNode,
   replyNode, sendNode,

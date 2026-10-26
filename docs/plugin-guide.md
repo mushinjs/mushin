@@ -104,7 +104,7 @@ ctx.bot.middleware(async (session, next) => {
 })
 ```
 
-See `packages/bot-plugin-llm-chat` for a complete version with per-chat history.
+The built-in LLM chat (`packages/bot-plugin-llm-chat`) does not reply itself: it makes a flow on each bot (`ctx.flows.create()` with `source: { kind: 'plugin', plugin }`) and removes it when turned off, so users can change its behavior on the canvas. Prefer that for plugins whose behavior people will want to adjust.
 
 To speak as the bot's persona for this chat (when `@mushin/plugin-personas` runs), ask it at reply time and put its prompt and examples first. Declare the plugin under `optional` in your manifest:
 
