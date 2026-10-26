@@ -130,6 +130,9 @@ describe('bots over OneBot', () => {
 
   it('replies with the LLM when mentioned and records the model as the source', async () => {
     await app.call('bots.plugins.enable', { id: botA, package: '@mushin/bot-plugin-llm-chat' })
+    // The plugin answers through the flow it makes on the bot.
+    await waitFor(async () => (await app.call<any[]>('flows.list')).some((flow) => flow.source?.plugin === '@mushin/bot-plugin-llm-chat' && flow.bots.includes(botA)))
+    await waitFor(async () => (await app.call<any[]>('bots.plugins.list', { id: botA })).find((p) => p.package === '@mushin/bot-plugin-flows')?.status === 'active')
     llm.setFallback({ text: 'Hi from LLM' })
     const before = llm.requests.length
     napcat.pushGroupMessage('500', '42', [{ type: 'text', data: { text: 'just chatting' } }])
@@ -142,8 +145,7 @@ describe('bots over OneBot', () => {
     expect(request.messages.some((m: any) => m.content === 'user42: just chatting')).toBe(true)
 
     const reply = (await app.call<any[]>('bots.messages', { id: botA })).at(-1)
-    expect(reply.source).toMatchObject({ kind: 'llm', provider: 'Mock', model: 'mock-model', plugin: 'llm-chat' })
-    expect(reply.source.latencyMs).toBeGreaterThanOrEqual(0)
+    expect(reply.source).toMatchObject({ kind: 'flow', node: '回复', provider: 'Mock', model: 'mock-model' })
   })
 
   it('loads a local TypeScript bot plugin from the instance plugins folder', async () => {
@@ -183,7 +185,9 @@ describe('bots over OneBot', () => {
     const byName = Object.fromEntries(plugins.map((p) => [p.package, p]))
     expect(byName['@mushin/bot-plugin-echo']).toMatchObject({ enabled: true, status: 'active' })
     expect(byName['mushin-bot-plugin-shout']).toMatchObject({ enabled: true, status: 'active' })
-    expect(byName['@mushin/bot-plugin-llm-chat'].configSchema.properties.trigger.enum).toEqual(['mention', 'always'])
+    // LLM chat keeps its settings in its flow.
+    expect(byName['@mushin/bot-plugin-llm-chat']).toMatchObject({ enabled: true, status: 'active' })
+    expect(Object.keys(byName['@mushin/bot-plugin-llm-chat'].configSchema.properties ?? {})).toEqual([])
   })
 
   it('accepts a reverse-mode connection with the right token only', async () => {

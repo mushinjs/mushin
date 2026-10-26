@@ -752,4 +752,8 @@ export default {
     noPersonas: 'Create a persona first, then pick it here.',
     openPersonas: 'Go to Personas',
   },
+  botPlugins: {
+    madeFlows: 'Its flows:',
+    llmChatHint: 'Edit when and how it replies in the flow; turning the plugin off removes the flow.',
+  },
 }

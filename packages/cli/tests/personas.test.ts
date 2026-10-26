@@ -90,10 +90,10 @@ describe('personas', () => {
 
   it('makes LLM chat speak as the persona and shows it in provenance', async () => {
     const reply = await say('有人吗', '600')
-    expect(lastSystem()).toMatch(/^你是一只毒舌猫娘。\n\nYou are chatting in a QQ chat/)
+    expect(lastSystem()).toBe('你是一只毒舌猫娘。')
     expect(llm.requests.at(-1).messages.slice(1, 3)).toEqual([{ role: 'user', content: '你好' }, { role: 'assistant', content: '哼，才不想理你喵' }])
     expect(llm.requests.at(-1).temperature).toBe(1.2)
-    expect(reply.source).toMatchObject({ kind: 'llm', persona: '毒舌猫娘' })
+    expect(reply.source).toMatchObject({ kind: 'flow', persona: '毒舌猫娘' })
   })
 
   it('switches a chat with /persona, for admins only', async () => {

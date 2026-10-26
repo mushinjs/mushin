@@ -2,12 +2,12 @@ import { type ChannelInfo, Context, MushinError, randomId, seg, Service, toJsonS
 import { type BotEvent, type BotRole, BUILTIN_PRIORITY, type CommandEntry, commandMatches, type GroupRole, helpText, requiredRole, roleAtLeast, splitCommand } from '@mushin/plugin-bots'
 import type {} from '@mushin/plugin-providers'
 import type {} from '@mushin/plugin-storage'
-import { FlowError, matchTriggers, runFlow, type RunEnvironment, type TriggerMatch } from './engine'
+import { FlowError, localDay, matchTriggers, MemoryUsage, runFlow, type RunEnvironment, type TriggerMatch } from './engine'
 import { compile, type CompiledFlow, FLOW_FORMAT, interceptOf, layout, migrateIntercept, triggerPriority } from './graph'
 import { builtinNodes, commandName, scheduleTarget } from './nodes'
 import { overlap, triggerOrder, triggerSummary, type TriggerSlot } from './order'
 import { migrateDataEdges } from './refs'
-import type { FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, FlowSource, Intercept, FlowSession, LlmLike, NodeType, PersonaResolver, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
+import type { ChatLine, DailyCounter, FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, FlowSource, Intercept, FlowSession, LlmLike, NodeType, PersonaResolver, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
 
 export * from './engine'
 export * from './graph'
@@ -45,6 +45,8 @@ interface Waiter {
 }
 
 const channelKey = (channel: ChannelInfo) => `${channel.type}:${channel.id}`
+/** Daily counters of the daily quota nodes. */
+const USAGE_KEY = 'flows-usage'
 
 const nodeInput = z.object({
   id: z.string().optional().describe('Unique within the flow; generated when omitted'),
@@ -201,6 +203,14 @@ export class FlowService extends Service {
   private fired = new Map<string, number>()
   private watched = new Map<string, number>()
   private personas?: PersonaResolver
+  private saveUsageTimer?: ReturnType<typeof setTimeout>
+  /** Daily quota counters, saved a moment after they change. */
+  private usage = new MemoryUsage(() => {
+    this.saveUsageTimer ??= setTimeout(() => {
+      this.saveUsageTimer = undefined
+      void this.saveUsage()
+    }, 1000)
+  })
 
   constructor(ctx: Context) {
     super(ctx, 'flows')
@@ -217,6 +227,16 @@ export class FlowService extends Service {
       const doc = await this.home.storage.get<FlowDocument>(key)
       if (doc?.id) this.docs.set(doc.id, doc)
     }
+    const today = localDay()
+    for (const [key, counter] of Object.entries((await this.home.storage.get<Record<string, DailyCounter>>(USAGE_KEY)) ?? {})) {
+      if (counter.day === today) this.usage.counters.set(key, counter)
+    }
+    yield this.home.effect(() => () => {
+      if (!this.saveUsageTimer) return
+      clearTimeout(this.saveUsageTimer)
+      this.saveUsageTimer = undefined
+      return this.saveUsage()
+    }, 'flows usage')
     for (const type of builtinNodes) yield this.defineNode(type)
     // Flows saved before references replaced data connections, with renamed node types, or before
     // triggers said what they intercept (their old default kept the message from everything after).
@@ -614,6 +634,12 @@ export class FlowService extends Service {
     return `"${doc.name}" (${doc.id})`
   }
 
+  private async saveUsage() {
+    const today = localDay()
+    const current = Object.fromEntries([...this.usage.counters].filter(([, counter]) => counter.day === today))
+    await this.home.storage.set(USAGE_KEY, current).catch((error) => this.logger.warn('saving daily quotas failed: %s', error))
+  }
+
   // ---- running ----
 
   private varsFor(flowId: string, botId: string, session: FlowSession): Pick<Variables, 'get' | 'set'> {
@@ -652,6 +678,18 @@ export class FlowService extends Service {
       selfId: bot.selfId,
       call: (action, params) => bot.call(action, params),
       send: (channel, content) => bot.send(channel, content),
+      history: async (channel, limit) => {
+        const records = await this.home.get('bots')?.messages(bot.id, { channel: channel.id, limit: Math.min(limit * 3, 500) }) ?? []
+        return records
+          .filter((record) => record.channel.type === channel.type)
+          .slice(-limit)
+          .map((record): ChatLine => ({
+            direction: record.direction,
+            user: record.user,
+            text: record.segments.map((segment) => (segment.type === 'text' ? segment.data.text : segment.type === 'at' ? `@${segment.data.name ?? segment.data.qq}` : `[${segment.type}]`)).join('').trim(),
+            ...(record.messageId ? { messageId: record.messageId } : {}),
+          }))
+      },
     }
   }
 
@@ -668,6 +706,7 @@ export class FlowService extends Service {
       waitForMessage: (options, origin) => this.waitFor(botId, origin, options),
       onStep: this.onStep,
       persona: this.personaFor(botId, session),
+      usage: this.usage,
     }
   }
 
@@ -892,7 +931,9 @@ export class FlowService extends Service {
     if (!bots) throw new MushinError('unavailable', 'The bots plugin is not running')
     const record = bots.get(botId)
     const prefixes = record.commands?.prefixes?.filter(Boolean)
-    const command = splitCommand(input.text, prefixes?.length ? prefixes : undefined)
+    const split = splitCommand(input.text, prefixes?.length ? prefixes : undefined)
+    const entry = split && bots.commands(botId).find((item) => commandMatches(item, split.name))
+    const command = split && (entry ? { ...split, entry } : split)
     const isDirect = input.role === 'private'
     const groupRole = input.role === 'owner' || input.role === 'admin' || input.role === 'member' ? input.role : undefined
     const user: UserInfo = { id: '10000', name: 'Tester', ...(groupRole ? { role: groupRole } : {}) }

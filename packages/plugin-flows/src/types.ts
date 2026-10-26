@@ -129,6 +129,16 @@ export interface FlowBot {
   call(action: string, params?: Record<string, any>): Promise<any>
   /** Sends to any chat, not only the current one. */
   send(channel: ChannelInfo, content: string | SourcedContentLike): Promise<SentLike | undefined | void>
+  /** Recent messages of a chat from the bot's message log, oldest first: what people said and what the bot sent. */
+  history?(channel: ChannelInfo, limit: number): Promise<ChatLine[]>
+}
+
+/** One message of a chat, for LLM context. */
+export interface ChatLine {
+  direction: 'in' | 'out'
+  user: UserInfo
+  text: string
+  messageId?: string
 }
 
 export interface WaitOptions {
@@ -155,7 +165,21 @@ export interface TriggerContext<C> {
 }
 
 export interface LlmLike {
-  chat(options: any): Promise<{ text: string; source: { provider: string; model: string } }>
+  chat(options: any): Promise<{ text: string; source: { provider: string; model: string; tokens?: number } }>
+}
+
+/** Today's count and tokens for one key, such as a daily quota node in one chat. */
+export interface DailyCounter {
+  /** Local date, `YYYY-MM-DD`; a new day starts from zero. */
+  day: string
+  count: number
+  tokens: number
+}
+
+/** Daily counters that survive restarts, for the daily quota node. Test runs get a scratch copy. */
+export interface UsageStore {
+  get(key: string): DailyCounter
+  add(key: string, delta: { count?: number; tokens?: number }): DailyCounter
 }
 
 export interface NodeContext<C> extends TriggerContext<C> {
@@ -177,6 +201,8 @@ export interface NodeContext<C> extends TriggerContext<C> {
   waitForMessage(options: WaitOptions): Promise<FlowSession | undefined>
   /** The run's persona: the one a persona node chose, else the bot's rules for this chat; nothing without one. */
   persona(): Promise<PersonaLike | undefined>
+  /** Daily counters that survive restarts (a scratch copy in test runs). */
+  usage: UsageStore
   test: boolean
 }
 
@@ -188,6 +214,8 @@ export interface RunState {
    * the first time a node asks. `null` means none.
    */
   persona?: PersonaLike | null
+  /** Called with the tokens of each LLM reply later in the run, e.g. by a daily quota node that let the run through. */
+  onTokens?: ((tokens: number) => void)[]
 }
 
 /** A persona as nodes use it, with its variables already filled in. Kept by the personas plugin. */

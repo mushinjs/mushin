@@ -90,24 +90,21 @@ The bots list shows each bot's connection mode and address, with a switch to sta
 
 If Mushin.js and NapCat run on different machines, bind Mushin.js to a reachable address (`host` in the server entry) and keep the admin token private.
 
-When a bot misbehaves, open its **Logs** tab. It lists what happened inside that bot only: every connection attempt (address, NapCat self id, client role, and why a token was rejected), logins, status changes, plugin warnings, and why LLM chat skipped a message. The same lines are saved in `instance/data/logs/<bot id>/` and the Agent can read them.
+When a bot misbehaves, open its **Logs** tab. It lists what happened inside that bot only: every connection attempt (address, NapCat self id, client role, and why a token was rejected), logins, status changes, and plugin warnings. The same lines are saved in `instance/data/logs/<bot id>/` and the Agent can read them.
 
 ## Keeping LLM chat in check
 
-The LLM chat bot plugin checks these limits before every model call. Change them on the bot's **Plugins** tab, or ask the Agent.
+Turning on the LLM chat bot plugin makes a flow on the bot, **大模型对话 · <bot name>**, and the limits are nodes in it. Open the flow from the bot's **Plugins** tab to change them, add your own conditions (only users who checked in, a persona for one group), or ask the Agent. The flow belongs to the plugin: turning the plugin off on the bot removes it. Bots set up with the plugin's old settings get a flow made from them.
 
-| Setting | Default | Effect |
+| Node | Default | Effect |
 | --- | --- | --- |
-| Reply in private chats | on | Turn off to answer only in groups |
-| Only these groups | all groups | Group ids the bot may answer in |
-| Ignore users | none | User ids never answered, such as other bots |
-| Chat cooldown | 3 s | Least time between two replies in one chat |
-| Replies per user | 5 per 60 s | Per-user rate limit, with an optional one-time notice |
-| Daily reply limit | 300 | LLM replies per bot per day; resets at local midnight and survives restarts |
-| Daily token budget | off | Tokens per bot per day, as reported by the provider |
-| Message length | 1000 characters | Longer messages are cut before they reach the model |
+| On message | @ me or private, skips commands | **Which messages**, **Only these groups** and **Ignore users** decide who gets answers |
+| Cooldown | 3 s per chat | Least time between two replies in one chat |
+| Rate limit | 5 per 60 s per user | Goes on `limited` past the limit; the `first` output sends a notice only once |
+| Daily quota | 300 a day | Runs (and, optionally, tokens of the LLM replies after it) per day; resets at local midnight and survives restarts |
+| Ask the LLM | 10 rounds of the chat, 1000 characters | Sends recent messages of the chat as context and cuts long messages; goes on `error` when the model fails or times out |
 
-A chat also gets only one model call at a time; messages that arrive while a reply is being written are not answered. When a daily limit is reached, the Logs page says so once.
+The flow sits below other flows (priority −100), so commands and keyword flows answer first; give their triggers **Intercept: All flows** to keep LLM chat from answering the same message. Each run's trace in the flow's **Logs** bar shows why a message got no reply.
 
 ## Conversation flows
 
@@ -118,11 +115,11 @@ Open **Flows** in the dashboard (cards or a compact list, grouped by bot by defa
 
 | Category | Nodes |
 | --- | --- |
-| Triggers | On message (any, mentions, private, group), Keyword, Command, Pattern (regular expression), On schedule (daily, every N minutes, cron) |
+| Triggers | On message (any, mentions, private, group; only some groups, ignore users, skip commands), Keyword, Command, Pattern (regular expression), On schedule (daily, every N minutes, cron) |
 | Event triggers (OneBot) | Member joined, Member left, Poke, Message recalled (with the recalled text), Mute changed, Admin changed, File uploaded, New friend, Friend request, Group request / invitation, Group info changed (card, name, title, essence, reactions), Group honor / lucky king, Any OneBot event |
-| Logic | If, Compare (branches on true / false), Random chance, Cooldown, Wait, Wait for reply |
+| Logic | If, Compare (branches on true / false), Random chance, Cooldown, Rate limit, Daily quota, Wait, Wait for reply |
 | Data | Text (with `{a}` `{b}` `{c}` `{user}` `{message}`), Message info, Get variable, Set variable, Add to number |
-| AI | Ask the LLM, Classify intent (one branch per label) |
+| AI | Ask the LLM (speaks as the persona, with chat history; `error` exit), Classify intent (one branch per label), Use a persona (Personas plugin) |
 | Actions | Reply, Send to chat |
 | Group management (OneBot) | Mute, Mute everyone, Remove member, Set admin, Set member card, Set special title, Rename group, Post announcement, Essence message, Group check-in, Leave group |
 | Platform API (OneBot) | Recall message, Get message, Send forward message, Poke, React with emoji, Like profile, Handle request, Member info, User info, Group info, Sender role, Call OneBot API (any OneBot 11 or NapCat action) |
