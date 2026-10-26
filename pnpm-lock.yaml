@@ -216,6 +216,9 @@ importers:
       '@mushin/plugin-storage':
         specifier: workspace:*
         version: link:../plugin-storage
+      '@mushin/plugin-terminal':
+        specifier: workspace:*
+        version: link:../plugin-terminal
       tsx:
         specifier: 'catalog:'
         version: 4.23.15
@@ -500,6 +503,15 @@ importers:
       '@mushin/core':
         specifier: workspace:*
         version: link:../core
+
+  packages/plugin-terminal:
+    dependencies:
+      '@mushin/core':
+        specifier: workspace:*
+        version: link:../core
+      '@mushin/plugin-flows':
+        specifier: workspace:*
+        version: link:../plugin-flows
 
 packages:
 

@@ -35,7 +35,8 @@
     "@mushin/plugin-stats": "workspace:*",
     "@mushin/plugin-permissions": "workspace:*",
     "@mushin/plugin-personas": "workspace:*",
-    "@mushin/plugin-mcp": "workspace:*"
+    "@mushin/plugin-mcp": "workspace:*",
+    "@mushin/plugin-terminal": "workspace:*"
   },
   "devDependencies": {
     "vite": "catalog:",
