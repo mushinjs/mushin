@@ -122,6 +122,7 @@ Open **Flows** in the dashboard (cards or a compact list, grouped by bot by defa
 | Data | Text (with `{a}` `{b}` `{c}` `{user}` `{message}`), Message info, Get variable, Set variable, Add to number |
 | AI | Ask the LLM (speaks as the persona, with chat history; `error` exit), Classify intent (one branch per label), Use a persona (Personas plugin) |
 | Actions | Reply, Send to chat |
+| Terminal (Terminal plugin) | Run command (on this machine) |
 | Group management (OneBot) | Mute, Mute everyone, Remove member, Set admin, Set member card, Set special title, Rename group, Post announcement, Essence message, Group check-in, Leave group |
 | Platform API (OneBot) | Recall message, Get message, Send forward message, Poke, React with emoji, Like profile, Handle request, Member info, User info, Group info, Sender role, Call OneBot API (any OneBot 11 or NapCat action) |
 
@@ -130,6 +131,16 @@ OneBot nodes call NapCat through the bot running the flow and continue on `ok` o
 Pick the flow's adapter at the top of the editor (it is chosen for you when only one is installed); nodes made for another adapter, such as the OneBot ones on a Discord flow, are greyed out in the node list, and hovering one says why. Right-click the canvas, a node, a selection or a connection for more: add a node where you clicked, copy and paste (Ctrl+C / Ctrl+V, also between flows), duplicate (Ctrl+D), group selected nodes into a dashed frame that moves and copies as one (Ctrl+G; Ctrl+Shift+G ungroups), or insert a node into a connection. **Skip** a node from the same menu, or with the button next to the delete button in its settings, to keep it on the canvas without running it: a skipped trigger never fires, and a skipped step passes straight on to its first exit. The canvas draws that bypass from the steps before a skipped step to the ones after it, and the skipped step's own connections are dashed. Nodes that only a skipped trigger leads to are shown as skipped too, since they never run. Click a connection to select it and press Delete, or drag either end to another handle, or onto empty canvas to remove it. The canvas stops a little beyond the nodes, and the minimap always shows that whole area with the visible part highlighted. A group can be collapsed into one box with the button on its frame, and double-clicking the box expands it again. Dropping a connection on empty canvas lists the nodes that can connect there. Then pick the bots that run the flow; Mushin.js turns on the flows bot plugin for them. After a trigger runs, the message goes on to later triggers and to the bot's other plugins, such as LLM chat, unless the trigger's **Intercept here** setting says otherwise: **In this flow** stops later triggers of the same flow, **All flows** stops later triggers of every flow on the bot, and **Everywhere** also keeps the built-in `/help` and the bot plugins from seeing it. Flows saved before this setting existed keep their old behavior: a trigger without "let other plugins answer too" intercepts everywhere. The **Logs** bar under the canvas sends a made-up message, event or schedule tick through the saved flow without sending anything to a chat or calling NapCat (AI nodes do call the LLM; the platform calls the run would make are listed) and lists every step with its input and output, as a table or JSON. **Execute step** on a node, or ▶ on its card, runs the same test but stops after that node. Recent live runs appear there too; pick one to highlight its path on the canvas. While a run is going, the edge into the running node is a moving dashed line, and edges turn green or red as each node succeeds or fails.
 
 When one message starts several triggers on a bot, across all of its flows, they run highest **priority** first (ties: older flow first), and a trigger that intercepts stops the ones after it as far as it reaches. A trigger's settings list the triggers that compete with it on each bot, with buttons to run it earlier or later. A trigger that an earlier one always keeps the message from is marked **Never runs** on the canvas, with the trigger in its way, and so are the steps only it leads to.
+
+### Terminal commands
+
+Enable **Terminal** on the Plugins page to get the **Run command** node, which runs a command on the machine running Mushin.js (PowerShell on Windows and `sh` elsewhere, or pick bash, pwsh or cmd). It passes `stdin` in, puts `stdout`, `stderr`, `code` and `error` out, and continues on `ok` when the command exits with 0, else on `failed`. The node has a timeout (30 s by default, stopping the command and everything it started), and output is cut at the plugin's limit (64 KB per stream).
+
+Because a command can do anything your account can:
+
+- A reference in the command, such as `ping -c 3 {{n1.rest}}`, is inserted as one quoted argument, so a chat message cannot end the argument and add commands of its own. cmd cannot quote `"`, `%`, `!` or line breaks safely, so values containing them stop the run; prefer PowerShell on Windows.
+- Only people can add the node or change its command, in the flow editor. The Agent cannot add it or change its settings, though it can still edit the rest of a flow that has it.
+- Test runs from the **Logs** bar or the Agent show the command they would run instead of running it, unless you turn on **Run commands in test runs** in the plugin settings. **Allow local commands** turns the node off.
 
 Turn a flow off with the switch on its card or at the top of the editor: it keeps its content and bots but answers no messages, events or schedules, and its commands leave `/help`, until it is turned on again.
 
@@ -162,6 +173,7 @@ pnpm typecheck    # TypeScript for all packages, vue-tsc for the dashboard
 | `@mushin/plugin-mcp` | MCP client (stdio and Streamable HTTP); each MCP tool becomes an action |
 | `@mushin/plugin-console` | HTTP API, WebSocket, admin token, dashboard hosting |
 | `@mushin/plugin-flows` | Flow documents, node types, validation and the execution engine |
+| `@mushin/plugin-terminal` | A flow node that runs commands locally (opt-in) |
 | `@mushin/plugin-stats` | Hourly counts of messages, commands, flow runs and model usage (kept hourly for 30 days, daily for a year, in `data/stats/`) and process samples for the overview |
 | `@mushin/bot-plugin-echo`, `@mushin/bot-plugin-llm-chat`, `@mushin/bot-plugin-flows` | Bot plugins |
 | `@mushin/plugin-demo` | Offline demo provider, sandbox bot adapter and sample flows (opt-in) |

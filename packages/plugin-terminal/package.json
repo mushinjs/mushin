@@ -1,0 +1,38 @@
+{
+  "name": "@mushin/plugin-terminal",
+  "version": "0.1.0",
+  "description": "Flow nodes that run commands in a local terminal",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "displayName": {
+      "en": "Terminal",
+      "zh-CN": "终端"
+    },
+    "description": {
+      "en": "A flow node that runs commands on this machine; only you can add it, not the Agent",
+      "zh-CN": "在本机运行命令的流程节点；只能由你添加，智能体不能"
+    },
+    "requires": {
+      "mushin": ">=0.1.0",
+      "plugins": {
+        "@mushin/plugin-flows": "*"
+      }
+    },
+    "nodes": [
+      "terminal.*"
+    ]
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-flows": "workspace:*"
+  }
+}
