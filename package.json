@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "mushin start --dir instance",
-    "dev": "pnpm --parallel --filter @mushin/cli --filter @mushin/dashboard run dev",
+    "dev": "pnpm --filter @mushin/cli dev",
     "demo": "pnpm --filter @mushin/cli demo",
     "build": "pnpm --filter @mushin/dashboard build",
     "test": "vitest run",

@@ -102,6 +102,7 @@ export class Console extends Service {
   }
 
   async *[Service.init]() {
+    const devDashboard = process.env.MUSHIN_DEV_DASHBOARD
     await this.ensureToken()
     const { server, actions } = this.home
     const base = this.config.path
@@ -149,6 +150,13 @@ export class Console extends Service {
     // Everything outside the API is the dashboard (with SPA fallback).
     const root = dashboardRoot()
     server.get(/^(?!\/api(?:\/|$)).*/, async (req, res) => {
+      if (devDashboard) {
+        res.status = 302
+        res.headers.set('location', `${devDashboard}${req.url}`)
+        res.headers.set('cache-control', 'no-store')
+        res.text('')
+        return
+      }
       const file = root ? await readStatic(root, req.path) : undefined
       if (!file) {
         res.headers.set('content-type', 'text/html; charset=utf-8')
@@ -168,9 +176,9 @@ export class Console extends Service {
 
     // The launcher prints the sign-in link from this event; the token never goes to the log buffer,
     // which the dashboard and the Agent can read.
-    this.ready = { url: server.baseUrl, token: this.envToken ?? this.auth!.token, fromEnv: !!this.envToken }
+    this.ready = { url: devDashboard ?? server.baseUrl, token: this.envToken ?? this.auth!.token, fromEnv: !!this.envToken }
     this.home.emit('console/ready', this.ready)
-    this.home.logger('console').info('dashboard at %s', server.baseUrl)
+    this.home.logger('console').info('dashboard at %s', this.ready.url)
     yield this.home.logger.exporter({
       colors: false,
       // Lines written inside a bot go to that bot's own log (`bots/log`), not the global one.
