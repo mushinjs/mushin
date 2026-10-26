@@ -306,6 +306,9 @@ export default {
     empty: 'Nothing logged yet. Connection attempts, adapter errors, plugin warnings and why LLM chat skipped a message show up here.',
   },
   flows: {
+    sourcePlugin: 'From {name}',
+    sourcePluginHint: 'Made by this plugin; remove it in the plugin\'s settings. Click to open the plugin.',
+    sourceAgent: 'By the Agent',
     interceptTitle: 'Intercept here',
     interceptShort: 'intercepts: {scope}',
     intercept: {

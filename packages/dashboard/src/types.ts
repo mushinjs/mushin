@@ -370,6 +370,8 @@ export interface FlowSummary {
   nodes: number
   errors: number
   warnings: number
+  /** Who made it; a plugin's flows can only be removed through that plugin. */
+  source?: { kind: 'user' | 'agent' | 'plugin'; plugin?: string }
   /** `all`: on some bot none of the flow's triggers can run; `some`: a few cannot. */
   blocked?: 'all' | 'some'
   triggers: { id: string; type: string; source: 'message' | 'event' | 'schedule'; summary: string; skip: boolean }[]

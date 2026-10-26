@@ -67,6 +67,7 @@ describe('flows', () => {
   it('creates a flow, lays it out and turns the flows plugin on for its bots', async () => {
     const flow = await app.call('flows.create', { ...pingPong, bots: [botId] })
     flowId = flow.id
+    expect(flow.source).toEqual({ kind: 'user' })
     expect(flow.issues).toEqual([])
     expect(flow.nodes.every((node: any) => Number.isFinite(node.position.x) && Number.isFinite(node.position.y))).toBe(true)
     const plugins = await app.call<any[]>('bots.plugins.list', { id: botId })

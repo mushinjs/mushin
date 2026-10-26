@@ -61,7 +61,7 @@ To try things inside your own instance instead, enable **Demo** (`@mushin/plugin
 - **Create the demo bot**: a sandbox bot. In its live conversation view you play the test user: what you send is received by the bot as the test user's message (start with `@` to mention the bot). The Agent can do the same with the `demo.say` action.
 - **Sample flows**: command reply (`/ping`, `/echo`), keyword trigger, condition branch (`/score 85`), cooldown and counter (`/checkin`), wait for a reply with a timeout (`/quiz`), LLM reply (`/ai`) and intent classification (`/客服`). They run on the demo bot when it exists, and the bot's built-in `/help` lists their commands.
 
-Unticking an item deletes it, and disabling the plugin deletes everything it created. Edit a sample flow freely, but untick it before you disable the plugin if you want to keep a copy.
+Unticking an item deletes it, and disabling the plugin deletes everything it created. The sample flows are marked as the plugin's on the flows page, cannot be deleted there, and link to the plugin. Edit a sample flow freely, but untick it before you disable the plugin if you want to keep a copy.
 
 ## Connecting NapCat
 

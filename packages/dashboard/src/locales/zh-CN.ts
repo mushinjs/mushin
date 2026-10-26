@@ -308,6 +308,9 @@ const zhCN: typeof en = {
     empty: '暂无日志。连接尝试、适配器错误、插件警告以及大模型对话跳过消息的原因都会显示在这里。',
   },
   flows: {
+    sourcePlugin: '来自插件：{name}',
+    sourcePluginHint: '由这个插件创建，需要在插件设置里移除。点击打开插件。',
+    sourceAgent: '智能体创建',
     interceptTitle: '在此处拦截',
     interceptShort: '拦截：{scope}',
     intercept: {

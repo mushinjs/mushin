@@ -60,6 +60,12 @@ describe('demo plugin', () => {
     for (const flow of flows) expect(flow).toMatchObject({ bots: [botId], errors: 0, warnings: 0 })
   })
 
+  it('marks its flows as its own, so they cannot be deleted from the flows list', async () => {
+    const [flow] = await app.call<any[]>('flows.list')
+    expect(flow.source).toEqual({ kind: 'plugin', plugin: PACKAGE })
+    await expect(app.call('flows.delete', { id: flow.id })).rejects.toMatchObject({ code: 'forbidden' })
+  })
+
   it('greets with /help so the chat shows up', async () => {
     const reply = await waitFor(async () => (await outgoing())[0])
     expect(reply).toContain('我是演示机器人，可以试试这些指令：')

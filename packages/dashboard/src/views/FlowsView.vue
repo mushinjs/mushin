@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
   AddOutline, AlertCircleOutline, AppsOutline, ChatbubblesOutline, CloseCircleOutline, ExtensionPuzzleOutline, FilterOutline, GitNetworkOutline,
-  LayersOutline, ListOutline, NotificationsOutline, PauseCircleOutline, PlayCircleOutline, SearchOutline, SwapVerticalOutline, TimeOutline,
+  LayersOutline, ListOutline, NotificationsOutline, PauseCircleOutline, PlayCircleOutline, SearchOutline, SparklesOutline, SwapVerticalOutline, TimeOutline,
   TrashOutline,
 } from '@vicons/ionicons5'
 import {
@@ -280,13 +280,47 @@ const columns = computed<DataTableColumns<FlowSummary>>(() => [
     title: '',
     key: 'actions',
     width: 50,
-    render: (flow) => h(IconAction, { icon: TrashOutline, label: t('common.delete'), type: 'error', onClick: () => remove(flow) }),
+    // A plugin's flows are removed through the plugin.
+    render: (flow) => (ownedByPlugin(flow) ? null : h(IconAction, { icon: TrashOutline, label: t('common.delete'), type: 'error', onClick: () => remove(flow) })),
   },
 ])
+
+// Display names of plugins, for flows that a plugin made.
+const pluginNames = ref(new Map<string, string>())
+onMounted(() => {
+  call<{ package: string; manifest?: { displayName?: any } }[]>('plugins.list')
+    .then((list) => (pluginNames.value = new Map(list.map((entry) => [entry.package, localize(entry.manifest?.displayName, locale.value) || entry.package]))))
+    .catch(() => {})
+})
+
+const ownedByPlugin = (flow: FlowSummary) => flow.source?.kind === 'plugin'
+
+/** Where a flow came from, as a tag: a plugin's flows link to that plugin. */
+function sourceTag(flow: FlowSummary) {
+  const source = flow.source
+  if (source?.kind === 'plugin') {
+    const name = pluginNames.value.get(source.plugin ?? '') ?? source.plugin
+    return h(NTag, {
+      size: 'small',
+      bordered: false,
+      type: 'success',
+      class: 'source-tag',
+      title: t('flows.sourcePluginHint'),
+      onClick: (event: Event) => {
+        event.stopPropagation()
+        router.push({ path: '/plugins', query: { highlight: source.plugin } })
+      },
+    }, { default: () => t('flows.sourcePlugin', { name }), icon: () => h(NIcon, null, { default: () => h(ExtensionPuzzleOutline) }) })
+  }
+  if (source?.kind === 'agent') return h(NTag, { size: 'small', bordered: false }, { default: () => t('flows.sourceAgent'), icon: () => h(NIcon, null, { default: () => h(SparklesOutline) }) })
+  return undefined
+}
 
 /** Status tags shown on cards and in the list. */
 function tagsOf(flow: FlowSummary) {
   const tags = []
+  const source = sourceTag(flow)
+  if (source) tags.push(source)
   if (!flow.enabled) tags.push(h(NTag, { size: 'small', bordered: false }, () => t('flows.disabledTag')))
   if (flow.blocked) tags.push(h(NTag, { size: 'small', bordered: false, type: 'warning' }, () => (flow.blocked === 'all' ? t('flows.blockedTag') : t('flows.partlyBlocked'))))
   if (flow.errors) tags.push(h(NTag, { size: 'small', bordered: false, type: 'error' }, () => t('flows.errorCount', flow.errors)))
@@ -441,7 +475,7 @@ function remove(flow: FlowSummary) {
                     <span class="sub">{{ t('flows.nodeCount', flow.nodes) }} · {{ formatTime(flow.updatedAt) }}</span>
                   </div>
                   <NSwitch size="small" :value="flow.enabled" :title="flow.enabled ? t('flows.enabledHint') : t('flows.disabledHint')" @click.stop @update:value="(value: boolean) => setEnabled(flow, value)" />
-                  <IconAction :icon="TrashOutline" :label="t('common.delete')" type="error" @click="remove(flow)" />
+                  <IconAction v-if="!ownedByPlugin(flow)" :icon="TrashOutline" :label="t('common.delete')" type="error" @click="remove(flow)" />
                 </div>
                 <p v-if="flow.description" class="flow-desc">{{ flow.description }}</p>
                 <p v-if="triggerText(flow)" class="flow-triggers">{{ triggerText(flow) }}</p>
@@ -649,6 +683,10 @@ function remove(flow: FlowSummary) {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+:deep(.source-tag) {
+  cursor: pointer;
 }
 
 .flow-triggers {
