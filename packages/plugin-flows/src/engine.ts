@@ -1,5 +1,5 @@
 import { type Logger, randomId, seg } from '@mushin/core'
-import { type CompiledFlow, passesOn, triggerPriority } from './graph'
+import { type CompiledFlow, interceptOf, triggerPriority } from './graph'
 import { interpolate, interpolateConfig, SCOPES, sysValues, toText } from './refs'
 import type { FlowBot, FlowEvent, FlowSession, LlmLike, PortType, RunState, RunStep, RunTrace, TriggerSource, Variables, VariableScope, WaitOptions } from './types'
 
@@ -129,7 +129,7 @@ export interface RunResult {
 
 /**
  * Runs one flow against one incoming message: matching triggers run highest priority first, until
- * one that does not pass the message on.
+ * one that intercepts the message.
  */
 export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<RunResult> {
   const trace: RunTrace = {
@@ -311,8 +311,9 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
       if (stopped) break
       const entry = flow.nodes.get(id)!
       matched = true
-      const passes = passesOn(entry)
-      if (!passes) consumed = true
+      const intercept = interceptOf(entry)
+      // Within one flow, any interception stops the later triggers; only `global` keeps the bot's plugins out too.
+      if (intercept === 'global') consumed = true
       if (result instanceof TriggerReply) {
         trace.steps.push({ nodeId: id, ms: Date.now() - started, outputs: { reply: result.reply } })
         step(id, 'ok')
@@ -324,7 +325,7 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
         if (id === env.stopAt) stopped = true
         await follow(id, 'next')
       }
-      if (!passes) break
+      if (intercept !== 'none') break
     }
   } catch (error) {
     trace.error = String((error as Error)?.message ?? error)

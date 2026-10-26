@@ -3,11 +3,11 @@ import { type BotEvent, BUILTIN_PRIORITY, type CommandEntry, commandMatches, hel
 import type {} from '@mushin/plugin-providers'
 import type {} from '@mushin/plugin-storage'
 import { FlowError, matchTriggers, runFlow, type RunEnvironment, type TriggerMatch } from './engine'
-import { compile, type CompiledFlow, layout, passesOn, triggerPriority } from './graph'
+import { compile, type CompiledFlow, FLOW_FORMAT, interceptOf, layout, migrateIntercept, triggerPriority } from './graph'
 import { builtinNodes, commandName, scheduleTarget } from './nodes'
 import { overlap, triggerOrder, triggerSummary, type TriggerSlot } from './order'
 import { migrateDataEdges } from './refs'
-import type { FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, FlowSession, LlmLike, NodeType, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
+import type { FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, Intercept, FlowSession, LlmLike, NodeType, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
 
 export * from './engine'
 export * from './graph'
@@ -53,8 +53,8 @@ const nodeInput = z.object({
   position: z.object({ x: z.number(), y: z.number() }).optional().describe('Canvas position; laid out automatically when omitted'),
   config: z.record(z.string(), z.any()).optional().describe('Settings matching the node type\'s config schema; strings may contain references such as {{n1.rest}}'),
   skip: z.boolean().optional().describe('Keep the node but skip it when the flow runs: a skipped trigger never fires, a skipped step passes on to its first exec output'),
-  priority: z.number().optional().describe('Triggers only: when one message starts several triggers on a bot (across all its flows), higher priority runs first; default 0. A trigger that does not let other plugins answer too stops the ones after it'),
-  passOn: z.boolean().optional().describe('Event and schedule triggers only: false stops later triggers once this one runs; default true'),
+  priority: z.number().optional().describe('Triggers only: when one message starts several triggers on a bot (across all its flows), higher priority runs first; default 0'),
+  intercept: z.enum(['none', 'flow', 'flows', 'global']).optional().describe('Triggers only: once this trigger runs, what may no longer handle the same message or event. none (default): nothing is stopped. flow: later triggers of this flow. flows: later triggers of every flow on the bot. global: those, the built-in /help and the bot plugins such as LLM chat'),
   inputs: z.record(z.string(), z.string()).optional()
     .describe('Input name → value: a reference like "{{n1.rest}}" ({{<node id>.<output>}}, {{sys.text|user|userId|groupId|isPrivate|mentioned}}, {{chat|user|flow|run.<variable>}}) or text containing references'),
 })
@@ -104,7 +104,7 @@ function normalizeGroups(groups: GroupInput[], nodes: FlowNode[]): FlowGroup[] {
 
 /** Unsaved edits of a flow, for previews. */
 export interface FlowDraft {
-  nodes: (Omit<FlowNode, 'position' | 'config'> & { position?: FlowNode['position']; config?: FlowNode['config'] })[]
+  nodes: (Omit<FlowNode, 'position' | 'config' | 'intercept'> & { position?: FlowNode['position']; config?: FlowNode['config']; intercept?: Intercept })[]
   edges: (Omit<FlowEdge, 'id'> & { id?: string })[]
   bots?: string[]
 }
@@ -155,7 +155,7 @@ function normalize(nodes: NodeInput[], edges: EdgeInput[], types: Map<string, No
     ...(node.inputs && Object.keys(node.inputs).length ? { inputs: node.inputs } : {}),
     ...(node.skip ? { skip: true } : {}),
     ...(node.priority ? { priority: node.priority } : {}),
-    ...(node.passOn === false ? { passOn: false } : {}),
+    ...(node.intercept && node.intercept !== 'none' ? { intercept: node.intercept } : {}),
   }))
   const flowEdges: FlowEdge[] = edges.map((edge) => ({
     id: edge.id ?? `e-${randomId(5)}`,
@@ -165,8 +165,11 @@ function normalize(nodes: NodeInput[], edges: EdgeInput[], types: Map<string, No
     targetHandle: edge.targetHandle,
   }))
   const migrated = migrateDataEdges(flowNodes, flowEdges, types)
-  layout(migrated)
-  return { nodes: migrated.nodes, edges: migrated.edges }
+  // Callers (often the Agent) may still send the old "let other plugins answer too" setting.
+  const intercepts = migrateIntercept(migrated.nodes, false)
+  const result = { nodes: intercepts.nodes, edges: migrated.edges }
+  layout(result)
+  return result
 }
 
 /**
@@ -205,13 +208,15 @@ export class FlowService extends Service {
       if (doc?.id) this.docs.set(doc.id, doc)
     }
     for (const type of builtinNodes) yield this.defineNode(type)
-    // Flows saved before references replaced data connections, or with renamed node types.
+    // Flows saved before references replaced data connections, with renamed node types, or before
+    // triggers said what they intercept (their old default kept the message from everything after).
     for (const doc of this.docs.values()) {
       const migrated = migrateDataEdges(doc.nodes, doc.edges, this.types)
       const renamed = migrated.nodes.some((node) => RENAMED_TYPES[node.type])
-      if (!migrated.changed && !renamed) continue
-      const nodes = migrated.nodes.map((node) => (RENAMED_TYPES[node.type] ? { ...node, type: RENAMED_TYPES[node.type] } : node))
-      const next = { ...doc, nodes, edges: migrated.edges }
+      const intercepts = migrateIntercept(migrated.nodes, doc.format !== FLOW_FORMAT)
+      if (!migrated.changed && !renamed && !intercepts.changed && doc.format === FLOW_FORMAT) continue
+      const nodes = intercepts.nodes.map((node) => (RENAMED_TYPES[node.type] ? { ...node, type: RENAMED_TYPES[node.type] } : node))
+      const next = { ...doc, nodes, edges: migrated.edges, format: FLOW_FORMAT }
       this.docs.set(doc.id, next)
       await this.home.storage.set(`flows/${doc.id}`, next)
       this.logger.info('migrated flow "%s" to the current format', doc.name)
@@ -347,7 +352,12 @@ export class FlowService extends Service {
     const saved = this.get(flowId)
     const doc: FlowDocument = {
       ...saved,
-      nodes: draft.nodes.map((node) => ({ ...node, position: node.position ?? { x: 0, y: 0 }, config: node.config ?? {} })),
+      nodes: migrateIntercept(draft.nodes.map(({ intercept, ...node }) => ({
+        ...node,
+        position: node.position ?? { x: 0, y: 0 },
+        config: node.config ?? {},
+        ...(intercept && intercept !== 'none' ? { intercept } : {}),
+      })), false).nodes,
       edges: draft.edges.map((edge, index) => ({ ...edge, id: edge.id ?? `draft-${index}` })),
       bots: draft.bots ?? saved.bots,
     }
@@ -510,6 +520,7 @@ export class FlowService extends Service {
       nodes,
       edges,
       ...(groups.length ? { groups } : {}),
+      format: FLOW_FORMAT,
       createdAt: now,
       updatedAt: now,
     }
@@ -520,7 +531,7 @@ export class FlowService extends Service {
   }
 
   async update(id: string, patch: Partial<{ name: string; description: string; adapter: string; bots: string[]; enabled: boolean; nodes: NodeInput[]; edges: EdgeInput[]; groups: GroupInput[] }>) {
-    const doc = { ...this.get(id) }
+    const doc: FlowDocument = { ...this.get(id), format: FLOW_FORMAT }
     if (patch.name !== undefined) doc.name = patch.name
     if (patch.description !== undefined) doc.description = patch.description
     if (patch.adapter !== undefined) {
@@ -692,7 +703,9 @@ export class FlowService extends Service {
 
   /**
    * Runs the triggers a message or event starts across a bot's flows, highest priority first (ties:
-   * older flow first, then canvas order), until one that does not pass the message on.
+   * older flow first, then canvas order). A trigger that intercepts stops the later ones of its
+   * flow (`flow`) or of every flow (`flows`, `global`); `global` also keeps the message from the
+   * bot's built-in commands and plugins.
    */
   private async runOrdered(runs: { compiled: CompiledFlow; env: RunEnvironment }[]) {
     const matches: { compiled: CompiledFlow; env: RunEnvironment; match: TriggerMatch }[] = []
@@ -702,11 +715,15 @@ export class FlowService extends Service {
     // Array sort is stable, so ties keep flow order and each flow's own order.
     matches.sort((a, b) => triggerPriority(b.compiled.nodes.get(b.match.nodeId)!) - triggerPriority(a.compiled.nodes.get(a.match.nodeId)!))
     let consumed = false
+    const closed = new Set<string>()
     for (const { compiled, env, match } of matches) {
+      if (closed.has(compiled.doc.id)) continue
       const result = await runFlow(compiled, { ...env, matched: match })
       this.record(result.trace)
-      if (!passesOn(compiled.nodes.get(match.nodeId)!)) {
-        consumed = true
+      const intercept = interceptOf(compiled.nodes.get(match.nodeId)!)
+      if (intercept === 'flow') closed.add(compiled.doc.id)
+      if (intercept === 'flows' || intercept === 'global') {
+        consumed = intercept === 'global'
         break
       }
     }
@@ -873,6 +890,8 @@ export class FlowService extends Service {
       for (const match of matchTriggers(compiled, env)) matches.set(`${compiled.doc.id}|${match.nodeId}`, { ...match, compiled })
     }
     let consumed = false
+    let stopped = false
+    const closed = new Set<string>()
     const triggers = []
     for (const slot of slots.filter((item) => item.source === 'message')) {
       const match = matches.get(`${slot.flowId}|${slot.nodeId}`)
@@ -880,7 +899,7 @@ export class FlowService extends Service {
         triggers.push({ ...slot, state: 'no-match' as const })
         continue
       }
-      if (consumed) {
+      if (stopped || closed.has(slot.flowId)) {
         triggers.push({ ...slot, state: 'blocked' as const })
         continue
       }
@@ -893,10 +912,12 @@ export class FlowService extends Service {
         matched: match,
         waitForMessage: async () => undefined,
       })
-      const keeps = !passesOn(match.compiled.nodes.get(match.nodeId)!)
+      const intercept = interceptOf(match.compiled.nodes.get(match.nodeId)!)
       const labels = Object.fromEntries(match.compiled.doc.nodes.flatMap((node) => (node.label ? [[node.id, node.label]] : [])))
-      triggers.push({ ...slot, state: 'ran' as const, keeps, trace: result.trace, labels })
-      if (keeps) consumed = true
+      triggers.push({ ...slot, state: 'ran' as const, keeps: intercept !== 'none', trace: result.trace, labels })
+      if (intercept === 'flow') closed.add(slot.flowId)
+      if (intercept === 'flows' || intercept === 'global') stopped = true
+      if (intercept === 'global') consumed = true
     }
 
     // After the flows: built-in commands and plugins, in the bot's middleware order.

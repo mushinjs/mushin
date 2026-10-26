@@ -9,7 +9,7 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import {
-  type DropdownOption, NAlert, NButton, NDropdown, NEmpty, NForm, NFormItem, NIcon, NInput, NInputNumber, NSelect, NSwitch, NTabPane, NTabs, NTag, useMessage,
+  type DropdownOption, NAlert, NButton, NDropdown, NEmpty, NForm, NFormItem, NIcon, NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSwitch, NTabPane, NTabs, NTag, useMessage,
 } from 'naive-ui'
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, provide, type Ref, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -28,7 +28,7 @@ import SchemaForm from '../components/SchemaForm.vue'
 import { categoryColors, execOutHandle, parseHandle, portColors, portsOf, refOf, refsIn, schemaDefaults, supports, sysPorts } from '../flow'
 import { useDataStore } from '../stores/data'
 import { useTheme } from '../theme'
-import type { FlowDoc, FlowGroupDoc, FlowIssue, NodeTypeInfo, RunStep, RunTrace, TriggerSlot } from '../types'
+import type { FlowDoc, FlowGroupDoc, FlowIssue, Intercept, NodeTypeInfo, RunStep, RunTrace, TriggerSlot } from '../types'
 import { clone, localize } from '../utils'
 
 const { t, locale } = useI18n()
@@ -122,7 +122,7 @@ function toDoc() {
       ...(node.data!.inputs && Object.keys(node.data!.inputs).length ? { inputs: node.data!.inputs } : {}),
       ...(node.data!.skip ? { skip: true } : {}),
       ...(node.data!.priority ? { priority: node.data!.priority } : {}),
-      ...(node.data!.passOn === false ? { passOn: false } : {}),
+      ...(node.data!.intercept ? { intercept: node.data!.intercept } : {}),
     })),
     edges: edges.value.filter((edge) => !isVirtual(edge)).map((edge) => ({
       id: edge.id,
@@ -191,7 +191,7 @@ function apply(flow: FlowDoc, fit: boolean) {
       inputs: { ...node.inputs },
       ...(node.skip ? { skip: true } : {}),
       ...(node.priority ? { priority: node.priority } : {}),
-      ...(node.passOn === false ? { passOn: false } : {}),
+      ...(node.intercept ? { intercept: node.intercept } : {}),
     },
   }))
   edges.value = flow.edges.map((edge) => ({ ...edge, ...edgeLook(edge) }))
@@ -427,7 +427,6 @@ function convertToCommand() {
       ...schemaDefaults(command.configSchema),
       name: unprefixed(first),
       aliases: [...new Set(keywordsOf(config).map(unprefixed))].filter((item) => item && item !== unprefixed(first)),
-      passThrough: !!config.passThrough,
     },
   })
   message.success(t('flows.convertedToCommand', { name: `/${unprefixed(first)}` }))
@@ -455,7 +454,7 @@ function convertToKeyword() {
   const aliases: string[] = Array.isArray(config.aliases) ? config.aliases : []
   updateSelected({
     typeId: KEYWORD,
-    config: { ...schemaDefaults(keyword.configSchema), keywords: [commandText.value.trim(), ...aliases].filter(Boolean), mode: 'startsWith', passThrough: !!config.passThrough },
+    config: { ...schemaDefaults(keyword.configSchema), keywords: [commandText.value.trim(), ...aliases].filter(Boolean), mode: 'startsWith' },
   })
   message.success(t('flows.convertedToKeyword'))
 }
@@ -686,7 +685,8 @@ const pluginsAfter = ref<string[]>([])
 const ordering = ref(false)
 const selectedIsTrigger = computed(() => !!selected.value && types.value.get(selected.value.data!.typeId)?.kind === 'trigger')
 /** Event and schedule triggers have no "let other plugins answer too"; they pass on unless told not to. */
-const hasPassThrough = computed(() => !!selectedInfo.value?.configSchema?.properties?.passThrough)
+const intercepts: Intercept[] = ['none', 'flow', 'flows', 'global']
+const interceptLabel = (value: Intercept) => t(`flows.intercept.${value}`)
 
 watch(bots, (list) => {
   if (!orderBot.value || !list.includes(orderBot.value)) orderBot.value = list[0]
@@ -1847,8 +1847,10 @@ watch(narrow, (value) => {
                           <NInputNumber :value="selected.data!.priority ?? 0" :precision="0" @update:value="(value: number | null) => updateSelected({ priority: value || undefined })" />
                         </div>
                       </NFormItem>
-                      <NFormItem v-if="!hasPassThrough" :label="t('flows.passOn')" :feedback="t('flows.passOnHint')" label-placement="left">
-                        <NSwitch :value="selected.data!.passOn !== false" @update:value="(value: boolean) => updateSelected({ passOn: value ? undefined : false })" />
+                      <NFormItem :label="t('flows.interceptTitle')" :feedback="t(`flows.interceptHint.${selected.data!.intercept ?? 'none'}`)" data-agent-target="flows.intercept">
+                        <NRadioGroup :value="selected.data!.intercept ?? 'none'" size="small" @update:value="(value: Intercept) => updateSelected({ intercept: value === 'none' ? undefined : value })">
+                          <NRadioButton v-for="value in intercepts" :key="value" :value="value">{{ interceptLabel(value) }}</NRadioButton>
+                        </NRadioGroup>
                       </NFormItem>
                     </NForm>
                     <template v-if="bots.length">
@@ -1872,7 +1874,7 @@ watch(narrow, (value) => {
                           <span class="order-grip" :title="t('flows.dragToOrder')">⋮⋮</span>
                           <button type="button" class="order-name" :title="t('flows.focusTrigger')" @click="openTrigger(slot)">
                             <span><span class="order-number">{{ String(slot.number).padStart(2, '0') }}</span>{{ slot.name }}</span>
-                            <span class="muted small">{{ slot.flowName }} · {{ t('flows.priorityShort', { n: slot.priority }) }}{{ slot.passesOn ? ` · ${t('flows.passesOnShort')}` : '' }}</span>
+                            <span class="muted small">{{ slot.flowName }} · {{ t('flows.priorityShort', { n: slot.priority }) }}{{ slot.intercept !== 'none' ? ` · ${t('flows.interceptShort', { scope: interceptLabel(slot.intercept) })}` : '' }}</span>
                             <span v-if="slot.certain" class="order-tag">{{ t('flows.blockedTag') }}</span>
                             <span v-else-if="slot.blockedBy" class="order-tag maybe">{{ t('flows.maybeBlocked') }}</span>
                           </button>

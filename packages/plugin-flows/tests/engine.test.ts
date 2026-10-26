@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { seg } from '@mushin/core'
-import { builtinNodes, compile, type FlowDocument, type FlowEdge, type FlowNode, type FlowSession, layout, migrateDataEdges, type NodeType, runFlow, triggerOrder } from '../src'
+import { builtinNodes, compile, type FlowDocument, type FlowEdge, type FlowNode, type FlowSession, layout, migrateDataEdges, migrateIntercept, type NodeType, runFlow, triggerOrder } from '../src'
 
 const types = new Map<string, NodeType>(builtinNodes.map((type) => [type.type, type]))
 const logger = { info() {}, warn() {}, debug() {}, error() {} } as any
@@ -114,7 +114,7 @@ describe('runFlow', () => {
     ])
     const result = await run(doc, 'echo hello there')
     expect(result.matched).toBe(true)
-    expect(result.consumed).toBe(true)
+    expect(result.consumed).toBe(false)
     expect(result.sent).toEqual([{ text: 'user42 said: hello there', source: { kind: 'flow', flow: 'Test flow', node: 'Answer' } }])
     expect(result.trace.steps.map((step) => step.nodeId)).toEqual(['n1', 'n2', 'n3'])
     expect(result.trace.edges).toEqual(['e1', 'e2'])
@@ -236,10 +236,26 @@ describe('runFlow', () => {
     expect(result.trace.steps.find((step) => step.nodeId === 'n2')?.exec).toBe('question')
   })
 
-  it('lets the message through when the trigger allows it', async () => {
-    const doc = flow([{ type: 'trigger.message', config: { passThrough: true } }], [])
-    const result = await run(doc, 'hi')
-    expect(result).toMatchObject({ matched: true, consumed: false })
+  it('lets the message through unless the trigger intercepts it globally', async () => {
+    expect(await run(flow([{ type: 'trigger.message' }], []), 'hi')).toMatchObject({ matched: true, consumed: false })
+    expect(await run(flow([{ type: 'trigger.message', intercept: 'flows' }], []), 'hi')).toMatchObject({ matched: true, consumed: false })
+    expect(await run(flow([{ type: 'trigger.message', intercept: 'global' }], []), 'hi')).toMatchObject({ matched: true, consumed: true })
+  })
+
+  it('moves the old "let other plugins answer too" setting to intercept', () => {
+    const nodes = [
+      { id: 'a', type: 'trigger.keyword', position: { x: 0, y: 0 }, config: { keywords: ['x'], passThrough: false } },
+      { id: 'b', type: 'trigger.keyword', position: { x: 0, y: 0 }, config: { keywords: ['y'], passThrough: true } },
+      { id: 'c', type: 'trigger.command', position: { x: 0, y: 0 }, config: { name: 'z' } },
+      { id: 'd', type: 'onebot.memberJoin', position: { x: 0, y: 0 }, config: {}, passOn: false },
+      { id: 'e', type: 'action.reply', position: { x: 0, y: 0 }, config: {} },
+    ] as FlowNode[]
+    const legacy = migrateIntercept(nodes, true).nodes
+    expect(legacy.map((node) => [node.id, node.intercept, 'passThrough' in node.config])).toEqual([
+      ['a', 'global', false], ['b', undefined, false], ['c', 'global', false], ['d', 'flows', false], ['e', undefined, false],
+    ])
+    // Flows saved in the current format keep the new default for triggers without the old setting.
+    expect(migrateIntercept(nodes, false).nodes.find((node) => node.id === 'c')?.intercept).toBeUndefined()
   })
 
   it('stops runaway loops', async () => {
@@ -386,7 +402,7 @@ describe('command trigger', () => {
 
   it('replies with the usage when the arguments do not fit, and does not run', async () => {
     const result = await run(scoreFlow(), '/score abc')
-    expect(result).toMatchObject({ matched: true, consumed: true })
+    expect(result).toMatchObject({ matched: true, consumed: false })
     expect(replyText(result.sent)).toEqual(['用法：/score <分数:number> [备注]'])
     expect(result.trace.steps.map((step) => step.nodeId)).toEqual(['score'])
   })
@@ -433,16 +449,18 @@ describe('trigger order', () => {
   ], [['a', 'exec:next', 'sayA', 'exec'], ['b', 'exec:next', 'sayB', 'exec']])
 
   it('runs the highest priority first and stops at a trigger that keeps the message', async () => {
-    expect(replyText((await run(two({}, {}), 'hi')).sent)).toEqual(['A'])
-    expect(replyText((await run(two({}, { priority: 5 }), 'hi')).sent)).toEqual(['B'])
-    expect(replyText((await run(two({ config: { keywords: ['hi'], mode: 'exact', passThrough: true } }, {}), 'hi')).sent)).toEqual(['A', 'B'])
+    expect(replyText((await run(two({ intercept: 'global' }, {}), 'hi')).sent)).toEqual(['A'])
+    expect(replyText((await run(two({ intercept: 'global' }, { priority: 5, intercept: 'global' }), 'hi')).sent)).toEqual(['B'])
+    expect(replyText((await run(two({}, {}), 'hi')).sent)).toEqual(['A', 'B'])
+    expect(replyText((await run(two({ intercept: 'flow' }, {}), 'hi')).sent)).toEqual(['A'])
   })
 
   it('finds triggers an earlier one always or sometimes keeps from running', () => {
-    const order = triggerOrder([compile(two({}, {}), types)])
+    expect(triggerOrder([compile(two({}, {}), types)]).every((slot) => !slot.blockedBy)).toBe(true)
+    const order = triggerOrder([compile(two({ intercept: 'flow' }, {}), types)])
     expect(order.map((slot) => [slot.nodeId, slot.certain, slot.blockedBy?.nodeId])).toEqual([['a', undefined, undefined], ['b', true, 'a']])
     const loose = flow([
-      { id: 'a', type: 'trigger.keyword', config: { keywords: ['hi'], mode: 'contains' } },
+      { id: 'a', type: 'trigger.keyword', config: { keywords: ['hi'], mode: 'contains' }, intercept: 'flows' },
       { id: 'b', type: 'trigger.keyword', config: { keywords: ['hi there'], mode: 'exact' } },
       { id: 'c', type: 'trigger.keyword', config: { keywords: ['bye'], mode: 'exact' } },
     ], [])

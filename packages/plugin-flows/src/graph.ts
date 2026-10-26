@@ -1,7 +1,7 @@
 import { z } from '@mushin/core'
 import { parseSignature } from '@mushin/plugin-bots'
 import { refsIn, SCOPES } from './refs'
-import type { FlowDocument, FlowIssue, FlowNode, NodeType, PortDef, PortType } from './types'
+import type { FlowDocument, FlowIssue, FlowNode, Intercept, NodeType, PortDef, PortType } from './types'
 
 export const EXEC_IN = 'exec'
 export const execOutHandle = (name: string) => `exec:${name}`
@@ -78,14 +78,38 @@ function stringsOf(value: unknown): string[] {
 
 export const triggerPriority = (entry: Pick<CompiledNode, 'node'>) => entry.node.priority ?? 0
 
+/** What a trigger keeps from also handling the message once it runs; see `FlowNode.intercept`. */
+export const interceptOf = (entry: Pick<CompiledNode, 'node'>): Intercept => entry.node.intercept ?? 'none'
+
+/** The current storage format: triggers say what they intercept. */
+export const FLOW_FORMAT = 2
+
+/** Message triggers that used to keep the message from everything after them unless told otherwise. */
+const MESSAGE_TRIGGERS = new Set(['trigger.message', 'trigger.keyword', 'trigger.command', 'trigger.regex'])
+
 /**
- * Whether later triggers (and the bot's plugins) still see the message after this trigger runs.
- * Message triggers say so with their "let other plugins answer too" setting; triggers without
- * that setting (events, schedules) pass on unless the node turns it off.
+ * Moves the old settings to `intercept`: a message trigger's "let other plugins answer too" (off,
+ * the old default, meant global) and an event trigger's `passOn: false` (later triggers stopped).
+ * `legacy` flows were saved before intercept existed, so their message triggers without the
+ * setting also had the old default.
  */
-export function passesOn(entry: Pick<CompiledNode, 'node' | 'config'>) {
-  if (entry.config && 'passThrough' in entry.config) return !!entry.config.passThrough
-  return entry.node.passOn !== false
+export function migrateIntercept(nodes: FlowNode[], legacy: boolean) {
+  let changed = false
+  const next = nodes.map((node) => {
+    const raw = node as FlowNode & { passOn?: boolean }
+    const hasPassThrough = !!node.config && 'passThrough' in node.config
+    if (!hasPassThrough && raw.passOn === undefined && !(legacy && MESSAGE_TRIGGERS.has(node.type) && !node.intercept)) return node
+    changed = true
+    const { passOn, ...rest } = raw
+    const { passThrough, ...config } = node.config ?? {}
+    let intercept = node.intercept
+    if (hasPassThrough) intercept = passThrough ? undefined : 'global'
+    else if (legacy && MESSAGE_TRIGGERS.has(node.type) && !intercept) intercept = 'global'
+    if (passOn === false && !intercept) intercept = 'flows'
+    return { ...rest, config, ...(intercept ? { intercept } : {}) } as FlowNode
+  })
+  if (changed) for (const node of next) if (!node.intercept) delete node.intercept
+  return { nodes: next, changed }
 }
 
 /** Resolves node types, checks every edge and config, and builds the lookup tables the engine runs on. */

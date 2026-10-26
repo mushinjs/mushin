@@ -194,11 +194,14 @@ export interface FlowNode {
   /** Triggers: higher runs first when one message (or event) starts several triggers on a bot. Default 0. */
   priority?: number
   /**
-   * Triggers without a "let other plugins answer too" setting (events, schedules): false stops
-   * later triggers once this one runs. Default true.
+   * Triggers: what this trigger keeps from also handling the message (or event) after it runs.
+   * `flow`: later triggers of this flow. `flows`: later triggers of every flow on the bot.
+   * `global`: those, the built-in commands and the bot's plugins (such as LLM chat). Missing: none.
    */
-  passOn?: boolean
+  intercept?: Exclude<Intercept, 'none'>
 }
+
+export type Intercept = 'none' | 'flow' | 'flows' | 'global'
 
 /** An edge means "run next": from an exec output `exec:<name>` to a node's exec input `exec`. */
 export interface FlowEdge {
@@ -232,6 +235,8 @@ export interface FlowDocument {
   nodes: FlowNode[]
   edges: FlowEdge[]
   groups?: FlowGroup[]
+  /** Storage format; flows saved before interception scopes (format 2) are migrated on load. */
+  format?: number
   createdAt: number
   updatedAt: number
 }

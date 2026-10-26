@@ -50,7 +50,7 @@ export const demoFlows: Record<DemoFlowKey, DemoFlow> = {
         id: 'morning',
         type: 'trigger.keyword',
         label: '早上好',
-        config: { keywords: ['早上好', '早安', 'good morning'], mode: 'contains', passThrough: true },
+        config: { keywords: ['早上好', '早安', 'good morning'], mode: 'contains' },
       },
       reply('greet', '问早', '{{sys.user}}，早上好！☀️ 今天也要元气满满。', true),
     ],

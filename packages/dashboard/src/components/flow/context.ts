@@ -1,5 +1,5 @@
 import { type ComputedRef, inject, type InjectionKey, type Ref } from 'vue'
-import type { FlowGroupDoc, FlowIssue, NodeTypeInfo } from '../../types'
+import type { FlowGroupDoc, FlowIssue, Intercept, NodeTypeInfo } from '../../types'
 
 /** `skipped`: the node is set to be skipped and the run passed through it. */
 export type RunStatus = 'running' | 'ok' | 'error' | 'skipped'
@@ -51,8 +51,8 @@ export interface CanvasNodeData {
   skip?: boolean
   /** Triggers: run order among the triggers one message starts on a bot. */
   priority?: number
-  /** Event and schedule triggers: false stops later triggers. */
-  passOn?: boolean
+  /** Triggers: what may no longer handle the same message once this one runs. */
+  intercept?: Exclude<Intercept, 'none'>
   /** Set on the box that stands for a collapsed group. */
   groupId?: string
 }

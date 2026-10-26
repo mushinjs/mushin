@@ -27,7 +27,7 @@ async function say(text: string) {
 const pingPong = {
   name: 'Ping pong',
   nodes: [
-    { id: 'trigger', type: 'trigger.keyword', label: 'ping', config: { keywords: ['ping'], mode: 'exact' } },
+    { id: 'trigger', type: 'trigger.keyword', label: 'ping', config: { keywords: ['ping'], mode: 'exact' }, intercept: 'global' },
     { id: 'answer', type: 'action.reply', label: 'Say pong', config: { text: 'pong, {user}' } },
   ],
   edges: [{ source: 'trigger', sourceHandle: 'exec:next', target: 'answer', targetHandle: 'exec' }],
@@ -147,7 +147,7 @@ describe('flows', () => {
       name: 'Ask',
       bots: [botId],
       nodes: [
-        { id: 't', type: 'trigger.keyword', config: { keywords: ['ask'], mode: 'startsWith' } },
+        { id: 't', type: 'trigger.keyword', config: { keywords: ['ask'], mode: 'startsWith' }, intercept: 'global' },
         { id: 'ai', type: 'ai.chat', label: 'Think', inputs: { prompt: '{{t.rest}}' } },
         { id: 'r', type: 'action.reply', label: 'Answer', inputs: { text: '{{ai.reply}}' } },
       ],
@@ -171,7 +171,7 @@ describe('commands', () => {
     name,
     bots: [botId],
     nodes: [
-      { id: 'cmd', type: 'trigger.command', config: { name: 'checkin', aliases: ['签到'], description: 'Daily check-in', ...extra } },
+      { id: 'cmd', type: 'trigger.command', config: { name: 'checkin', aliases: ['签到'], description: 'Daily check-in', ...extra }, intercept: 'global' },
       { id: 'say', type: 'action.reply', config: { text: 'checked in {{cmd.rest}}' } },
     ],
     edges: [{ source: 'cmd', sourceHandle: 'exec:next', target: 'say', targetHandle: 'exec' }],
