@@ -168,6 +168,7 @@ export interface CommandSettings {
   help?: boolean
   helpTitle?: string
   admins?: string[]
+  helpByRole?: boolean
 }
 
 export interface CommandSource {
@@ -183,7 +184,8 @@ export interface CommandEntry {
   description?: string
   usage?: string
   hidden?: boolean
-  permission?: 'all' | 'admin'
+  permission?: 'all' | 'admin' | 'master'
+  role?: 'user' | 'admin' | 'master'
   botId: string
   source: CommandSource
 }

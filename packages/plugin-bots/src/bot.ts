@@ -3,10 +3,13 @@ import {
   Service, toSegments,
 } from '@mushin/core'
 import {
-  type CommandDef, type CommandEntry, commandMatches, DEFAULT_PREFIXES, parseArgs, type ParsedCommand, parseSignature, splitCommand,
+  type CommandDef, type CommandEntry, commandMatches, DEFAULT_PREFIXES, parseArgs, type ParsedCommand, parseSignature, requiredRole, splitCommand,
   usageReply,
 } from './commands'
-import type { BotEvent, BotRecord, BotStatus, IncomingMessage, SourcedContent, Transport } from './types'
+import {
+  type BotEvent, type BotRecord, type BotRole, type BotStatus, type GroupRole, type GroupRoleResolver, type IncomingMessage, roleAtLeast,
+  type SourcedContent, type Transport,
+} from './types'
 
 export type Sendable = Content | SourcedContent
 
@@ -32,7 +35,11 @@ export interface BotHooks {
   /** A message ran a registered command. */
   commandCalled?(bot: Bot, entry: CommandEntry, session: Session): void
   /** The answer to a built-in command such as `/help`. */
-  builtinCommand?(bot: Bot, entry: CommandEntry): string | undefined
+  builtinCommand?(bot: Bot, entry: CommandEntry, session: Session): string | undefined
+  /** The sender's role on this bot; nothing when the permissions plugin is not running. */
+  roleOf?(bot: Bot, userId: string): BotRole | undefined
+  /** A command that an app plugin answers on every bot, such as `/persona`. */
+  appCommand?(bot: Bot, entry: CommandEntry): ((session: Session) => Promise<unknown> | unknown) | undefined
 }
 
 export type CommandHandler = (session: Session, args: Record<string, string | number>, command: ParsedCommand) => Promise<unknown> | unknown
@@ -82,9 +89,19 @@ export class Session {
     return this.parsed.value
   }
 
-  /** True when the sender is one of the bot's admins, who may run admin-only commands. */
+  /** The sender's role on this bot (master, admin or user); nothing when the permissions plugin is off. */
+  role(): BotRole | undefined {
+    return this.bot.roleOf(this.user.id)
+  }
+
+  /** The sender's role in this group, when the adapter can tell; nothing in private chats. */
+  groupRole(): Promise<GroupRole | undefined> {
+    return this.bot.groupRoleOf({ channel: this.channel, user: this.user })
+  }
+
+  /** True when the sender is an admin or master of the bot, who may run admin-only commands. */
   get isAdmin() {
-    return !!this.bot.record.commands?.admins?.includes(this.user.id)
+    return roleAtLeast(this.role(), 'admin')
   }
 
   /** Plain text with mentions of this bot removed. */
@@ -130,6 +147,7 @@ export class Bot extends Service {
   private eventHandlers = new Set<(event: BotEvent) => void>()
   private ownCommands = new Set<{ def: CommandDef; plugin: string }>()
   private commandProviders = new Set<() => CommandEntry[]>()
+  private roleResolver?: GroupRoleResolver
 
   constructor(ctx: Context, config: { record: BotRecord; hooks: BotHooks }) {
     super(ctx, 'bot')
@@ -173,6 +191,44 @@ export class Bot extends Service {
         this.setStatus('offline')
       }
     }, 'bot.useTransport()')
+  }
+
+  /** Called by adapters that can tell a sender's group role (owner, admin, member). */
+  useRoleResolver(resolver: GroupRoleResolver) {
+    return this.ctx.effect(() => {
+      this.roleResolver = resolver
+      return () => {
+        if (this.roleResolver === resolver) this.roleResolver = undefined
+      }
+    }, 'bot.useRoleResolver()')
+  }
+
+  /** The user's role on this bot, from the permissions plugin; nothing when it is not running. */
+  roleOf(userId: string): BotRole | undefined {
+    return this.hooks.roleOf?.(this, userId)
+  }
+
+  /** A sender's group role: from the message when the platform sent it, else from the adapter. */
+  async groupRoleOf(target: { channel: ChannelInfo; user: { id: string; role?: GroupRole } }): Promise<GroupRole | undefined> {
+    if (target.channel.type !== 'group' || !target.user.id) return
+    if (target.user.role) return target.user.role
+    try {
+      return await this.roleResolver?.({ channel: target.channel, user: target.user })
+    } catch (error) {
+      this.ctx.logger('bot').debug('group role of %s: %s', target.user.id, error)
+    }
+  }
+
+  /** Whether a command's role requirement lets this session run it; logs why not. */
+  allows(def: Pick<CommandDef, 'name' | 'permission' | 'role'>, session: Session) {
+    const required = requiredRole(def)
+    if (!required) return true
+    const role = session.role()
+    if (role === undefined) {
+      this.ctx.logger('bot').debug('/%s needs %s, but the permissions plugin is not running; ignored', def.name, required)
+      return false
+    }
+    return roleAtLeast(role, required)
   }
 
   /** Registers middleware for incoming messages; runs in registration order. */
@@ -244,7 +300,7 @@ export class Bot extends Service {
     return this.middleware(async (session, next) => {
       const parsed = session.command
       if (!parsed || !commandMatches(def, parsed.name)) return next()
-      if (def.permission === 'admin' && !session.isAdmin) return
+      if (!this.allows(def, session)) return
       const values = parseArgs(args, parsed.rest)
       if (!values.ok) {
         await session.reply(usageReply(def, parsed.prefix))
@@ -298,13 +354,19 @@ export class Bot extends Service {
       } catch {}
     }
     const chain = [...this.middlewares]
-    if (entry?.source.kind === 'builtin') {
+    const appHandler = entry?.source.kind === 'plugin' ? this.hooks.appCommand?.(this, entry) : undefined
+    if (entry?.source.kind === 'builtin' || appHandler) {
       // After flows, so a flow that answers the same text (say a keyword trigger on /help) still wins.
       const builtin: MiddlewareEntry = {
-        plugin: BUILTIN_PLUGIN,
+        plugin: appHandler ? entry!.source.id : BUILTIN_PLUGIN,
         priority: BUILTIN_PRIORITY,
-        callback: async (view) => {
-          const answer = this.hooks.builtinCommand?.(this, entry)
+        callback: async (view, next) => {
+          if (!this.allows(entry!, view)) return next()
+          if (appHandler) {
+            await appHandler(view)
+            return
+          }
+          const answer = this.hooks.builtinCommand?.(this, entry!, view)
           if (answer !== undefined) await view.reply(answer)
         },
       }

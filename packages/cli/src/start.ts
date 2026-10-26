@@ -15,6 +15,7 @@ export function defaultConfig(): InstanceConfig {
       { id: 'provider-openai', package: '@mushin/plugin-provider-openai', config: {} },
       { id: 'provider-anthropic', package: '@mushin/plugin-provider-anthropic', config: {} },
       { id: 'bots', package: '@mushin/plugin-bots', config: {} },
+      { id: 'permissions', package: '@mushin/plugin-permissions', config: {} },
       { id: 'adapter-onebot', package: '@mushin/plugin-adapter-onebot', config: {} },
       { id: 'flows', package: '@mushin/plugin-flows', config: {} },
       { id: 'agent', package: '@mushin/plugin-agent', config: {} },

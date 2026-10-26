@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { WebSocket } from 'ws'
 import { type Context, field, z } from '@mushin/core'
-import type {} from '@mushin/plugin-bots'
+import type { GroupRole } from '@mushin/plugin-bots'
 import type {} from '@cordisjs/plugin-server'
 import type {} from '@mushin/plugin-flows'
 import { onebotNodes } from './nodes'
@@ -336,7 +336,28 @@ const Connection = {
   Config: AdapterConfig,
   apply(ctx: Context, config: AdapterConfig) {
     ctx.plugin(config.mode === 'reverse' ? Reverse : config.mode === 'http' ? Http : Forward, config)
+    ctx.bot.useRoleResolver(groupRoleResolver(ctx))
   },
+}
+
+const ROLE_CACHE_MS = 5 * 60_000
+
+/**
+ * Group roles for permission checks. Messages carry the sender's role; events do not, so those ask
+ * NapCat (`get_group_member_info`), and the answer is kept a few minutes per group and user.
+ */
+function groupRoleResolver(ctx: Context) {
+  const cache = new Map<string, { role: GroupRole | undefined; at: number }>()
+  return async ({ channel, user }: { channel: { id: string }; user: { id: string } }) => {
+    const key = `${channel.id}|${user.id}`
+    const hit = cache.get(key)
+    if (hit && Date.now() - hit.at < ROLE_CACHE_MS) return hit.role
+    const data = await ctx.bot.call('get_group_member_info', { group_id: Number(channel.id) || channel.id, user_id: Number(user.id) || user.id })
+    const role = data?.role === 'owner' || data?.role === 'admin' || data?.role === 'member' ? data.role as GroupRole : undefined
+    cache.set(key, { role, at: Date.now() })
+    if (cache.size > 2000) cache.delete(cache.keys().next().value!)
+    return role
+  }
 }
 
 /** How a bot connects, for the bots list. */
@@ -353,6 +374,7 @@ export function apply(ctx: Context) {
     config: AdapterConfig,
     secrets: ['token', 'secret'],
     segments: ONEBOT_SEGMENTS,
+    groupRoles: true,
     plugin: Connection,
     describe: (config, botId) => describeConnection(AdapterConfig.parse(config), botId),
   })

@@ -12,7 +12,7 @@ const { t } = useI18n()
 const router = useRouter()
 const message = useMessage()
 
-type Role = 'member' | 'admin' | 'owner' | 'botAdmin' | 'private'
+type Role = 'member' | 'admin' | 'owner' | 'botAdmin' | 'master' | 'private'
 interface RouteTrigger extends TriggerSlot {
   state: 'no-match' | 'blocked' | 'ran'
   keeps?: boolean
@@ -67,7 +67,7 @@ async function trace() {
   }
 }
 
-const roleOptions = computed(() => (['member', 'admin', 'owner', 'botAdmin', 'private'] as Role[]).map((value) => ({ label: t(`botOverview.role.${value}`), value })))
+const roleOptions = computed(() => (['member', 'admin', 'owner', 'botAdmin', 'master', 'private'] as Role[]).map((value) => ({ label: t(`botOverview.role.${value}`), value })))
 const messageSlots = computed(() => (result.value?.triggers ?? slots.value.filter((slot) => slot.source === 'message')) as RouteTrigger[])
 const otherSlots = computed(() => slots.value.filter((slot) => slot.source !== 'message'))
 const pluginName = (name: string) => name.replace(/^@mushin\/bot-plugin-/, '')

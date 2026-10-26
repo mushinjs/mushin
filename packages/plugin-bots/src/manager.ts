@@ -4,9 +4,9 @@ import {
   validatePluginConfig, z,
 } from '@mushin/core'
 import type {} from '@mushin/plugin-storage'
-import { Bot, type BotHooks } from './bot'
-import { type CommandEntry, commandConflicts, type CommandSettings, commandMatches, helpText } from './commands'
-import type { AdapterType, BotPluginEntry, BotRecord, BotStatus } from './types'
+import { Bot, type BotHooks, type Session } from './bot'
+import { type CommandDef, type CommandEntry, commandConflicts, type CommandSettings, commandMatches, helpText, requiredRole } from './commands'
+import { type AdapterType, type BotPluginEntry, type BotRecord, type BotStatus, type PermissionProvider, roleAtLeast } from './types'
 
 declare module '@mushin/core' {
   interface Context {
@@ -47,6 +47,14 @@ export interface CommandCall {
 /** Lists commands a plugin provides on a bot, e.g. the command nodes of the flows attached to it. */
 export type CommandProvider = (botId: string) => CommandEntry[]
 
+/** A command an app plugin answers on every bot, or on the bots `bots` picks. */
+interface AppCommand {
+  def: CommandDef
+  plugin: string
+  handler: (session: Session) => Promise<unknown> | unknown
+  bots?: (botId: string) => boolean
+}
+
 export interface BotStatusInfo {
   id: string
   status: BotStatus
@@ -82,7 +90,8 @@ const commandSettingsInput = z.object({
   prefixes: z.array(z.string().min(1)).optional().describe('Command prefixes; default ["/"]'),
   help: z.boolean().optional().describe('Answer /help with the list of commands; on unless false'),
   helpTitle: z.string().optional().describe('First line of the /help menu'),
-  admins: z.array(z.string()).optional().describe('User ids allowed to run admin-only commands'),
+  admins: z.array(z.string()).optional().describe('Deprecated: admins now live in the permissions plugin (permissions.update)'),
+  helpByRole: z.boolean().optional().describe('/help lists only the commands the asker may run'),
 })
 
 /** Answers `/help` when nothing else on the bot registers a command called help. */
@@ -109,6 +118,8 @@ export class BotManager extends Service {
   /** Sequence numbers of recent bot log lines; still recognized after the bot that wrote them stops. */
   private botLogSns = new Set<number>()
   private commandProviders = new Set<CommandProvider>()
+  private appCommands = new Set<AppCommand>()
+  private permissionProvider?: PermissionProvider
 
   constructor(ctx: Context) {
     super(ctx, 'bots')
@@ -174,6 +185,7 @@ export class BotManager extends Service {
       configSchema: toJsonSchema(adapter.config),
       secrets: adapter.secrets ?? [],
       segments: adapter.segments,
+      groupRoles: !!adapter.groupRoles,
     }))
   }
 
@@ -349,9 +361,20 @@ export class BotManager extends Service {
       commandCalled: (bot, entry, session) => {
         this.home.emit('bots/command', { botId: bot.id, name: entry.name, source: entry.source, userId: session.user.id, channel: session.channel, at: Date.now() })
       },
-      builtinCommand: (bot, entry) => {
-        if (entry.name === HELP_COMMAND.name) return helpText(this.commands(bot.id), bot.record.commands)
+      builtinCommand: (bot, entry, session) => {
+        if (entry.name !== HELP_COMMAND.name) return
+        let entries = this.commands(bot.id)
+        if (bot.record.commands?.helpByRole) {
+          const role = session.role()
+          entries = entries.filter((item) => {
+            const required = requiredRole(item)
+            return !required || roleAtLeast(role, required)
+          })
+        }
+        return helpText(entries, bot.record.commands)
       },
+      roleOf: (bot, userId) => this.permissionProvider?.roleOf(bot.id, userId),
+      appCommand: (bot, entry) => this.appCommandFor(bot.id, entry)?.handler,
     }
     this.runtimes.set(id, runtime)
     runtime.fiber = this.home.isolate('bot').plugin({
@@ -513,6 +536,40 @@ export class BotManager extends Service {
     }, 'bots.defineCommands()')
   }
 
+  /**
+   * Answers a command on every bot (or those `bots` picks) from an app plugin, such as `/persona`.
+   * It answers after flows, like `/help`, and shows in each bot's command list.
+   */
+  defineCommand(def: CommandDef, handler: AppCommand['handler'], options: { bots?: (botId: string) => boolean } = {}) {
+    const ctx = this.ctx
+    const command: AppCommand = { def, plugin: ctx.fiber.name, handler, bots: options.bots }
+    return ctx.effect(() => {
+      this.appCommands.add(command)
+      return () => this.appCommands.delete(command)
+    }, `bots.defineCommand(${def.name})`)
+  }
+
+  /** The app plugin command behind a command entry, if an app plugin answers it. */
+  appCommandFor(botId: string, entry: CommandEntry) {
+    if (entry.source.kind !== 'plugin') return
+    return [...this.appCommands].find((item) => item.plugin === entry.source.id && commandMatches(item.def, entry.name) && (item.bots?.(botId) ?? true))
+  }
+
+  /** Lets the permissions plugin say who is master, admin or user on each bot. */
+  usePermissions(provider: PermissionProvider) {
+    return this.ctx.effect(() => {
+      this.permissionProvider = provider
+      return () => {
+        if (this.permissionProvider === provider) this.permissionProvider = undefined
+      }
+    }, 'bots.usePermissions()')
+  }
+
+  /** A user's role on a bot; nothing when the permissions plugin is not running. */
+  roleOf(botId: string, userId: string) {
+    return this.permissionProvider?.roleOf(botId, userId)
+  }
+
   /** Commands registered on one bot: from command providers such as flows, its plugins, and the built-in help. */
   commands(botId: string): CommandEntry[] {
     const record = this.records.find((item) => item.id === botId)
@@ -526,6 +583,10 @@ export class BotManager extends Service {
       }
     }
     entries.push(...(this.runtimes.get(botId)?.bot?.localCommands() ?? []))
+    for (const command of this.appCommands) {
+      if (command.bots && !command.bots(botId)) continue
+      entries.push({ ...command.def, botId, source: { kind: 'plugin', id: command.plugin, name: command.plugin } })
+    }
     if (record.commands?.help !== false && !entries.some((entry) => commandMatches(entry, HELP_COMMAND.name))) {
       entries.push({ ...HELP_COMMAND, botId, source: { kind: 'builtin', id: 'help', name: 'help' } })
     }
@@ -700,7 +761,7 @@ export class BotManager extends Service {
         name: z.string().min(1).optional(),
         adapter: adapterInput.optional(),
         provider: z.string().nullable().optional(),
-        commands: commandSettingsInput.optional().describe('Command prefixes, the built-in /help and admins; changing only these does not restart the bot'),
+        commands: commandSettingsInput.optional().describe('Command prefixes and the built-in /help; changing only these does not restart the bot'),
       }),
       handler: ({ id, ...patch }) => this.update(id, patch),
     })

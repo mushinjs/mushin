@@ -23,8 +23,10 @@ export interface CommandDef {
   usage?: string
   /** Left out of `/help`. */
   hidden?: boolean
-  /** `admin`: only the bot's admins may run it. */
-  permission?: 'all' | 'admin'
+  /** Who may run it: `admin` lets admins and masters, `master` only masters. Needs the permissions plugin. */
+  permission?: 'all' | 'admin' | 'master'
+  /** The same as `permission`, as a role: `{ role: 'admin' }`. */
+  role?: 'user' | 'admin' | 'master'
 }
 
 export interface CommandSource {
@@ -52,8 +54,10 @@ export interface CommandSettings {
   help?: boolean
   /** First line of the help menu. */
   helpTitle?: string
-  /** User ids allowed to run admin-only commands. */
+  /** User ids allowed to run admin-only commands. Moved to the permissions plugin, which reads it once. */
   admins?: string[]
+  /** `/help` lists only the commands the asker may run. */
+  helpByRole?: boolean
 }
 
 export const DEFAULT_PREFIXES = ['/']
@@ -132,6 +136,12 @@ export function commandUsage(def: Pick<CommandDef, 'name' | 'usage'>, prefix = D
 /** The reply when a command's arguments do not fit its signature. */
 export function usageReply(def: Pick<CommandDef, 'name' | 'usage'>, prefix?: string) {
   return `用法：${commandUsage(def, prefix)}`
+}
+
+/** The role a command needs, from `role` or `permission`; nothing when everyone may run it. */
+export function requiredRole(def: Pick<CommandDef, 'permission' | 'role'>): 'admin' | 'master' | undefined {
+  const role = def.role ?? (def.permission === 'all' ? undefined : def.permission)
+  return role === 'admin' || role === 'master' ? role : undefined
 }
 
 /** The help menu for a bot's commands: one line per command, hidden ones left out. */

@@ -1,5 +1,5 @@
 import type { ChannelInfo, Logger, LocalizedText, Segment, UserInfo, z } from '@mushin/core'
-import type { ParsedCommand, SourcedContent } from '@mushin/plugin-bots'
+import type { BotRole, GroupRole, ParsedCommand, SourcedContent } from '@mushin/plugin-bots'
 import type { TriggerReply } from './engine'
 
 type SourcedContentLike = SourcedContent
@@ -97,8 +97,12 @@ export interface FlowSession {
   messageId?: string
   /** The command the message runs, split by the bot's prefixes; command triggers fall back to `/`. */
   command?: ParsedCommand
-  /** The sender is one of the bot's admins. */
+  /** The sender is an admin or master of the bot. */
   isAdmin?: boolean
+  /** The sender's role on the bot (master, admin, user); nothing when the permissions plugin is off. */
+  role?(): BotRole | undefined
+  /** The sender's role in the group, when the adapter can tell; nothing in private chats. */
+  groupRole?(): Promise<GroupRole | undefined>
   send(content: string | SourcedContentLike): Promise<SentLike | undefined | void>
   reply(content: string | SourcedContentLike): Promise<SentLike | undefined | void>
 }

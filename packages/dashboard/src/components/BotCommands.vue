@@ -15,7 +15,7 @@ const message = useMessage()
 const prefixes = ref<string[]>([])
 const help = ref(true)
 const helpTitle = ref('')
-const admins = ref<string[]>([])
+const helpByRole = ref(false)
 const saving = ref(false)
 const list = ref<CommandList>({ commands: [], conflicts: [] })
 
@@ -24,7 +24,7 @@ watch(() => props.bot.id, () => {
   prefixes.value = settings.prefixes?.length ? [...settings.prefixes] : ['/']
   help.value = settings.help !== false
   helpTitle.value = settings.helpTitle ?? ''
-  admins.value = [...(settings.admins ?? [])]
+  helpByRole.value = !!settings.helpByRole
 }, { immediate: true })
 
 async function refresh() {
@@ -45,7 +45,7 @@ async function save() {
   try {
     await call('bots.update', {
       id: props.bot.id,
-      commands: { prefixes: prefixes.value.filter(Boolean), help: help.value, helpTitle: helpTitle.value, admins: admins.value.filter(Boolean) },
+      commands: { prefixes: prefixes.value.filter(Boolean), help: help.value, helpTitle: helpTitle.value, helpByRole: helpByRole.value },
     })
     message.success(t('common.saved'))
     await data.refreshBots()
@@ -87,7 +87,8 @@ const columns = computed(() => [
     title: '',
     key: 'tags',
     render: (row: CommandEntry) => h(NSpace, { size: 4 }, () => [
-      ...(row.permission === 'admin' ? [h(NTag, { size: 'small', type: 'warning', bordered: false }, () => t('bot.adminOnly'))] : []),
+      ...(row.permission === 'admin' || row.role === 'admin' ? [h(NTag, { size: 'small', type: 'warning', bordered: false }, () => t('bot.adminOnly'))] : []),
+      ...(row.permission === 'master' || row.role === 'master' ? [h(NTag, { size: 'small', type: 'error', bordered: false }, () => t('bot.masterOnly'))] : []),
       ...(row.hidden ? [h(NTag, { size: 'small', bordered: false }, () => t('bot.hiddenFromHelp'))] : []),
     ]),
   },
@@ -115,9 +116,13 @@ const columns = computed(() => [
         <NFormItem v-if="help" :label="t('bot.helpTitle')">
           <NInput v-model:value="helpTitle" :placeholder="t('bot.helpTitlePlaceholder')" />
         </NFormItem>
-        <NFormItem :label="t('bot.admins')" :feedback="t('bot.adminsHint')">
-          <NDynamicTags v-model:value="admins" />
+        <NFormItem v-if="help" :label="t('bot.helpByRole')" :feedback="t('bot.helpByRoleHint')" label-placement="left">
+          <NSwitch v-model:value="helpByRole" />
         </NFormItem>
+        <p class="muted small">
+          {{ t('bot.adminsMoved') }}
+          <RouterLink :to="`/bots/${bot.id}/permissions`">{{ t('bot.openPermissions') }}</RouterLink>
+        </p>
       </NForm>
       <NSpace justify="end">
         <NButton type="primary" :loading="saving" @click="save">{{ t('common.save') }}</NButton>
