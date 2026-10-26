@@ -56,7 +56,7 @@ Edges are control flow only: from an exec output `exec:<name>` to a node's exec 
 
 At run time `@mushin/bot-plugin-flows` registers middleware with priority 10, ahead of plugins such as LLM chat. It hands each message to `ctx.flows.dispatch()`, which runs every flow attached to the bot whose trigger matches. A matching trigger consumes the message unless its `passThrough` option is on; only unconsumed messages reach the next middleware. A run is stopped after 200 steps or 60 seconds. Each run produces a trace (nodes visited with timings, inputs and outputs, edges taken, replies, error), kept in memory for the last 20 runs per flow and sent as the `flows/run` event, which the editor uses to highlight live paths. `flows.test` runs a made-up message through the same engine with a session whose `send` only records the text; with `nodeId` it stops after that node, which is how the editor executes one step.
 
-Variables have four scopes: `run` (this message), `chat`, `user` and `flow` (all three per bot). They are kept in memory.
+Variables have four scopes: `run` (this message), `chat`, `user` and `flow` (all three per bot). Nodes read them from memory; with the database plugin running, `chat`, `user` and `flow` variables are loaded from the `flows_var` table at startup and saved a second after they change, so they survive restarts. Deleting a flow deletes its variables. Test runs use the bot id `test`, whose variables are never saved.
 
 ## Agent
 
