@@ -3,12 +3,6 @@ import { commandMatches, parseArgs, parseSignature, splitCommand, usageReply } f
 import { FlowError, TriggerReply } from './engine'
 import type { FlowSession, LlmLike, NodeType, VariableScope } from './types'
 
-const passThrough = z.boolean().default(false).meta(field(
-  'Let other plugins answer too',
-  'Off: when this trigger matches, plugins such as LLM chat do not see the message',
-  { 'zh-CN': { title: '同时交给其他插件', description: '关闭时：此触发器匹配后，大模型对话等插件不会再处理这条消息' } },
-))
-
 const scopeField = z.enum(['chat', 'user', 'flow', 'run']).default('chat').meta(field(
   'Scope',
   'chat: per group or private chat. user: per person. flow: shared by everyone. run: only this message.',
@@ -57,7 +51,6 @@ const messageTrigger: NodeType = {
       'any: every message. mention: @-mentions in groups and all private messages. private / group: only that kind of chat.',
       { 'zh-CN': { title: '哪些消息', description: 'any：所有消息。mention：群里 @ 机器人的消息和所有私聊。private / group：仅私聊或仅群聊。' } },
     )),
-    passThrough,
   }),
   outputs: [...sessionOutputs, { name: 'isPrivate', type: 'boolean', title: { en: 'Private chat', 'zh-CN': '是私聊' } }],
   match({ config, session }) {
@@ -81,7 +74,6 @@ const keywordTrigger: NodeType = {
     })),
     mode: z.enum(['contains', 'startsWith', 'exact']).default('contains').meta(field('Match', undefined, { 'zh-CN': { title: '匹配方式' } })),
     ignoreCase: z.boolean().default(true).meta(field('Ignore case', undefined, { 'zh-CN': { title: '忽略大小写' } })),
-    passThrough,
   }),
   outputs: [
     ...sessionOutputs,
@@ -144,7 +136,6 @@ export const commandTrigger: NodeType = {
     permission: z.enum(['all', 'admin']).default('all').meta(field('Who can use it', 'admin: only the admins set on the bot', {
       'zh-CN': { title: '谁可以使用', description: 'admin：仅机器人设置里的管理员' },
     })),
-    passThrough,
   }),
   outputs: commandOutputs,
   outputsFrom: { key: 'usage', format: 'signature' },
@@ -173,7 +164,6 @@ const regexTrigger: NodeType = {
         'zh-CN': { title: '表达式', description: 'JavaScript 正则表达式；捕获组会成为输出' },
       })),
     flags: z.string().regex(/^[gimsuy]*$/).default('i').meta(field('Flags', undefined, { 'zh-CN': { title: '标志' } })),
-    passThrough,
   }),
   outputs: [
     ...sessionOutputs,

@@ -293,9 +293,12 @@ export interface FlowNodeDoc {
   skip?: boolean
   /** Triggers: higher runs first among the triggers one message starts on a bot. */
   priority?: number
-  /** Event and schedule triggers: false stops later triggers once this one runs. */
-  passOn?: boolean
+  /** Triggers: what may no longer handle the same message once this one runs; missing means nothing. */
+  intercept?: Exclude<Intercept, 'none'>
 }
+
+/** none: nothing. flow: later triggers of this flow. flows: of every flow. global: also /help and bot plugins. */
+export type Intercept = 'none' | 'flow' | 'flows' | 'global'
 
 /** A trigger's place in its bot's order (see `flows.triggers`). */
 export interface TriggerSlot {
@@ -308,7 +311,7 @@ export interface TriggerSlot {
   type: string
   source: 'message' | 'event' | 'schedule'
   priority: number
-  passesOn: boolean
+  intercept: Intercept
   blockedBy?: { flowId: string; flowName: string; nodeId: string; name: string; priority: number }
   /** True: never runs on this bot. False: may not, depending on the message. */
   certain?: boolean

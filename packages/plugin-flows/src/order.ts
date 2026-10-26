@@ -1,6 +1,6 @@
 import { commandName } from './nodes'
-import { type CompiledFlow, type CompiledNode, passesOn, triggerPriority } from './graph'
-import type { TriggerSource } from './types'
+import { type CompiledFlow, type CompiledNode, interceptOf, triggerPriority } from './graph'
+import type { Intercept, TriggerSource } from './types'
 
 /** A trigger's place in its bot's order: higher priority first, then older flows, then canvas order. */
 export interface TriggerSlot {
@@ -14,8 +14,8 @@ export interface TriggerSlot {
   type: string
   source: TriggerSource
   priority: number
-  /** After it runs, later triggers and plugins still see the message. */
-  passesOn: boolean
+  /** What it keeps from also handling the message once it runs. */
+  intercept: Intercept
   /** An earlier trigger that answers first and keeps the message from this one. */
   blockedBy?: { flowId: string; flowName: string; nodeId: string; name: string; priority: number }
   /** `true`: it never runs on this bot. `false`: it may not, depending on the message. */
@@ -112,11 +112,13 @@ export function triggerOrder(flows: CompiledFlow[]): TriggerSlot[] {
       type: entry.node.type,
       source: entry.type?.kind === 'trigger' ? entry.type.source ?? 'message' : 'message',
       priority: triggerPriority(entry),
-      passesOn: passesOn(entry),
+      intercept: interceptOf(entry),
     }
     let maybe: (typeof entries)[number] | undefined
     for (const before of entries.slice(0, position)) {
-      if (passesOn(before.entry)) continue
+      // A trigger intercepts the ones after it in its own flow (`flow`), or in every flow.
+      const intercept = interceptOf(before.entry)
+      if (intercept === 'none' || (intercept === 'flow' && before.flow !== flow)) continue
       const kind = overlap(before.entry, entry)
       if (kind === 'always') {
         maybe = before

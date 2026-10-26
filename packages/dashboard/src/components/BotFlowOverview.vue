@@ -144,7 +144,7 @@ function open(slot: { flowId: string; nodeId: string }) {
               >
                 <span class="row-main">
                   <span class="row-name">{{ slot.name }}</span>
-                  <span class="muted small">{{ slot.flowName }} · {{ t('flows.priorityShort', { n: slot.priority }) }}{{ slot.passesOn ? ` · ${t('flows.passesOnShort')}` : '' }}</span>
+                  <span class="muted small">{{ slot.flowName }} · {{ t('flows.priorityShort', { n: slot.priority }) }}{{ slot.intercept !== 'none' ? ` · ${t('flows.interceptShort', { scope: t(`flows.intercept.${slot.intercept}`) })}` : '' }}</span>
                   <span v-if="slot.state === 'ran' && path(slot)" class="row-path small">{{ path(slot) }}</span>
                   <span v-if="slot.trace?.error" class="error small">{{ slot.trace.error }}</span>
                 </span>
