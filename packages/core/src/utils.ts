@@ -71,14 +71,32 @@ export function localize(text: string | Record<string, string> | undefined, loca
 export interface FieldText {
   title?: string
   description?: string
+  /** Labels of an enum's values, by value. */
+  options?: Record<string, string>
+}
+
+export interface FieldDisplay {
+  /** English labels of an enum's values, by value; translations go in `translations[locale].options`. */
+  options?: Record<string, string>
+  /** How compact forms (the flow editor) show a boolean: a checkbox (default) or a switch, for settings that change behavior. */
+  widget?: 'checkbox' | 'switch'
+  /** Compact forms fold descriptions into a hint icon; `inline` keeps this one visible. */
+  hint?: 'inline'
 }
 
 /**
  * Metadata for a config field, shown by dashboard forms: an English title and description,
  * plus translations keyed by locale. Use with zod's `.meta()`.
  */
-export function field(title: string, description?: string, translations: Record<string, FieldText> = {}) {
-  return { title, ...(description ? { description } : {}), 'x-i18n': translations }
+export function field(title: string, description?: string, translations: Record<string, FieldText> = {}, display: FieldDisplay = {}) {
+  return {
+    title,
+    ...(description ? { description } : {}),
+    'x-i18n': translations,
+    ...(display.options ? { 'x-options': display.options } : {}),
+    ...(display.widget ? { 'x-widget': display.widget } : {}),
+    ...(display.hint ? { 'x-hint': display.hint } : {}),
+  }
 }
 
 /** Source category of a log line, for quick filters in the dashboard. */

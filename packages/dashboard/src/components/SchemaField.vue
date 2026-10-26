@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { NDynamicTags, NFormItem, NInput, NInputNumber, NSelect, NSwitch } from 'naive-ui'
+import { InformationCircleOutline } from '@vicons/ionicons5'
+import { NCheckbox, NDynamicTags, NFormItem, NIcon, NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSwitch, NTooltip } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { JsonSchema } from '../types'
@@ -12,6 +13,11 @@ const props = defineProps<{
   modelValue: any
   required?: boolean
   secret?: boolean
+  /**
+   * The flow editor's dense layout: descriptions fold into a hint icon, booleans are checkboxes
+   * (or a switch on the label's row), and short choices are buttons.
+   */
+  compact?: boolean
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [value: any] }>()
@@ -47,6 +53,14 @@ const kind = computed(() => {
 const translated = computed(() => schema.value['x-i18n']?.[locale.value] ?? props.schema['x-i18n']?.[locale.value] ?? {})
 const label = computed(() => translated.value.title ?? schema.value.title ?? props.schema.title ?? humanize(props.name))
 const description = computed(() => translated.value.description ?? schema.value.description ?? props.schema.description)
+const hintInline = computed(() => (schema.value['x-hint'] ?? props.schema['x-hint']) === 'inline')
+
+/** An enum value's label: translated, then the plugin's English label, then the value itself. */
+const optionLabel = (option: string) => translated.value.options?.[option] ?? (schema.value['x-options'] ?? props.schema['x-options'])?.[option] ?? String(option)
+const options = computed(() => (schema.value.enum ?? []).map((option: string) => ({ label: optionLabel(option), value: option })))
+/** In compact forms, up to four choices show as buttons. */
+const asButtons = computed(() => props.compact && kind.value === 'enum' && options.value.length <= 4)
+const widget = computed(() => schema.value['x-widget'] ?? props.schema['x-widget'] ?? 'checkbox')
 
 // Free-form values (records, mixed arrays) are edited as JSON text.
 const jsonText = ref('')
@@ -76,16 +90,38 @@ function onJson(text: string) {
 </script>
 
 <template>
+  <!-- Compact checkbox: the label sits next to the box, the description in its hint. -->
+  <div v-if="compact && kind === 'boolean' && widget === 'checkbox'" class="check">
+    <NCheckbox :checked="!!value" @update:checked="(next: boolean) => (value = next)">{{ label }}</NCheckbox>
+    <NTooltip v-if="description" :style="{ maxWidth: '280px' }">
+      <template #trigger><NIcon :size="14" class="hint"><InformationCircleOutline /></NIcon></template>
+      {{ description }}
+    </NTooltip>
+  </div>
   <NFormItem
-    :label="label"
+    v-else
     :required="required"
-    :feedback="jsonError || description"
+    :label-placement="compact && kind === 'boolean' ? 'left' : undefined"
+    :show-feedback="!compact || !!jsonError || (hintInline && !!description)"
+    :feedback="jsonError || (compact && !hintInline ? undefined : description)"
     :validation-status="jsonError ? 'error' : undefined"
   >
+    <template #label>
+      <span class="label">
+        {{ label }}
+        <NTooltip v-if="compact && description && !hintInline" :style="{ maxWidth: '280px' }">
+          <template #trigger><NIcon :size="14" class="hint"><InformationCircleOutline /></NIcon></template>
+          {{ description }}
+        </NTooltip>
+      </span>
+    </template>
+    <NRadioGroup v-if="asButtons" v-model:value="value" size="small" class="choices">
+      <NRadioButton v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</NRadioButton>
+    </NRadioGroup>
     <NSelect
-      v-if="kind === 'enum'"
+      v-else-if="kind === 'enum'"
       v-model:value="value"
-      :options="schema.enum.map((option: string) => ({ label: String(option), value: option }))"
+      :options="options"
       :clearable="!required"
     />
     <NInput
@@ -132,6 +168,28 @@ function onJson(text: string) {
 </template>
 
 <style scoped>
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hint {
+  opacity: 0.5;
+  cursor: help;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 16px 10px 0;
+}
+
+.choices {
+  flex-wrap: wrap;
+}
+
 .nested {
   width: 100%;
   padding: 12px 12px 0;

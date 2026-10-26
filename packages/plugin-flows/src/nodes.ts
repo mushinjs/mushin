@@ -5,8 +5,9 @@ import type { FlowSession, LlmLike, NodeType, VariableScope } from './types'
 
 const scopeField = z.enum(['chat', 'user', 'flow', 'run']).default('chat').meta(field(
   'Scope',
-  'chat: per group or private chat. user: per person. flow: shared by everyone. run: only this message.',
-  { 'zh-CN': { title: '作用范围', description: 'chat：每个会话独立。user：每个用户独立。flow：所有人共享。run：仅本条消息。' } },
+  'Per chat: each group or private chat has its own. Per user: each person has their own. Shared: one for everyone. This message: only during this run.',
+  { 'zh-CN': { title: '作用范围', description: '每个会话：每个群或私聊各自一份。每个用户：每人一份。全体共享：所有人共用一份。仅本次：只在这次运行中有效。', options: { chat: '每个会话', user: '每个用户', flow: '全体共享', run: '仅本次' } } },
+  { options: { chat: 'Per chat', user: 'Per user', flow: 'Shared', run: 'This message' } },
 ))
 
 const nameField = z.string().min(1).default('count').meta(field('Variable name', undefined, { 'zh-CN': { title: '变量名' } }))
@@ -48,8 +49,9 @@ const messageTrigger: NodeType = {
   config: z.object({
     when: z.enum(['any', 'mention', 'private', 'group']).default('any').meta(field(
       'Which messages',
-      'any: every message. mention: @-mentions in groups and all private messages. private / group: only that kind of chat.',
-      { 'zh-CN': { title: '哪些消息', description: 'any：所有消息。mention：群里 @ 机器人的消息和所有私聊。private / group：仅私聊或仅群聊。' } },
+      '@ me or private: @-mentions in groups and every private message.',
+      { 'zh-CN': { title: '哪些消息', description: '@我或私聊：群里 @ 机器人的消息，以及所有私聊。', options: { any: '所有消息', mention: '@我或私聊', private: '仅私聊', group: '仅群聊' } } },
+      { options: { any: 'All', mention: '@ me or private', private: 'Private only', group: 'Groups only' } },
     )),
   }),
   outputs: [...sessionOutputs, { name: 'isPrivate', type: 'boolean', title: { en: 'Private chat', 'zh-CN': '是私聊' } }],
@@ -72,7 +74,9 @@ const keywordTrigger: NodeType = {
     keywords: z.array(z.string()).default(['hello']).meta(field('Keywords', 'Any one of these matches', {
       'zh-CN': { title: '关键词', description: '匹配其中任意一个' },
     })),
-    mode: z.enum(['contains', 'startsWith', 'exact']).default('contains').meta(field('Match', undefined, { 'zh-CN': { title: '匹配方式' } })),
+    mode: z.enum(['contains', 'startsWith', 'exact']).default('contains').meta(field('Match', undefined, {
+      'zh-CN': { title: '匹配方式', options: { contains: '包含', startsWith: '匹配开头', exact: '匹配全部' } },
+    }, { options: { contains: 'Contains', startsWith: 'Starts with', exact: 'Whole message' } })),
     ignoreCase: z.boolean().default(true).meta(field('Ignore case', undefined, { 'zh-CN': { title: '忽略大小写' } })),
   }),
   outputs: [
@@ -128,14 +132,15 @@ export const commandTrigger: NodeType = {
       'Arguments',
       'e.g. <score:number> [note]: <> required, [] optional, :number a number; the last text argument takes the rest. Each argument becomes an output of the same name.',
       { 'zh-CN': { title: '参数', description: '例如 <分数:number> [备注]：<> 必填，[] 可选，:number 表示数字，最后一个文本参数接收剩余内容。每个参数都会成为同名输出。' } },
+      { hint: 'inline' },
     )),
     usageHint: z.boolean().default(true).meta(field('Reply with usage on wrong arguments', undefined, {
       'zh-CN': { title: '参数不对时回复用法' },
     })),
     showInHelp: z.boolean().default(true).meta(field('Show in /help', undefined, { 'zh-CN': { title: '显示在 /help 里' } })),
-    permission: z.enum(['all', 'admin']).default('all').meta(field('Who can use it', 'admin: only the admins set on the bot', {
-      'zh-CN': { title: '谁可以使用', description: 'admin：仅机器人设置里的管理员' },
-    })),
+    permission: z.enum(['all', 'admin']).default('all').meta(field('Who can use it', 'Admins are set on the bot\'s Commands tab', {
+      'zh-CN': { title: '谁可以使用', description: '管理员在机器人的「指令」页设置', options: { all: '所有人', admin: '仅管理员' } },
+    }, { options: { all: 'Everyone', admin: 'Admins only' } })),
   }),
   outputs: commandOutputs,
   outputsFrom: { key: 'usage', format: 'signature' },

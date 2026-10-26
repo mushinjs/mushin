@@ -9,7 +9,7 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import {
-  type DropdownOption, NAlert, NButton, NDropdown, NEmpty, NForm, NFormItem, NIcon, NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSwitch, NTabPane, NTabs, NTag, useMessage,
+  type DropdownOption, NAlert, NButton, NDropdown, NEmpty, NForm, NFormItem, NIcon, NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSwitch, NTabPane, NTabs, NTag, NTooltip, useMessage,
 } from 'naive-ui'
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, provide, type Ref, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -1753,8 +1753,26 @@ watch(narrow, (value) => {
               <div class="node-head" :style="{ '--accent': selectedColor }">
                 <span class="node-icon"><NIcon :size="20"><component :is="selectedIcon" /></NIcon></span>
                 <div class="node-title">
-                  <div class="node-name"><span class="node-number">{{ selectedNumber }}</span>{{ selected.data!.label || typeTitle(selected.data!.typeId) }}</div>
-                  <div class="muted small">{{ selected.data!.label ? typeTitle(selected.data!.typeId) : selected.data!.typeId }}</div>
+                  <!-- The title is the node's name: type to rename it, clear it to use the type's name. -->
+                  <div class="node-name">
+                    <span class="node-number">{{ selectedNumber }}</span>
+                    <input
+                      class="name-edit"
+                      :value="selected.data!.label ?? ''"
+                      :placeholder="typeTitle(selected.data!.typeId)"
+                      :title="t('flows.renameHint')"
+                      :aria-label="t('flows.nodeLabel')"
+                      @input="updateSelected({ label: ($event.target as HTMLInputElement).value || undefined })"
+                      @keydown.enter="($event.target as HTMLInputElement).blur()"
+                    >
+                  </div>
+                  <div class="muted small type-line">
+                    {{ selected.data!.label ? typeTitle(selected.data!.typeId) : selected.data!.typeId }}
+                    <NTooltip v-if="selectedInfo.description" :style="{ maxWidth: '300px' }">
+                      <template #trigger><NIcon :size="13" class="type-hint"><InformationCircleOutline /></NIcon></template>
+                      {{ localize(selectedInfo.description, locale) }}
+                    </NTooltip>
+                  </div>
                 </div>
                 <NButton
                   quaternary
@@ -1793,11 +1811,6 @@ watch(narrow, (value) => {
               </NAlert>
               <NTabs v-model:value="nodeTab" type="segment" size="small" class="node-tabs">
                 <NTabPane name="settings" :tab="t('flows.nodeSettings')">
-                  <NForm label-placement="top" size="small">
-                    <NFormItem :label="t('flows.nodeLabel')" :feedback="t('flows.nodeLabelHint')">
-                      <NInput :value="selected.data!.label ?? ''" :placeholder="typeTitle(selected.data!.typeId)" @update:value="(label: string) => updateSelected({ label: label || undefined })" />
-                    </NFormItem>
-                  </NForm>
                   <template v-if="wiring?.inputs.length">
                     <div class="inputs-title">{{ t('flows.ioInputs') }}</div>
                     <NForm label-placement="top" size="small">
@@ -1823,6 +1836,7 @@ watch(narrow, (value) => {
                   <template v-if="selectedInfo.configSchema">
                     <SchemaForm
                       v-if="leadFields.length"
+                      compact
                       :model-value="selected.data!.config"
                       :schema="selectedInfo.configSchema"
                       :hidden="otherFields(selectedInfo.configSchema, leadFields)"
@@ -1833,6 +1847,7 @@ watch(narrow, (value) => {
                       <NButton size="tiny" secondary type="primary" @click="convertToCommand">{{ t('flows.convertToCommand') }}</NButton>
                     </NAlert>
                     <SchemaForm
+                      compact
                       :model-value="selected.data!.config"
                       :schema="selectedInfo.configSchema"
                       :hidden="selected.data!.typeId === COMMAND ? ['name'] : leadFields"
@@ -1842,7 +1857,16 @@ watch(narrow, (value) => {
                   <div v-if="selectedIsTrigger" class="order" data-agent-target="flows.triggerOrder">
                     <div class="inputs-title">{{ t('flows.triggerOrder') }}</div>
                     <NForm label-placement="top" size="small">
-                      <NFormItem :label="t('flows.priority')" :feedback="t('flows.priorityHint')">
+                      <NFormItem :show-feedback="false">
+                        <template #label>
+                          <span class="label-with-hint">
+                            {{ t('flows.priority') }}
+                            <NTooltip :style="{ maxWidth: '280px' }">
+                              <template #trigger><NIcon :size="14" class="type-hint"><InformationCircleOutline /></NIcon></template>
+                              {{ t('flows.priorityHint') }} {{ t('flows.priorityWheel') }}
+                            </NTooltip>
+                          </span>
+                        </template>
                         <div class="priority-input" :title="t('flows.priorityWheel')" @wheel.prevent="onPriorityWheel">
                           <NInputNumber :value="selected.data!.priority ?? 0" :precision="0" @update:value="(value: number | null) => updateSelected({ priority: value || undefined })" />
                         </div>
@@ -1936,16 +1960,6 @@ watch(narrow, (value) => {
                 </NTabPane>
               </NTabs>
 
-              <div class="node-foot">
-                <div v-if="selectedInfo.description" class="node-note">
-                  <NIcon :size="14" class="note-icon"><InformationCircleOutline /></NIcon>
-                  <span>{{ localize(selectedInfo.description, locale) }}</span>
-                </div>
-                <NButton type="primary" block :loading="executing === selected.id" :disabled="testing" @click="runTest(selected.id)">
-                  <template #icon><NIcon><PlayOutline /></NIcon></template>
-                  {{ t('flows.executeStep') }}
-                </NButton>
-              </div>
             </template>
             <NEmpty v-else :description="t('flows.selectNode')" class="panel-empty" />
           </NTabPane>
@@ -2191,11 +2205,55 @@ watch(narrow, (value) => {
 }
 
 .node-name {
+  display: flex;
+  align-items: baseline;
   font-size: 15px;
   font-weight: 600;
-  overflow: hidden;
+  min-width: 0;
+}
+
+.name-edit {
+  flex: 1;
+  min-width: 0;
+  padding: 1px 4px;
+  margin-left: -4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.name-edit:hover {
+  border-color: rgba(127, 127, 127, 0.3);
+}
+
+.name-edit:focus {
+  outline: none;
+  border-color: #2080f0;
+}
+
+.name-edit::placeholder {
+  color: inherit;
+  opacity: 1;
+}
+
+.type-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.type-hint {
+  cursor: help;
+  opacity: 0.6;
+}
+
+.label-with-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .node-number {
