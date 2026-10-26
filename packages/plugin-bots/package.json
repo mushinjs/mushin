@@ -21,6 +21,15 @@
     "description": {
       "en": "Creates bots and runs each in its own isolated context",
       "zh-CN": "创建机器人，并为每个机器人运行独立的上下文"
+    },
+    "provides": [
+      "bots",
+      "bot"
+    ],
+    "requires": {
+      "plugins": {
+        "@mushin/plugin-storage": "*"
+      }
     }
   },
   "dependencies": {

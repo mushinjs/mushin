@@ -20,6 +20,20 @@
     "description": {
       "en": "Operate Mushin.js through natural-language conversation",
       "zh-CN": "通过自然语言对话操作 Mushin.js"
+    },
+    "provides": [
+      "agent"
+    ],
+    "requires": {
+      "plugins": {
+        "@mushin/plugin-storage": "*",
+        "@mushin/plugin-providers": "*"
+      }
+    },
+    "optional": {
+      "plugins": {
+        "@mushin/plugin-bots": "*"
+      }
     }
   },
   "dependencies": {

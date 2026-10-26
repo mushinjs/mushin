@@ -21,6 +21,24 @@
     "description": {
       "en": "Serves the dashboard and its API",
       "zh-CN": "提供控制台页面及其 API"
+    },
+    "provides": [
+      "console"
+    ],
+    "requires": {
+      "plugins": {
+        "@cordisjs/plugin-server": "*",
+        "@mushin/plugin-storage": "*"
+      }
+    },
+    "optional": {
+      "plugins": {
+        "@mushin/plugin-bots": "*",
+        "@mushin/plugin-agent": "*",
+        "@mushin/plugin-providers": "*",
+        "@mushin/plugin-flows": "*",
+        "@mushin/plugin-stats": "*"
+      }
     }
   },
   "dependencies": {

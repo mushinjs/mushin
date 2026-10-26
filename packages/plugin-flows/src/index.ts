@@ -303,7 +303,17 @@ export class FlowService extends Service {
     }))
     // A command that certainly never runs says so once, as blocked.
     const commands = this.commandIssues(doc).filter((issue) => !blocked.some((item) => item.nodeId === issue.nodeId))
-    return [...this.compiledOf(doc).issues, ...commands, ...blocked]
+    return [...this.compiledOf(doc).issues.map((issue) => this.explainUnknown(doc, issue)), ...commands, ...blocked]
+  }
+
+  /** Says which plugin to enable for a node type no loaded plugin provides, when a manifest claims it. */
+  private explainUnknown(doc: FlowDocument, issue: FlowIssue): FlowIssue {
+    if (!issue.nodeId || !issue.message.startsWith('Unknown node type')) return issue
+    const type = doc.nodes.find((node) => node.id === issue.nodeId)?.type
+    const entry = type ? this.home.get('manager')?.packageForNode(type) : undefined
+    if (!entry) return issue
+    const name = typeof entry.manifest.displayName === 'string' ? entry.manifest.displayName : entry.manifest.displayName?.en ?? entry.package
+    return { ...issue, message: `The node type "${type}" comes from the plugin ${name} (${entry.package}); enable it on the plugins page to use this node`, plugin: entry.package }
   }
 
   private botLabel(botId: string) {

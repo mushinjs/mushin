@@ -15,6 +15,7 @@ const type = computed(() => {
     case 'pending':
     case 'loading':
     case 'unloading':
+    case 'missing':
       return 'warning'
     case 'error':
     case 'failed':

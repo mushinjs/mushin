@@ -24,6 +24,11 @@
     "description": {
       "en": "Replies to \"echo <text>\" with the text",
       "zh-CN": "收到「echo 内容」时原样回复内容"
+    },
+    "requires": {
+      "plugins": {
+        "@mushin/plugin-bots": "*"
+      }
     }
   },
   "dependencies": {

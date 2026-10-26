@@ -24,6 +24,13 @@
     "description": {
       "en": "Replies with an LLM when mentioned or in private chat",
       "zh-CN": "被 @ 或私聊时使用大模型回复"
+    },
+    "requires": {
+      "plugins": {
+        "@mushin/plugin-bots": "*",
+        "@mushin/plugin-providers": "*",
+        "@mushin/plugin-storage": "*"
+      }
     }
   },
   "dependencies": {

@@ -20,6 +20,21 @@
     "description": {
       "en": "Counts messages, commands, flow runs and model usage by hour, and samples CPU and memory for the overview page",
       "zh-CN": "按小时统计消息、指令、流程运行和模型用量，并采样 CPU 与内存，供总览页使用"
+    },
+    "provides": [
+      "stats"
+    ],
+    "requires": {
+      "plugins": {
+        "@mushin/plugin-storage": "*"
+      }
+    },
+    "optional": {
+      "plugins": {
+        "@mushin/plugin-bots": "*",
+        "@mushin/plugin-flows": "*",
+        "@mushin/plugin-providers": "*"
+      }
     }
   },
   "dependencies": {

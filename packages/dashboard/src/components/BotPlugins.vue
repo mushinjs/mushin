@@ -5,8 +5,9 @@ import { NButton, NCard, NEmpty, NList, NListItem, NModal, NSpace, NSpin, NSwitc
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call, on } from '../api'
-import type { BotPluginInfo } from '../types'
+import type { BotPluginInfo, CatalogEntry } from '../types'
 import { clone, localize } from '../utils'
+import DependencyTags from './DependencyTags.vue'
 import SchemaForm from './SchemaForm.vue'
 import StatusBadge from './StatusBadge.vue'
 
@@ -15,6 +16,7 @@ const { t, locale } = useI18n()
 const message = useMessage()
 
 const plugins = ref<BotPluginInfo[]>([])
+const catalog = ref<CatalogEntry[]>([])
 const loading = ref(true)
 const busy = ref<string>()
 const editing = ref<BotPluginInfo>()
@@ -31,7 +33,10 @@ async function refresh() {
   }
 }
 
-onMounted(refresh)
+onMounted(() => {
+  refresh()
+  call<CatalogEntry[]>('plugins.catalog').then((list) => (catalog.value = list), () => {})
+})
 watch(() => props.botId, refresh)
 const off = on('bots/changed', refresh)
 onBeforeUnmount(off)
@@ -86,6 +91,7 @@ async function save() {
               <span class="mono sub">{{ plugin.package }}@{{ plugin.version }}</span>
             </template>
             {{ localize(plugin.manifest.description, locale) }}
+            <DependencyTags v-if="plugin.dependencies?.requires.some((dep) => dep.problem && dep.problem !== 'not-app')" :deps="{ requires: plugin.dependencies.requires, optional: [] }" :catalog="catalog" />
           </NThing>
           <template #suffix>
             <NSpace :wrap="false" align="center">

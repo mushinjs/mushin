@@ -13,7 +13,7 @@ import {
 } from 'naive-ui'
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, provide, type Ref, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, RouterLink, useRoute, useRouter } from 'vue-router'
 import { call, on } from '../api'
 import { type CanvasNodeData, type FlowHighlight, flowEditorKey, type RunStatus } from '../components/flow/context'
 import FlowGroupBox from '../components/flow/FlowGroupBox.vue'
@@ -1919,6 +1919,7 @@ watch(narrow, (value) => {
                   </div>
                   <NAlert v-for="(issue, index) in issuesByNode.get(selected.id) ?? []" :key="index" :type="issue.severity" :show-icon="false" class="issue">
                     {{ issue.message }}
+                    <RouterLink v-if="issue.plugin" :to="`/plugins?highlight=${issue.plugin}`" class="issue-link">{{ t('flows.enablePlugin') }}</RouterLink>
                   </NAlert>
                 </NTabPane>
 
@@ -1982,6 +1983,7 @@ watch(narrow, (value) => {
               @click="selectIssue(issue)"
             >
               <strong v-if="issue.nodeId">{{ nodeName(issue.nodeId) }}: </strong>{{ issue.message }}
+              <RouterLink v-if="issue.plugin" :to="`/plugins?highlight=${issue.plugin}`" class="issue-link" @click.stop>{{ t('flows.enablePlugin') }}</RouterLink>
             </NAlert>
             <p class="muted small">{{ t('flows.editHelp') }}</p>
           </NTabPane>
@@ -2524,6 +2526,10 @@ watch(narrow, (value) => {
 
 .issue {
   margin-bottom: 8px;
+}
+
+.issue-link {
+  margin-left: 6px;
 }
 
 .issue.clickable {

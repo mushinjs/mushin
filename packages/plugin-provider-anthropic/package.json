@@ -20,6 +20,11 @@
     "description": {
       "en": "Claude models through the Anthropic Messages API",
       "zh-CN": "通过 Anthropic Messages API 使用 Claude 模型"
+    },
+    "requires": {
+      "plugins": {
+        "@mushin/plugin-providers": "*"
+      }
     }
   },
   "dependencies": {

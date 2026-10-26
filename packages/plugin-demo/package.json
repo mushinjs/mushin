@@ -21,6 +21,14 @@
     "description": {
       "en": "Adds an offline test provider and a sandbox bot adapter; pick a demo provider, bot and sample flows to create in its settings",
       "zh-CN": "提供离线测试模型和沙盒机器人适配器；可在设置中勾选创建演示提供商、演示机器人和示例流程"
+    },
+    "requires": {
+      "plugins": {
+        "@mushin/plugin-providers": "*",
+        "@mushin/plugin-bots": "*",
+        "@mushin/plugin-flows": "*",
+        "@mushin/plugin-storage": "*"
+      }
     }
   },
   "dependencies": {
