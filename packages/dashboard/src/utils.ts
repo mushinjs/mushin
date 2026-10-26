@@ -48,6 +48,19 @@ export function humanize(key: string) {
   return words.join(' ')
 }
 
+/** A size such as "12.3 KB". */
+export function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  const units = ['KB', 'MB', 'GB']
+  let value = bytes / 1024
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit++
+  }
+  return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unit]}`
+}
+
 /** Deep copy for editing forms without mutating store data. */
 export function clone<T>(value: T): T {
   return value === undefined ? value : JSON.parse(JSON.stringify(value))

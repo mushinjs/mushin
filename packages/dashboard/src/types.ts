@@ -590,3 +590,25 @@ export interface BotPersonaSettings {
   command: { enabled: boolean; role: 'user' | 'admin' | 'master' }
   chats: { chat: string; persona: { id: string; name: string } }[]
 }
+
+export interface DatabaseStatus {
+  driver: 'sqlite' | 'memory'
+  path?: string
+  size?: number
+  tables: number
+}
+
+export interface DatabaseColumn {
+  name: string
+  type: string
+  primary: boolean
+  nullable: boolean
+}
+
+export interface DatabaseTable {
+  name: string
+  group: string
+  primary: string[]
+  columns: DatabaseColumn[]
+  count: number
+}

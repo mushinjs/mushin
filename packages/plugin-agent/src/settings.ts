@@ -41,7 +41,7 @@ export interface AgentSettings {
   disabledSkills: string[]
 }
 
-export const SCENE_KEYS = ['overview', 'setup', 'providers', 'bots', 'botDetail', 'flows', 'flowEditor', 'personas', 'plugins', 'logs', 'agent'] as const
+export const SCENE_KEYS = ['overview', 'setup', 'providers', 'bots', 'botDetail', 'flows', 'flowEditor', 'personas', 'database', 'plugins', 'logs', 'agent'] as const
 
 export const profileInput = z.object({
   hint: z.string().max(1000).optional(),

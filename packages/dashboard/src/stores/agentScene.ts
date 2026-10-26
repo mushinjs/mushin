@@ -34,7 +34,7 @@ export interface PageFacts {
 }
 
 /** Pages the Agent knows, in the order the Agent page lists them. */
-export const SCENES = ['overview', 'setup', 'providers', 'bots', 'botDetail', 'flows', 'flowEditor', 'personas', 'plugins', 'logs', 'agent'] as const
+export const SCENES = ['overview', 'setup', 'providers', 'bots', 'botDetail', 'flows', 'flowEditor', 'personas', 'database', 'plugins', 'logs', 'agent'] as const
 
 /** The built-in suggestions each page can show (each only when its condition holds), for the Agent page. */
 export const SCENE_RECOMMENDATIONS: Record<string, string[]> = {
@@ -46,6 +46,7 @@ export const SCENE_RECOMMENDATIONS: Record<string, string[]> = {
   flows: ['flowCheckin', 'flowKeyword', 'flowService', 'flowNew'],
   flowEditor: ['flowFix', 'flowExplain', 'flowTests'],
   personas: ['connect', 'status', 'provider'],
+  database: ['dbExplain', 'dbMessages'],
   plugins: ['pluginsFailed'],
   logs: ['connect', 'status', 'provider'],
   agent: ['connect', 'status', 'provider'],
@@ -168,6 +169,10 @@ export const useAgentSceneStore = defineStore('agentScene', () => {
         add('flowTests', '')
         break
       }
+      case 'database':
+        if (facts.value?.state?.table) add('dbExplain', '')
+        add('dbMessages', '')
+        break
       case 'plugins':
         if (counts.value.failedPlugins?.length) add('pluginsFailed', '', { urgent: true, values: { names: counts.value.failedPlugins.join(', ') } })
         break

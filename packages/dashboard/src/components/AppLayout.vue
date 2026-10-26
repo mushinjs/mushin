@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  ChatbubblesOutline, DocumentTextOutline, GridOutline, ExtensionPuzzleOutline, GitNetworkOutline, KeyOutline, LanguageOutline, LogOutOutline,
+  ChatbubblesOutline, ServerOutline, DocumentTextOutline, GridOutline, ExtensionPuzzleOutline, GitNetworkOutline, KeyOutline, LanguageOutline, LogOutOutline,
   MoonOutline, PersonCircleOutline, RocketOutline, SparklesOutline, SunnyOutline,
 } from '@vicons/ionicons5'
 import {
@@ -62,6 +62,7 @@ const menu = computed<MenuOption[]>(() => [
   { key: '/personas', label: link('/personas', t('nav.personas')), icon: icon(PersonCircleOutline) },
   { key: '/providers', label: link('/providers', t('nav.providers')), icon: icon(KeyOutline) },
   { key: '/agent', label: link('/agent', t('nav.agent')), icon: icon(SparklesOutline) },
+  { key: '/database', label: link('/database', t('nav.database')), icon: icon(ServerOutline) },
   { key: '/plugins', label: link('/plugins', t('nav.plugins')), icon: icon(ExtensionPuzzleOutline) },
   { key: '/logs', label: link('/logs', t('nav.logs')), icon: icon(DocumentTextOutline) },
 ])
