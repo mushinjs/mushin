@@ -186,7 +186,9 @@ export function configSummary(type: NodeTypeInfo, config: Record<string, any>, l
     if (value === undefined || value === null || value === '' || value === false) continue
     if (Array.isArray(value) ? !value.length : typeof value === 'object') continue
     const label = field['x-i18n']?.[locale]?.title ?? field.title ?? humanize(key)
-    lines.push({ key, label, value: Array.isArray(value) ? value.join(', ') : value === true ? '✓' : String(value) })
+    const options = { ...(field['x-options'] ?? field.items?.['x-options']), ...field['x-i18n']?.[locale]?.options }
+    const show = (item: unknown) => options[String(item)] ?? String(item)
+    lines.push({ key, label, value: Array.isArray(value) ? value.map(show).join(', ') : value === true ? '✓' : show(value) })
     if (lines.length >= limit) break
   }
   return lines

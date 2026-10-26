@@ -1373,7 +1373,7 @@ const offStep = on('flows/step', (step: RunStep) => {
 onBeforeUnmount(offStep)
 
 const test = ref<TestInput>({
-  text: '', userName: '', private: false, mentioned: false, mode: 'message', eventName: '', eventData: '{}', schedule: '', replies: '',
+  text: '', userName: '', private: false, mentioned: false, role: 'user', groupRole: '', mode: 'message', eventName: '', eventData: '{}', schedule: '', replies: '',
 })
 const testing = ref(false)
 const schedules = computed(() => nodes.value
@@ -1398,7 +1398,8 @@ function testPayload() {
   }
   if (mode === 'schedule') return schedule ? { schedule, ...common } : undefined
   if (!text.trim()) return
-  return { text, userName, private: test.value.private, mentioned, ...common }
+  const roles = { ...(test.value.role !== 'user' ? { role: test.value.role } : {}), ...(test.value.groupRole && !test.value.private ? { groupRole: test.value.groupRole } : {}) }
+  return { text, userName, private: test.value.private, mentioned, ...roles, ...common }
 }
 
 /** Runs the saved flow with the test message; with a node, only the path up to that node runs. */

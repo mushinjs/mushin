@@ -854,19 +854,19 @@ const senderRoleNode: NodeType = {
   category: 'platform',
   title: text('Sender role', '发送者身份'),
   description: text(
-    'Branches on who sent the message: "master" for the QQ numbers listed here, then the group owner, admins and members. In private chats everyone but a master is "member".',
-    '按发送者身份分支：这里列出的 QQ 走 master，其余按群主 owner、管理员 admin、成员 member。私聊中除 master 外都走 member。',
+    'Branches on who sent the message: "master" for the bot\'s masters (Permissions tab) and the QQ numbers listed here, then the group owner, admins and members. In private chats everyone but a master is "member". To check bot admins too, use the permission check node.',
+    '按发送者身份分支：机器人的主人（「权限」页）和这里列出的 QQ 走 master，其余按群主 owner、管理员 admin、成员 member。私聊中除 master 外都走 member。要同时判断机器人管理员，请用「权限检测」节点。',
   ),
   config: z.object({
-    masters: z.array(z.string()).default([]).meta(field('Masters', 'QQ numbers that always count as master', { 'zh-CN': { title: '主人', description: '始终视为 master 的 QQ 号' } })),
+    masters: z.array(z.string()).default([]).meta(field('Extra masters', 'QQ numbers that count as master besides the bot\'s masters', { 'zh-CN': { title: '额外的主人', description: '除机器人的主人外，也视为 master 的 QQ 号' } })),
   }),
   outputs: [port('role', 'text', 'Role', '身份')],
   execOut: ['master', ...ROLES],
   async run(context) {
     const { config, session } = context
-    if ((config.masters as string[]).map(str).includes(session.user.id)) return { exec: 'master', outputs: { role: 'master' } }
+    if (session.role?.() === 'master' || (config.masters as string[]).map(str).includes(session.user.id)) return { exec: 'master', outputs: { role: 'master' } }
     if (session.channel.type !== 'group') return { exec: 'member', outputs: { role: 'member' } }
-    let role: string | undefined = session.user.role
+    let role: string | undefined = session.user.role ?? await session.groupRole?.()
     // Events carry no sender role; ask NapCat.
     if (!role && session.user.id) {
       const response = await callApi(context, 'get_group_member_info', { group_id: toId(session.channel.id), user_id: toId(session.user.id) })

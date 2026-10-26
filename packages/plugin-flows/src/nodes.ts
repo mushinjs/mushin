@@ -1,5 +1,5 @@
 import { type ChannelInfo, field, segmentsToText, z } from '@mushin/core'
-import { commandMatches, parseArgs, parseSignature, splitCommand, usageReply } from '@mushin/plugin-bots'
+import { commandMatches, parseArgs, parseSignature, roleAtLeast, splitCommand, usageReply } from '@mushin/plugin-bots'
 import { FlowError, TriggerReply } from './engine'
 import type { FlowSession, LlmLike, NodeType, VariableScope } from './types'
 
@@ -100,6 +100,11 @@ const keywordTrigger: NodeType = {
   },
 }
 
+/** The sender's role on the bot; sessions without `role()` fall back to `isAdmin`. */
+export function senderRole(session: FlowSession) {
+  return session.role ? session.role() : session.isAdmin ? 'admin' : undefined
+}
+
 /** A command name as stored: without a leading prefix or spaces. */
 export const commandName = (name: unknown) => String(name ?? '').trim().replace(/^[/#!！]+/, '')
 
@@ -138,9 +143,9 @@ export const commandTrigger: NodeType = {
       'zh-CN': { title: '参数不对时回复用法' },
     })),
     showInHelp: z.boolean().default(true).meta(field('Show in /help', undefined, { 'zh-CN': { title: '显示在 /help 里' } })),
-    permission: z.enum(['all', 'admin']).default('all').meta(field('Who can use it', 'Admins are set on the bot\'s Commands tab', {
-      'zh-CN': { title: '谁可以使用', description: '管理员在机器人的「指令」页设置', options: { all: '所有人', admin: '仅管理员' } },
-    }, { options: { all: 'Everyone', admin: 'Admins only' } })),
+    permission: z.enum(['all', 'admin', 'master']).default('all').meta(field('Who can use it', 'Masters and admins are set on the bot\'s Permissions tab; others get no answer', {
+      'zh-CN': { title: '谁可以使用', description: '主人和管理员在机器人的「权限」页设置；没有权限的人不会收到回应', options: { all: '所有人', admin: '管理员和主人', master: '仅主人' } },
+    }, { options: { all: 'Everyone', admin: 'Admins and masters', master: 'Masters only' } })),
   }),
   outputs: commandOutputs,
   outputsFrom: { key: 'usage', format: 'signature' },
@@ -148,7 +153,7 @@ export const commandTrigger: NodeType = {
     const parsed = session.command ?? splitCommand(session.text)
     const name = commandName(config.name)
     if (!parsed || !name || !commandMatches({ name, aliases: (config.aliases as string[]).map(commandName) }, parsed.name)) return
-    if (config.permission === 'admin' && !session.isAdmin) return
+    if ((config.permission === 'admin' || config.permission === 'master') && !roleAtLeast(senderRole(session), config.permission)) return
     const args = parseArgs(parseSignature(config.usage), parsed.rest)
     if (!args.ok) return config.usageHint ? new TriggerReply(usageReply({ name, usage: config.usage }, parsed.prefix)) : undefined
     const named = Object.fromEntries(Object.entries(args.values).filter(([key]) => !commandOutputNames.has(key)))

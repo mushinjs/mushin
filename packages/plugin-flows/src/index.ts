@@ -1,5 +1,5 @@
 import { type ChannelInfo, Context, MushinError, randomId, seg, Service, toJsonSchema, type UserInfo, z } from '@mushin/core'
-import { type BotEvent, BUILTIN_PRIORITY, type CommandEntry, commandMatches, helpText, splitCommand } from '@mushin/plugin-bots'
+import { type BotEvent, type BotRole, BUILTIN_PRIORITY, type CommandEntry, commandMatches, type GroupRole, helpText, requiredRole, roleAtLeast, splitCommand } from '@mushin/plugin-bots'
 import type {} from '@mushin/plugin-providers'
 import type {} from '@mushin/plugin-storage'
 import { FlowError, matchTriggers, runFlow, type RunEnvironment, type TriggerMatch } from './engine'
@@ -102,6 +102,11 @@ function normalizeGroups(groups: GroupInput[], nodes: FlowNode[]): FlowGroup[] {
   return result
 }
 
+/** Role methods for a made-up session, as the permissions plugin and the adapter would answer. */
+function testRoles(role: BotRole, groupRole: GroupRole | undefined) {
+  return { isAdmin: roleAtLeast(role, 'admin'), role: () => role, groupRole: async () => groupRole }
+}
+
 /** Unsaved edits of a flow, for previews. */
 export interface FlowDraft {
   nodes: (Omit<FlowNode, 'position' | 'config' | 'intercept'> & { position?: FlowNode['position']; config?: FlowNode['config']; intercept?: Intercept })[]
@@ -112,8 +117,8 @@ export interface FlowDraft {
 /** A message to trace through a bot without sending it. */
 export interface RouteInput {
   text: string
-  /** Group roles come from the platform; `botAdmin` is in the bot's admin list; `private` is a private chat. */
-  role?: 'member' | 'admin' | 'owner' | 'botAdmin' | 'private'
+  /** Group roles come from the platform; `master` and `botAdmin` are the bot's masters and admins; `private` is a private chat. */
+  role?: 'member' | 'admin' | 'owner' | 'botAdmin' | 'master' | 'private'
   mentioned?: boolean
   /** Call the model for LLM nodes instead of answering with a placeholder. */
   useLlm?: boolean
@@ -124,8 +129,12 @@ export interface TestInput {
   userName?: string
   private?: boolean
   mentioned?: boolean
-  /** Pretend the sender is one of the bot's admins. */
+  /** Pretend the sender is one of the bot's admins. Same as `role: 'admin'`. */
   admin?: boolean
+  /** Pretend the sender has this role on the bot; `user` when unset. */
+  role?: BotRole
+  /** Pretend the sender has this role in the group. */
+  groupRole?: GroupRole
   nodeId?: string
   /** Pretend an adapter event happened, e.g. `{ name: 'group_increase', data: { group_id: 1, user_id: 2 } }`. */
   event?: { name: string; data?: Record<string, any> }
@@ -427,7 +436,7 @@ export class FlowService extends Service {
         ...(config.description ? { description: String(config.description) } : {}),
         ...(config.usage ? { usage: String(config.usage) } : {}),
         ...(config.showInHelp === false ? { hidden: true } : {}),
-        ...(config.permission === 'admin' ? { permission: 'admin' as const } : {}),
+        ...(config.permission === 'admin' || config.permission === 'master' ? { permission: config.permission as 'admin' | 'master' } : {}),
         ...(node.priority ? { priority: node.priority } : {}),
         botId,
         source: { kind: 'flow' as const, id: doc.id, name: doc.name, nodeId: node.id },
@@ -830,7 +839,7 @@ export class FlowService extends Service {
       isDirect: channel.type === 'private',
       mentioned: !!input.mentioned,
       ...(command ? { command } : {}),
-      isAdmin: !!input.admin,
+      ...testRoles(input.role ?? (input.admin ? 'admin' : 'user'), channel.type === 'group' ? input.groupRole : undefined),
       send: async () => undefined,
       reply: async () => undefined,
     }
@@ -879,7 +888,7 @@ export class FlowService extends Service {
       isDirect,
       mentioned: !!input.mentioned,
       ...(command ? { command } : {}),
-      isAdmin: input.role === 'botAdmin',
+      ...testRoles(input.role === 'master' ? 'master' : input.role === 'botAdmin' ? 'admin' : 'user', groupRole),
       send: async () => undefined,
       reply: async () => undefined,
     }
@@ -935,7 +944,7 @@ export class FlowService extends Service {
 
     // After the flows: built-in commands and plugins, in the bot's middleware order.
     const after: { kind: 'builtin' | 'plugin'; name: string; state: 'answers' | 'receives' | 'not-reached' | 'ignores'; reply?: string }[] = []
-    const builtin = command && bots.commands(botId).find((entry) => entry.source.kind === 'builtin' && commandMatches(entry, command.name))
+    const builtin = command && bots.commands(botId).find((entry) => (entry.source.kind === 'builtin' || !!bots.appCommandFor(botId, entry)) && commandMatches(entry, command.name) && (!requiredRole(entry) || roleAtLeast(session.role?.(), requiredRole(entry)!)))
     const order = [
       ...(bots.bot(botId)?.middlewareOrder() ?? []).filter((entry) => entry.plugin !== 'flows'),
       ...(builtin ? [{ plugin: `/${builtin.name}`, priority: BUILTIN_PRIORITY, builtin: true }] : []),
@@ -1038,7 +1047,9 @@ export class FlowService extends Service {
         userName: z.string().optional(),
         private: z.boolean().optional().describe('Pretend the message is a private chat'),
         mentioned: z.boolean().optional().describe('Pretend the message @-mentions the bot'),
-        admin: z.boolean().optional().describe('Pretend the sender is a bot admin, for admin-only commands'),
+        admin: z.boolean().optional().describe('Pretend the sender is a bot admin, for admin-only commands; same as role "admin"'),
+        role: z.enum(['master', 'admin', 'user']).optional().describe('Pretend the sender has this role on the bot (permissions plugin); user when omitted'),
+        groupRole: z.enum(['owner', 'admin', 'member']).optional().describe('Pretend the sender has this role in the group, for permission checks on group roles'),
         nodeId: z.string().optional().describe('Stop after this node: runs the path up to it and nothing after, to check one step'),
       }),
       handler: ({ id, ...input }) => {
@@ -1071,7 +1082,7 @@ export class FlowService extends Service {
       input: z.object({
         bot: z.string().describe('Bot id from bots.list'),
         text: z.string().min(1),
-        role: z.enum(['member', 'admin', 'owner', 'botAdmin', 'private']).optional().describe('Who sends it: a group member, group admin or owner, someone in the bot\'s admin list, or a private chat'),
+        role: z.enum(['member', 'admin', 'owner', 'botAdmin', 'master', 'private']).optional().describe('Who sends it: a group member, group admin or owner, one of the bot\'s admins (botAdmin) or masters, or a private chat'),
         mentioned: z.boolean().optional(),
         useLlm: z.boolean().optional(),
       }),

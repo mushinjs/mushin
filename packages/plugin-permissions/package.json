@@ -1,0 +1,50 @@
+{
+  "name": "@mushin/plugin-permissions",
+  "version": "0.1.0",
+  "description": "Who is master, admin or user on each bot, and the permission check node for flows",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "category": "manage",
+    "displayName": {
+      "en": "Permissions",
+      "zh-CN": "权限"
+    },
+    "description": {
+      "en": "Keeps each bot's masters and admins in one place; commands, flows and plugins check them, and the permission check node branches on them",
+      "zh-CN": "在一处管理每个机器人的主人和管理员；指令、流程和插件都按它判断，权限检测节点按它分支"
+    },
+    "provides": [
+      "permissions"
+    ],
+    "requires": {
+      "mushin": ">=0.1.0",
+      "plugins": {
+        "@mushin/plugin-bots": "*",
+        "@mushin/plugin-storage": "*"
+      }
+    },
+    "optional": {
+      "plugins": {
+        "@mushin/plugin-flows": "*"
+      }
+    },
+    "nodes": [
+      "logic.permission"
+    ]
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-bots": "workspace:*",
+    "@mushin/plugin-flows": "workspace:*",
+    "@mushin/plugin-storage": "workspace:*"
+  }
+}

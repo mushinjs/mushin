@@ -69,8 +69,23 @@ Middleware receives a `Session` for each incoming message:
 | `session.isDirect`, `session.mentioned` | Private chat; message @-mentions this bot |
 | `session.send(content)` | Reply in the same chat |
 | `session.reply(content)` | Reply quoting the incoming message |
+| `session.role()` | `'master' \| 'admin' \| 'user'` on this bot, from the permissions plugin (`'user'` without it) |
+| `session.groupRole()` | `'owner' \| 'admin' \| 'member'` in a group, when the adapter reports group roles; a promise |
 
 Call `next()` to let later plugins see the message. `ctx.bot.send(channel, content)` sends outside a session, and `ctx.bot.call(action, params)` reaches raw adapter APIs, including NapCat's extensions.
+
+### Commands with permissions
+
+Bot plugins register commands with `ctx.bot.command()`; app plugins that should answer on every bot use `ctx.bots.defineCommand()`. Set `permission` to `'admin'` or `'master'` and everyone below stays silently ignored (an admin check lets masters through):
+
+```ts
+ctx.bots.defineCommand(
+  { name: 'reload', description: 'Reload the config', permission: 'master' },
+  async (session) => { await session.send('reloaded') },
+)
+```
+
+Who is master or admin is kept per bot by `@mushin/plugin-permissions` (the bot's Permissions tab). Without that plugin, admin and master commands answer nobody.
 
 ### Replying with an LLM
 

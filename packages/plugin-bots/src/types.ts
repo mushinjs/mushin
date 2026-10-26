@@ -36,6 +36,8 @@ export interface AdapterType<C = any> {
   secrets?: string[]
   /** Segment types this adapter can send; used to compute a message's supported platforms. */
   segments: string[]
+  /** The adapter can tell a sender's group role (owner, admin, member); its bots call `bot.useRoleResolver()`. */
+  groupRoles?: boolean
   /**
    * How a bot with this config connects, for the bots list: a mode such as `ws`, `ws-reverse` or
    * `http`, the address it dials or is reached at, and for HTTP the path events are posted to.
@@ -61,6 +63,30 @@ export interface IncomingMessage {
   segments: Segment[]
   timestamp?: number
 }
+
+/**
+ * A sender's role on one bot, from the permissions plugin: `master` owns the bot, `admin` helps
+ * manage it, `user` is everyone else. Higher roles include lower ones.
+ */
+export type BotRole = 'master' | 'admin' | 'user'
+
+/** A sender's role in a group, as the platform reports it. Kept apart from bot roles. */
+export type GroupRole = 'owner' | 'admin' | 'member'
+
+export const ROLE_RANK: Record<BotRole, number> = { user: 0, admin: 1, master: 2 }
+
+/** Whether `role` meets `required`: a master passes where an admin is required. */
+export function roleAtLeast(role: BotRole | undefined, required: BotRole) {
+  return role !== undefined && ROLE_RANK[role] >= ROLE_RANK[required]
+}
+
+/** Who someone is to a bot; supplied by the permissions plugin through `bots.usePermissions()`. */
+export interface PermissionProvider {
+  roleOf(botId: string, userId: string): BotRole
+}
+
+/** Asks the platform for a sender's group role; registered per bot by adapters that can tell. */
+export type GroupRoleResolver = (target: { channel: ChannelInfo; user: UserInfo }) => Promise<GroupRole | undefined>
 
 /** Content plus an explicit source, e.g. an LLM result (`{ text, source }`). */
 export interface SourcedContent {

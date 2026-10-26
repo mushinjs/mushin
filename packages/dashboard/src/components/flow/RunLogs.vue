@@ -14,6 +14,9 @@ export interface TestInput {
   userName: string
   private: boolean
   mentioned: boolean
+  /** Pretended role on the bot and in the group. */
+  role: 'user' | 'admin' | 'master'
+  groupRole: '' | 'owner' | 'admin' | 'member'
   /** What starts the test run. */
   mode: 'message' | 'event' | 'schedule'
   eventName: string
@@ -200,6 +203,18 @@ const iconOf = (nodeId: string) => {
             <NInput v-model:value="test.userName" size="small" :placeholder="`${t('flows.testUser')}: Tester`" />
             <NCheckbox v-model:checked="test.private">{{ t('flows.testPrivate') }}</NCheckbox>
             <NCheckbox v-model:checked="test.mentioned">{{ t('flows.testMentioned') }}</NCheckbox>
+            <span class="muted small">{{ t('flows.testRole') }}</span>
+            <NRadioGroup v-model:value="test.role" size="small">
+              <NRadioButton value="user">{{ t('flows.roleUser') }}</NRadioButton>
+              <NRadioButton value="admin">{{ t('flows.roleAdmin') }}</NRadioButton>
+              <NRadioButton value="master">{{ t('flows.roleMaster') }}</NRadioButton>
+            </NRadioGroup>
+            <NRadioGroup v-if="!test.private" v-model:value="test.groupRole" size="small">
+              <NRadioButton value="">{{ t('flows.groupRoleNone') }}</NRadioButton>
+              <NRadioButton value="member">{{ t('flows.groupRoleMember') }}</NRadioButton>
+              <NRadioButton value="admin">{{ t('flows.groupRoleAdmin') }}</NRadioButton>
+              <NRadioButton value="owner">{{ t('flows.groupRoleOwner') }}</NRadioButton>
+            </NRadioGroup>
           </template>
           <template v-else-if="test.mode === 'event'">
             <span class="muted small">{{ t('flows.testEventData') }}</span>
