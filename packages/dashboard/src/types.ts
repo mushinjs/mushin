@@ -612,3 +612,64 @@ export interface DatabaseTable {
   columns: DatabaseColumn[]
   count: number
 }
+
+/** What a flow test case checks after its run; mirrors the server's `Assertion`. */
+export type TestAssertion =
+  | { kind: 'reply'; match: 'equals' | 'contains' | 'regex'; value: string; index?: number }
+  | { kind: 'noReply' }
+  | { kind: 'matched'; value: boolean }
+  | { kind: 'visits'; node: string; not?: boolean }
+  | { kind: 'branch'; node: string; exec: string }
+  | { kind: 'variable'; scope: 'chat' | 'user' | 'flow'; name: string; value: string }
+  | { kind: 'call'; action: string; not?: boolean }
+  | { kind: 'noError' }
+  | { kind: 'judge'; criterion: string }
+
+export interface TestCaseInput {
+  name: string
+  input: {
+    text?: string
+    userName?: string
+    private?: boolean
+    mentioned?: boolean
+    role?: 'master' | 'admin' | 'user'
+    groupRole?: 'owner' | 'admin' | 'member'
+    event?: { name: string; data?: Record<string, any> }
+    schedule?: string
+  }
+  replies: string[]
+  vars: { scope: 'chat' | 'user' | 'flow'; name: string; value: any }[]
+  llm: { mode: 'mock' | 'real'; replies: string[] }
+  expect: TestAssertion[]
+}
+
+export interface TestCase extends TestCaseInput {
+  id: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface TestCaseResult {
+  id: string
+  name: string
+  passed: boolean
+  failures: { index: number; message: string }[]
+  ms: number
+  trace?: RunTrace
+}
+
+export interface TestRunSummary {
+  flowId: string
+  at: number
+  source: string
+  passed: number
+  failed: number
+  uncovered: string[]
+  results: TestCaseResult[]
+}
+
+export interface FlowTests {
+  cases: TestCase[]
+  autoRun?: boolean
+  lastRun?: TestRunSummary
+}

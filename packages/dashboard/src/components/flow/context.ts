@@ -30,6 +30,8 @@ export interface FlowEditorContext {
   groups: Ref<FlowGroupDoc[]>
   /** Collapses or expands a group. */
   toggleGroup(groupId: string): void
+  /** Nodes no test case reached, marked while the tests panel asks for it. */
+  uncovered: Ref<Set<string>>
 }
 
 export const flowEditorKey: InjectionKey<FlowEditorContext> = Symbol('flow-editor')

@@ -32,6 +32,7 @@ const executing = computed(() => editor.executing.value === props.id)
 const skippedBy = computed(() => (props.data.skip ? undefined : editor.inheritedSkip.value.get(props.id)))
 /** Why this node never runs on some bot: an earlier trigger keeps the message. */
 const blocked = computed(() => (props.data.skip || skippedBy.value ? undefined : editor.blocked.value.get(props.id)))
+const uncovered = computed(() => editor.uncovered.value.has(props.id))
 
 // A node with only `next` keeps its exec output on the header; branching nodes list one row per branch, like CASE / ELSE.
 const execOut = computed(() => ports.value?.execOut ?? [])
@@ -57,7 +58,7 @@ const summary = computed(() => (info.value ? configSummary(info.value, props.dat
 <template>
   <div
     class="flow-node"
-    :class="{ selected, [`issue-${issueLevel}`]: !!issueLevel, [`run-${run}`]: !!run, executing, skip: data.skip || !!skippedBy, blocked: !!blocked }"
+    :class="{ selected, [`issue-${issueLevel}`]: !!issueLevel, [`run-${run}`]: !!run, executing, skip: data.skip || !!skippedBy, blocked: !!blocked, uncovered }"
     :style="{ '--accent': color }"
     :title="[...(skippedBy ? [t('flows.inheritedSkip', { name: skippedBy })] : []), ...(blocked ? [blocked.reason] : []), ...issues.map((issue) => issue.message)].join('\n') || undefined"
   >
@@ -68,6 +69,7 @@ const summary = computed(() => (info.value ? configSummary(info.value, props.dat
       <span v-if="data.skip" class="off-tag">{{ t('flows.nodeSkipped') }}</span>
       <span v-else-if="skippedBy" class="off-tag">{{ t('flows.upstreamSkipped') }}</span>
       <span v-else-if="blocked" class="off-tag blocked-tag">{{ t('flows.blockedTag') }}</span>
+      <span v-if="uncovered" class="off-tag uncovered-tag" :title="t('flowTests.uncoveredHint')">{{ t('flowTests.uncoveredTag') }}</span>
       <span v-if="data.priority" class="priority" :title="t('flows.priority')">{{ data.priority > 0 ? `+${data.priority}` : data.priority }}</span>
       <span class="number">{{ number }}</span>
       <span v-if="issueLevel" class="badge" :class="issueLevel">!</span>
@@ -180,6 +182,17 @@ const summary = computed(() => (info.value ? configSummary(info.value, props.dat
 
 .flow-node.blocked > :not(.handle) {
   opacity: 0.6;
+}
+
+/* No test case reaches it; shown while the tests panel marks coverage. */
+.flow-node.uncovered {
+  border-style: dashed;
+  border-color: #8a5cf5;
+}
+
+.uncovered-tag {
+  background: rgba(138, 92, 245, 0.2);
+  color: #8a5cf5;
 }
 
 .blocked-tag {

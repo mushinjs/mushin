@@ -23,6 +23,7 @@ import { nodeIcon } from '../components/flow/icons'
 import NodePalette from '../components/flow/NodePalette.vue'
 import NodePicker from '../components/flow/NodePicker.vue'
 import RunLogs, { type TestInput } from '../components/flow/RunLogs.vue'
+import TestPanel from '../components/flow/TestPanel.vue'
 import VarInput from '../components/flow/VarInput.vue'
 import SchemaForm from '../components/SchemaForm.vue'
 import { categoryColors, execOutHandle, parseHandle, portColors, portsOf, refOf, refsIn, schemaDefaults, supports, sysPorts } from '../flow'
@@ -86,6 +87,10 @@ const showPalette = ref(true)
 const showPanel = ref(true)
 const showLogs = ref(true)
 const logs = ref<InstanceType<typeof RunLogs>>()
+const logsTab = ref<'logs' | 'tests'>('logs')
+/** Test case count and failures of the last run, shown on the tests tab. */
+const testStatus = ref({ failed: 0, total: 0 })
+const uncovered = ref(new Set<string>())
 const executing = ref<string>()
 
 const issuesByNode = computed(() => {
@@ -115,6 +120,7 @@ provide(flowEditorKey, {
   execute: (nodeId: string) => runTest(nodeId),
   nodeName: (id: string) => nodeName(id),
   toggleGroup: (groupId: string) => toggleGroup(groupId),
+  uncovered,
 })
 const nodeTypes = { mushin: markRaw(FlowNodeCard), [BOX]: markRaw(FlowGroupBox) } as any
 
@@ -1451,6 +1457,25 @@ async function runTest(nodeId?: string) {
   }
 }
 
+/** Opens a test case's run in the logs and draws it on the canvas. */
+function showCaseTrace(trace: RunTrace) {
+  if (!runs.value.some((run) => run.id === trace.id)) runs.value = [trace, ...runs.value].slice(0, 20)
+  showTrace(trace)
+  nextTick(() => logs.value?.focus(trace.id))
+}
+
+/** Cases run the saved flow, so pending edits are saved first. */
+async function saveBeforeTests() {
+  if (dirty.value) await save()
+}
+
+const nodeOptions = computed(() => realNodes.value.map((node) => ({ value: node.id, label: nodeName(node.id) })))
+function execOptions(nodeId: string) {
+  const node = realNodes.value.find((item) => item.id === nodeId)
+  const info = node && types.value.get(node.data!.typeId)
+  return info ? portsOf(info, node.data!.config).execOut : []
+}
+
 function clearRuns() {
   runs.value = []
   clearHighlight()
@@ -1748,6 +1773,8 @@ watch(narrow, (value) => {
           ref="logs"
           v-model:test="test"
           v-model:open="showLogs"
+          v-model:tab="logsTab"
+          :tests="testStatus"
           :runs="runs"
           :schedules="schedules"
           :testing="testing"
@@ -1757,7 +1784,19 @@ watch(narrow, (value) => {
           @clear="clearRuns"
           @show="showTrace"
           @select="selectFromLogs"
-        />
+        >
+          <template #tests>
+            <TestPanel
+              :flow-id="flowId"
+              :nodes="nodeOptions"
+              :exec-options="execOptions"
+              :schedules="schedules"
+              :prepare="saveBeforeTests"
+              @trace="showCaseTrace"
+              @status="(value) => (testStatus = value)"
+            />
+          </template>
+        </RunLogs>
       </div>
 
       <aside v-if="showPanel" class="panel side">
