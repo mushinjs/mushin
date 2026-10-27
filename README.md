@@ -160,12 +160,13 @@ Every bot has a command list on its **Commands** tab: command nodes from the flo
 pnpm dev          # backend on :5160 and the dashboard dev server on :5173 (proxying /api)
 pnpm test         # unit and end-to-end tests (mock NapCat and mock LLM)
 pnpm typecheck    # TypeScript for all packages, vue-tsc for the dashboard
+pnpm test:flows   # the saved test cases of every flow in ./instance, offline (mushin test)
 ```
 
 | Package | Role |
 | --- | --- |
 | `@mushin/core` | Action registry, plugin manager, message and provenance types |
-| `@mushin/cli` | `mushin start` and `mushin token reset` |
+| `@mushin/cli` | `mushin start`, `mushin test` and `mushin token reset` |
 | `@mushin/plugin-storage` | JSON documents in the data directory |
 | `@mushin/plugin-database` | The database service (minato; SQLite in `data/mushin.db` by default) and the actions behind the Database page |
 | `@mushin/plugin-providers` | Provider records and the `llm` service |

@@ -169,7 +169,8 @@ export class BotManager extends Service {
         if (this.archive === archive) this.archive = undefined
       }
     })
-    for (const record of this.records) {
+    if (this.home.offline) this.logger.info('offline: bots are not started')
+    for (const record of this.home.offline ? [] : this.records) {
       if (record.enabled && this.adapterStore.has(record.adapter.type)) this.startSafely(record.id)
     }
   }
@@ -184,6 +185,7 @@ export class BotManager extends Service {
       this.adapterStore.set(adapter.id, adapter)
       this.logger.info('adapter %s is available', adapter.id)
       for (const record of this.records) {
+        if (this.home.offline) break
         if (record.enabled && record.adapter.type === adapter.id && !this.runtimes.has(record.id)) {
           this.startSafely(record.id)
         }

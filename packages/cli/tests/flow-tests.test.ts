@@ -1,4 +1,7 @@
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { testCommand } from '../src/test'
 import { startInstance, type TestInstance } from './helpers/instance'
 
 let app: TestInstance
@@ -134,5 +137,33 @@ describe('flow test cases', () => {
     await app.call('flows.tests.create', { id: flow.id, case: { name: 'judge', input: { text: '/score 5' }, expect: [{ kind: 'judge', criterion: 'encourages the user' }] } })
     const run = await app.call('flows.tests.run', { id: flow.id })
     expect(run.results[0].failures[0].message).toMatch(/provider|LLM/i)
+  })
+
+  it('runs every flow\'s cases offline from the command line', async () => {
+    const baseDir = app.baseDir
+    await app.call('plugins.enable', { package: '@mushin/plugin-demo' })
+    await app.call('plugins.configure', { id: 'demo', config: { bot: true } })
+    const configBefore = await readFile(join(baseDir, 'mushin.config.json'), 'utf8')
+    await app.stop({ keep: true })
+
+    const lines: string[] = []
+    const code = await testCommand({ baseDir, print: (line) => lines.push(line) })
+    expect(code).toBe(1)
+    expect(lines.some((line) => line.startsWith('✗ Score') && line.includes('passed'))).toBe(true)
+    expect(lines.some((line) => line.includes('No reply equals "passed with 60"; got "well done"'))).toBe(true)
+    expect(lines.at(-1)).toMatch(/^\n\d+ passed, \d+ failed in \d+ flow\(s\)$/)
+    expect(await readFile(join(baseDir, 'mushin.config.json'), 'utf8')).toBe(configBefore)
+
+    const support = await testCommand({ baseDir, flow: 'Support', print: (line) => lines.push(line) })
+    expect(support).toBe(0)
+    const json: string[] = []
+    expect(await testCommand({ baseDir, flow: 'nope', json: true, print: (line) => json.push(line) })).toBe(1)
+    expect(json).toEqual(['No flow with id or name "nope".'])
+
+    app = await startInstance({ baseDir })
+    // The offline run left the demo bot alone, and recorded where the runs came from.
+    const flows = await app.call<any[]>('flows.list')
+    const score = flows.find((flow) => flow.name === 'Score')
+    expect((await app.call('flows.tests.list', { id: score.id })).lastRun.source).toBe('cli')
   })
 })
