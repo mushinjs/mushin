@@ -6,7 +6,9 @@ let app: TestInstance
 let llm: Awaited<ReturnType<typeof createMockOpenAI>>
 let botId: string
 
-const outgoing = async () => (await app.call<any[]>('bots.messages', { id: botId, limit: 500 })).filter((record) => record.direction === 'out')
+// Check-in replies only: the sandbox's greeting (a reply to `/help`) can land at any point.
+const checkins = async () => (await app.call<any[]>('bots.messages', { id: botId, limit: 500 }))
+  .filter((record) => record.direction === 'out' && JSON.stringify(record.segments).includes('checked in'))
 
 beforeAll(async () => {
   llm = await createMockOpenAI()
@@ -85,11 +87,11 @@ describe('bot commands from the Agent', () => {
   })
 
   it('only previews a command without a target', async () => {
-    const before = (await outgoing()).length
+    const before = (await checkins()).length
     const result = await app.call('bots.commands.run', { bot: botId, command: 'checkin' })
     expect(result).toMatchObject({ simulated: true, text: '/checkin' })
     expect(JSON.stringify(result.route)).toContain('checked in')
-    expect((await outgoing()).length).toBe(before)
+    expect((await checkins()).length).toBe(before)
   })
 
   it('runs a command for real as the master, in their private chat or a group', async () => {
