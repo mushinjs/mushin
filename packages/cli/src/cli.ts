@@ -4,16 +4,20 @@ import { parseArgs } from 'node:util'
 import { type InstanceConfig, readJson } from '@mushin/core'
 import { resetAdminToken, type SignInInfo } from '@mushin/plugin-console'
 import { start } from './start'
+import { testCommand } from './test'
 
 const usage = `Usage: mushin <command> [options]
 
 Commands:
   start           Start Mushin.js (default)
   token reset     Create a new admin token for the dashboard
+  test            Run the saved test cases of every flow, offline; exits with 1 when one fails
 
 Options:
   -d, --dir <path>   Instance directory (default: the current directory, or ./instance if it holds one)
   -p, --port <port>  Override the server port
+  --flow <id|name>   test: only this flow
+  --json             test: print the results as JSON
   -h, --help         Show this help`
 
 const { values, positionals } = parseArgs({
@@ -22,6 +26,8 @@ const { values, positionals } = parseArgs({
     dir: { type: 'string', short: 'd' },
     port: { type: 'string', short: 'p' },
     help: { type: 'boolean', short: 'h' },
+    flow: { type: 'string' },
+    json: { type: 'boolean' },
   },
 })
 
@@ -96,6 +102,12 @@ if (values.help) {
   }
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
+} else if (command === 'test') {
+  if (!existsSync(join(baseDir, CONFIG))) {
+    console.error(`No Mushin.js instance in ${baseDir}. Pass the instance folder with --dir.`)
+    process.exit(1)
+  }
+  process.exit(await testCommand({ baseDir, flow: values.flow, json: values.json }))
 } else if (command === 'token' && sub === 'reset') {
   const config = await readJson<InstanceConfig>(join(baseDir, CONFIG))
   if (!config) {

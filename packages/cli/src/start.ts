@@ -1,4 +1,5 @@
-import { mkdir } from 'node:fs/promises'
+import { mkdir, mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Actions, Context, type Exporter, type InstanceConfig, Logger, type Message, PluginManager, readJson, writeJsonAtomic } from '@mushin/core'
@@ -59,6 +60,23 @@ export interface StartOptions {
   quiet?: boolean
   /** Called when the dashboard is up, with the sign-in link details. */
   onSignIn?: (info: SignInInfo) => void
+  /**
+   * For `mushin test`: bots stay offline, the web server, dashboard, Agent, MCP servers and
+   * statistics do not load, the database lives in memory, and the config file is never written.
+   */
+  offline?: boolean
+}
+
+/** Plugins `mushin test` leaves out: they serve people or reach other programs, and flows do not need them. */
+const OFFLINE_SKIP = new Set(['@cordisjs/plugin-server', '@mushin/plugin-console', '@mushin/plugin-agent', '@mushin/plugin-mcp', '@mushin/plugin-stats'])
+
+function offlineConfig(config: InstanceConfig): InstanceConfig {
+  return {
+    ...config,
+    plugins: config.plugins
+      .filter((entry) => !OFFLINE_SKIP.has(entry.package))
+      .map((entry) => (entry.package === '@mushin/plugin-database' ? { ...entry, config: { ...entry.config, driver: 'memory' } } : entry)),
+  }
 }
 
 /** Boots an instance: root context, action registry, then every app plugin in the config file. */
@@ -85,6 +103,8 @@ export async function start(options: StartOptions) {
 
   const ctx = new Context()
   ctx.baseDir = baseDir
+  ctx.offline = !!options.offline
+  if (options.offline) config = offlineConfig(config)
   if (!options.quiet) ctx.logger.exporter(consoleExporter())
 
   if (options.onSignIn) ctx.on('console/ready', options.onSignIn)
@@ -92,7 +112,8 @@ export async function start(options: StartOptions) {
   const actions = ctx.plugin(Actions)
   await actions
   const manager = ctx.plugin(PluginManager, {
-    configPath,
+    // Offline runs change the plugin list in memory; saving it would lose the real one.
+    configPath: options.offline ? join(await mkdtemp(join(tmpdir(), 'mushin-offline-')), 'mushin.config.json') : configPath,
     config,
     nodeModules: [
       fileURLToPath(new URL('../node_modules', import.meta.url)),

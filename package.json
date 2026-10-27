@@ -12,6 +12,7 @@
     "demo": "pnpm --filter @mushin/cli demo",
     "build": "pnpm --filter @mushin/dashboard build",
     "test": "vitest run",
+    "test:flows": "mushin test --dir instance",
     "typecheck": "tsc -p tsconfig.json && pnpm --filter @mushin/dashboard typecheck"
   },
   "dependencies": {

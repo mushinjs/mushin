@@ -7,6 +7,8 @@ declare module 'cordis' {
     actions: Actions
     /** The instance directory: config file, data and local plugins live here. */
     baseDir: string
+    /** Set by `mushin test`: bots stay offline and nothing reaches the outside. The launcher always sets it. */
+    offline: boolean
   }
 
   interface Events {
