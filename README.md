@@ -132,6 +132,14 @@ Pick the flow's adapter at the top of the editor (it is chosen for you when only
 
 When one message starts several triggers on a bot, across all of its flows, they run highest **priority** first (ties: older flow first), and a trigger that intercepts stops the ones after it as far as it reaches. A trigger's settings list the triggers that compete with it on each bot, with buttons to run it earlier or later. A trigger that an earlier one always keeps the message from is marked **Never runs** on the canvas, with the trigger in its way, and so are the steps only it leads to.
 
+### Test cases
+
+The **Tests** tab next to **Logs** keeps test cases for the flow. A case is a message (or an event, or a schedule tick) with the sender's role and chat, later messages that answer **Wait for reply**, variables to start from, answers for LLM nodes, and assertions: a reply equals, contains or matches a value; no reply; a trigger starts or not; the run passes a node or never reaches it; a node takes a branch; a variable ends with a value; a platform call is made or not; no node fails; or an LLM judges the replies against a sentence such as "politely refuses".
+
+**Generate** tries messages made from the flow (keywords and commands, the values its comparisons use and their neighbors, the roles its permission checks care about, every label of a classify node, a reply and no reply for each wait), keeps one case per distinct path, and records what each did as its assertions; pick the ones to keep. Cases run like a test from the Logs bar, so nothing is sent, and each case has variables of its own. LLM nodes give the case's answers (a fixed placeholder when there are none) unless the case asks for the real model. Turn on **Run after each save** to rerun every case whenever the flow is saved, and **Mark nodes no case reaches** to see what the cases miss on the canvas. **Show run** opens a case's last run in the logs.
+
+`mushin test` (or `pnpm test:flows` in this repository) runs every flow's cases without connecting any bot or opening a port, prints each result, and exits with 1 when a case fails, so it fits CI; `--flow <id or name>` runs one flow and `--json` prints the results as JSON.
+
 ### Terminal commands
 
 Enable **Terminal** on the Plugins page to get two nodes: **Run command** runs a command on the machine running Mushin.js (PowerShell on Windows and `sh` elsewhere, or pick bash, pwsh or cmd), and **Run over SSH** signs in to a server and runs it there. Both pass `stdin` in, put `stdout`, `stderr`, `code` and `error` out, and continue on `ok` when the command exits with 0, else on `failed`. Each node has a timeout (30 s by default, stopping the command and everything it started), and output is cut at the plugin's limit (64 KB per stream).
@@ -146,7 +154,7 @@ SSH servers are listed in the plugin settings: a name the nodes pick, address, p
 
 Turn a flow off with the switch on its card or at the top of the editor: it keeps its content and bots but answers no messages, events or schedules, and its commands leave `/help`, until it is turned on again.
 
-Variables live in memory and reset when Mushin.js restarts.
+Variables are saved in the database (`flows_var`) and survive restarts.
 
 ### Commands
 
