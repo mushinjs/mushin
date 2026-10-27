@@ -35,10 +35,14 @@ const props = defineProps<{
   schedules: { id: string; name: string }[]
   nodeName: (id: string) => string
   nodeType: (id: string) => string | undefined
+  /** Test cases of the flow and how many failed last time, for the tests tab. */
+  tests?: { failed: number; total: number }
 }>()
 const emit = defineEmits<{ run: []; clear: []; show: [trace: RunTrace]; select: [nodeId: string] }>()
 const test = defineModel<TestInput>('test', { required: true })
 const open = defineModel<boolean>('open', { required: true })
+/** Which tab the panel shows: run logs, or the flow's test cases (the `tests` slot). */
+const tab = defineModel<'logs' | 'tests'>('tab', { default: 'logs' })
 const { t } = useI18n()
 const editor = useFlowEditor()
 
@@ -74,8 +78,14 @@ function pickStep(trace: RunTrace | undefined) {
 function focus(id: string) {
   runId.value = id
   open.value = true
+  tab.value = 'logs'
   side.value = 'output'
   pickStep(props.runs.find((item) => item.id === id))
+}
+
+function pickTab(value: 'logs' | 'tests') {
+  tab.value = value
+  open.value = true
 }
 
 function selectRun(id: string) {
@@ -113,6 +123,7 @@ const ready = computed(() => {
 
 function focusInput() {
   open.value = true
+  tab.value = 'logs'
   input.value?.focus()
 }
 
@@ -151,98 +162,113 @@ const iconOf = (nodeId: string) => {
 <template>
   <section class="logs" :class="{ open }">
     <header class="logs-head">
-      <button type="button" class="logs-toggle" @click="open = !open">
+      <button type="button" class="logs-toggle" :aria-label="open ? t('flowTests.collapse') : t('flowTests.expand')" @click="open = !open">
         <NIcon :size="14"><ChevronDownOutline v-if="open" /><ChevronUpOutline v-else /></NIcon>
-        <span class="logs-title">{{ t('flows.logs') }}</span>
-        <NTag v-if="run" size="tiny" :bordered="false" :type="status(run).type">{{ status(run).text }}</NTag>
       </button>
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" class="tab" :class="{ active: tab === 'logs' }" :aria-selected="tab === 'logs'" @click="pickTab('logs')">
+          <span class="logs-title">{{ t('flows.logs') }}</span>
+          <NTag v-if="run && tab === 'logs'" size="tiny" :bordered="false" :type="status(run).type">{{ status(run).text }}</NTag>
+        </button>
+        <button type="button" role="tab" class="tab" :class="{ active: tab === 'tests' }" :aria-selected="tab === 'tests'" data-agent-target="flows.tests" @click="pickTab('tests')">
+          <span class="logs-title">{{ t('flowTests.tab') }}</span>
+          <NTag v-if="tests?.total" size="tiny" :bordered="false" :type="tests.failed ? 'error' : 'default'">
+            {{ tests.failed ? t('flowTests.failedCount', { n: tests.failed }) : tests.total }}
+          </NTag>
+        </button>
+      </div>
       <span class="spacer" />
-      <NInput
-        v-if="test.mode === 'message'"
-        ref="input"
-        v-model:value="test.text"
-        size="small"
-        class="test-text"
-        clearable
-        :placeholder="t('flows.testPlaceholder')"
-        @keyup.enter="emit('run')"
-      />
-      <NSelect
-        v-else-if="test.mode === 'event'"
-        :value="test.eventName || null"
-        size="small"
-        class="test-text"
-        filterable
-        tag
-        :options="eventOptions"
-        :placeholder="t('flows.testEvent')"
-        @update:value="pickEvent"
-      />
-      <NSelect
-        v-else
-        v-model:value="test.schedule"
-        size="small"
-        class="test-text"
-        :options="scheduleOptions"
-        :placeholder="schedules.length ? t('flows.testSchedule') : t('flows.testNoSchedule')"
-      />
-      <NPopover trigger="click" placement="top-end">
-        <template #trigger>
-          <NButton size="small" quaternary circle :aria-label="t('flows.testOptions')">
-            <template #icon><NIcon><OptionsOutline /></NIcon></template>
-          </NButton>
-        </template>
-        <NSpace vertical size="small" class="test-options">
-          <span class="muted small">{{ t('flows.testMode') }}</span>
-          <NRadioGroup v-model:value="test.mode" size="small">
-            <NRadioButton value="message">{{ t('flows.testModeMessage') }}</NRadioButton>
-            <NRadioButton value="event">{{ t('flows.testModeEvent') }}</NRadioButton>
-            <NRadioButton value="schedule">{{ t('flows.testModeSchedule') }}</NRadioButton>
-          </NRadioGroup>
-          <template v-if="test.mode === 'message'">
-            <NInput v-model:value="test.userName" size="small" :placeholder="`${t('flows.testUser')}: Tester`" />
-            <NCheckbox v-model:checked="test.private">{{ t('flows.testPrivate') }}</NCheckbox>
-            <NCheckbox v-model:checked="test.mentioned">{{ t('flows.testMentioned') }}</NCheckbox>
-            <span class="muted small">{{ t('flows.testRole') }}</span>
-            <NRadioGroup v-model:value="test.role" size="small">
-              <NRadioButton value="user">{{ t('flows.roleUser') }}</NRadioButton>
-              <NRadioButton value="admin">{{ t('flows.roleAdmin') }}</NRadioButton>
-              <NRadioButton value="master">{{ t('flows.roleMaster') }}</NRadioButton>
-            </NRadioGroup>
-            <NRadioGroup v-if="!test.private" v-model:value="test.groupRole" size="small">
-              <NRadioButton value="">{{ t('flows.groupRoleNone') }}</NRadioButton>
-              <NRadioButton value="member">{{ t('flows.groupRoleMember') }}</NRadioButton>
-              <NRadioButton value="admin">{{ t('flows.groupRoleAdmin') }}</NRadioButton>
-              <NRadioButton value="owner">{{ t('flows.groupRoleOwner') }}</NRadioButton>
-            </NRadioGroup>
+      <template v-if="tab === 'logs'">
+        <NInput
+          v-if="test.mode === 'message'"
+          ref="input"
+          v-model:value="test.text"
+          size="small"
+          class="test-text"
+          clearable
+          :placeholder="t('flows.testPlaceholder')"
+          @keyup.enter="emit('run')"
+        />
+        <NSelect
+          v-else-if="test.mode === 'event'"
+          :value="test.eventName || null"
+          size="small"
+          class="test-text"
+          filterable
+          tag
+          :options="eventOptions"
+          :placeholder="t('flows.testEvent')"
+          @update:value="pickEvent"
+        />
+        <NSelect
+          v-else
+          v-model:value="test.schedule"
+          size="small"
+          class="test-text"
+          :options="scheduleOptions"
+          :placeholder="schedules.length ? t('flows.testSchedule') : t('flows.testNoSchedule')"
+        />
+        <NPopover trigger="click" placement="top-end">
+          <template #trigger>
+            <NButton size="small" quaternary circle :aria-label="t('flows.testOptions')">
+              <template #icon><NIcon><OptionsOutline /></NIcon></template>
+            </NButton>
           </template>
-          <template v-else-if="test.mode === 'event'">
-            <span class="muted small">{{ t('flows.testEventData') }}</span>
-            <NInput v-model:value="test.eventData" type="textarea" size="small" class="mono" :autosize="{ minRows: 4, maxRows: 10 }" />
-          </template>
-          <span class="muted small">{{ t('flows.testReplyLines') }}</span>
-          <NInput v-model:value="test.replies" type="textarea" size="small" :autosize="{ minRows: 1, maxRows: 4 }" />
-          <span class="muted small">{{ t('flows.testHint') }}</span>
-        </NSpace>
-      </NPopover>
-      <NButton
-        size="small"
-        type="primary"
-        :loading="testing"
-        :disabled="!ready"
-        data-agent-target="flows.test"
-        @click="emit('run')"
-      >
-        <template #icon><NIcon><PlayOutline /></NIcon></template>
-        {{ t('flows.runFlow') }}
-      </NButton>
-      <NButton size="small" quaternary :disabled="!runs.length" @click="emit('clear')">
-        <template #icon><NIcon><TrashOutline /></NIcon></template>
-        <span class="clear-label">{{ t('flows.logsClear') }}</span>
-      </NButton>
+          <NSpace vertical size="small" class="test-options">
+            <span class="muted small">{{ t('flows.testMode') }}</span>
+            <NRadioGroup v-model:value="test.mode" size="small">
+              <NRadioButton value="message">{{ t('flows.testModeMessage') }}</NRadioButton>
+              <NRadioButton value="event">{{ t('flows.testModeEvent') }}</NRadioButton>
+              <NRadioButton value="schedule">{{ t('flows.testModeSchedule') }}</NRadioButton>
+            </NRadioGroup>
+            <template v-if="test.mode === 'message'">
+              <NInput v-model:value="test.userName" size="small" :placeholder="`${t('flows.testUser')}: Tester`" />
+              <NCheckbox v-model:checked="test.private">{{ t('flows.testPrivate') }}</NCheckbox>
+              <NCheckbox v-model:checked="test.mentioned">{{ t('flows.testMentioned') }}</NCheckbox>
+              <span class="muted small">{{ t('flows.testRole') }}</span>
+              <NRadioGroup v-model:value="test.role" size="small">
+                <NRadioButton value="user">{{ t('flows.roleUser') }}</NRadioButton>
+                <NRadioButton value="admin">{{ t('flows.roleAdmin') }}</NRadioButton>
+                <NRadioButton value="master">{{ t('flows.roleMaster') }}</NRadioButton>
+              </NRadioGroup>
+              <NRadioGroup v-if="!test.private" v-model:value="test.groupRole" size="small">
+                <NRadioButton value="">{{ t('flows.groupRoleNone') }}</NRadioButton>
+                <NRadioButton value="member">{{ t('flows.groupRoleMember') }}</NRadioButton>
+                <NRadioButton value="admin">{{ t('flows.groupRoleAdmin') }}</NRadioButton>
+                <NRadioButton value="owner">{{ t('flows.groupRoleOwner') }}</NRadioButton>
+              </NRadioGroup>
+            </template>
+            <template v-else-if="test.mode === 'event'">
+              <span class="muted small">{{ t('flows.testEventData') }}</span>
+              <NInput v-model:value="test.eventData" type="textarea" size="small" class="mono" :autosize="{ minRows: 4, maxRows: 10 }" />
+            </template>
+            <span class="muted small">{{ t('flows.testReplyLines') }}</span>
+            <NInput v-model:value="test.replies" type="textarea" size="small" :autosize="{ minRows: 1, maxRows: 4 }" />
+            <span class="muted small">{{ t('flows.testHint') }}</span>
+          </NSpace>
+        </NPopover>
+        <NButton
+          size="small"
+          type="primary"
+          :loading="testing"
+          :disabled="!ready"
+          data-agent-target="flows.test"
+          @click="emit('run')"
+        >
+          <template #icon><NIcon><PlayOutline /></NIcon></template>
+          {{ t('flows.runFlow') }}
+        </NButton>
+        <NButton size="small" quaternary :disabled="!runs.length" @click="emit('clear')">
+          <template #icon><NIcon><TrashOutline /></NIcon></template>
+          <span class="clear-label">{{ t('flows.logsClear') }}</span>
+        </NButton>
+      </template>
     </header>
 
-    <div v-if="open" class="logs-body">
+    <div v-if="open && tab === 'tests'" class="logs-body tests-body">
+      <slot name="tests" />
+    </div>
+    <div v-else-if="open" class="logs-body">
       <p v-if="!run" class="logs-empty muted">{{ t('flows.logsEmpty') }}</p>
       <template v-else>
         <div class="logs-steps">
@@ -359,6 +385,36 @@ const iconOf = (nodeId: string) => {
   min-width: 0;
 }
 
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.tab:hover {
+  background: rgba(127, 127, 127, 0.08);
+}
+
+.tab.active {
+  opacity: 1;
+  background: rgba(127, 127, 127, 0.14);
+}
+
 .logs-title {
   font-weight: 600;
   font-size: 13px;
@@ -383,6 +439,10 @@ const iconOf = (nodeId: string) => {
   height: min(240px, 40vh);
   display: flex;
   min-height: 0;
+}
+
+.tests-body {
+  height: min(340px, 50vh);
 }
 
 .logs-empty {
