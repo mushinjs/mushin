@@ -7,6 +7,7 @@ import { compile, type CompiledFlow, FLOW_FORMAT, interceptOf, layout, migrateIn
 import { builtinNodes, commandName, scheduleTarget } from './nodes'
 import { overlap, triggerOrder, triggerSummary, type TriggerSlot } from './order'
 import { migrateDataEdges } from './refs'
+import { branchSteps, candidates, type CaseResult, check, judgeWith, MOCK_REPLY, mockLlm, newCase, scratchVars, snapshot, type TestCase, TestCaseInput, type TestRunSummary, type TestsDocument } from './tests'
 import { VariableStore } from './variables'
 import type { ChatLine, DailyCounter, FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, FlowSource, Intercept, FlowSession, LlmLike, NodeType, PersonaResolver, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
 
@@ -15,6 +16,7 @@ export * from './graph'
 export * from './nodes'
 export * from './order'
 export * from './refs'
+export * from './tests'
 export * from './types'
 export * from './variables'
 
@@ -27,6 +29,13 @@ declare module '@mushin/core' {
     'flows/changed'(): void
     'flows/run'(trace: RunTrace): void
     'flows/step'(step: RunStep): void
+    'flows/tests'(summary: TestRunSummary): void
+  }
+}
+
+declare module 'minato' {
+  interface Tables {
+    flows_testrun: { id: number; flow: string; at: number; source: string; passed: number; failed: number; uncovered: number }
   }
 }
 
@@ -58,6 +67,8 @@ function stableJson(value: unknown): string {
 const channelKey = (channel: ChannelInfo) => `${channel.type}:${channel.id}`
 /** Daily counters of the daily quota nodes. */
 const USAGE_KEY = 'flows-usage'
+/** Test cases of a flow and its last test run. */
+const testsKey = (flowId: string) => `flows-tests/${flowId}`
 
 const nodeInput = z.object({
   id: z.string().optional().describe('Unique within the flow; generated when omitted'),
@@ -155,6 +166,14 @@ export interface TestInput {
   schedule?: string
   replies?: string[]
 }
+/** How a test run differs from the editor's test button; test cases use their own variables and model. */
+export interface TestOptions {
+  vars?: Pick<Variables, 'get' | 'set'>
+  llm?: LlmLike
+  /** Keep the trace in the flow's recent runs and send live steps (default true). */
+  record?: boolean
+}
+
 type EdgeInput = z.infer<typeof edgeInput>
 
 /** Gives nodes and edges ids, turns old data connections into references and lays out nodes that have no position. */
@@ -215,6 +234,8 @@ export class FlowService extends Service {
   private fired = new Map<string, number>()
   private watched = new Map<string, number>()
   private personas?: PersonaResolver
+  /** Where test runs are recorded, when the database plugin runs. */
+  private testRuns?: Context['database']
   private saveUsageTimer?: ReturnType<typeof setTimeout>
   /** Daily quota counters, saved a moment after they change. */
   private usage = new MemoryUsage(() => {
@@ -265,6 +286,13 @@ export class FlowService extends Service {
     }
     this.logger.info('loaded %d flow(s)', this.docs.size)
     this.home.inject(['model', 'database'], async (ctx) => {
+      ctx.model.extend('flows_testrun', {
+        id: 'unsigned', flow: 'string', at: 'double', source: 'string', passed: 'unsigned', failed: 'unsigned', uncovered: 'unsigned',
+      }, { autoInc: true, indexes: [['flow', 'at']] })
+      this.testRuns = ctx.database
+      ctx.effect(() => () => {
+        this.testRuns = undefined
+      }, 'flows test runs')
       const detach = await this.variables.attach(ctx)
       ctx.effect(() => detach, 'flows variables')
     })
@@ -648,6 +676,7 @@ export class FlowService extends Service {
     await this.save(doc)
     if (patch.enabled !== undefined) this.logger.info('%s flow %s', patch.enabled ? 'enabled' : 'disabled', this.label(doc))
     else this.logger.info('saved flow %s', this.label(doc))
+    if (patch.nodes !== undefined || patch.edges !== undefined) void this.autoRunTests(id)
     return this.describe(doc)
   }
 
@@ -657,6 +686,7 @@ export class FlowService extends Service {
     this.compiled.delete(id)
     this.traces.delete(id)
     await this.home.storage.delete(`flows/${id}`)
+    await this.home.storage.delete(testsKey(id))
     await this.variables.removeFlow(id).catch((error) => this.logger.warn('removing the variables of flow %s failed: %s', id, error))
     this.home.emit('flows/changed')
     this.logger.info('deleted flow %s', this.label(doc))
@@ -890,7 +920,7 @@ export class FlowService extends Service {
    * Sends a made-up message (or event, or schedule tick) through a flow without a bot; replies and
    * platform calls are collected, not made. `replies` answer the flow's waits for a reply, in order.
    */
-  async test(id: string, input: TestInput) {
+  async test(id: string, input: TestInput, options: TestOptions = {}) {
     const doc = this.get(id)
     if (input.nodeId && !doc.nodes.some((node) => node.id === input.nodeId)) {
       throw new MushinError('not_found', `No node with id "${input.nodeId}" in this flow`)
@@ -928,12 +958,12 @@ export class FlowService extends Service {
     const replies = [...(input.replies ?? [])]
     const result = await runFlow(compiled, {
       session,
-      vars: this.varsFor(doc.id, 'test', session),
-      llm: this.home.get('llm') as LlmLike | undefined,
+      vars: options.vars ?? this.varsFor(doc.id, 'test', session),
+      llm: options.llm ?? this.home.get('llm') as LlmLike | undefined,
       logger: this.home.logger('flows'),
       test: true,
       stopAt: input.nodeId,
-      onStep: this.onStep,
+      ...(options.record === false ? {} : { onStep: this.onStep }),
       persona: this.personaFor(doc.bots[0], session),
       ...(input.event ? { event: { name: input.event.name, data } } : {}),
       ...(input.schedule ? { scheduled: { nodeId: input.schedule, now: new Date() } } : {}),
@@ -943,7 +973,7 @@ export class FlowService extends Service {
         return { ...origin, text: reply, segments: [seg.text(reply)], send: origin.send, reply: origin.reply }
       },
     })
-    this.record(result.trace)
+    if (options.record !== false) this.record(result.trace)
     return { matched: result.matched, consumed: result.consumed, trace: result.trace, issues: this.issuesOf(doc) }
   }
 
@@ -1053,6 +1083,161 @@ export class FlowService extends Service {
     }
   }
 
+  // ---- test cases ----
+
+  async tests(id: string): Promise<TestsDocument> {
+    this.get(id)
+    return (await this.home.storage.get<TestsDocument>(testsKey(id))) ?? { cases: [] }
+  }
+
+  private async saveTests(id: string, doc: TestsDocument) {
+    await this.home.storage.set(testsKey(id), doc)
+  }
+
+  async createCase(id: string, input: TestCaseInput) {
+    const doc = await this.tests(id)
+    const item = newCase(input)
+    doc.cases.push(item)
+    await this.saveTests(id, doc)
+    return item
+  }
+
+  async updateCase(id: string, caseId: string, patch: Partial<TestCaseInput>) {
+    const doc = await this.tests(id)
+    const index = doc.cases.findIndex((item) => item.id === caseId)
+    if (index < 0) throw new MushinError('not_found', `No test case with id "${caseId}" in this flow`)
+    const next: TestCase = { ...doc.cases[index], ...TestCaseInput.partial().parse(patch), updatedAt: Date.now() }
+    doc.cases[index] = next
+    await this.saveTests(id, doc)
+    return next
+  }
+
+  async deleteCase(id: string, caseId: string) {
+    const doc = await this.tests(id)
+    const before = doc.cases.length
+    doc.cases = doc.cases.filter((item) => item.id !== caseId)
+    if (doc.cases.length === before) throw new MushinError('not_found', `No test case with id "${caseId}" in this flow`)
+    if (doc.lastRun) doc.lastRun = { ...doc.lastRun, results: doc.lastRun.results.filter((item) => item.id !== caseId) }
+    await this.saveTests(id, doc)
+    return { deleted: caseId }
+  }
+
+  async setAutoRun(id: string, autoRun: boolean) {
+    const doc = await this.tests(id)
+    doc.autoRun = autoRun
+    await this.saveTests(id, doc)
+    return { autoRun }
+  }
+
+  private async autoRunTests(id: string) {
+    try {
+      const doc = await this.tests(id)
+      if (doc.autoRun && doc.cases.length) await this.runTests(id, { source: 'save' })
+    } catch (error) {
+      this.logger.warn('running the tests of flow %s after saving failed: %s', id, error)
+    }
+  }
+
+  /** Runs one case with its own variables, made-up chat and (unless it asks for the real one) a mock model. */
+  private async runCase(id: string, item: TestCaseInput & { id: string }): Promise<CaseResult & { matched: boolean }> {
+    const vars = scratchVars(item.vars)
+    const real = this.home.get('llm') as LlmLike | undefined
+    const llm = item.llm.mode === 'real' ? real : mockLlm(item.llm.replies)
+    const started = Date.now()
+    const result = await this.test(id, { ...item.input, replies: item.replies }, { vars, record: false, ...(llm ? { llm } : {}) })
+    const failures: CaseResult['failures'] = []
+    for (const [index, assertion] of item.expect.entries()) {
+      const message = await check(assertion, {
+        trace: result.trace,
+        matched: result.matched,
+        vars,
+        ...(real ? { judge: (criterion: string, replies: string[]) => judgeWith(real, criterion, replies) } : {}),
+      }).catch((error) => `Could not check: ${error instanceof Error ? error.message : error}`)
+      if (message) failures.push({ index, message })
+    }
+    return { id: item.id, name: item.name, passed: !failures.length, failures, ms: Date.now() - started, trace: result.trace, matched: result.matched }
+  }
+
+  /** Nodes no trace reached. */
+  private uncovered(doc: FlowDocument, traces: RunTrace[]) {
+    const reached = new Set(traces.flatMap((trace) => trace.steps.map((step) => step.nodeId)))
+    return doc.nodes.filter((node) => !reached.has(node.id)).map((node) => node.id)
+  }
+
+  /** Runs a flow's test cases (all, or those in `ids`), saves the summary and says how it went. */
+  async runTests(id: string, options: { ids?: string[]; source?: string } = {}) {
+    const flow = this.get(id)
+    const doc = await this.tests(id)
+    const chosen = options.ids ? doc.cases.filter((item) => options.ids!.includes(item.id)) : doc.cases
+    const results: CaseResult[] = []
+    for (const item of chosen) {
+      const { matched: _matched, ...result } = await this.runCase(id, item)
+      results.push(result)
+    }
+    const summary: TestRunSummary = {
+      flowId: id,
+      at: Date.now(),
+      source: options.source ?? 'editor',
+      passed: results.filter((item) => item.passed).length,
+      failed: results.filter((item) => !item.passed).length,
+      uncovered: options.ids ? doc.lastRun?.uncovered ?? [] : this.uncovered(flow, results.map((item) => item.trace)),
+      results: results.map(({ trace: _trace, ...rest }) => rest),
+    }
+    // A partial run updates the results of those cases only.
+    const kept = options.ids ? (doc.lastRun?.results ?? []).filter((item) => !options.ids!.includes(item.id) && doc.cases.some((c) => c.id === item.id)) : []
+    const saved = { ...summary, results: [...kept, ...summary.results], passed: summary.passed + kept.filter((item) => item.passed).length, failed: summary.failed + kept.filter((item) => !item.passed).length }
+    await this.saveTests(id, { ...(await this.tests(id)), lastRun: saved })
+    await this.testRuns?.create('flows_testrun', { flow: id, at: summary.at, source: summary.source, passed: saved.passed, failed: saved.failed, uncovered: saved.uncovered.length })
+      .catch((error) => this.logger.warn('recording a test run failed: %s', error))
+    this.home.emit('flows/tests', saved)
+    if (saved.failed) this.logger.warn('%d of %d test case(s) of flow %s failed', saved.failed, saved.failed + saved.passed, this.label(flow))
+    // The counts cover every case; the results with traces only those that ran now.
+    return { ...saved, results }
+  }
+
+  /**
+   * Proposes test cases: tries inputs made from the flow (see `candidates`), keeps one per distinct
+   * path, and turns what each did into assertions. Nothing is saved; the caller picks which to keep.
+   */
+  async generateTests(id: string) {
+    const flow = this.get(id)
+    const compiled = this.compiledOf(flow)
+    const existing = (await this.tests(id)).cases
+    const prefixes = (() => {
+      try {
+        return this.home.get('bots')?.get(flow.bots[0])?.commands?.prefixes?.filter(Boolean)
+      } catch {}
+    })()
+    const label = (nodeId: string) => flow.nodes.find((node) => node.id === nodeId)?.label ?? nodeId
+    const seen = new Set<string>()
+    const drafts: (TestCaseInput & { path: string[] })[] = []
+    const traces: RunTrace[] = []
+    for (const candidate of candidates(compiled, prefixes?.[0] ?? '/')) {
+      const draft: TestCaseInput = {
+        name: '',
+        input: candidate.input,
+        replies: candidate.replies,
+        vars: [],
+        llm: { mode: 'mock', replies: candidate.llm.length ? [...candidate.llm, MOCK_REPLY] : [] },
+        expect: [],
+      }
+      const result = await this.runCase(id, { ...draft, id: 'draft' })
+      if (!result.matched || !result.trace.steps.length) continue
+      const path = result.trace.steps.map((step) => `${step.nodeId}:${step.exec ?? ''}`)
+      const signature = `${path.join('>')}|${result.trace.replies.join('|')}`
+      if (seen.has(signature)) continue
+      seen.add(signature)
+      traces.push(result.trace)
+      const branches = branchSteps(compiled, result.trace).map((step) => `${label(step.nodeId)}: ${step.exec}`)
+      const start = candidate.input.text ?? (candidate.input.schedule ? label(candidate.input.schedule) : '')
+      draft.name = [start, ...candidate.tags.filter((tag) => !start.includes(tag))].filter(Boolean).join(' · ') + (branches.length ? ` → ${branches.join(', ')}` : '')
+      draft.expect = snapshot(compiled, result.trace)
+      const same = existing.some((item) => JSON.stringify([item.input, item.replies, item.llm.replies]) === JSON.stringify([draft.input, draft.replies, draft.llm.replies]))
+      if (!same) drafts.push({ ...draft, path: result.trace.steps.map((step) => step.nodeId) })
+    }
+    return { drafts, uncovered: this.uncovered(flow, traces) }
+  }
+
   runs(id: string, limit = TRACE_LIMIT) {
     this.get(id)
     return (this.traces.get(id) ?? []).slice(-limit)
@@ -1148,6 +1333,64 @@ export class FlowService extends Service {
         if (!input.event && !input.schedule && !input.text) throw new MushinError('invalid_input', 'Give text, event or schedule')
         return this.test(id, input)
       },
+    })
+
+    const caseId = idInput.extend({ case: z.string().describe('Test case id from flows.tests.list') })
+
+    yield actions.define({
+      name: 'flows.tests.list',
+      description: 'The saved test cases of a flow (input, mock LLM answers, assertions), whether they run after each save, and the last run\'s results and uncovered nodes.',
+      risk: 'read',
+      input: idInput,
+      handler: ({ id }) => this.tests(id),
+    })
+
+    yield actions.define({
+      name: 'flows.tests.create',
+      description: 'Save a test case for a flow: the message that starts it (or an event or schedule trigger), later replies for "wait for reply" nodes, preset variables, how LLM nodes answer (mock by default) and assertions. Returns the case.',
+      risk: 'write',
+      input: idInput.extend({ case: TestCaseInput }),
+      handler: ({ id, case: input }) => this.createCase(id, input),
+    })
+
+    yield actions.define({
+      name: 'flows.tests.update',
+      description: 'Change a saved test case; fields given replace the old ones (expect replaces all assertions).',
+      risk: 'write',
+      input: caseId.extend({ patch: TestCaseInput.partial() }),
+      handler: ({ id, case: item, patch }) => this.updateCase(id, item, patch),
+    })
+
+    yield actions.define({
+      name: 'flows.tests.delete',
+      description: 'Delete a saved test case.',
+      risk: 'write',
+      input: caseId,
+      handler: ({ id, case: item }) => this.deleteCase(id, item),
+    })
+
+    yield actions.define({
+      name: 'flows.tests.autoRun',
+      description: 'Turn running every test case after each save of the flow on or off.',
+      risk: 'write',
+      input: idInput.extend({ autoRun: z.boolean() }),
+      handler: ({ id, autoRun }) => this.setAutoRun(id, autoRun),
+    })
+
+    yield actions.define({
+      name: 'flows.tests.generate',
+      description: 'Propose test cases for a flow: tries messages made from its triggers (with the values its comparisons use, the roles its permission checks care about, each label of a classify node, a reply and no reply for waits), keeps one per distinct path and records what each did as assertions. Nothing is saved; save the ones the user wants with flows.tests.create. Also returns nodes no proposed case reaches.',
+      risk: 'read',
+      input: idInput,
+      handler: ({ id }) => this.generateTests(id),
+    })
+
+    yield actions.define({
+      name: 'flows.tests.run',
+      description: 'Run the saved test cases of a flow (all, or the given ids) in test mode: nothing is sent and no platform API is called; LLM nodes give the case\'s mock answers unless the case asks for the real model. Returns passed and failed counts, each case\'s failures and trace, and nodes no case reached.',
+      risk: 'write',
+      input: idInput.extend({ cases: z.array(z.string()).optional() }),
+      handler: ({ id, cases }, caller) => this.runTests(id, { ...(cases ? { ids: cases } : {}), source: caller.kind === 'agent' ? 'agent' : 'editor' }),
     })
 
     yield actions.define({
