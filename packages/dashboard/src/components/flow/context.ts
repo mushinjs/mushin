@@ -1,5 +1,5 @@
 import { type ComputedRef, inject, type InjectionKey, type Ref } from 'vue'
-import type { FlowGroupDoc, FlowIssue, Intercept, NodeTypeInfo } from '../../types'
+import type { FlowGroupDoc, FlowIssue, Intercept, NodeTypeInfo, TraceStep } from '../../types'
 
 /** `skipped`: the node is set to be skipped and the run passed through it. */
 export type RunStatus = 'running' | 'ok' | 'error' | 'skipped'
@@ -32,6 +32,8 @@ export interface FlowEditorContext {
   toggleGroup(groupId: string): void
   /** Nodes no test case reached, marked while the tests panel asks for it. */
   uncovered: Ref<Set<string>>
+  /** The node's step in the run the logs show, for its inputs and outputs on hover. */
+  stepOf(nodeId: string): TraceStep | undefined
 }
 
 export const flowEditorKey: InjectionKey<FlowEditorContext> = Symbol('flow-editor')

@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { call } from '../api'
 import BotEditor from '../components/BotEditor.vue'
+import BotActivity from '../components/runs/BotActivity.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { useDataStore } from '../stores/data'
 import type { Bot } from '../types'
@@ -66,6 +67,7 @@ function connectionOf(bot: Bot) {
             </div>
             <StatusBadge :status="bot.status" :error="bot.error" />
           </div>
+          <RouterLink v-if="bot.status === 'online'" :to="`/bots/${bot.id}/runs`" class="activity" @click.stop><BotActivity :bot-id="bot.id" /></RouterLink>
           <p class="bot-desc">
             <NTag size="small" :bordered="false" class="mode-tag">{{ connectionOf(bot).tag }}</NTag>
             <span class="mono" :title="connectionOf(bot).address">{{ connectionOf(bot).address }}</span>
@@ -132,6 +134,13 @@ function connectionOf(bot: Bot) {
 .sub {
   font-size: 12px;
   opacity: 0.6;
+}
+
+.activity {
+  display: flex;
+  margin-top: 10px;
+  color: inherit;
+  text-decoration: none;
 }
 
 .mode-tag {

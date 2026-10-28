@@ -675,3 +675,31 @@ export interface FlowTests {
   autoRun?: boolean
   lastRun?: TestRunSummary
 }
+
+/** Where a run on a bot is; `waiting` is waiting for a reply, `queued` for a resource another run holds. */
+export type FlowRunStatus = 'queued' | 'running' | 'waiting' | 'ok' | 'error' | 'stopped'
+
+/** A real run on a bot, from flows.history and the `flows/activity` event. */
+export interface FlowRunInfo {
+  id: string
+  flowId: string
+  flowName: string
+  botId: string
+  source: 'message' | 'event' | 'schedule'
+  text: string
+  user?: { id: string; name?: string }
+  channel?: string
+  status: FlowRunStatus
+  node?: { id: string; type: string; label?: string }
+  startedAt: number
+  endedAt?: number
+  error?: string
+  stoppedBy?: string
+}
+
+export interface BotActivity {
+  botId: string
+  state: 'idle' | 'replying' | 'running'
+  run?: FlowRunInfo
+  count: number
+}

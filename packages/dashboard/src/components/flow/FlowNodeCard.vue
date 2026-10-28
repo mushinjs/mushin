@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { CheckmarkOutline, CloseOutline, PlayOutline } from '@vicons/ionicons5'
 import { Handle, Position } from '@vue-flow/core'
-import { NIcon, NSpin } from 'naive-ui'
-import { computed } from 'vue'
+import { NIcon, NPopover, NSpin } from 'naive-ui'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { categoryColors, configSummary, EXEC_IN, execOutHandle, portsOf, wholeRef } from '../../flow'
-import type { PortDef } from '../../types'
-import { localize } from '../../utils'
+import type { PortDef, Segment } from '../../types'
+import { localize, segmentsText } from '../../utils'
 import { type CanvasNodeData, useFlowEditor } from './context'
 import { nodeIcon } from './icons'
 
@@ -53,14 +53,41 @@ const inputRows = computed(() => (ports.value?.inputs ?? []).flatMap((port) => {
   }]
 }))
 const summary = computed(() => (info.value ? configSummary(info.value, props.data.config, locale.value) : []))
+
+// Hovering a node a moment shows what it took and gave in the run the logs show.
+const hovering = ref(false)
+let hoverTimer: number | undefined
+function enter() {
+  window.clearTimeout(hoverTimer)
+  hoverTimer = window.setTimeout(() => (hovering.value = true), 450)
+}
+function leave() {
+  window.clearTimeout(hoverTimer)
+  hovering.value = false
+}
+onBeforeUnmount(() => window.clearTimeout(hoverTimer))
+const step = computed(() => (hovering.value ? editor.stepOf(props.id) : undefined))
+const showStep = computed(() => hovering.value && (!!step.value || run.value === 'running'))
+
+const isSegments = (value: unknown): value is Segment[] => Array.isArray(value) && value.every((item) => item && typeof item === 'object' && 'type' in item && 'data' in item)
+function valueText(value: unknown) {
+  const text = value === undefined ? '' : typeof value === 'string' ? value : isSegments(value) ? segmentsText(value) : JSON.stringify(value)
+  return text.length > 160 ? `${text.slice(0, 160)}…` : text
+}
+const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(values ?? {}).slice(0, 10)
 </script>
 
 <template>
+  <NPopover :show="showStep" placement="bottom" :show-arrow="false" :style="{ maxWidth: '340px' }">
+    <template #trigger>
   <div
     class="flow-node"
     :class="{ selected, [`issue-${issueLevel}`]: !!issueLevel, [`run-${run}`]: !!run, executing, skip: data.skip || !!skippedBy, blocked: !!blocked, uncovered }"
     :style="{ '--accent': color }"
     :title="[...(skippedBy ? [t('flows.inheritedSkip', { name: skippedBy })] : []), ...(blocked ? [blocked.reason] : []), ...issues.map((issue) => issue.message)].join('\n') || undefined"
+    @mouseenter="enter"
+    @mouseleave="leave"
+    @pointerdown="leave"
   >
     <Handle v-if="ports?.execIn" :id="EXEC_IN" type="target" :position="Position.Left" class="handle head-handle" />
     <header class="flow-node-head">
@@ -116,9 +143,82 @@ const summary = computed(() => (info.value ? configSummary(info.value, props.dat
       </div>
     </div>
   </div>
+    </template>
+    <div class="step-pop">
+      <template v-if="step">
+        <div class="pop-head">
+          <strong>{{ data.label || typeTitle }}</strong>
+          <span v-if="step.skipped" class="pop-muted">{{ t('flows.logsSkipped') }}</span>
+          <span v-else :class="step.error ? 'pop-error' : 'pop-muted'">{{ step.error ? t('flows.runFailed') : t('flows.logsSuccessIn', { ms: step.ms }) }}</span>
+          <span v-if="step.exec && step.exec !== 'next'" class="pop-exec">{{ step.exec }}</span>
+        </div>
+        <div v-if="step.error" class="pop-error">{{ step.error }}</div>
+        <template v-for="side in (['inputs', 'outputs'] as const)" :key="side">
+          <div v-if="rowsOf(step[side]).length" class="pop-section">
+            <div class="pop-label">{{ side === 'inputs' ? t('flows.logsInput') : t('flows.logsOutput') }}</div>
+            <div v-for="[key, value] in rowsOf(step[side])" :key="key" class="pop-row">
+              <span class="pop-key">{{ key }}</span>
+              <span class="pop-value">{{ valueText(value) }}</span>
+            </div>
+          </div>
+        </template>
+        <div v-if="!step.error && !rowsOf(step.inputs).length && !rowsOf(step.outputs).length" class="pop-muted">{{ t('flows.logsNoOutput') }}</div>
+      </template>
+      <div v-else class="pop-muted">{{ t('runs.status.running') }}…</div>
+    </div>
+  </NPopover>
 </template>
 
 <style scoped>
+.step-pop {
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pop-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.pop-muted {
+  opacity: 0.6;
+}
+
+.pop-error {
+  color: #d03050;
+}
+
+.pop-exec {
+  padding: 0 6px;
+  border-radius: 4px;
+  background: rgba(127, 127, 127, 0.14);
+}
+
+.pop-label {
+  font-weight: 600;
+  opacity: 0.7;
+  margin-bottom: 2px;
+}
+
+.pop-row {
+  display: grid;
+  grid-template-columns: minmax(48px, max-content) 1fr;
+  gap: 8px;
+}
+
+.pop-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  opacity: 0.7;
+}
+
+.pop-value {
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
 .flow-node {
   position: relative;
   width: 240px;
