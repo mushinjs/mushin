@@ -50,7 +50,7 @@ describe('demo plugin', () => {
   it('creates the checked provider, bot and flows', async () => {
     await app.call('plugins.configure', { id: 'demo', config: allOn })
     const { providers } = await app.call('providers.list')
-    expect(providers).toMatchObject([{ name: '演示模型', type: 'demo', models: ['demo-chat'] }])
+    expect(providers).toMatchObject([{ name: '演示模型', type: 'demo', models: ['demo-chat', 'demo-embedding'] }])
     const bots = await app.call<any[]>('bots.list')
     expect(bots).toMatchObject([{ name: '演示机器人', adapter: { type: 'demo' }, provider: providers[0].id }])
     botId = bots[0].id
