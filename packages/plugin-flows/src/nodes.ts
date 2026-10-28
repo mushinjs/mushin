@@ -524,6 +524,16 @@ export function personaMessages(persona: PersonaLike | undefined, own: string) {
   ]
 }
 
+/** A message with knowledge base passages to answer from, as ai.chat sends it. */
+export function withReference(passages: string, message: string) {
+  return [
+    'Reference material from the knowledge base. Answer from it when it is relevant, and do not make up facts it does not contain; if it does not cover the question, answer as you normally would.',
+    `<reference>\n${passages}\n</reference>`,
+    '',
+    `<message>\n${message}\n</message>`,
+  ].join('\n')
+}
+
 /** Most messages kept per chat for an ai.chat node's own history. */
 const MAX_HISTORY = 50
 
@@ -557,8 +567,8 @@ const chatNode: NodeType = {
   category: 'ai',
   title: { en: 'Ask the LLM', 'zh-CN': '询问大模型' },
   description: {
-    en: 'Sends the prompt (or the message) to an LLM and outputs its reply, with earlier messages of the chat when history is on. Speaks as the run\'s persona when there is one (a persona node, or the bot\'s persona rules). Continues on "error" when the model fails or times out.',
-    'zh-CN': '把提示词（或消息）发给大模型并输出回复；开启历史时带上会话之前的消息。有人格时（人格节点，或机器人的人格规则）以该人格说话。模型出错或超时时走 error。',
+    en: 'Sends the prompt (or the message) to an LLM and outputs its reply, with earlier messages of the chat when history is on. Speaks as the run\'s persona when there is one (a persona node, or the bot\'s persona rules). Reference passages (from a knowledge search) go with this message. Continues on "error" when the model fails or times out.',
+    'zh-CN': '把提示词（或消息）发给大模型并输出回复；开启历史时带上会话之前的消息。有人格时（人格节点，或机器人的人格规则）以该人格说话。接上参考资料（来自知识库检索）时随这条消息一起发送。模型出错或超时时走 error。',
   },
   config: z.object({
     usePersona: z.boolean().default(true).meta(field('Speak as the persona', 'Uses the persona chosen by a persona node, or by the bot\'s persona rules', {
@@ -586,7 +596,10 @@ const chatNode: NodeType = {
     })),
     timeout: z.number().min(5).max(55).default(45).meta(field('Timeout (seconds)', 'A whole run may work for 60 seconds at most', { 'zh-CN': { title: '超时（秒）', description: '一次运行最多工作 60 秒' } })),
   }),
-  inputs: [{ name: 'prompt', type: 'text', title: { en: 'Prompt', 'zh-CN': '提示词' } }],
+  inputs: [
+    { name: 'prompt', type: 'text', title: { en: 'Prompt', 'zh-CN': '提示词' } },
+    { name: 'knowledge', type: 'text', title: { en: 'Reference passages', 'zh-CN': '参考资料' } },
+  ],
   outputs: [
     { name: 'reply', type: 'text', title: { en: 'Reply', 'zh-CN': '回复' } },
     { name: 'tokens', type: 'number', title: { en: 'Tokens used', 'zh-CN': '用掉的 Token' } },
@@ -606,6 +619,9 @@ const chatNode: NodeType = {
     const limit = Number(config.maxInputChars ?? 0)
     if (limit > 0 && text.length > limit) text = `${text.slice(0, limit)}…`
     const asked: ChatMessage = { role: 'user', content: prefixed && !inputs.prompt ? `${session.user.name ?? session.user.id}: ${text}` : text }
+    // Passages go with this message only; history keeps the message as it was asked.
+    const knowledge = String(inputs.knowledge ?? '').trim()
+    const sent: ChatMessage = knowledge ? { role: 'user', content: withReference(knowledge, asked.content) } : asked
     try {
       const result = await llm.chat({
         provider: config.provider || persona?.provider || provider,
@@ -616,7 +632,7 @@ const chatNode: NodeType = {
         messages: [
           ...personaMessages(persona, own),
           ...await chatHistory(context, rounds, config.historySource, prefixed),
-          asked,
+          sent,
         ],
       })
       const tokens = result.source.tokens ?? 0
@@ -635,6 +651,17 @@ const chatNode: NodeType = {
       return { exec: 'error', outputs: { reply: '', tokens: 0, model: '', error: message } }
     }
   },
+}
+
+/** Where a reply came from: the flow and node, the last LLM reply's model and persona, and the knowledge passages found. */
+function replySource(flow: { name: string }, node: { label: string }, run: NodeContext<any>['run']) {
+  return {
+    kind: 'flow' as const,
+    flow: flow.name,
+    node: node.label,
+    ...(run.llm ?? {}),
+    ...(run.knowledge?.length ? { knowledge: run.knowledge } : {}),
+  }
 }
 
 /** Fixed reply text, rewritten in the persona's voice when a persona node asked for it. */
@@ -723,7 +750,7 @@ const replyNode: NodeType = {
       ? String(inputs.text)
       : await inVoice(context, fillTemplate(config.text, { user: session.user.name ?? session.user.id, message: session.text }))
     if (!text.trim()) return { outputs: { messageId: '' } }
-    const content = { text, source: { kind: 'flow' as const, flow: flow.name, node: node.label, ...(run.llm ?? {}) } }
+    const content = { text, source: replySource(flow, node, run) }
     const sent = await (config.quote ? session.reply(content) : session.send(content))
     return { outputs: { messageId: sent?.messageId ?? '' } }
   },
@@ -772,7 +799,7 @@ const sendNode: NodeType = {
     const channel = resolveTarget(config, session.channel)
     if (!channel) throw new FlowError('Set the group or user id to send to')
     if (!text.trim()) return { outputs: { messageId: '' } }
-    const content = { text, source: { kind: 'flow' as const, flow: flow.name, node: node.label, ...(run.llm ?? {}) } }
+    const content = { text, source: replySource(flow, node, run) }
     try {
       const sent = channel === session.channel || !bot ? await session.send(content) : await bot.send(channel, content)
       return { outputs: { messageId: sent?.messageId ?? '' } }

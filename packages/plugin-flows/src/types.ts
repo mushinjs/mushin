@@ -1,4 +1,4 @@
-import type { ChannelInfo, Logger, LocalizedText, Segment, UserInfo, z } from '@mushin/core'
+import type { ChannelInfo, KnowledgeSource, Logger, LocalizedText, Segment, UserInfo, z } from '@mushin/core'
 import type { BotRole, GroupRole, ParsedCommand, SourcedContent } from '@mushin/plugin-bots'
 import type { TriggerReply } from './engine'
 
@@ -246,6 +246,8 @@ export interface RunState {
    * the first time a node asks. `null` means none.
    */
   persona?: PersonaLike | null
+  /** Passages a knowledge search node found, copied into the provenance of later replies. */
+  knowledge?: KnowledgeSource[]
   /** Called with the tokens of each LLM reply later in the run, e.g. by a daily quota node that let the run through. */
   onTokens?: ((tokens: number) => void)[]
 }

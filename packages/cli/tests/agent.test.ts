@@ -61,7 +61,9 @@ describe('agent scenes and skills', () => {
   it('lists skills and rejects unknown ones', async () => {
     const skills = await app.call<any[]>('agent.skills.list')
     expect(skills.map((skill) => skill.id)).toEqual(expect.arrayContaining(['diagnose-bot', 'build-flow', 'fix-flow', 'connect-provider']))
-    expect(skills.every((skill) => skill.source === 'builtin' && skill.enabled)).toBe(true)
+    expect(skills.every((skill) => skill.source === (skill.plugin ? 'plugin' : 'builtin') && skill.enabled)).toBe(true)
+    // Plugins add their own, such as the knowledge base's.
+    expect(skills.find((skill) => skill.id === 'answer-from-knowledge')).toMatchObject({ source: 'plugin' })
     await expect(app.call('agent.send', { text: 'hi', skills: ['nope'] })).rejects.toMatchObject({ code: 'not_found' })
     await expect(app.call('agent.send', { text: '  ' })).rejects.toMatchObject({ code: 'invalid_input' })
   })
