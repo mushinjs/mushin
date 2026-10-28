@@ -1,8 +1,8 @@
 import { type ComputedRef, inject, type InjectionKey, type Ref } from 'vue'
 import type { FlowGroupDoc, FlowIssue, Intercept, NodeTypeInfo, TraceStep } from '../../types'
 
-/** `skipped`: the node is set to be skipped and the run passed through it. */
-export type RunStatus = 'running' | 'ok' | 'error' | 'skipped'
+/** `skipped`: the node is set to be skipped and the run passed through it. `paused`: a test run waits at its breakpoint. */
+export type RunStatus = 'running' | 'ok' | 'error' | 'skipped' | 'paused'
 
 /** A run shown on the canvas: each node's and edge's state, live while it runs. */
 export interface FlowHighlight {
@@ -34,6 +34,9 @@ export interface FlowEditorContext {
   uncovered: Ref<Set<string>>
   /** The node's step in the run the logs show, for its inputs and outputs on hover. */
   stepOf(nodeId: string): TraceStep | undefined
+  /** Nodes test runs pause before. */
+  breakpoints: Ref<Set<string>>
+  toggleBreakpoint(nodeId: string): void
 }
 
 export const flowEditorKey: InjectionKey<FlowEditorContext> = Symbol('flow-editor')

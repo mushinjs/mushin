@@ -506,7 +506,7 @@ export interface RunStep {
   test: boolean
   nodeId: string
   edgeId?: string
-  status: 'running' | 'ok' | 'error' | 'skipped'
+  status: 'running' | 'ok' | 'error' | 'skipped' | 'paused'
 }
 
 export interface PerfSample {
@@ -702,4 +702,13 @@ export interface BotActivity {
   state: 'idle' | 'replying' | 'running'
   run?: FlowRunInfo
   count: number
+}
+
+/** A test run waiting at a breakpoint, from the `flows/paused` event. */
+export interface FlowPause {
+  runId: string
+  flowId: string
+  nodeId: string
+  inputs: Record<string, unknown>
+  trace: RunTrace
 }

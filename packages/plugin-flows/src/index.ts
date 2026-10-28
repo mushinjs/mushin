@@ -2,7 +2,7 @@ import { type ChannelInfo, Context, MushinError, randomId, seg, Service, toJsonS
 import { type BotEvent, type BotRole, BUILTIN_PRIORITY, type CommandEntry, commandMatches, type GroupRole, helpText, requiredRole, roleAtLeast, splitCommand } from '@mushin/plugin-bots'
 import type {} from '@mushin/plugin-providers'
 import type {} from '@mushin/plugin-storage'
-import { FlowError, localDay, matchTriggers, MemoryUsage, runFlow, type RunEnvironment, type TriggerMatch } from './engine'
+import { FlowError, localDay, matchTriggers, MemoryUsage, type PauseAction, type PauseInfo, runFlow, type RunEnvironment, type TriggerMatch } from './engine'
 import { compile, type CompiledFlow, FLOW_FORMAT, interceptOf, layout, migrateIntercept, triggerPriority } from './graph'
 import { builtinNodes, commandName, scheduleTarget } from './nodes'
 import { overlap, triggerOrder, triggerSummary, type TriggerSlot } from './order'
@@ -37,6 +37,7 @@ declare module '@mushin/core' {
     'flows/step'(step: RunStep): void
     'flows/tests'(summary: TestRunSummary): void
     'flows/activity'(run: RunInfo): void
+    'flows/paused'(pause: FlowPause): void
   }
 }
 
@@ -155,7 +156,19 @@ export interface RouteInput {
   useLlm?: boolean
 }
 
+/** A test run waiting at a breakpoint, sent to the editor; `flows.debug` answers it. */
+export interface FlowPause extends Omit<PauseInfo, 'trace'> {
+  runId: string
+  flowId: string
+  trace: RunTrace
+}
+
+/** How long a test run waits at a breakpoint before it stops. */
+const PAUSE_LIMIT = 600_000
+
 export interface TestInput {
+  /** Pause before these nodes; only for people in the editor, who answer with flows.debug. */
+  breakpoints?: string[]
   text?: string
   userName?: string
   private?: boolean
@@ -243,6 +256,8 @@ export class FlowService extends Service {
   /** Bot contexts running the flows bot plugin, by bot id; event and schedule runs use them. */
   private runners = new Map<string, Context>()
   private waiters = new Set<Waiter>()
+  /** Test runs paused at a breakpoint, by run id. */
+  private paused = new Map<string, (action: PauseAction) => void>()
   /** `${flowId}|${nodeId}|${botId}` → when a schedule trigger last fired, and when it started being watched. */
   private fired = new Map<string, number>()
   private watched = new Map<string, number>()
@@ -323,6 +338,7 @@ export class FlowService extends Service {
     yield this.home.effect(() => () => {
       for (const waiter of this.waiters) waiter.resolve(undefined)
       this.waiters.clear()
+      for (const answer of this.paused.values()) answer('stop')
     }, 'flows waiters')
   }
 
@@ -1042,6 +1058,7 @@ export class FlowService extends Service {
       test: true,
       stopAt: input.nodeId,
       ...(options.record === false ? {} : { onStep: this.onStep }),
+      ...(input.breakpoints?.length ? { breakpoints: new Set(input.breakpoints), onPause: (pause: PauseInfo) => this.pause(doc.id, pause) } : {}),
       persona: this.personaFor(doc.bots[0], session),
       ...(input.event ? { event: { name: input.event.name, data } } : {}),
       ...(input.schedule ? { scheduled: { nodeId: input.schedule, now: new Date() } } : {}),
@@ -1053,6 +1070,29 @@ export class FlowService extends Service {
     })
     if (options.record !== false) this.record(result.trace)
     return { matched: result.matched, consumed: result.consumed, trace: result.trace, issues: this.issuesOf(doc) }
+  }
+
+  /** Waits for flows.debug to say how a paused test run goes on; it stops after `PAUSE_LIMIT`. */
+  private pause(flowId: string, pause: PauseInfo) {
+    const runId = pause.trace.id
+    return new Promise<PauseAction>((resolve) => {
+      const timer = setTimeout(() => answer('stop'), PAUSE_LIMIT)
+      const answer = (action: PauseAction) => {
+        clearTimeout(timer)
+        this.paused.delete(runId)
+        resolve(action)
+      }
+      this.paused.set(runId, answer)
+      this.home.emit('flows/paused', { ...pause, runId, flowId, trace: structuredClone(pause.trace) })
+    })
+  }
+
+  /** Answers a test run paused at a breakpoint. */
+  debug(runId: string, action: PauseAction) {
+    const answer = this.paused.get(runId)
+    if (!answer) throw new MushinError('not_found', `Run "${runId}" is not paused`)
+    answer(action)
+    return { runId, action }
   }
 
   /**
@@ -1406,11 +1446,22 @@ export class FlowService extends Service {
         role: z.enum(['master', 'admin', 'user']).optional().describe('Pretend the sender has this role on the bot (permissions plugin); user when omitted'),
         groupRole: z.enum(['owner', 'admin', 'member']).optional().describe('Pretend the sender has this role in the group, for permission checks on group roles'),
         nodeId: z.string().optional().describe('Stop after this node: runs the path up to it and nothing after, to check one step'),
+        breakpoints: z.array(z.string()).optional().describe('Editor only: node ids to pause before'),
       }),
-      handler: ({ id, ...input }) => {
+      handler: ({ id, ...input }, caller) => {
         if (!input.event && !input.schedule && !input.text) throw new MushinError('invalid_input', 'Give text, event or schedule')
+        // Only someone in the editor can answer a breakpoint.
+        if (caller.kind !== 'api') delete input.breakpoints
         return this.test(id, input)
       },
+    })
+
+    yield actions.define({
+      name: 'flows.debug',
+      description: 'Editor only: tell a test run paused at a breakpoint to continue to the next breakpoint, pause again at the next node (step), or stop.',
+      risk: 'write',
+      input: z.object({ runId: z.string(), action: z.enum(['continue', 'step', 'stop']) }),
+      handler: ({ runId, action }) => this.debug(runId, action),
     })
 
     yield actions.define({

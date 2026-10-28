@@ -126,4 +126,29 @@ describe('run monitoring', () => {
     // The second run started once the first ended.
     expect(done[0].endedAt - done[1].endedAt).toBeGreaterThanOrEqual(500)
   })
+
+  it('pauses test runs at breakpoints, then steps, continues or stops', async () => {
+    const flow = await app.call('flows.create', command('三步', [
+      { id: 'a', type: 'action.reply', config: { text: '一' } },
+      { id: 'b', type: 'action.reply', config: { text: '二 {{sys.text}}' } },
+      { id: 'c', type: 'action.reply', config: { text: '三' } },
+    ]))
+    const pauses: any[] = []
+    const off = app.ctx.on('flows/paused', (pause: any) => void pauses.push(pause))
+    const running = app.call('flows.test', { id: flow.id, text: '/三步', breakpoints: ['a'] })
+    await waitFor(() => pauses.length === 1)
+    expect(pauses[0]).toMatchObject({ flowId: flow.id, nodeId: 'a', trace: { steps: [{ nodeId: 'cmd' }] } })
+    await app.call('flows.debug', { runId: pauses[0].runId, action: 'step' })
+    await waitFor(() => pauses.length === 2)
+    expect(pauses[1]).toMatchObject({ nodeId: 'b', inputs: {}, trace: { replies: ['一'] } })
+    await app.call('flows.debug', { runId: pauses[0].runId, action: 'continue' })
+    expect((await running).trace.replies).toEqual(['一', '二 /三步', '三'])
+    await expect(app.call('flows.debug', { runId: pauses[0].runId, action: 'continue' })).rejects.toMatchObject({ code: 'not_found' })
+
+    const stopping = app.call('flows.test', { id: flow.id, text: '/三步', breakpoints: ['b'] })
+    await waitFor(() => pauses.length === 3)
+    await app.call('flows.debug', { runId: pauses[2].runId, action: 'stop' })
+    expect((await stopping).trace).toMatchObject({ replies: ['一'], error: 'Stopped at a breakpoint' })
+    off()
+  })
 })

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CheckmarkOutline, CloseOutline, PlayOutline } from '@vicons/ionicons5'
+import { CheckmarkOutline, CloseOutline, PauseOutline, PlayOutline } from '@vicons/ionicons5'
 import { Handle, Position } from '@vue-flow/core'
 import { NIcon, NPopover, NSpin } from 'naive-ui'
 import { computed, onBeforeUnmount, ref } from 'vue'
@@ -33,6 +33,7 @@ const skippedBy = computed(() => (props.data.skip ? undefined : editor.inherited
 /** Why this node never runs on some bot: an earlier trigger keeps the message. */
 const blocked = computed(() => (props.data.skip || skippedBy.value ? undefined : editor.blocked.value.get(props.id)))
 const uncovered = computed(() => editor.uncovered.value.has(props.id))
+const breakpoint = computed(() => editor.breakpoints.value.has(props.id))
 
 // A node with only `next` keeps its exec output on the header; branching nodes list one row per branch, like CASE / ELSE.
 const execOut = computed(() => ports.value?.execOut ?? [])
@@ -82,7 +83,7 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
     <template #trigger>
   <div
     class="flow-node"
-    :class="{ selected, [`issue-${issueLevel}`]: !!issueLevel, [`run-${run}`]: !!run, executing, skip: data.skip || !!skippedBy, blocked: !!blocked, uncovered }"
+    :class="{ selected, [`issue-${issueLevel}`]: !!issueLevel, [`run-${run}`]: !!run, executing, skip: data.skip || !!skippedBy, blocked: !!blocked, uncovered, breakpoint }"
     :style="{ '--accent': color }"
     :title="[...(skippedBy ? [t('flows.inheritedSkip', { name: skippedBy })] : []), ...(blocked ? [blocked.reason] : []), ...issues.map((issue) => issue.message)].join('\n') || undefined"
     @mouseenter="enter"
@@ -90,6 +91,7 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
     @pointerdown="leave"
   >
     <Handle v-if="ports?.execIn" :id="EXEC_IN" type="target" :position="Position.Left" class="handle head-handle" />
+    <button v-if="breakpoint" type="button" class="bp nodrag" :title="t('flows.breakpointHint')" :aria-label="t('flows.menuRemoveBreakpoint')" @click.stop="editor.toggleBreakpoint(id)" />
     <header class="flow-node-head">
       <span class="icon"><NIcon :size="15"><component :is="icon" /></NIcon></span>
       <span class="name">{{ data.label || typeTitle }}</span>
@@ -101,6 +103,7 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
       <span class="number">{{ number }}</span>
       <span v-if="issueLevel" class="badge" :class="issueLevel">!</span>
       <NSpin v-else-if="run === 'running'" :size="12" class="run-spin" />
+      <span v-else-if="run === 'paused'" class="run-mark paused"><NIcon :size="11"><PauseOutline /></NIcon></span>
       <span v-else-if="run && run !== 'skipped'" class="run-mark" :class="run">
         <NIcon :size="11"><CheckmarkOutline v-if="run === 'ok'" /><CloseOutline v-else /></NIcon>
       </span>
@@ -148,7 +151,8 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
       <template v-if="step">
         <div class="pop-head">
           <strong>{{ data.label || typeTitle }}</strong>
-          <span v-if="step.skipped" class="pop-muted">{{ t('flows.logsSkipped') }}</span>
+          <span v-if="run === 'paused'" class="pop-paused">{{ t('flows.pausedShort') }}</span>
+          <span v-else-if="step.skipped" class="pop-muted">{{ t('flows.logsSkipped') }}</span>
           <span v-else :class="step.error ? 'pop-error' : 'pop-muted'">{{ step.error ? t('flows.runFailed') : t('flows.logsSuccessIn', { ms: step.ms }) }}</span>
           <span v-if="step.exec && step.exec !== 'next'" class="pop-exec">{{ step.exec }}</span>
         </div>
@@ -162,7 +166,7 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
             </div>
           </div>
         </template>
-        <div v-if="!step.error && !rowsOf(step.inputs).length && !rowsOf(step.outputs).length" class="pop-muted">{{ t('flows.logsNoOutput') }}</div>
+        <div v-if="!step.error && !rowsOf(step.inputs).length && !rowsOf(step.outputs).length" class="pop-muted">{{ run === 'paused' ? t('flows.logsNoInput') : t('flows.logsNoOutput') }}</div>
       </template>
       <div v-else class="pop-muted">{{ t('runs.status.running') }}…</div>
     </div>
@@ -189,6 +193,10 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
 
 .pop-error {
   color: #d03050;
+}
+
+.pop-paused {
+  color: #f0a020;
 }
 
 .pop-exec {
@@ -254,6 +262,26 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
 
 .flow-node.run-error {
   border-color: #d03050;
+}
+
+.flow-node.run-paused {
+  border-color: #f0a020;
+  box-shadow: 0 0 0 3px rgba(240, 160, 32, 0.25), 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+/* A red dot on the left edge, like a debugger's gutter. */
+.bp {
+  position: absolute;
+  top: 9px;
+  left: -16px;
+  width: 11px;
+  height: 11px;
+  padding: 0;
+  border: 2px solid var(--flow-node-bg, #fff);
+  border-radius: 50%;
+  background: #d03050;
+  cursor: pointer;
+  z-index: 2;
 }
 
 .flow-node.run-running {
@@ -387,6 +415,10 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
 
 .run-mark.ok {
   background: #18a058;
+}
+
+.run-mark.paused {
+  background: #f0a020;
 }
 
 .run-step {

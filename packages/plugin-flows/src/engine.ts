@@ -71,12 +71,28 @@ export interface RunEnvironment {
   locks?: ResourceLocks
   /** Told when the run starts and stops waiting in a resource's queue. */
   onQueue?(waiting: boolean, resource: string): void
+  /** Nodes to pause before, for debugging test runs; needs `onPause`. */
+  breakpoints?: Set<string>
+  /**
+   * Called before a node at a breakpoint (or the next node after a step) runs; the run waits for
+   * the answer: go on to the next breakpoint, pause again at the next node, or stop.
+   */
+  onPause?(pause: PauseInfo): Promise<PauseAction>
   /** Run only this trigger, already matched by the caller (which ordered triggers across flows). */
   matched?: TriggerMatch
   /** The persona the bot's rules give this message, looked up when a node first asks. */
   persona?(): Promise<PersonaLike | undefined> | PersonaLike | undefined
   /** Daily counters that survive restarts; a scratch store when not given (tests and previews). */
   usage?: UsageStore
+}
+
+export type PauseAction = 'continue' | 'step' | 'stop'
+
+/** Where a debugged run paused: before `nodeId` runs, with the inputs it will get and the trace so far. */
+export interface PauseInfo {
+  nodeId: string
+  inputs: Record<string, unknown>
+  trace: RunTrace
 }
 
 /** Local calendar day, `YYYY-MM-DD`; daily counters reset at local midnight. */
@@ -284,6 +300,8 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
     return state.persona ?? undefined
   }
   let steps = 0
+  /** Pause before the next node, after a step at a breakpoint. */
+  let stepping = false
   let matched = false
   let consumed = false
   let stopped = false
@@ -374,8 +392,20 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
       await follow(id, exec)
       return
     }
-    const started = Date.now()
     const inputs = resolveInputs(id)
+    if (env.onPause && (stepping || env.breakpoints?.has(id))) {
+      step(id, 'paused', edgeId)
+      budget?.pause()
+      let action: PauseAction
+      try {
+        action = await untilAborted(env.onPause({ nodeId: id, inputs, trace }), signal)
+      } finally {
+        budget?.resume()
+      }
+      if (action === 'stop') throw new FlowError('Stopped at a breakpoint')
+      stepping = action === 'step'
+    }
+    const started = Date.now()
     step(id, 'running', edgeId)
     let exec: string | undefined
     const type = entry.type
