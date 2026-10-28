@@ -264,6 +264,8 @@ export function apply(ctx: Context) {
 
 Flows have tables of their own (`flow_<name>`), which users declare on the Database page and the database nodes read and write. A plugin can declare one too with `ctx.flows.tables.define(name, fields)`, and use `ctx.flows.tables.query()` and the like to read it. A node type that needs something which may be missing, such as the database, can return a reason from `unavailable()`; the editor then greys it out with that text and flows using it get an error. Call `ctx.flows.recompile()` when the answer changes.
 
+Nodes that drive a tool for minutes, such as a game automation client, set `long: true`: their time does not count toward the run's 60-second working limit, so they must keep to a timeout of their own and stop when `context.signal` aborts (the user can stop a run from its bot's Runs tab). When runs must not use the tool at the same time, return its name from `resource(config)`: one run at a time holds the resource, from the first node that names it until the run ends, and other runs queue and show as queued. `context.runId` is the run's id as `flows.history` lists it.
+
 ## Provider types and adapters
 
 - A provider type calls `ctx.llm.defineType({ id, displayName, config, secrets, presets, create })`. `create` returns a client with `chat()` and, optionally, `stream()` and `listModels()`. See `packages/plugin-provider-openai`.
