@@ -42,5 +42,6 @@ export function refreshChoices() {
 
 on('manager/changed', refreshChoices)
 on('personas/changed', refreshChoices)
+on('knowledge/changed', refreshChoices)
 // Flow tables and their fields are choices of the database nodes.
 on('flows/changed', refreshChoices)
