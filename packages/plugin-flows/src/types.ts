@@ -205,6 +205,8 @@ export interface NodeContext<C> extends TriggerContext<C> {
   inputs: Record<string, any>
   flow: { id: string; name: string }
   node: { id: string; label: string }
+  /** This run's id, as flows.history lists it. */
+  runId: string
   llm?: LlmLike
   /** The bot's default provider id, if it has one. */
   provider?: string

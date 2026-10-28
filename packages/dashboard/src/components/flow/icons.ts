@@ -6,7 +6,7 @@ import {
   HappyOutline, IdCardOutline, InformationCircleOutline, KeyOutline, MailUnreadOutline, MedalOutline, MegaphoneOutline,
   NotificationsOutline, PeopleOutline, PersonAddOutline, PersonOutline, PersonRemoveOutline, PricetagOutline, RibbonOutline,
   ReturnDownBackOutline, ShieldCheckmarkOutline, ShieldHalfOutline, StarOutline, ThumbsUpOutline, TimeOutline, TrashBinOutline,
-  ChatbubbleOutline, CheckmarkDoneOutline, GridOutline, VolumeMuteOutline,
+  ChatbubbleOutline, CheckmarkDoneOutline, GridOutline, StopCircleOutline, VolumeMuteOutline,
 } from '@vicons/ionicons5'
 import type { Component } from 'vue'
 import type { NodeCategory } from '../../types'
@@ -20,6 +20,7 @@ const byType: Record<string, Component> = {
   'logic.random': ShuffleOutline,
   'logic.cooldown': StopwatchOutline,
   'logic.delay': HourglassOutline,
+  'logic.stopRuns': StopCircleOutline,
   'data.text': TextOutline,
   'data.message': MailOpenOutline,
   'data.getVar': ServerOutline,

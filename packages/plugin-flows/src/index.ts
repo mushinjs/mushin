@@ -9,7 +9,7 @@ import { overlap, triggerOrder, triggerSummary, type TriggerSlot } from './order
 import { migrateDataEdges } from './refs'
 import { branchSteps, candidates, type CaseResult, check, judgeWith, MOCK_REPLY, mockLlm, newCase, scratchVars, snapshot, type TestCase, TestCaseInput, type TestRunSummary, type TestsDocument } from './tests'
 import { FIELD_TYPES, TableField, TableName, tableNodes, TableStore } from './tables'
-import { KEEP_DAYS, type RunInfo, type RunStatus, RunStore } from './runs'
+import { KEEP_DAYS, type RunInfo, type RunStatus, RunStore, stopRunsNode } from './runs'
 import { VariableStore } from './variables'
 import type { ChatLine, DailyCounter, FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, FlowSource, Intercept, FlowSession, LlmLike, NodeType, PersonaResolver, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
 
@@ -281,6 +281,7 @@ export class FlowService extends Service {
       return this.saveUsage()
     }, 'flows usage')
     for (const type of builtinNodes) yield this.defineNode(type)
+    yield this.defineNode(stopRunsNode(this.runs))
     await this.tables.load()
     for (const type of tableNodes(this.tables)) yield this.defineNode(type)
     // Flows saved before references replaced data connections, with renamed node types, or before
@@ -1427,6 +1428,14 @@ export class FlowService extends Service {
       risk: 'dangerous',
       input: z.object({ name: z.string() }),
       handler: ({ name }) => this.tables.drop(name),
+    })
+
+    yield actions.define({
+      name: 'flows.choices',
+      description: 'Flows as { value: id, label: name }, for forms.',
+      risk: 'read',
+      input: z.object({}),
+      handler: () => [...this.docs.values()].sort((a, b) => a.createdAt - b.createdAt).map((doc) => ({ value: doc.id, label: doc.name })),
     })
 
     yield actions.define({

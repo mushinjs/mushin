@@ -326,6 +326,7 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
       vars,
       flow: { id: flow.doc.id, name: flow.doc.name },
       node: { id, label: entry.node.label || entry.node.type },
+      runId: trace.id,
       llm: env.llm,
       provider: env.provider,
       logger: env.logger,
