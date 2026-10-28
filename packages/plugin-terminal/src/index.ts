@@ -121,8 +121,12 @@ const commandField = (en: string, zh: string) => z.string().trim().min(1).max(20
   { 'zh-CN': { title: '命令', description: `${zh}{{n1.rest}} 这样的变量引用会作为一个加了引号的参数插入，消息内容无法注入额外命令。` } },
 ))
 
-const timeoutField = z.number().int().min(1).max(3600).default(30).meta(field('Timeout (s)', 'Stop the command after this many seconds', {
-  'zh-CN': { title: '超时（秒）', description: '超过这么多秒后终止命令' },
+const timeoutField = z.number().int().min(1).max(86_400).default(30).meta(field('Timeout (s)', 'Stop the command after this many seconds, at most a day. The time does not count toward the run\'s one-minute working limit', {
+  'zh-CN': { title: '超时（秒）', description: '超过这么多秒后终止命令，最长一天。这段时间不计入运行一分钟的工作时间上限' },
+}))
+
+const resourceField = z.string().trim().max(40).default('').meta(field('Resource', 'Runs whose nodes name the same resource (e.g. bettergi) take turns: one run holds it from this node until it ends, the others queue. Empty: no queue', {
+  'zh-CN': { title: '占用资源', description: '填写相同资源名（例如 bettergi）的运行会轮流使用：一个运行从这个节点起占用它直到运行结束，其他运行排队等候。留空则不排队' },
 }))
 
 const cwdField = (en: string, zh: string) => z.string().default('').meta(field('Working directory', en, {
@@ -181,7 +185,7 @@ export function terminalNodes(env: TerminalEnv): NodeType[] {
   }))
   const shellOf = (shell: string): LocalShell => (shell === 'default' ? config.shell : shell as LocalShell)
 
-  const local: NodeType<{ command: string; shell: string; cwd: string; timeout: number }> = {
+  const local: NodeType<{ command: string; shell: string; cwd: string; timeout: number; resource: string }> = {
     kind: 'action',
     type: 'terminal.local',
     category: 'action',
@@ -196,11 +200,14 @@ export function terminalNodes(env: TerminalEnv): NodeType[] {
       shell: localShell,
       cwd: cwdField('Empty uses the Terminal plugin\'s working directory', '留空使用终端插件设置的工作目录'),
       timeout: timeoutField,
+      resource: resourceField,
     }),
     escapeConfig: { command: (value, raw) => quote(value, quotingOf(shellOf(raw.shell ?? 'default'))) },
     inputs,
     outputs,
     execOut: ['ok', 'failed'],
+    long: true,
+    resource: (values) => values.resource || undefined,
     async run(context) {
       if (!config.local) throw new FlowError('Local commands are turned off in the Terminal plugin settings')
       const shell = shellOf(context.config.shell)
@@ -219,7 +226,7 @@ export function terminalNodes(env: TerminalEnv): NodeType[] {
     { 'zh-CN': { title: '服务器', description: '终端插件设置中的 SSH 服务器' } },
   ))
 
-  const ssh: NodeType<{ host: string; command: string; cwd: string; timeout: number }> = {
+  const ssh: NodeType<{ host: string; command: string; cwd: string; timeout: number; resource: string }> = {
     kind: 'action',
     type: 'terminal.ssh',
     category: 'action',
@@ -234,6 +241,7 @@ export function terminalNodes(env: TerminalEnv): NodeType[] {
       command: commandField('Runs in the server\'s shell.', '在服务器的 Shell 中运行。'),
       cwd: cwdField('Empty uses the login directory', '留空使用登录后的目录'),
       timeout: timeoutField,
+      resource: resourceField,
     }),
     escapeConfig: {
       command: (value, raw) => quote(value, config.hosts.find((host) => host.id === raw.host)?.shell ?? 'posix'),
@@ -241,6 +249,8 @@ export function terminalNodes(env: TerminalEnv): NodeType[] {
     inputs,
     outputs,
     execOut: ['ok', 'failed'],
+    long: true,
+    resource: (values) => values.resource || undefined,
     async run(context) {
       const host = findHost(config, context.config.host)
       if (context.test && !config.runInTests) return dryRun(`${host.username}@${host.host}`, context.config.command)

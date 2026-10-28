@@ -94,6 +94,17 @@ export interface ActionNodeType<C = any> extends NodeTypeBase<C> {
   /** Exec outputs; defaults to `['next']`. */
   execOut?: string[]
   execOutFrom?: ExecOutFromConfig
+  /**
+   * The node may work longer than a run's working time (`RUN_LIMIT`) allows: its time does not
+   * count toward it, and the node keeps to its own timeout instead. For commands and other tools.
+   */
+  long?: boolean
+  /**
+   * A resource the node uses, such as `bettergi`, from its config (references filled in). One run
+   * at a time holds a resource, from its first node that uses it until the run ends; other runs
+   * that need it queue in order.
+   */
+  resource?(config: C): string | undefined
   run(context: NodeContext<C>): Promise<NodeResult | void> | NodeResult | void
 }
 
