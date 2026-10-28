@@ -34,9 +34,13 @@ export function portsOf(type: NodeTypeInfo, config: Record<string, any>): NodePo
     execOut = [...new Set([...names.map((name) => name.trim()), ...(type.execOutFrom.extra ?? [])])]
   }
   let outputs = type.outputs
-  if (type.outputsFrom?.format === 'signature') {
+  if (type.outputsFrom) {
     const taken = new Set(outputs.map((port) => port.name))
-    const extra = parseSignature(String(config?.[type.outputsFrom.key] ?? '')).filter((arg) => !taken.has(arg.name) && !!taken.add(arg.name))
+    const value = config?.[type.outputsFrom.key]
+    const args = type.outputsFrom.format === 'names'
+      ? (Array.isArray(value) ? value : []).filter((name): name is string => typeof name === 'string' && !!name.trim()).map((name) => ({ name: name.trim(), type: 'any' as const }))
+      : parseSignature(String(value ?? ''))
+    const extra = args.filter((arg) => !taken.has(arg.name) && !!taken.add(arg.name))
     outputs = [...outputs, ...extra.map((arg) => ({ name: arg.name, type: arg.type, title: arg.name }))]
   }
   return { execIn: type.execIn, execOut, inputs: type.inputs, outputs }
@@ -100,7 +104,9 @@ export const portColors: Record<PortType, string> = {
 }
 
 /** Whether a node type works on the flow's adapter; with no adapter chosen every node does. */
-export function supports(type: Pick<NodeTypeInfo, 'platforms'>, adapter: string | undefined) {
+/** Whether a node can be added: it works with the adapter, and nothing it needs is missing. */
+export function supports(type: Pick<NodeTypeInfo, 'platforms' | 'unavailable'>, adapter: string | undefined) {
+  if (type.unavailable) return false
   return !adapter || !type.platforms?.length || type.platforms.includes(adapter)
 }
 

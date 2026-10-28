@@ -365,9 +365,11 @@ export interface NodeTypeInfo {
   execOut: string[]
   execOutFrom?: { key: string; extra?: string[] }
   /** More outputs read from config: `signature` makes one output per command argument. */
-  outputsFrom?: { key: string; format: 'signature' }
+  outputsFrom?: { key: string; format: 'signature' | 'names' }
   /** Adapter ids the node works with; omitted means every adapter. */
   platforms?: string[]
+  /** Why the node cannot be used now, e.g. a plugin it needs is off. */
+  unavailable?: LocalizedText
 }
 
 export interface FlowNodeDoc {

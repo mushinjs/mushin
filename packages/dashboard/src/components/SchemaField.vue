@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { InformationCircleOutline } from '@vicons/ionicons5'
-import { NCheckbox, NDynamicTags, NFormItem, NIcon, NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSwitch, NTooltip } from 'naive-ui'
+import { AddOutline, InformationCircleOutline, TrashOutline } from '@vicons/ionicons5'
+import { NButton, NCheckbox, NDynamicTags, NFormItem, NIcon, NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSwitch, NTooltip } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { JsonSchema } from '../types'
@@ -22,7 +22,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [value: any] }>()
-const { locale } = useI18n()
+const { locale, t } = useI18n()
 
 const value = computed({
   get: () => props.modelValue,
@@ -48,6 +48,7 @@ const kind = computed(() => {
   if (s.type === 'boolean') return 'boolean'
   if (s.type === 'array' && s.items?.type === 'string') return 'tags'
   if (s.type === 'object' && s.properties) return 'object'
+  if (s.type === 'array' && s.items?.type === 'object' && s.items.properties) return 'list'
   return 'json'
 })
 
@@ -70,6 +71,18 @@ const choiceOptions = computed(() => {
 /** In compact forms, up to four choices show as buttons. */
 const asButtons = computed(() => props.compact && kind.value === 'enum' && options.value.length <= 4)
 const widget = computed(() => schema.value['x-widget'] ?? props.schema['x-widget'] ?? 'checkbox')
+
+// Lists of objects, such as the conditions of a database node: one small form per item.
+const items = computed<Record<string, any>[]>(() => (Array.isArray(props.modelValue) ? props.modelValue : []))
+function setItem(index: number, next: Record<string, any>) {
+  value.value = items.value.map((item, position) => (position === index ? next : item))
+}
+function removeItem(index: number) {
+  value.value = items.value.filter((_, position) => position !== index)
+}
+function addItem() {
+  value.value = [...items.value, {}]
+}
 
 // Free-form values (records, mixed arrays) are edited as JSON text.
 const jsonText = ref('')
@@ -172,6 +185,18 @@ function onJson(text: string) {
     <div v-else-if="kind === 'object'" class="nested">
       <SchemaForm v-model="value" :schema="schema" />
     </div>
+    <div v-else-if="kind === 'list'" class="list">
+      <div v-for="(item, index) in items" :key="index" class="list-item">
+        <SchemaForm :model-value="item" :schema="schema.items" :compact="compact" @update:model-value="(next) => setItem(index, next)" />
+        <NButton quaternary circle size="tiny" class="list-remove" :aria-label="t('common.delete')" @click="removeItem(index)">
+          <template #icon><NIcon><TrashOutline /></NIcon></template>
+        </NButton>
+      </div>
+      <NButton dashed size="small" @click="addItem">
+        <template #icon><NIcon><AddOutline /></NIcon></template>
+        {{ t('common.add') }}
+      </NButton>
+    </div>
     <NInput
       v-else
       :value="jsonText"
@@ -205,6 +230,26 @@ function onJson(text: string) {
 
 .choices {
   flex-wrap: wrap;
+}
+
+.list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.list-item {
+  position: relative;
+  padding: 8px 28px 0 10px;
+  border: 1px solid rgba(127, 127, 127, 0.22);
+  border-radius: 8px;
+}
+
+.list-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
 }
 
 .nested {
