@@ -120,6 +120,8 @@ Open **Flows** in the dashboard (cards or a compact list, grouped by bot by defa
 | Event triggers (OneBot) | Member joined, Member left, Poke, Message recalled (with the recalled text), Mute changed, Admin changed, File uploaded, New friend, Friend request, Group request / invitation, Group info changed (card, name, title, essence, reactions), Group honor / lucky king, Any OneBot event |
 | Logic | If, Compare (branches on true / false), Random chance, Cooldown, Rate limit, Daily quota, Wait, Wait for reply |
 | Data | Text (with `{a}` `{b}` `{c}` `{user}` `{message}`), Message info, Get variable, Set variable, Add to number |
+| Database | Find rows, Count rows, Add row, Update rows, Delete rows (flow tables; needs the Database plugin) |
+| Permissions (Permissions plugin) | Permission check, Manage chat member, Chat member |
 | AI | Ask the LLM (speaks as the persona, with chat history; `error` exit), Classify intent (one branch per label), Use a persona (Personas plugin) |
 | Actions | Reply, Send to chat |
 | Terminal (Terminal plugin) | Run command (on this machine), Run over SSH |
@@ -139,6 +141,31 @@ The **Tests** tab next to **Logs** keeps test cases for the flow. A case is a me
 **Generate** tries messages made from the flow (keywords and commands, the values its comparisons use and their neighbors, the roles its permission checks care about, every label of a classify node, a reply and no reply for each wait), keeps one case per distinct path, and records what each did as its assertions; pick the ones to keep. Cases run like a test from the Logs bar, so nothing is sent, and each case has variables of its own. LLM nodes give the case's answers (a fixed placeholder when there are none) unless the case asks for the real model. Turn on **Run after each save** to rerun every case whenever the flow is saved, and **Mark nodes no case reaches** to see what the cases miss on the canvas. **Show run** opens a case's last run in the logs.
 
 `mushin test` (or `pnpm test:flows` in this repository) runs every flow's cases without connecting any bot or opening a port, prints each result, and exits with 1 when a case fails, so it fits CI; `--flow <id or name>` runs one flow and `--json` prints the results as JSON.
+
+### Flow tables
+
+For data that outgrows variables, such as check-ins, points or an inventory, create a **flow table** on the **Database** page (**New flow table**): a name and typed fields (text, number, whole number, yes / no, JSON), in any script, e.g. `签到` with `用户` and `积分`. Every table also has `id`, `createdAt` and `updatedAt`, and is stored as `flow_<name>`, so the Database page shows its rows. Fields can be added later, but not retyped.
+
+The database nodes work on these tables. Their conditions and values are lists edited in the node's settings, and take references such as `{{sys.userId}}`:
+
+- **Find rows** continues on `found` or `none`, and outputs the first row's `id`, the fields listed under **Outputs** (e.g. `{{find.积分}}`), `count` and all `rows`.
+- **Count rows** outputs how many rows match.
+- **Add row** outputs the new row's `id`.
+- **Update rows** sets fields or adds to number fields on the matching rows, continuing on `updated` or `none`; **Add when missing** adds a row from the "equals" conditions and the values instead.
+- **Delete rows** removes the matching rows.
+
+Update and delete need at least one condition. Test runs (the Logs bar and test cases) read the tables but never write: the writes they would make are listed with the platform calls, and test cases can assert them. Without the Database plugin, the nodes are greyed out and flows using them show an error. The Agent manages tables with `flows.tables.list`, `flows.tables.define` and `flows.tables.drop`.
+
+### Permissions
+
+The **Permissions** tab of each bot lists its masters and admins; everyone else is a user. Commands can require admin or master, and the **Permission check** node continues on `allow` or `deny` (it sends nothing itself, so put a reply with `{{check.reason}}` after `deny` if you want one). Besides bot roles it can allow group owners and group admins, when the adapter reports them.
+
+With the Database plugin, each chat also keeps its own members and rules, edited under **Per chat** on the same tab:
+
+- Members have a chat role (member or **chat admin**), tags such as `VIP`, a note, and can be blocked.
+- Rules name a feature (a command name without its prefix, the feature name set on a permission check, or `*` for everything) and either turn it off in that chat or keep it for members with one of some tags.
+
+Set a permission check's **Check** to **Chat rules** to look only at the chat (blocked users and rules for the feature), or **Both** to look at the chat first and then at **Allowed**, which can now include **Chat admin**. Masters pass every chat rule. The **Manage chat member** node blocks, unblocks, tags or names chat admins from a flow, and **Chat member** reads someone's chat role, tags and block. Turn on **Chat commands** to let people manage members in a group: `/拉黑 @someone`, `/解除拉黑`, `/加标签 @someone VIP` and `/去标签` for bot admins and chat admins, `/设为管理` and `/取消管理` for bot admins only. Rules change only on this tab or through the Agent (`permissions.rules.*`), never from a chat.
 
 ### Terminal commands
 

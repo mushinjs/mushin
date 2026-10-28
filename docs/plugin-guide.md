@@ -262,6 +262,8 @@ export function apply(ctx: Context) {
 - `ctx.database` offers `get`, `create`, `upsert`, `set`, `remove`, `select(...).orderBy().limit().execute()` and aggregates such as `$.count()` (import `$` from `minato`).
 - Without the database plugin the callback does not run, so keep a fallback (memory or `ctx.storage`) when the plugin is optional.
 
+Flows have tables of their own (`flow_<name>`), which users declare on the Database page and the database nodes read and write. A plugin can declare one too with `ctx.flows.tables.define(name, fields)`, and use `ctx.flows.tables.query()` and the like to read it. A node type that needs something which may be missing, such as the database, can return a reason from `unavailable()`; the editor then greys it out with that text and flows using it get an error. Call `ctx.flows.recompile()` when the answer changes.
+
 ## Provider types and adapters
 
 - A provider type calls `ctx.llm.defineType({ id, displayName, config, secrets, presets, create })`. `create` returns a client with `chat()` and, optionally, `stream()` and `listModels()`. See `packages/plugin-provider-openai`.
