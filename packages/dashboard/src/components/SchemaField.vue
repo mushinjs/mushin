@@ -46,7 +46,7 @@ const kind = computed(() => {
   if (s.type === 'string') return /prompt|template/i.test(props.name) || (s.maxLength ?? 0) > 200 ? 'text' : 'string'
   if (s.type === 'integer' || s.type === 'number') return 'number'
   if (s.type === 'boolean') return 'boolean'
-  if (s.type === 'array' && s.items?.type === 'string') return 'tags'
+  if (s.type === 'array' && s.items?.type === 'string') return s['x-choices'] ?? props.schema['x-choices'] ? 'multiChoices' : 'tags'
   if (s.type === 'object' && s.properties) return 'object'
   if (s.type === 'array' && s.items?.type === 'object' && s.items.properties) return 'list'
   return 'json'
@@ -182,6 +182,15 @@ function onJson(text: string) {
     />
     <NSwitch v-else-if="kind === 'boolean'" v-model:value="value" />
     <NDynamicTags v-else-if="kind === 'tags'" v-model:value="value" />
+    <NSelect
+      v-else-if="kind === 'multiChoices'"
+      :value="Array.isArray(value) ? value : []"
+      :options="choiceOptions"
+      multiple
+      filterable
+      clearable
+      @update:value="(next: string[]) => (value = next)"
+    />
     <div v-else-if="kind === 'object'" class="nested">
       <SchemaForm v-model="value" :schema="schema" />
     </div>

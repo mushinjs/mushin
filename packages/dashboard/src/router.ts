@@ -15,6 +15,7 @@ export const router = createRouter({
     { path: '/flows', component: () => import('./views/FlowsView.vue') },
     { path: '/flows/:id', component: () => import('./views/FlowEditorView.vue') },
     { path: '/personas', component: () => import('./views/PersonasView.vue') },
+    { path: '/knowledge/:id?/:tab(docs|chunks|search|graph|learn|settings)?', component: () => import('./views/KnowledgeView.vue') },
     { path: '/agent/:tab(scenes|skills|mcp|tools|model|styles)?', component: () => import('./views/AgentView.vue') },
     { path: '/database', component: () => import('./views/DatabaseView.vue') },
     { path: '/plugins', component: () => import('./views/PluginsView.vue') },

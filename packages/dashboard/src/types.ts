@@ -229,11 +229,19 @@ export interface Segment {
   data: Record<string, any>
 }
 
+/** A knowledge base passage a reply was written from. */
+export interface KnowledgeSource {
+  base: string
+  doc: string
+  chunk: string
+  title: string
+}
+
 export type Provenance =
   | { kind: 'user' }
   | { kind: 'plugin'; plugin: string }
   | { kind: 'llm'; plugin?: string; provider: string; model: string; latencyMs: number; tokens?: number; persona?: string }
-  | { kind: 'flow'; flow: string; node: string; provider?: string; model?: string; persona?: string }
+  | { kind: 'flow'; flow: string; node: string; provider?: string; model?: string; persona?: string; knowledge?: KnowledgeSource[] }
   | { kind: 'agent'; session: string }
   | { kind: 'manual' }
 
@@ -711,4 +719,116 @@ export interface FlowPause {
   nodeId: string
   inputs: Record<string, unknown>
   trace: RunTrace
+}
+
+export interface KnowledgeLearn {
+  enabled: boolean
+  channels: string[]
+  every: number
+  autoAccept: boolean
+  dailyLimit: number
+  provider: string
+  model: string
+}
+
+export interface KnowledgeBase {
+  id: string
+  name: string
+  description: string
+  provider: string
+  model: string
+  dimension: number
+  chunkSize: number
+  chunkOverlap: number
+  topK: number
+  minScore: number
+  bots: string[]
+  commands: { enabled: boolean; role: 'user' | 'admin' | 'master' }
+  learn: KnowledgeLearn
+  createdAt: number
+  updatedAt: number
+}
+
+/** A base as kb.list returns it, with its counts. */
+export interface KnowledgeSummary extends KnowledgeBase {
+  docs: number
+  chunks: number
+  embedded: number
+  busy: boolean
+  candidates: number
+}
+
+export type KnowledgeDocStatus = 'pending' | 'parsing' | 'embedding' | 'ready' | 'error'
+
+export interface KnowledgeDoc {
+  id: string
+  base: string
+  title: string
+  kind: 'file' | 'url' | 'text' | 'notes' | 'learned'
+  source: string
+  format: string
+  status: KnowledgeDocStatus
+  error: string
+  chars: number
+  chunks: number
+  createdAt: number
+  updatedAt: number
+}
+
+export interface KnowledgeChunk {
+  id: string
+  base: string
+  doc: string
+  seq: number
+  title: string
+  text: string
+  embedded: boolean
+  edited: boolean
+  meta: Record<string, any>
+  createdAt: number
+  updatedAt: number
+}
+
+export interface KnowledgeHit {
+  id: string
+  doc: string
+  title: string
+  text: string
+  score: number
+  similarity?: number
+  coverage: number
+  bm25: number
+  ranks: { keyword?: number; vector?: number }
+  fused: number
+  base: string
+  baseName: string
+  docTitle: string
+}
+
+export interface KnowledgeProgress {
+  base: string
+  doc?: string
+  stage: KnowledgeDocStatus | 'reindex' | 'done'
+  done: number
+  total: number
+}
+
+export interface KnowledgeCandidate {
+  id: number
+  base: string
+  bot: string
+  channel: string
+  question: string
+  answer: string
+  status: 'pending' | 'accepted' | 'rejected'
+  chunk: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface KnowledgeGraph {
+  byVector: boolean
+  total: number
+  nodes: { id: string; doc: string; docTitle: string; title: string; text: string }[]
+  edges: { source: string; target: string; similarity: number }[]
 }

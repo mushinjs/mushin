@@ -2,6 +2,7 @@
 import { NPopover, NTag } from 'naive-ui'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { RouterLink } from 'vue-router'
 import type { MessageRecord, Segment } from '../types'
 import { formatTime } from '../utils'
 
@@ -41,6 +42,9 @@ const sourceDetail = computed(() => {
       return []
   }
 })
+
+/** Knowledge base passages a flow reply was written from. */
+const knowledge = computed(() => (source.value.kind === 'flow' ? source.value.knowledge ?? [] : []))
 
 const typeLabel = computed(() => (te(`messageType.${props.record.type}`) ? t(`messageType.${props.record.type}`) : props.record.type))
 
@@ -134,12 +138,24 @@ function onImageError(index: number) {
           <dt class="sub">{{ key }}</dt>
           <dd class="mono">{{ value }}</dd>
         </template>
+        <template v-if="knowledge.length">
+          <dt>{{ t('hover.knowledge') }}</dt>
+          <dd class="sources">
+            <RouterLink v-for="(item, index) in knowledge" :key="item.chunk" :to="`/knowledge/${item.base}/chunks?doc=${item.doc}&chunk=${item.chunk}`">[{{ index + 1 }}] {{ item.title }}</RouterLink>
+          </dd>
+        </template>
       </dl>
     </NPopover>
   </div>
 </template>
 
 <style scoped>
+.sources {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .row {
   display: flex;
   flex-direction: column;
