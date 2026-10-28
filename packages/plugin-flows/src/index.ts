@@ -9,6 +9,7 @@ import { overlap, triggerOrder, triggerSummary, type TriggerSlot } from './order
 import { migrateDataEdges } from './refs'
 import { branchSteps, candidates, type CaseResult, check, judgeWith, MOCK_REPLY, mockLlm, newCase, scratchVars, snapshot, type TestCase, TestCaseInput, type TestRunSummary, type TestsDocument } from './tests'
 import { FIELD_TYPES, TableField, TableName, tableNodes, TableStore } from './tables'
+import { KEEP_DAYS, type RunInfo, type RunStatus, RunStore } from './runs'
 import { VariableStore } from './variables'
 import type { ChatLine, DailyCounter, FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, FlowSource, Intercept, FlowSession, LlmLike, NodeType, PersonaResolver, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
 
@@ -17,6 +18,7 @@ export * from './graph'
 export * from './nodes'
 export * from './order'
 export * from './refs'
+export * from './runs'
 export * from './tests'
 export * from './types'
 export * from './tables'
@@ -32,6 +34,7 @@ declare module '@mushin/core' {
     'flows/run'(trace: RunTrace): void
     'flows/step'(step: RunStep): void
     'flows/tests'(summary: TestRunSummary): void
+    'flows/activity'(run: RunInfo): void
   }
 }
 
@@ -231,6 +234,8 @@ export class FlowService extends Service {
   private variables = new VariableStore((error) => this.logger.warn('saving flow variables failed: %s', error))
   /** Tables flows keep their own data in; usable while the database plugin runs. */
   readonly tables: TableStore
+  /** Real runs on bots, going on and finished. */
+  readonly runs = new RunStore((run) => this.home.emit('flows/activity', run), (error) => this.logger.warn('saving a flow run failed: %s', error))
   /** Bot contexts running the flows bot plugin, by bot id; event and schedule runs use them. */
   private runners = new Map<string, Context>()
   private waiters = new Set<Waiter>()
@@ -303,6 +308,7 @@ export class FlowService extends Service {
       const detach = await this.variables.attach(ctx)
       ctx.effect(() => detach, 'flows variables')
       ctx.effect(() => this.tables.attach(ctx), 'flows tables')
+      ctx.effect(() => this.runs.attach(ctx), 'flows runs')
     })
     yield* this.defineActions()
     yield this.home.effect(() => {
@@ -698,6 +704,7 @@ export class FlowService extends Service {
     await this.home.storage.delete(`flows/${id}`)
     await this.home.storage.delete(testsKey(id))
     await this.variables.removeFlow(id).catch((error) => this.logger.warn('removing the variables of flow %s failed: %s', id, error))
+    await this.runs.removeFlow(id).catch((error) => this.logger.warn('removing the runs of flow %s failed: %s', id, error))
     this.home.emit('flows/changed')
     this.logger.info('deleted flow %s', this.label(doc))
     return { deleted: id }
@@ -770,7 +777,7 @@ export class FlowService extends Service {
       logger: ctx.logger('flows'),
       botId,
       bot: this.flowBot(ctx),
-      waitForMessage: (options, origin) => this.waitFor(botId, origin, options),
+      waitForMessage: (options, origin, signal) => this.waitFor(botId, origin, options, signal),
       onStep: this.onStep,
       persona: this.personaFor(botId, session),
       usage: this.usage,
@@ -806,19 +813,24 @@ export class FlowService extends Service {
   }
 
   /** Resolves with the next matching message in the chat, or nothing after `seconds`. */
-  private waitFor(botId: string, origin: FlowSession, options: WaitOptions) {
+  private waitFor(botId: string, origin: FlowSession, options: WaitOptions, signal?: AbortSignal) {
     return new Promise<FlowSession | undefined>((resolve) => {
+      // A stopped run stops waiting, so the next message is not kept from everything else.
+      const abort = () => waiter.resolve(undefined)
       const waiter: Waiter = {
         botId,
         channel: channelKey(origin.channel),
         userId: options.who === 'sender' ? origin.user.id : undefined,
         resolve: (session) => {
           clearTimeout(timer)
+          signal?.removeEventListener('abort', abort)
           this.waiters.delete(waiter)
           resolve(session)
         },
       }
       const timer = setTimeout(() => waiter.resolve(undefined), options.seconds * 1000)
+      if (signal?.aborted) return waiter.resolve(undefined)
+      signal?.addEventListener('abort', abort, { once: true })
       this.waiters.add(waiter)
     })
   }
@@ -862,8 +874,7 @@ export class FlowService extends Service {
     const closed = new Set<string>()
     for (const { compiled, env, match } of matches) {
       if (closed.has(compiled.doc.id)) continue
-      const result = await runFlow(compiled, { ...env, matched: match })
-      this.record(result.trace)
+      await this.execute(compiled, { ...env, matched: match })
       const intercept = interceptOf(compiled.nodes.get(match.nodeId)!)
       if (intercept === 'flow') closed.add(compiled.doc.id)
       if (intercept === 'flows' || intercept === 'global') {
@@ -872,6 +883,53 @@ export class FlowService extends Service {
       }
     }
     return { consumed }
+  }
+
+  /** Runs a flow on a bot, tracked in the run list from the moment a trigger matches. */
+  private async execute(compiled: CompiledFlow, env: RunEnvironment) {
+    const controller = new AbortController()
+    let runId: string | undefined
+    const nodeOf = (id: string) => {
+      const node = compiled.nodes.get(id)?.node
+      return { id, type: node?.type ?? '', ...(node?.label ? { label: node.label } : {}) }
+    }
+    const { session } = env
+    const result = await runFlow(compiled, {
+      ...env,
+      cancel: controller.signal,
+      onStart: (trace) => {
+        runId = trace.id
+        this.runs.start({
+          id: trace.id,
+          flowId: compiled.doc.id,
+          flowName: compiled.doc.name,
+          botId: env.botId!,
+          source: env.scheduled ? 'schedule' : env.event ? 'event' : 'message',
+          text: trace.text,
+          ...(session.user.id ? { user: { id: session.user.id, ...(session.user.name ? { name: session.user.name } : {}) } } : {}),
+          ...(session.channel.id ? { channel: channelKey(session.channel) } : {}),
+        }, trace, controller)
+      },
+      onStep: (step) => {
+        env.onStep?.(step)
+        if (runId && step.status !== 'skipped') this.runs.update(runId, { node: nodeOf(step.nodeId) })
+      },
+      ...(env.waitForMessage
+        ? {
+            waitForMessage: async (options: WaitOptions, origin: FlowSession, signal?: AbortSignal) => {
+              if (runId) this.runs.update(runId, { status: 'waiting' })
+              try {
+                return await env.waitForMessage!(options, origin, signal)
+              } finally {
+                if (runId) this.runs.update(runId, { status: 'running' })
+              }
+            },
+          }
+        : {}),
+    })
+    if (runId) this.runs.finish(runId)
+    if (result.matched) this.record(result.trace)
+    return result
   }
 
   /** A session for a run that no message started; sending goes to `channel`. */
@@ -918,8 +976,7 @@ export class FlowService extends Service {
           this.fired.set(key, now.getTime())
           const target = scheduleTarget(entry.config)
           const session = this.botSession(ctx, target, undefined)
-          runs.push(runFlow(compiled, { ...this.environment(ctx, compiled.doc.id, session), scheduled: { nodeId: id, now } })
-            .then((result) => result.matched && this.record(result.trace)))
+          runs.push(this.execute(compiled, { ...this.environment(ctx, compiled.doc.id, session), scheduled: { nodeId: id, now } }))
         }
       }
     }
@@ -1248,7 +1305,7 @@ export class FlowService extends Service {
     return { drafts, uncovered: this.uncovered(flow, traces) }
   }
 
-  runs(id: string, limit = TRACE_LIMIT) {
+  recentRuns(id: string, limit = TRACE_LIMIT) {
     this.get(id)
     return (this.traces.get(id) ?? []).slice(-limit)
   }
@@ -1496,7 +1553,57 @@ export class FlowService extends Service {
       description: 'Recent runs of a flow, oldest first: the message, the nodes and edges it went through, replies and errors.',
       risk: 'read',
       input: idInput.extend({ limit: z.number().int().min(1).max(TRACE_LIMIT).optional() }),
-      handler: ({ id, limit }) => this.runs(id, limit),
+      handler: ({ id, limit }) => this.recentRuns(id, limit),
+    })
+
+    const runStatus = z.enum(['queued', 'running', 'waiting', 'ok', 'error', 'stopped'])
+    yield actions.define({
+      name: 'flows.activity',
+      description: 'What each bot is doing now: idle, replying to someone (a run a message started) or running a flow (started by a schedule or an event), with the newest run and how many are going on. Also lists the runs going on now.',
+      risk: 'read',
+      input: z.object({ bot: z.string().optional().describe('Only this bot') }),
+      handler: ({ bot }) => {
+        const ids = bot ? [bot] : this.home.get('bots')?.list().map((item) => item.id) ?? [...this.runners.keys()]
+        return { bots: this.runs.activity(ids), runs: this.runs.active(bot) }
+      },
+    })
+
+    yield actions.define({
+      name: 'flows.history',
+      description: `Runs of flows on bots, newest first: the ones going on, then finished ones (kept ${KEEP_DAYS} days with the database plugin, else the latest 200). Status: queued, running, waiting (for a reply), ok, error, stopped. Test runs are not listed. Page back with before = the startedAt of the last run.`,
+      risk: 'read',
+      input: z.object({
+        bot: z.string().optional(),
+        flow: z.string().optional(),
+        status: z.array(runStatus).optional().describe('Only runs in these states; running includes waiting'),
+        limit: z.number().int().min(1).max(200).optional(),
+        before: z.number().optional(),
+      }),
+      handler: (input) => this.runs.history(input as { status?: RunStatus[] }),
+    })
+
+    yield actions.define({
+      name: 'flows.run',
+      description: 'One run from flows.history with its full trace: every node it went through with inputs and outputs, edges, replies, platform calls and error.',
+      risk: 'read',
+      input: z.object({ id: z.string() }),
+      handler: async ({ id }) => {
+        const run = await this.runs.get(id)
+        if (!run) throw new MushinError('not_found', `No run "${id}"`)
+        return run
+      },
+    })
+
+    yield actions.define({
+      name: 'flows.stop',
+      description: 'Stop a run that is going on (from flows.activity or flows.history). It ends as stopped; nodes after the current one do not run.',
+      risk: 'dangerous',
+      input: z.object({ id: z.string() }),
+      handler: ({ id }, caller) => {
+        const run = this.runs.stop(id, caller.kind === 'agent' ? 'agent' : caller.kind === 'api' ? 'dashboard' : 'system')
+        if (!run) throw new MushinError('not_found', `Run "${id}" is not going on`)
+        return run
+      },
     })
   }
 }

@@ -8,6 +8,7 @@ export const MAX_STEPS = 200
 export const RUN_LIMIT = 60_000
 /** The longest a single wait for a reply may last. */
 export const MAX_WAIT = 3_600_000
+const TOO_LONG = 'The run took too long and was stopped'
 
 export class FlowError extends Error {
   name = 'FlowError'
@@ -58,9 +59,13 @@ export interface RunEnvironment {
   /** Working time allowed, in ms; `RUN_LIMIT` by default. */
   limit?: number
   /** Waits for the next message in the session's chat. Without it, waits time out at once. */
-  waitForMessage?(options: WaitOptions, session: FlowSession): Promise<FlowSession | undefined>
+  waitForMessage?(options: WaitOptions, session: FlowSession, signal?: AbortSignal): Promise<FlowSession | undefined>
   /** Called as each node starts and finishes, so the editor can show the run live. */
   onStep?(step: RunStep): void
+  /** Called once a trigger matched, with the trace that fills in as the run goes on. */
+  onStart?(trace: RunTrace): void
+  /** Stops the run when aborted; the abort reason is the run's error. */
+  cancel?: AbortSignal
   /** Run only this trigger, already matched by the caller (which ordered triggers across flows). */
   matched?: TriggerMatch
   /** The persona the bot's rules give this message, looked up when a node first asks. */
@@ -133,7 +138,7 @@ function runBudget(limit: number) {
   let timer: NodeJS.Timeout | undefined
   const start = () => {
     startedAt = Date.now()
-    timer = setTimeout(() => controller.abort(new FlowError('The run took too long and was stopped')), remaining)
+    timer = setTimeout(() => controller.abort(new FlowError(TOO_LONG)), remaining)
   }
   start()
   return {
@@ -145,6 +150,21 @@ function runBudget(limit: number) {
     resume: start,
     dispose: () => clearTimeout(timer),
   }
+}
+
+/** The error a stopped run ends with: the abort reason when it is one, else the time limit's. */
+function abortError(signal: AbortSignal) {
+  return signal.reason instanceof FlowError ? signal.reason : new FlowError(TOO_LONG)
+}
+
+/** Settles with `promise`, or rejects as soon as the run is stopped. */
+function untilAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(abortError(signal))
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(abortError(signal))
+    signal.addEventListener('abort', abort, { once: true })
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort))
+  })
 }
 
 function sourceOf(env: Pick<RunEnvironment, 'event' | 'scheduled'>): TriggerSource {
@@ -235,13 +255,14 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
   const outputs = new Map<string, Record<string, unknown>>()
   const sys = sysValues(session)
   const budget = env.signal ? undefined : runBudget(env.limit ?? RUN_LIMIT)
-  const signal = env.signal ?? budget!.signal
+  const own = env.signal ?? budget!.signal
+  const signal = env.cancel ? AbortSignal.any([own, env.cancel]) : own
   const waitForMessage = async (options: WaitOptions) => {
     if (!env.waitForMessage) return undefined
     const seconds = Math.min(Math.max(options.seconds, 1), MAX_WAIT / 1000)
     budget?.pause()
     try {
-      return await env.waitForMessage({ ...options, seconds }, env.session)
+      return await untilAborted(env.waitForMessage({ ...options, seconds }, env.session, signal), signal)
     } finally {
       budget?.resume()
     }
@@ -334,7 +355,7 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
   }
 
   const visit = async (id: string, edgeId?: string): Promise<void> => {
-    if (signal.aborted) throw new FlowError('The run took too long and was stopped')
+    if (signal.aborted) throw abortError(signal)
     if (++steps > MAX_STEPS) throw new FlowError(`Stopped after ${MAX_STEPS} steps; check for a loop in the flow`)
     const entry = flow.nodes.get(id)
     if (entry?.type?.kind !== 'action' || !entry.ports) return
@@ -352,7 +373,7 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
     step(id, 'running', edgeId)
     let exec: string | undefined
     try {
-      const result = await entry.type.run(contextFor(id, inputs))
+      const result = await untilAborted(Promise.resolve(entry.type.run(contextFor(id, inputs))), signal)
       exec = result?.exec ?? entry.ports.execOut[0]
       outputs.set(id, result?.outputs ?? {})
       trace.steps.push({ nodeId: id, exec, ms: Date.now() - started, inputs, outputs: result?.outputs ?? {} })
@@ -372,6 +393,11 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
     for (const { nodeId: id, outputs: result } of matches) {
       if (stopped) break
       const entry = flow.nodes.get(id)!
+      if (!matched) {
+        try {
+          env.onStart?.(trace)
+        } catch {}
+      }
       matched = true
       const intercept = interceptOf(entry)
       // Within one flow, any interception stops the later triggers; only `global` keeps the bot's plugins out too.
