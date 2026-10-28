@@ -60,7 +60,7 @@ const CLIENT_CALL_TIMEOUTS: Record<string, number> = { 'ui.ask': 15 * 60_000 }
 const FORWARDED_EVENTS = [
   'actions/changed', 'manager/changed', 'providers/changed',
   'bots/changed', 'bots/status', 'bots/message', 'bots/log', 'agent/event', 'agent/changed',
-  'flows/changed', 'flows/run', 'flows/step', 'flows/tests', 'stats/sample', 'permissions/changed', 'personas/changed',
+  'flows/changed', 'flows/run', 'flows/step', 'flows/tests', 'flows/activity', 'stats/sample', 'permissions/changed', 'personas/changed',
 ] as const
 
 const plainExporter: Exporter = { colors: false, export() {} }
