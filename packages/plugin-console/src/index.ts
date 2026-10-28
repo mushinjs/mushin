@@ -61,6 +61,7 @@ const FORWARDED_EVENTS = [
   'actions/changed', 'manager/changed', 'providers/changed',
   'bots/changed', 'bots/status', 'bots/message', 'bots/log', 'agent/event', 'agent/changed',
   'flows/changed', 'flows/run', 'flows/step', 'flows/tests', 'flows/activity', 'flows/paused', 'stats/sample', 'permissions/changed', 'personas/changed',
+  'knowledge/changed', 'knowledge/progress',
 ] as const
 
 const plainExporter: Exporter = { colors: false, export() {} }

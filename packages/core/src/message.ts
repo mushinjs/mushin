@@ -55,11 +55,19 @@ export function messageType(segments: Segment[]): MessageType {
   return 'mixed'
 }
 
+/** A knowledge base passage a reply was written from. */
+export interface KnowledgeSource {
+  base: string
+  doc: string
+  chunk: string
+  title: string
+}
+
 export type Provenance =
   | { kind: 'user' }
   | { kind: 'plugin'; plugin: string }
   | { kind: 'llm'; plugin?: string; provider: string; model: string; latencyMs: number; tokens?: number; persona?: string }
-  | { kind: 'flow'; flow: string; node: string; provider?: string; model?: string; persona?: string }
+  | { kind: 'flow'; flow: string; node: string; provider?: string; model?: string; persona?: string; knowledge?: KnowledgeSource[] }
   | { kind: 'agent'; session: string }
   | { kind: 'manual' }
 

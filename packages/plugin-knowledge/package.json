@@ -1,0 +1,59 @@
+{
+  "name": "@mushin/plugin-knowledge",
+  "version": "0.1.0",
+  "description": "Knowledge bases: documents searched by keywords and meaning, from flows, the Agent and chat",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "category": "ai",
+    "displayName": {
+      "en": "Knowledge bases",
+      "zh-CN": "知识库"
+    },
+    "description": {
+      "en": "Upload documents and let bots and the Agent answer from them; admins add knowledge from chat, and bases can learn from chats for review",
+      "zh-CN": "上传资料，让机器人和智能体据此回答；管理员可以在聊天里补充知识，也可以从对话里学习，审核后加入"
+    },
+    "provides": [
+      "knowledge"
+    ],
+    "requires": {
+      "mushin": ">=0.1.0",
+      "plugins": {
+        "@mushin/plugin-bots": "*",
+        "@mushin/plugin-database": "*",
+        "@mushin/plugin-providers": "*",
+        "@mushin/plugin-storage": "*"
+      }
+    },
+    "optional": {
+      "plugins": {
+        "@mushin/plugin-flows": "*",
+        "@mushin/plugin-agent": "*"
+      }
+    },
+    "nodes": [
+      "kb.*"
+    ]
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-bots": "workspace:*",
+    "@mushin/plugin-database": "workspace:*",
+    "@mushin/plugin-flows": "workspace:*",
+    "@mushin/plugin-providers": "workspace:*",
+    "@mushin/plugin-storage": "workspace:*",
+    "minato": "catalog:"
+  },
+  "devDependencies": {
+    "@mushin/plugin-agent": "workspace:*"
+  }
+}
