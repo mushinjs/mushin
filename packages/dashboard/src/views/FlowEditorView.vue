@@ -32,7 +32,7 @@ import { useAgentSceneStore } from '../stores/agentScene'
 import { useDataStore } from '../stores/data'
 import { isLive, useRunsStore } from '../stores/runs'
 import { useTheme } from '../theme'
-import type { FlowDoc, FlowGroupDoc, FlowIssue, FlowRunInfo, Intercept, NodeTypeInfo, RunStep, RunTrace, TraceStep, TriggerSlot } from '../types'
+import type { FlowDoc, FlowGroupDoc, FlowIssue, FlowPause, FlowRunInfo, Intercept, NodeTypeInfo, RunStep, RunTrace, TraceStep, TriggerSlot } from '../types'
 import { clone, localize } from '../utils'
 
 const { t, locale } = useI18n()
@@ -79,6 +79,10 @@ const runs = ref<RunTrace[]>([])
 const logsRun = ref<string>()
 /** A run on a bot opened from its run list (`?run=<id>`), drawn on the canvas until closed. */
 const viewing = ref<FlowRunInfo>()
+/** Nodes test runs pause before; kept in this browser for each flow. */
+const breakpoints = ref(new Set<string>())
+/** The test run waiting at a breakpoint. */
+const paused = ref<FlowPause>()
 const loaded = ref(false)
 const saving = ref(false)
 const savedSignature = ref('')
@@ -128,6 +132,8 @@ provide(flowEditorKey, {
   toggleGroup: (groupId: string) => toggleGroup(groupId),
   uncovered,
   stepOf: (nodeId: string) => stepOf(nodeId),
+  breakpoints,
+  toggleBreakpoint: (nodeId: string) => toggleBreakpoint(nodeId),
 })
 const nodeTypes = { mushin: markRaw(FlowNodeCard), [BOX]: markRaw(FlowGroupBox) } as any
 
@@ -164,7 +170,7 @@ function toDoc() {
 const signature = () => JSON.stringify(toDoc())
 const dirty = computed(() => loaded.value && signature() !== savedSignature.value)
 
-const edgeColors: Record<RunStatus, string> = { running: '#2080f0', ok: '#18a058', error: '#d03050', skipped: '#18a058' }
+const edgeColors: Record<RunStatus, string> = { running: '#2080f0', ok: '#18a058', error: '#d03050', skipped: '#18a058', paused: '#f0a020' }
 
 /**
  * Every edge means "run next". Grey by default; during a run the edge into a running node is a
@@ -268,6 +274,7 @@ async function load() {
   types.value = new Map(typeList.map((type) => [type.type, type]))
   runs.value = [...recent].reverse()
   apply(flow, true)
+  loadBreakpoints()
   if (typeof route.query.run === 'string') void openRun(route.query.run)
   // A link such as /flows/<id>?node=<node id> opens with that node selected.
   const target = typeof route.query.node === 'string' ? route.query.node : undefined
@@ -546,6 +553,17 @@ async function setEnabled(value: boolean) {
 
 function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') menu.value = undefined
+  // Debugger keys: F9 toggles the selected node's breakpoint; F8 continues and F10 steps a paused run.
+  if (event.key === 'F9' && selectedId.value) {
+    event.preventDefault()
+    toggleBreakpoint(selectedId.value)
+    return
+  }
+  if ((event.key === 'F8' || event.key === 'F10') && paused.value) {
+    event.preventDefault()
+    void debug(event.key === 'F8' ? 'continue' : 'step')
+    return
+  }
   if (!(event.ctrlKey || event.metaKey)) return
   const key = event.key.toLowerCase()
   if (key === 's') {
@@ -1225,6 +1243,7 @@ const menuOptions = computed<DropdownOption[]>(() => {
   const allSkipped = ids.every((id) => realNodes.value.find((node) => node.id === id)?.data?.skip)
   return [
     ...(kind === 'node' ? [{ key: 'execute', label: t('flows.executeStep'), disabled: testing.value }] : []),
+    ...(kind === 'node' && current.target ? [{ key: 'breakpoint', label: breakpoints.value.has(current.target) ? t('flows.menuRemoveBreakpoint') : t('flows.menuBreakpoint') }] : []),
     { key: 'toggleSkip', label: allSkipped ? t('flows.menuUnskip') : t('flows.menuSkip') },
     ...(kind === 'selection' ? [{ key: 'group', label: t('flows.menuGroup') }] : []),
     ...(inGroup(ids) ? [{ key: 'ungroup', label: t('flows.menuUngroup') }] : []),
@@ -1247,6 +1266,7 @@ function onMenuSelect(key: string) {
     case 'selectAll': return selectAll()
     case 'fit': return fitView({ padding: 0.2, maxZoom: 1.2 })
     case 'execute': return target && runTest(target)
+    case 'breakpoint': return target && toggleBreakpoint(target)
     case 'group': return groupNodes(ids)
     case 'ungroup': return current.kind === 'group' ? (groups.value = groups.value.filter((group) => group.id !== target)) : ungroupNodes(ids)
     case 'rename': return (renaming.value = target)
@@ -1377,6 +1397,8 @@ function showTrace(trace: RunTrace) {
 
 /** What a node took and gave in the run the logs show: its last step there. */
 function stepOf(nodeId: string): TraceStep | undefined {
+  // The node a test run is paused before shows the inputs it is about to get.
+  if (paused.value?.nodeId === nodeId) return { nodeId, ms: 0, inputs: paused.value.inputs }
   const trace = runs.value.find((item) => item.id === logsRun.value) ?? runs.value[0]
   return trace?.steps.findLast((step) => step.nodeId === nodeId)
 }
@@ -1558,8 +1580,9 @@ async function runTest(nodeId?: string) {
   try {
     // Tests run the saved flow, so save pending edits first.
     if (dirty.value) await save()
-    const result = await call<{ matched: boolean; trace: RunTrace }>('flows.test', { id: flowId.value, ...payload, nodeId })
-    if (!runs.value.some((run) => run.id === result.trace.id)) runs.value = [result.trace, ...runs.value].slice(0, 20)
+    const points = [...breakpoints.value].filter((id) => nodes.value.some((node) => node.id === id))
+    const result = await call<{ matched: boolean; trace: RunTrace }>('flows.test', { id: flowId.value, ...payload, nodeId, ...(points.length ? { breakpoints: points } : {}) })
+    runs.value = [result.trace, ...runs.value.filter((run) => run.id !== result.trace.id)].slice(0, 20)
     showTrace(result.trace)
     await nextTick()
     logs.value?.focus(result.trace.id)
@@ -1569,6 +1592,52 @@ async function runTest(nodeId?: string) {
   } finally {
     testing.value = false
     executing.value = undefined
+    paused.value = undefined
+  }
+}
+
+// ---- breakpoints ----
+
+const breakpointsKey = () => `mushin.flows.breakpoints.${flowId.value}`
+
+function loadBreakpoints() {
+  let saved: string[] = []
+  try {
+    saved = JSON.parse(localStorage.getItem(breakpointsKey()) ?? '[]')
+  } catch {}
+  breakpoints.value = new Set(saved.filter((id) => nodes.value.some((node) => node.id === id)))
+}
+
+function toggleBreakpoint(nodeId: string) {
+  const node = realNodes.value.find((item) => item.id === nodeId)
+  // Triggers start runs; there is nothing to pause before.
+  if (!node || types.value.get(node.data!.typeId)?.kind === 'trigger') return
+  const next = new Set(breakpoints.value)
+  if (next.has(nodeId)) next.delete(nodeId)
+  else next.add(nodeId)
+  breakpoints.value = next
+  try {
+    localStorage.setItem(breakpointsKey(), JSON.stringify([...next]))
+  } catch {}
+}
+
+const offPaused = on('flows/paused', (pause: FlowPause) => {
+  if (pause.flowId !== flowId.value || !testing.value) return
+  paused.value = pause
+  runs.value = [pause.trace, ...runs.value.filter((item) => item.id !== pause.trace.id)].slice(0, 20)
+  nextTick(() => logs.value?.focus(pause.trace.id))
+})
+onBeforeUnmount(offPaused)
+
+/** Answers the paused test run: on to the next breakpoint, one node further, or stop. */
+async function debug(action: 'continue' | 'step' | 'stop') {
+  const pause = paused.value
+  if (!pause) return
+  paused.value = undefined
+  try {
+    await call('flows.debug', { runId: pause.runId, action })
+  } catch (error) {
+    message.error((error as Error).message)
   }
 }
 
@@ -1776,6 +1845,21 @@ watch(narrow, (value) => {
       <NButton type="primary" :loading="saving" :disabled="!dirty" data-agent-target="flows.save" @click="save">{{ t('common.save') }}</NButton>
     </header>
 
+    <div v-if="paused" class="run-banner" :style="{ '--state': '#f0a020' }" role="status">
+      <span class="run-state"><span class="run-dot live" />{{ t('flows.pausedAt', { node: nodeName(paused.nodeId) }) }}</span>
+      <span class="run-what muted">{{ t('flows.pausedHint') }}</span>
+      <span class="spacer" />
+      <NButton size="small" type="primary" @click="debug('continue')">
+        <template #icon><NIcon><PlayOutline /></NIcon></template>
+        {{ t('flows.debugContinue') }}
+      </NButton>
+      <NButton size="small" @click="debug('step')">{{ t('flows.debugStep') }}</NButton>
+      <NButton size="small" type="error" secondary @click="debug('stop')">
+        <template #icon><NIcon><StopCircleOutline /></NIcon></template>
+        {{ t('flows.debugStop') }}
+      </NButton>
+    </div>
+
     <div v-if="viewing" class="run-banner" :style="{ '--state': runColors[viewing.status] }" role="status">
       <span class="run-state"><span class="run-dot" :class="{ live: isLive(viewing) }" />{{ runText.statusText(viewing) }}</span>
       <span class="run-what">{{ t('runs.viewing', { bot: viewingBot?.name ?? viewing.botId }) }} · {{ viewing.source === 'message' ? t('runs.saidBy', { name: runText.userName(viewing), text: viewing.text }) : `${t(`runs.source.${viewing.source}`)} ${viewing.text}` }}</span>
@@ -1907,7 +1991,7 @@ watch(narrow, (value) => {
           v-model:open="showLogs"
           v-model:tab="logsTab"
           v-model:current="logsRun"
-          :live="viewing && isLive(viewing) ? [viewing.id] : []"
+          :live="[...(viewing && isLive(viewing) ? [viewing.id] : []), ...(paused ? [paused.runId] : [])]"
           :tests="testStatus"
           :runs="runs"
           :schedules="schedules"

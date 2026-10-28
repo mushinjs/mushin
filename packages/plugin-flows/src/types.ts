@@ -392,5 +392,6 @@ export interface RunStep {
   nodeId: string
   /** The edge that led to the node, for nodes after the trigger. */
   edgeId?: string
-  status: 'running' | 'ok' | 'error' | 'skipped'
+  /** `paused`: waiting at a breakpoint before it runs (test runs only). */
+  status: 'running' | 'ok' | 'error' | 'skipped' | 'paused'
 }
