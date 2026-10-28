@@ -13,6 +13,8 @@ import BotPermissions from '../components/BotPermissions.vue'
 import BotPersonas from '../components/BotPersonas.vue'
 import BotPlugins from '../components/BotPlugins.vue'
 import LiveConversation from '../components/LiveConversation.vue'
+import BotActivity from '../components/runs/BotActivity.vue'
+import BotRuns from '../components/runs/BotRuns.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { useDataStore } from '../stores/data'
 
@@ -72,6 +74,7 @@ function remove() {
               · <RouterLink :to="`/bots/${id}/logs`">{{ t('bot.viewLogs') }}</RouterLink>
             </template>
           </p>
+          <RouterLink v-if="bot.status === 'online'" :to="`/bots/${id}/runs`" class="activity-link"><BotActivity :bot-id="bot.id" /></RouterLink>
         </div>
       </div>
       <NSpace>
@@ -101,6 +104,9 @@ function remove() {
       <NTabPane name="personas" :tab="t('bot.personas')" data-agent-target="bot.personas">
         <BotPersonas :bot="bot" />
       </NTabPane>
+      <NTabPane name="runs" :tab="t('runs.tab')" data-agent-target="bot.runs">
+        <BotRuns :bot-id="bot.id" />
+      </NTabPane>
       <NTabPane name="live" :tab="t('bot.live')" data-agent-target="bot.live">
         <LiveConversation :bot-id="bot.id" />
       </NTabPane>
@@ -128,5 +134,13 @@ function remove() {
 
 .error {
   color: #d03050;
+}
+
+.activity-link {
+  display: inline-flex;
+  max-width: 100%;
+  margin-top: 4px;
+  color: inherit;
+  text-decoration: none;
 }
 </style>

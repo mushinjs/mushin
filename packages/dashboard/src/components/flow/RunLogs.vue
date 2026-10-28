@@ -37,6 +37,8 @@ const props = defineProps<{
   nodeType: (id: string) => string | undefined
   /** Test cases of the flow and how many failed last time, for the tests tab. */
   tests?: { failed: number; total: number }
+  /** Runs still going on, by id: their trace is only what happened so far. */
+  live?: string[]
 }>()
 const emit = defineEmits<{ run: []; clear: []; show: [trace: RunTrace]; select: [nodeId: string] }>()
 const test = defineModel<TestInput>('test', { required: true })
@@ -46,7 +48,8 @@ const tab = defineModel<'logs' | 'tests'>('tab', { default: 'logs' })
 const { t } = useI18n()
 const editor = useFlowEditor()
 
-const runId = ref<string>()
+/** The run shown; the editor uses it for the node cards' hover. */
+const runId = defineModel<string>('current')
 const stepIndex = ref(0)
 const side = ref<'input' | 'output'>('output')
 const view = ref<'table' | 'json'>('table')
@@ -62,6 +65,7 @@ const runOptions = computed(() => props.runs.map((trace) => ({
 })))
 
 function status(trace: RunTrace) {
+  if (props.live?.includes(trace.id)) return { type: 'success' as const, text: t('runs.status.running') }
   if (trace.error) return { type: 'error' as const, text: t('flows.runFailed') }
   if (!trace.steps.length) return { type: 'default' as const, text: t('flows.logsNoMatch') }
   return { type: 'success' as const, text: t('flows.logsSuccessIn', { ms: total(trace) }) }

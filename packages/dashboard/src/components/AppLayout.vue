@@ -14,6 +14,7 @@ import { setLocale } from '../i18n'
 import { useAgentStore } from '../stores/agent'
 import { useAgentSceneStore } from '../stores/agentScene'
 import { useDataStore } from '../stores/data'
+import { useRunsStore } from '../stores/runs'
 import { themeMode, useTheme } from '../theme'
 import AgentDock from './AgentDock.vue'
 
@@ -23,6 +24,7 @@ const router = useRouter()
 const data = useDataStore()
 const agent = useAgentStore()
 const agentScene = useAgentSceneStore()
+const runs = useRunsStore()
 const { isDark } = useTheme()
 
 const width = ref(window.innerWidth)
@@ -36,6 +38,7 @@ if (window.innerWidth < 1100) agent.open = false
 data.bind()
 agent.bind()
 agentScene.bind()
+runs.bind()
 onMounted(() => {
   data.refreshProviders().catch(() => {})
   data.refreshBots().catch(() => {})

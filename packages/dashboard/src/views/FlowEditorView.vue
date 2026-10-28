@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  ArrowBackOutline, BanOutline, ChevronDownOutline, ChevronUpOutline, ConstructOutline, InformationCircleOutline, ListOutline, PlayOutline, TrashOutline,
+  ArrowBackOutline, BanOutline, ChevronDownOutline, ChevronUpOutline, CloseOutline, ConstructOutline, InformationCircleOutline, ListOutline, PlayOutline, StopCircleOutline, TrashOutline,
 } from '@vicons/ionicons5'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
@@ -9,7 +9,7 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import {
-  type DropdownOption, NAlert, NButton, NDropdown, NEmpty, NForm, NFormItem, NIcon, NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSwitch, NTabPane, NTabs, NTag, NTooltip, useMessage,
+  type DropdownOption, NAlert, NButton, useDialog, NDropdown, NEmpty, NForm, NFormItem, NIcon, NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSwitch, NTabPane, NTabs, NTag, NTooltip, useMessage,
 } from 'naive-ui'
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, provide, type Ref, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -24,13 +24,15 @@ import NodePalette from '../components/flow/NodePalette.vue'
 import NodePicker from '../components/flow/NodePicker.vue'
 import RunLogs, { type TestInput } from '../components/flow/RunLogs.vue'
 import TestPanel from '../components/flow/TestPanel.vue'
+import { runColors, useRunText } from '../components/runs/useRunText'
 import VarInput from '../components/flow/VarInput.vue'
 import SchemaForm from '../components/SchemaForm.vue'
 import { categoryColors, execOutHandle, parseHandle, portColors, portsOf, refOf, refsIn, schemaDefaults, supports, sysPorts } from '../flow'
 import { useAgentSceneStore } from '../stores/agentScene'
 import { useDataStore } from '../stores/data'
+import { isLive, useRunsStore } from '../stores/runs'
 import { useTheme } from '../theme'
-import type { FlowDoc, FlowGroupDoc, FlowIssue, Intercept, NodeTypeInfo, RunStep, RunTrace, TriggerSlot } from '../types'
+import type { FlowDoc, FlowGroupDoc, FlowIssue, FlowRunInfo, Intercept, NodeTypeInfo, RunStep, RunTrace, TraceStep, TriggerSlot } from '../types'
 import { clone, localize } from '../utils'
 
 const { t, locale } = useI18n()
@@ -73,6 +75,10 @@ watch([name, issues, flowId], () => agentScene.publish({
 }), { immediate: true })
 onBeforeUnmount(() => agentScene.publish(undefined))
 const runs = ref<RunTrace[]>([])
+/** The run the logs panel shows; node cards show its inputs and outputs on hover. */
+const logsRun = ref<string>()
+/** A run on a bot opened from its run list (`?run=<id>`), drawn on the canvas until closed. */
+const viewing = ref<FlowRunInfo>()
 const loaded = ref(false)
 const saving = ref(false)
 const savedSignature = ref('')
@@ -121,6 +127,7 @@ provide(flowEditorKey, {
   nodeName: (id: string) => nodeName(id),
   toggleGroup: (groupId: string) => toggleGroup(groupId),
   uncovered,
+  stepOf: (nodeId: string) => stepOf(nodeId),
 })
 const nodeTypes = { mushin: markRaw(FlowNodeCard), [BOX]: markRaw(FlowGroupBox) } as any
 
@@ -261,6 +268,7 @@ async function load() {
   types.value = new Map(typeList.map((type) => [type.type, type]))
   runs.value = [...recent].reverse()
   apply(flow, true)
+  if (typeof route.query.run === 'string') void openRun(route.query.run)
   // A link such as /flows/<id>?node=<node id> opens with that node selected.
   const target = typeof route.query.node === 'string' ? route.query.node : undefined
   if (target && flow.nodes.some((node) => node.id === target)) {
@@ -1363,7 +1371,14 @@ function showTrace(trace: RunTrace) {
   highlight.value = { nodes: nodeStatus, edges: edgeStatus }
   restyleEdges()
   window.clearTimeout(clearTimer)
-  clearTimer = window.setTimeout(clearHighlight, 10_000)
+  // A run opened from the run list stays drawn; others fade after a while.
+  if (viewing.value?.id !== trace.id) clearTimer = window.setTimeout(clearHighlight, 10_000)
+}
+
+/** What a node took and gave in the run the logs show: its last step there. */
+function stepOf(nodeId: string): TraceStep | undefined {
+  const trace = runs.value.find((item) => item.id === logsRun.value) ?? runs.value[0]
+  return trace?.steps.findLast((step) => step.nodeId === nodeId)
 }
 
 /** A node of a run in this flow started or finished: update the canvas while the run goes on. */
@@ -1382,14 +1397,114 @@ function showStep(step: RunStep) {
 
 const off = on('flows/run', (trace: RunTrace) => {
   if (trace.flowId !== flowId.value) return
-  runs.value = [trace, ...runs.value].slice(0, 20)
+  runs.value = [trace, ...runs.value.filter((item) => item.id !== trace.id)].slice(0, 20)
+  if (viewing.value && viewing.value.id !== trace.id) return
   if (!trace.test || liveRun === trace.id) showTrace(trace)
 })
 onBeforeUnmount(off)
 const offStep = on('flows/step', (step: RunStep) => {
-  if (step.flowId === flowId.value) showStep(step)
+  if (step.flowId !== flowId.value) return
+  // While a run from the run list is open, other runs do not draw over it.
+  if (viewing.value && viewing.value.id !== step.runId) return
+  showStep(step)
 })
 onBeforeUnmount(offStep)
+
+// ---- a run from a bot's run list ----
+
+const runsStore = useRunsStore()
+const runText = useRunText()
+const dialog = useDialog()
+const now = ref(Date.now())
+const clock = window.setInterval(() => (now.value = Date.now()), 1000)
+onBeforeUnmount(() => window.clearInterval(clock))
+
+/** Shows a run in the logs and on the canvas; a run going on keeps updating there. */
+async function openRun(id: string) {
+  let run: FlowRunInfo & { trace: RunTrace }
+  try {
+    run = await call<FlowRunInfo & { trace: RunTrace }>('flows.run', { id })
+  } catch {
+    message.warning(t('runs.notFound'))
+    return
+  }
+  if (run.flowId !== flowId.value) return
+  const { trace, ...info } = run
+  viewing.value = info
+  runs.value = [trace, ...runs.value.filter((item) => item.id !== trace.id)].slice(0, 20)
+  showTrace(trace)
+  // Steps still to come draw on top of the ones so far, starting with the node working now.
+  if (isLive(info)) {
+    liveRun = trace.id
+    const current = info.node?.id
+    if (current && !trace.steps.some((step) => step.nodeId === current)) {
+      const nodes = new Map(highlight.value.nodes)
+      nodes.set(current, 'running')
+      highlight.value = { ...highlight.value, nodes }
+    }
+  }
+  nextTick(() => logs.value?.focus(trace.id))
+}
+
+let refreshing = false
+let again = false
+/** Fetches the open run's trace again, so the logs follow it while it goes on. */
+async function refreshViewing() {
+  if (refreshing) {
+    again = true
+    return
+  }
+  refreshing = true
+  try {
+    const run = await call<FlowRunInfo & { trace: RunTrace }>('flows.run', { id: viewing.value!.id })
+    const { trace, ...info } = run
+    if (viewing.value?.id !== info.id) return
+    viewing.value = info
+    runs.value = runs.value.map((item) => (item.id === trace.id ? trace : item))
+    if (!isLive(info)) showTrace(trace)
+  } catch {} finally {
+    refreshing = false
+    if (again && viewing.value) {
+      again = false
+      void refreshViewing()
+    }
+  }
+}
+
+const offActivity = runsStore.subscribe((run) => {
+  if (viewing.value?.id === run.id) void refreshViewing()
+})
+onBeforeUnmount(offActivity)
+
+function closeRun() {
+  viewing.value = undefined
+  clearHighlight()
+  const { run, ...query } = route.query
+  router.replace({ query })
+}
+
+function stopViewing() {
+  const run = viewing.value
+  if (!run) return
+  dialog.warning({
+    title: t('runs.stopTitle'),
+    content: t('runs.stopConfirm', { flow: run.flowName }),
+    positiveText: t('runs.stop'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: async () => {
+      try {
+        await call('flows.stop', { id: run.id })
+      } catch (error) {
+        message.error((error as Error).message)
+      }
+    },
+  })
+}
+
+const viewingBot = computed(() => data.bots.find((bot) => bot.id === viewing.value?.botId))
+watch(() => route.query.run, (id) => {
+  if (loaded.value && typeof id === 'string' && id !== viewing.value?.id) void openRun(id)
+})
 
 const test = ref<TestInput>({
   text: '', userName: '', private: false, mentioned: false, role: 'user', groupRole: '', mode: 'message', eventName: '', eventData: '{}', schedule: '', replies: '',
@@ -1661,6 +1776,23 @@ watch(narrow, (value) => {
       <NButton type="primary" :loading="saving" :disabled="!dirty" data-agent-target="flows.save" @click="save">{{ t('common.save') }}</NButton>
     </header>
 
+    <div v-if="viewing" class="run-banner" :style="{ '--state': runColors[viewing.status] }" role="status">
+      <span class="run-state"><span class="run-dot" :class="{ live: isLive(viewing) }" />{{ runText.statusText(viewing) }}</span>
+      <span class="run-what">{{ t('runs.viewing', { bot: viewingBot?.name ?? viewing.botId }) }} · {{ viewing.source === 'message' ? t('runs.saidBy', { name: runText.userName(viewing), text: viewing.text }) : `${t(`runs.source.${viewing.source}`)} ${viewing.text}` }}</span>
+      <span class="muted">{{ runText.duration((viewing.endedAt ?? now) - viewing.startedAt) }}</span>
+      <span v-if="viewing.status === 'stopped'" class="run-error">{{ runText.stoppedByText(viewing) }}</span>
+      <span v-else-if="viewing.error" class="run-error" :title="viewing.error">{{ viewing.error }}</span>
+      <span class="spacer" />
+      <NButton v-if="isLive(viewing)" size="small" type="error" secondary @click="stopViewing">
+        <template #icon><NIcon><StopCircleOutline /></NIcon></template>
+        {{ t('runs.stop') }}
+      </NButton>
+      <RouterLink :to="`/bots/${viewing.botId}/runs`" class="run-link">{{ t('runs.allRuns') }}</RouterLink>
+      <NButton size="small" quaternary circle :aria-label="t('common.close')" @click="closeRun">
+        <template #icon><NIcon><CloseOutline /></NIcon></template>
+      </NButton>
+    </div>
+
     <div class="editor-body">
       <NodePalette
         v-if="showPalette"
@@ -1774,6 +1906,8 @@ watch(narrow, (value) => {
           v-model:test="test"
           v-model:open="showLogs"
           v-model:tab="logsTab"
+          v-model:current="logsRun"
+          :live="viewing && isLive(viewing) ? [viewing.id] : []"
           :tests="testStatus"
           :runs="runs"
           :schedules="schedules"
@@ -2047,6 +2181,68 @@ watch(narrow, (value) => {
 </template>
 
 <style scoped>
+.run-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 6px 14px;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.16);
+  border-left: 3px solid var(--state);
+  background: color-mix(in srgb, var(--state) 7%, transparent);
+  font-size: 13px;
+}
+
+.run-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--state);
+  font-weight: 600;
+}
+
+.run-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--state);
+}
+
+.run-dot.live {
+  animation: run-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes run-pulse {
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--state) 25%, transparent);
+  }
+}
+
+.run-what {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-error {
+  color: #d03050;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-link {
+  font-size: 13px;
+  color: inherit;
+  opacity: 0.75;
+}
+
+.run-link:hover {
+  opacity: 1;
+}
+
 /* Category colors are tuned for light backgrounds; on dark ones icons mix in the text color to stay legible. */
 .editor :deep([style*='--accent']) {
   --accent-fg: color-mix(in srgb, var(--accent) var(--flow-accent-strength, 100%), var(--flow-node-fg, #222));
