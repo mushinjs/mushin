@@ -1084,6 +1084,7 @@ const zhCN: typeof en = {
       agent: '由智能体停止',
       system: '由 Mushin.js 停止',
     },
+    stoppedByFlow: '被流程「{flow}」停止',
     open: '在编辑器中查看',
     loadMore: '加载更多',
     empty: '还没有运行记录。这个机器人上的流程被触发后，会显示在这里。',

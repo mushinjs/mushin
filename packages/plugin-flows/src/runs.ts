@@ -1,7 +1,7 @@
-import type { Context } from '@mushin/core'
+import { type Context, field, type LocalizedText, z } from '@mushin/core'
 import type {} from '@mushin/plugin-database'
 import { FlowError } from './engine'
-import type { RunTrace, TriggerSource } from './types'
+import type { NodeType, RunTrace, TriggerSource } from './types'
 
 declare module 'minato' {
   interface Tables {
@@ -129,6 +129,17 @@ export class RunStore {
     return entry.info
   }
 
+  /** Stops the live runs that match, except `except`. Returns how many were stopped. */
+  stopWhere(match: (info: RunInfo) => boolean, by: string, except?: string) {
+    let count = 0
+    for (const [id, entry] of this.live) {
+      if (id === except || !match(entry.info)) continue
+      this.stop(id, by)
+      count++
+    }
+    return count
+  }
+
   /** Runs going on now, newest first. */
   active(bot?: string) {
     return [...this.live.values()].map((entry) => entry.info).filter((info) => !bot || info.botId === bot).sort((a, b) => b.startedAt - a.startedAt)
@@ -254,4 +265,43 @@ function infoOf(row: Partial<RunRow>): RunInfo {
   if (row.error) info.error = row.error
   if (row.stoppedBy) info.stoppedBy = row.stoppedBy
   return info
+}
+
+const text = (en: string, zh: string): LocalizedText => ({ en, 'zh-CN': zh })
+
+/** `logic.stopRuns`: stops other runs on the bot, e.g. for a `/停止` command. */
+export function stopRunsNode(store: RunStore): NodeType<{ flow: string; chat: boolean }> {
+  return {
+    kind: 'action',
+    type: 'logic.stopRuns',
+    category: 'logic',
+    title: text('Stop runs', '停止执行'),
+    description: text(
+      'Stops other runs going on on this bot: of this flow, of every flow, or of the flow you pick. Continues on "stopped" when it stopped any (count says how many), else on "none". Test runs only show what it would stop.',
+      '停止这个机器人上正在进行的其他运行：本流程的、所有流程的，或选定流程的。停止了至少一个时走“stopped”（count 为数量），否则走“none”。测试运行只显示要停止什么，不会真的停止。',
+    ),
+    config: z.object({
+      flow: z.string().default('this').meta(field('Flow', 'Whose runs to stop: this flow, all flows, or a flow you pick', {
+        'zh-CN': { title: '流程', description: '停止哪个流程的运行：本流程、所有流程，或选定的流程', options: { this: '本流程', all: '所有流程' } },
+      }, { options: { this: 'This flow', all: 'All flows' }, choices: 'flows.choices' })),
+      chat: z.boolean().default(true).meta(field('Only this chat', 'Only stop runs started in the same group or private chat', {
+        'zh-CN': { title: '只限本会话', description: '只停止在同一个群或私聊里开始的运行' },
+      })),
+    }),
+    inputs: [],
+    outputs: [{ name: 'count', type: 'number', title: text('Stopped', '停止数量') }],
+    execOut: ['stopped', 'none'],
+    async run({ config, session, flow, bot, runId, test }) {
+      const target = config.flow === 'this' ? flow.id : config.flow
+      const chat = `${session.channel.type}:${session.channel.id}`
+      if (test || !bot) {
+        await bot?.call('flows.stop', { flow: config.flow === 'all' ? 'all' : target, ...(config.chat ? { channel: chat } : {}) })
+        return { exec: 'none', outputs: { count: 0 } }
+      }
+      const count = store.stopWhere((info) => info.botId === bot.id
+        && (config.flow === 'all' || info.flowId === target)
+        && (!config.chat || info.channel === chat), `flow:${flow.name}`, runId)
+      return { exec: count ? 'stopped' : 'none', outputs: { count } }
+    },
+  }
 }

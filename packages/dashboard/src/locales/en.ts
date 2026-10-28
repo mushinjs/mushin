@@ -1082,6 +1082,7 @@ export default {
       agent: 'Stopped by the Agent',
       system: 'Stopped by Mushin.js',
     },
+    stoppedByFlow: 'Stopped by the flow “{flow}”',
     open: 'Open in the editor',
     loadMore: 'Load more',
     empty: 'No runs yet. Runs show here once a trigger of a flow on this bot fires.',

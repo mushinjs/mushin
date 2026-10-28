@@ -76,11 +76,31 @@ describe('run monitoring', () => {
     expect(page.runs.map((run: any) => run.id)).toEqual([id])
   })
 
+  it('stops runs from a flow node, except its own run', async () => {
+    const waiting = await app.call('flows.list').then((list: any[]) => list.find((flow) => flow.name === '等'))
+    const stopper = await app.call('flows.create', command('停止', [
+      { id: 'stop', type: 'logic.stopRuns', config: { flow: waiting.id } },
+      { id: 'yes', type: 'action.reply', config: { text: '停止了 {{stop.count}} 个' }, after: 'stopped' },
+    ]))
+    await app.call('flows.update', { id: stopper.id, nodes: [...stopper.nodes, { id: 'no', type: 'action.reply', config: { text: '没有要停止的' } }], edges: [...stopper.edges, { source: 'stop', sourceHandle: 'exec:none', target: 'no', targetHandle: 'exec' }] })
+    await say('/等', '43')
+    await waitFor(async () => (await app.call('flows.activity', { bot: botId })).runs.some((run: any) => run.status === 'waiting'))
+    await say('/停止', '44')
+    await waitFor(async () => (await outgoing()).includes('停止了 1 个'))
+    const [stopped] = (await app.call('flows.history', { bot: botId, status: ['stopped'] })).runs
+    expect(stopped).toMatchObject({ flowName: '等', user: { id: '43' }, stoppedBy: 'flow:停止' })
+    await say('/停止', '44')
+    await waitFor(async () => (await outgoing()).includes('没有要停止的'))
+    // Test runs list what they would stop.
+    const result = await app.call('flows.test', { id: stopper.id, text: '/停止' })
+    expect(result.trace.calls).toEqual([{ action: 'flows.stop', params: { flow: waiting.id, channel: 'group:test' } }])
+  })
+
   it('pages back through finished runs', async () => {
     const first = await app.call('flows.history', { bot: botId, limit: 1 })
-    expect(first).toMatchObject({ more: true, runs: [{ flowName: '你好' }] })
+    expect(first).toMatchObject({ more: true, runs: [{ flowName: '停止' }] })
     const next = await app.call('flows.history', { bot: botId, limit: 5, before: first.runs[0].startedAt })
-    expect(next.runs.map((run: any) => run.flowName)).toEqual(['等', '你好'])
+    expect(next.runs.map((run: any) => run.flowName)).toEqual(['停止', '等', '你好', '等', '你好'])
     expect(next.more).toBe(false)
   })
 })
