@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { call, on } from '../api'
 import type { AppPlugin, Bot } from '../types'
+import BotChatPermissions from './BotChatPermissions.vue'
 
 /** A bot's masters and admins, kept by the permissions plugin. */
 const props = defineProps<{ bot: Bot }>()
@@ -14,6 +15,9 @@ const message = useMessage()
 const masters = ref<string[]>([])
 const admins = ref<string[]>([])
 const groupRoles = ref(false)
+/** Chat members and rules need the database plugin. */
+const chats = ref(false)
+const chatCommands = ref(false)
 const available = ref<boolean>()
 const loading = ref(true)
 const saving = ref(false)
@@ -23,7 +27,9 @@ async function refresh() {
     const plugins = await call<AppPlugin[]>('plugins.list')
     available.value = plugins.some((plugin) => plugin.package === '@mushin/plugin-permissions' && plugin.status === 'active')
     if (!available.value) return
-    const result = await call<{ masters: string[]; admins: string[]; groupRoles: boolean }>('permissions.get', { bot: props.bot.id })
+    const result = await call<{ masters: string[]; admins: string[]; groupRoles: boolean; chats: boolean; chatCommands: boolean }>('permissions.get', { bot: props.bot.id })
+    chats.value = result.chats
+    chatCommands.value = result.chatCommands
     masters.value = result.masters
     admins.value = result.admins
     groupRoles.value = result.groupRoles
@@ -83,6 +89,11 @@ async function save() {
           <NButton type="primary" :loading="saving" @click="save">{{ t('common.save') }}</NButton>
         </NSpace>
       </NCard>
+      <BotChatPermissions v-if="chats" v-model:chat-commands="chatCommands" :bot="bot" />
+      <NAlert v-else type="info" :title="t('chatPermissions.title')">
+        {{ t('chatPermissions.needsDatabase') }}
+        <RouterLink to="/plugins?highlight=@mushin/plugin-database">{{ t('permissions.openPlugins') }}</RouterLink>
+      </NAlert>
       <NCard :title="t('permissions.usageTitle')">
         <ul class="usage">
           <li>{{ t('permissions.usageCommands') }}</li>
