@@ -690,7 +690,7 @@ export interface FlowRunInfo {
   user?: { id: string; name?: string }
   channel?: string
   status: FlowRunStatus
-  node?: { id: string; type: string; label?: string }
+  node?: { id: string; type: string; label?: string; long?: boolean }
   startedAt: number
   endedAt?: number
   error?: string

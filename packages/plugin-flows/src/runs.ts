@@ -29,7 +29,7 @@ export interface RunInfo {
   channel?: string
   status: RunStatus
   /** The node working now; for finished runs, the last one that ran. */
-  node?: { id: string; type: string; label?: string }
+  node?: { id: string; type: string; label?: string; long?: boolean }
   startedAt: number
   endedAt?: number
   error?: string
@@ -46,9 +46,13 @@ export interface RunRow extends Omit<RunInfo, 'user' | 'node' | 'status' | 'sour
   trace: any
 }
 
+/** A run a message started counts as replying, unless it queues or works at a long node such as a command. */
+const replying = (run: RunInfo) => run.source === 'message' && run.status !== 'queued' && !run.node?.long
+
 /** What the bot is doing, from its runs. */
 export interface BotActivity {
   botId: string
+  /** Replying to someone, or running a flow: started by a schedule or an event, or busy with a long node. */
   state: 'idle' | 'replying' | 'running'
   /** The run the state describes: the most recently started one. */
   run?: RunInfo
@@ -149,7 +153,7 @@ export class RunStore {
     return botIds.map((botId) => {
       const runs = this.active(botId)
       const run = runs.find((item) => item.status !== 'queued') ?? runs[0]
-      const state = !run ? 'idle' : run.source === 'message' && run.status !== 'queued' ? 'replying' : 'running'
+      const state = !run ? 'idle' : replying(run) ? 'replying' : 'running'
       return { botId, state, ...(run ? { run } : {}), count: runs.length }
     })
   }

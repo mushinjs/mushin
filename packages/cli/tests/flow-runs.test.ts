@@ -103,4 +103,27 @@ describe('run monitoring', () => {
     expect(next.runs.map((run: any) => run.flowName)).toEqual(['停止', '等', '你好', '等', '你好'])
     expect(next.more).toBe(false)
   })
+
+  it('queues runs that need a resource another run holds', async () => {
+    await app.call('plugins.enable', { package: '@mushin/plugin-terminal' })
+    await waitFor(async () => (await app.call<any[]>('flows.nodeTypes')).some((type) => type.type === 'terminal.local'))
+    await app.call('flows.create', command('原神', [
+      { id: 'run', type: 'terminal.local', label: '运行 BetterGI', config: { command: 'sleep 0.6', resource: 'game', timeout: 120 } },
+      { id: 'done', type: 'action.reply', config: { text: '完成' }, after: 'ok' },
+    ]))
+    await say('/原神', '51')
+    await waitFor(async () => (await app.call('flows.activity', { bot: botId })).runs.length === 1)
+    await say('/原神', '52')
+    const { runs } = await waitFor(async () => {
+      const result = await app.call('flows.activity', { bot: botId })
+      return result.runs.some((run: any) => run.status === 'queued') ? result : undefined
+    })
+    expect(runs.map((run: any) => [run.user.id, run.status])).toEqual([['52', 'queued'], ['51', 'running']])
+    expect((await app.call('flows.activity', { bot: botId })).bots[0]).toMatchObject({ state: 'running', count: 2, run: { user: { id: '51' }, node: { label: '运行 BetterGI', long: true } } })
+    await waitFor(async () => (await outgoing()).filter((text) => text === '完成').length === 2, 8000)
+    const done = (await app.call('flows.history', { bot: botId, flow: runs[0].flowId })).runs
+    expect(done.map((run: any) => [run.user.id, run.status])).toEqual([['52', 'ok'], ['51', 'ok']])
+    // The second run started once the first ended.
+    expect(done[0].endedAt - done[1].endedAt).toBeGreaterThanOrEqual(500)
+  })
 })

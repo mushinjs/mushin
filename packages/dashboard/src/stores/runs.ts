@@ -26,7 +26,8 @@ export const useRunsStore = defineStore('runs', () => {
   function activityOf(botId: string): BotActivity {
     const runs = [...live.value.values()].filter((run) => run.botId === botId).sort((a, b) => b.startedAt - a.startedAt)
     const run = runs.find((item) => item.status !== 'queued') ?? runs[0]
-    const state = !run ? 'idle' : run.source === 'message' && run.status !== 'queued' ? 'replying' : 'running'
+    // A message's run is replying, unless it queues or works at a long node such as a command.
+    const state = !run ? 'idle' : run.source === 'message' && run.status !== 'queued' && !run.node?.long ? 'replying' : 'running'
     return { botId, state, ...(run ? { run } : {}), count: runs.length }
   }
 

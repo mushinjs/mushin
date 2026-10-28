@@ -1,7 +1,8 @@
 import { type Logger, randomId, seg } from '@mushin/core'
 import { type CompiledFlow, interceptOf, triggerPriority } from './graph'
+import type { ResourceLocks } from './locks'
 import { interpolate, interpolateConfig, REF_PATTERN, SCOPES, sysValues, toText } from './refs'
-import type { DailyCounter, FlowBot, FlowEvent, FlowSession, LlmLike, PersonaLike, PortType, RunState, RunStep, RunTrace, TriggerSource, UsageStore, Variables, VariableScope, WaitOptions } from './types'
+import type { DailyCounter, FlowBot, FlowEvent, FlowSession, LlmLike, NodeResult, PersonaLike, PortType, RunState, RunStep, RunTrace, TriggerSource, UsageStore, Variables, VariableScope, WaitOptions } from './types'
 
 export const MAX_STEPS = 200
 /** How long a run may work; time spent waiting for a reply does not count. */
@@ -66,6 +67,10 @@ export interface RunEnvironment {
   onStart?(trace: RunTrace): void
   /** Stops the run when aborted; the abort reason is the run's error. */
   cancel?: AbortSignal
+  /** Resources nodes hold one run at a time; without it (test runs) nodes never queue. */
+  locks?: ResourceLocks
+  /** Told when the run starts and stops waiting in a resource's queue. */
+  onQueue?(waiting: boolean, resource: string): void
   /** Run only this trigger, already matched by the caller (which ordered triggers across flows). */
   matched?: TriggerMatch
   /** The persona the bot's rules give this message, looked up when a node first asks. */
@@ -373,8 +378,26 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
     const inputs = resolveInputs(id)
     step(id, 'running', edgeId)
     let exec: string | undefined
+    const type = entry.type
     try {
-      const result = await untilAborted(Promise.resolve(entry.type.run(contextFor(id, inputs))), signal)
+      const context = contextFor(id, inputs)
+      // Queueing for a resource and long nodes do not use up the run's working time.
+      const resource = env.locks ? type.resource?.(context.config) : undefined
+      if (resource) {
+        budget?.pause()
+        try {
+          await env.locks!.acquire(resource, trace.id, { signal, onQueue: (waiting) => env.onQueue?.(waiting, resource) })
+        } finally {
+          budget?.resume()
+        }
+      }
+      if (type.long) budget?.pause()
+      let result: NodeResult | void
+      try {
+        result = await untilAborted(Promise.resolve(type.run(context)), signal)
+      } finally {
+        if (type.long) budget?.resume()
+      }
       exec = result?.exec ?? entry.ports.execOut[0]
       outputs.set(id, result?.outputs ?? {})
       trace.steps.push({ nodeId: id, exec, ms: Date.now() - started, inputs, outputs: result?.outputs ?? {} })
@@ -421,6 +444,7 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
     env.logger.warn('flow "%s" stopped: %s', flow.doc.name, trace.error)
   } finally {
     budget?.dispose()
+    env.locks?.releaseAll(trace.id)
   }
   return { matched, consumed, trace }
 }

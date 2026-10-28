@@ -9,12 +9,14 @@ import { overlap, triggerOrder, triggerSummary, type TriggerSlot } from './order
 import { migrateDataEdges } from './refs'
 import { branchSteps, candidates, type CaseResult, check, judgeWith, MOCK_REPLY, mockLlm, newCase, scratchVars, snapshot, type TestCase, TestCaseInput, type TestRunSummary, type TestsDocument } from './tests'
 import { FIELD_TYPES, TableField, TableName, tableNodes, TableStore } from './tables'
+import { ResourceLocks } from './locks'
 import { KEEP_DAYS, type RunInfo, type RunStatus, RunStore, stopRunsNode } from './runs'
 import { VariableStore } from './variables'
 import type { ChatLine, DailyCounter, FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, FlowSource, Intercept, FlowSession, LlmLike, NodeType, PersonaResolver, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
 
 export * from './engine'
 export * from './graph'
+export * from './locks'
 export * from './nodes'
 export * from './order'
 export * from './refs'
@@ -234,6 +236,8 @@ export class FlowService extends Service {
   private variables = new VariableStore((error) => this.logger.warn('saving flow variables failed: %s', error))
   /** Tables flows keep their own data in; usable while the database plugin runs. */
   readonly tables: TableStore
+  /** Resources such as a game client that one run at a time may use. */
+  readonly locks = new ResourceLocks()
   /** Real runs on bots, going on and finished. */
   readonly runs = new RunStore((run) => this.home.emit('flows/activity', run), (error) => this.logger.warn('saving a flow run failed: %s', error))
   /** Bot contexts running the flows bot plugin, by bot id; event and schedule runs use them. */
@@ -891,13 +895,19 @@ export class FlowService extends Service {
     const controller = new AbortController()
     let runId: string | undefined
     const nodeOf = (id: string) => {
-      const node = compiled.nodes.get(id)?.node
-      return { id, type: node?.type ?? '', ...(node?.label ? { label: node.label } : {}) }
+      const entry = compiled.nodes.get(id)
+      const node = entry?.node
+      const long = entry?.type?.kind === 'action' && entry.type.long
+      return { id, type: node?.type ?? '', ...(node?.label ? { label: node.label } : {}), ...(long ? { long: true } : {}) }
     }
     const { session } = env
     const result = await runFlow(compiled, {
       ...env,
       cancel: controller.signal,
+      locks: this.locks,
+      onQueue: (waiting) => {
+        if (runId) this.runs.update(runId, { status: waiting ? 'queued' : 'running' })
+      },
       onStart: (trace) => {
         runId = trace.id
         this.runs.start({
