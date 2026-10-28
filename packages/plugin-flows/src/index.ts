@@ -8,6 +8,7 @@ import { builtinNodes, commandName, scheduleTarget } from './nodes'
 import { overlap, triggerOrder, triggerSummary, type TriggerSlot } from './order'
 import { migrateDataEdges } from './refs'
 import { branchSteps, candidates, type CaseResult, check, judgeWith, MOCK_REPLY, mockLlm, newCase, scratchVars, snapshot, type TestCase, TestCaseInput, type TestRunSummary, type TestsDocument } from './tests'
+import { FIELD_TYPES, TableField, TableName, tableNodes, TableStore } from './tables'
 import { VariableStore } from './variables'
 import type { ChatLine, DailyCounter, FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, FlowSource, Intercept, FlowSession, LlmLike, NodeType, PersonaResolver, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
 
@@ -18,6 +19,7 @@ export * from './order'
 export * from './refs'
 export * from './tests'
 export * from './types'
+export * from './tables'
 export * from './variables'
 
 declare module '@mushin/core' {
@@ -227,6 +229,8 @@ export class FlowService extends Service {
   private traces = new Map<string, RunTrace[]>()
   /** Chat, user and flow variables; saved in the database when the database plugin runs. */
   private variables = new VariableStore((error) => this.logger.warn('saving flow variables failed: %s', error))
+  /** Tables flows keep their own data in; usable while the database plugin runs. */
+  readonly tables: TableStore
   /** Bot contexts running the flows bot plugin, by bot id; event and schedule runs use them. */
   private runners = new Map<string, Context>()
   private waiters = new Set<Waiter>()
@@ -248,6 +252,7 @@ export class FlowService extends Service {
   constructor(ctx: Context) {
     super(ctx, 'flows')
     this.home = ctx
+    this.tables = new TableStore(ctx, () => this.recompile())
   }
 
   /** Flow lifecycle lines for the global log, tagged `flow` in the dashboard. Runs log inside each bot. */
@@ -271,6 +276,8 @@ export class FlowService extends Service {
       return this.saveUsage()
     }, 'flows usage')
     for (const type of builtinNodes) yield this.defineNode(type)
+    await this.tables.load()
+    for (const type of tableNodes(this.tables)) yield this.defineNode(type)
     // Flows saved before references replaced data connections, with renamed node types, or before
     // triggers said what they intercept (their old default kept the message from everything after).
     for (const doc of this.docs.values()) {
@@ -295,6 +302,7 @@ export class FlowService extends Service {
       }, 'flows test runs')
       const detach = await this.variables.attach(ctx)
       ctx.effect(() => detach, 'flows variables')
+      ctx.effect(() => this.tables.attach(ctx), 'flows tables')
     })
     yield* this.defineActions()
     yield this.home.effect(() => {
@@ -354,6 +362,7 @@ export class FlowService extends Service {
       execOut: type.kind === 'trigger' ? ['next'] : type.kind === 'action' ? type.execOut ?? ['next'] : [],
       execOutFrom: type.kind === 'action' ? type.execOutFrom : undefined,
       ...(type.restricted ? { restricted: true } : {}),
+      ...(type.unavailable?.() ? { unavailable: type.unavailable() } : {}),
     }))
   }
 
@@ -372,7 +381,8 @@ export class FlowService extends Service {
     }
   }
 
-  private recompile() {
+  /** Checks every flow again, e.g. after a node type was added or became unavailable. */
+  recompile() {
     this.compiled.clear()
     this.home.emit('flows/changed')
   }
@@ -1332,6 +1342,55 @@ export class FlowService extends Service {
       handler: ({ id, ...input }) => {
         if (!input.event && !input.schedule && !input.text) throw new MushinError('invalid_input', 'Give text, event or schedule')
         return this.test(id, input)
+      },
+    })
+
+    yield actions.define({
+      name: 'flows.tables.list',
+      description: 'Tables flows keep their own data in (check-ins, points, inventories), with their fields and row counts. Database nodes (data.dbQuery, dbCount, dbInsert, dbUpdate, dbDelete) read and write them; each is stored as flow_<name> and browsable on the Database page. Every table also has id, createdAt and updatedAt (ms).',
+      risk: 'read',
+      input: z.object({}),
+      handler: async () => {
+        const counts = await this.tables.counts()
+        return { available: this.tables.available, tables: this.tables.list().map((table) => ({ ...table, rows: (counts as Record<string, number>)[table.name] ?? 0 })) }
+      },
+    })
+
+    yield actions.define({
+      name: 'flows.tables.define',
+      description: `Create a flow table, or add fields to one. Field types: ${FIELD_TYPES.join(', ')}. A field's type cannot change, and fields are never removed this way. Names may use any script, e.g. 积分.`,
+      risk: 'write',
+      input: z.object({ name: TableName, fields: z.array(TableField).default([]) }),
+      handler: ({ name, fields }) => this.tables.define(name, fields),
+    })
+
+    yield actions.define({
+      name: 'flows.tables.drop',
+      description: 'Delete a flow table with all its rows. Flows using it stop working until it is created again.',
+      risk: 'dangerous',
+      input: z.object({ name: z.string() }),
+      handler: ({ name }) => this.tables.drop(name),
+    })
+
+    yield actions.define({
+      name: 'flows.tables.choices',
+      description: 'Flow table names as { value, label }, for forms.',
+      risk: 'read',
+      input: z.object({}),
+      handler: () => this.tables.list().map((table) => ({ value: table.name, label: table.name })),
+    })
+
+    yield actions.define({
+      name: 'flows.tables.fieldChoices',
+      description: 'Fields of every flow table as { value, label }, for forms.',
+      risk: 'read',
+      input: z.object({}),
+      handler: () => {
+        const seen = new Map<string, string[]>()
+        for (const table of this.tables.list()) {
+          for (const name of [...table.fields.map((item) => item.name), 'id', 'createdAt', 'updatedAt']) seen.set(name, [...seen.get(name) ?? [], table.name])
+        }
+        return [...seen].map(([value, tables]) => ({ value, label: `${value} (${tables.join(', ')})` }))
       },
     })
 

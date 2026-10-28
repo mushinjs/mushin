@@ -16,10 +16,13 @@ export interface PortDef {
 /** `event`, `manage` and `platform` hold nodes for one chat platform, such as OneBot. */
 export type NodeCategory = 'trigger' | 'event' | 'logic' | 'data' | 'ai' | 'action' | 'manage' | 'platform'
 
-/** Outputs read from a config value: `signature` turns `<score:number> [note]` into outputs `score` and `note`. */
+/**
+ * Outputs read from a config value: `signature` turns `<score:number> [note]` into outputs `score`
+ * and `note`; `names` makes one output per name in a list, such as the columns a query returns.
+ */
 export interface OutputsFromConfig {
   key: string
-  format: 'signature'
+  format: 'signature' | 'names'
 }
 
 /** Exec outputs taken from a config array, e.g. one branch per intent label plus `other`. */
@@ -54,6 +57,11 @@ interface NodeTypeBase<C> {
    * Agent cannot. For nodes that reach outside the chat, such as running commands.
    */
   restricted?: boolean
+  /**
+   * Why the node cannot run right now, such as a plugin it needs being off; nothing when it can.
+   * The editor greys it out with this text, and flows using it get an error.
+   */
+  unavailable?(): LocalizedText | undefined
 }
 
 /**

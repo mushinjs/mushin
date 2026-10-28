@@ -16,10 +16,14 @@ export interface NodePorts {
 /** Outputs a node's config adds, e.g. one per argument of a command; names already taken are left out. */
 export function configOutputs(type: NodeType, config: Record<string, any> | undefined): PortDef[] {
   const outputs = type.outputs ?? []
-  if (type.outputsFrom?.format !== 'signature') return outputs
+  if (!type.outputsFrom) return outputs
   const taken = new Set(outputs.map((port) => port.name))
   const extra: PortDef[] = []
-  for (const arg of parseSignature(String(config?.[type.outputsFrom.key] ?? ''))) {
+  const value = config?.[type.outputsFrom.key]
+  const args = type.outputsFrom.format === 'names'
+    ? (Array.isArray(value) ? value : []).filter((name): name is string => typeof name === 'string' && !!name.trim()).map((name) => ({ name: name.trim(), type: 'any' as PortType }))
+    : parseSignature(String(value ?? ''))
+  for (const arg of args) {
     if (taken.has(arg.name)) continue
     taken.add(arg.name)
     extra.push({ name: arg.name, type: arg.type, title: arg.name })
@@ -130,6 +134,8 @@ export function compile(doc: FlowDocument, types: Map<string, NodeType>): Compil
       nodes.set(node.id, { node, config: node.config ?? {} })
       continue
     }
+    const unavailable = type.unavailable?.()
+    if (unavailable) issues.push({ severity: 'error', nodeId: node.id, message: typeof unavailable === 'string' ? unavailable : unavailable.en ?? Object.values(unavailable)[0] ?? '' })
     if (doc.adapter && type.platforms && !type.platforms.includes(doc.adapter)) {
       issues.push({ severity: 'warning', nodeId: node.id, message: `"${node.label ?? node.type}" needs a ${type.platforms.join(' or ')} bot; this flow is for ${doc.adapter}` })
     }
