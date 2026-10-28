@@ -40,7 +40,7 @@ describe('permissions plugin', () => {
   })
 
   it('keeps masters and admins per bot, masters passing admin checks', async () => {
-    expect(await app.call('permissions.update', { bot: botId, masters: ['1'], admins: ['2', '2'] })).toEqual({ masters: ['1'], admins: ['2'] })
+    expect(await app.call('permissions.update', { bot: botId, masters: ['1'], admins: ['2', '2'] })).toEqual({ masters: ['1'], admins: ['2'], chatCommands: false })
     expect(await app.call('permissions.check', { bot: botId, user: '1', allow: ['admin'] })).toMatchObject({ ok: true, role: 'master' })
     expect(await app.call('permissions.check', { bot: botId, user: '2', allow: ['admin'] })).toMatchObject({ ok: true, role: 'admin' })
     expect(await app.call('permissions.check', { bot: botId, user: '3', allow: ['admin'] })).toMatchObject({ ok: false, role: 'user', reason: '需要管理员及以上，你是普通用户' })

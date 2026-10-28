@@ -34,17 +34,21 @@
     },
     "optional": {
       "plugins": {
-        "@mushin/plugin-flows": "*"
+        "@mushin/plugin-flows": "*",
+        "@mushin/plugin-database": "*"
       }
     },
     "nodes": [
-      "logic.permission"
+      "logic.permission",
+      "perm.*"
     ]
   },
   "dependencies": {
     "@mushin/core": "workspace:*",
     "@mushin/plugin-bots": "workspace:*",
     "@mushin/plugin-flows": "workspace:*",
-    "@mushin/plugin-storage": "workspace:*"
+    "@mushin/plugin-storage": "workspace:*",
+    "@mushin/plugin-database": "workspace:*",
+    "minato": "catalog:"
   }
 }

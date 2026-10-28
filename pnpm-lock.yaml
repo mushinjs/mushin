@@ -470,12 +470,18 @@ importers:
       '@mushin/plugin-bots':
         specifier: workspace:*
         version: link:../plugin-bots
+      '@mushin/plugin-database':
+        specifier: workspace:*
+        version: link:../plugin-database
       '@mushin/plugin-flows':
         specifier: workspace:*
         version: link:../plugin-flows
       '@mushin/plugin-storage':
         specifier: workspace:*
         version: link:../plugin-storage
+      minato:
+        specifier: 'catalog:'
+        version: 4.0.1(cordis@4.0.0-rc.11)
 
   packages/plugin-personas:
     dependencies:
