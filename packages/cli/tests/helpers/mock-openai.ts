@@ -8,9 +8,18 @@ export interface MockReply {
   delayMs?: number
 }
 
-/** A minimal OpenAI-compatible server: chat completions (plain and streamed) and the model list. */
+/** A 64-dimension vector from the characters of a text: texts sharing characters come out close. */
+export function mockEmbedding(text: string) {
+  const vector = new Array<number>(64).fill(0)
+  for (const char of text.toLowerCase()) if (char.trim()) vector[char.codePointAt(0)! % 64] += 1
+  const norm = Math.hypot(...vector) || 1
+  return vector.map((value) => value / norm)
+}
+
+/** A minimal OpenAI-compatible server: chat completions (plain and streamed), embeddings and the model list. */
 export async function createMockOpenAI() {
   const requests: any[] = []
+  const embeddings: any[] = []
   const queue: MockReply[] = []
   let fallback: MockReply = { text: 'Hi from LLM' }
   let counter = 0
@@ -31,6 +40,19 @@ export async function createMockOpenAI() {
     if (req.method === 'GET' && req.url === '/v1/models') {
       res.setHeader('content-type', 'application/json')
       res.end(JSON.stringify({ object: 'list', data: [{ id: 'mock-model', object: 'model', created: 0, owned_by: 'mock' }] }))
+      return
+    }
+    if (req.method === 'POST' && req.url === '/v1/embeddings') {
+      const body = JSON.parse(await readBody(req))
+      embeddings.push(body)
+      const input: string[] = Array.isArray(body.input) ? body.input : [body.input]
+      res.setHeader('content-type', 'application/json')
+      res.end(JSON.stringify({
+        object: 'list',
+        model: body.model,
+        data: input.map((text, index) => ({ object: 'embedding', index, embedding: mockEmbedding(text) })),
+        usage: { prompt_tokens: input.length * 3, total_tokens: input.length * 3 },
+      }))
       return
     }
     if (req.method !== 'POST' || req.url !== '/v1/chat/completions') {
@@ -86,6 +108,8 @@ export async function createMockOpenAI() {
   return {
     baseURL: `http://127.0.0.1:${port}/v1`,
     requests,
+    /** Bodies of embedding requests. */
+    embeddings,
     /** Queues replies for the next requests, in order. */
     enqueue: (...replies: MockReply[]) => queue.push(...replies),
     setFallback: (reply: MockReply) => (fallback = reply),

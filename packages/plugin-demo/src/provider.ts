@@ -1,7 +1,9 @@
 import { field, z } from '@mushin/core'
-import type { ChatRequest, ChatResponse, LlmMessage, ProviderClient, ProviderType, StreamEvent } from '@mushin/plugin-providers'
+import type { ChatRequest, ChatResponse, EmbedRequest, LlmMessage, ProviderClient, ProviderType, StreamEvent } from '@mushin/plugin-providers'
 
 export const DEMO_MODEL = 'demo-chat'
+export const DEMO_EMBEDDING_MODEL = 'demo-embedding'
+const EMBEDDING_SIZE = 256
 
 export const ProviderConfig = z.object({
   latency: z.number().int().min(0).max(10_000).default(300).meta(field('Latency (ms)', 'Pretend thinking time before each reply', {
@@ -35,6 +37,12 @@ export function demoReply(messages: LlmMessage[]) {
     return labels.find((label) => text.includes(label.toLowerCase())) ?? 'other'
   }
   if (user === 'Reply with OK.') return 'OK'
+  // A question asked with knowledge base passages (see the flows' ai.chat node): answer from the first one.
+  const reference = /<reference>\n([\s\S]*?)<\/reference>/.exec(user)
+  if (reference) {
+    const passage = reference[1].split('\n').slice(1).join(' ').trim().slice(0, 120)
+    return `【演示模型】根据资料：${passage}`
+  }
   if (CJK.test(user)) return `【演示模型】你说的是「${user}」。这是离线演示提供商生成的回复，换成真实模型后这里就是 AI 的回答。`
   return `[Demo model] You said "${user}". This reply comes from the offline demo provider; switch to a real model to get AI answers.`
 }
@@ -47,6 +55,27 @@ const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, 
     reject(signal.reason)
   }, { once: true })
 })
+
+/**
+ * A stand-in embedding: words and pairs of CJK characters hashed into a fixed-size vector, so texts
+ * sharing words come out close. Good enough to try knowledge bases offline.
+ */
+export function demoEmbedding(text: string) {
+  const vector = new Array<number>(EMBEDDING_SIZE).fill(0)
+  const lower = text.toLowerCase()
+  const pieces = [...lower.matchAll(/[a-z0-9]+/g)].map((match) => match[0])
+  for (const run of lower.match(/[㐀-鿿]+/g) ?? []) {
+    if (run.length === 1) pieces.push(run)
+    for (let index = 0; index < run.length - 1; index++) pieces.push(run.slice(index, index + 2))
+  }
+  for (const piece of pieces) {
+    let hash = 2166136261
+    for (const char of piece) hash = Math.imul(hash ^ char.codePointAt(0)!, 16777619)
+    vector[(hash >>> 0) % EMBEDDING_SIZE] += 1
+  }
+  const norm = Math.hypot(...vector) || 1
+  return vector.map((value) => value / norm)
+}
 
 /** Answers without any network, so flows and LLM plugins can be tried before a real provider is set up. */
 export class DemoClient implements ProviderClient {
@@ -79,8 +108,12 @@ export class DemoClient implements ProviderClient {
     yield { type: 'done', response }
   }
 
+  async embed(request: EmbedRequest) {
+    return { vectors: request.input.map(demoEmbedding), usage: { inputTokens: request.input.reduce((sum, text) => sum + Math.ceil(text.length / 4), 0) } }
+  }
+
   async listModels() {
-    return [DEMO_MODEL]
+    return [DEMO_MODEL, DEMO_EMBEDDING_MODEL]
   }
 }
 
@@ -88,6 +121,6 @@ export const demoProviderType: ProviderType<ProviderConfig> = {
   id: 'demo',
   displayName: { en: 'Demo (offline)', 'zh-CN': '演示（离线）' },
   config: ProviderConfig,
-  presets: [{ id: 'demo', label: { en: 'Demo model', 'zh-CN': '演示模型' }, config: { latency: 300 }, models: [DEMO_MODEL] }],
+  presets: [{ id: 'demo', label: { en: 'Demo model', 'zh-CN': '演示模型' }, config: { latency: 300 }, models: [DEMO_MODEL, DEMO_EMBEDDING_MODEL] }],
   create: (config) => new DemoClient(ProviderConfig.parse(config ?? {})),
 }

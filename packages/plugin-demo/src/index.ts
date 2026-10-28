@@ -5,7 +5,7 @@ import type {} from '@mushin/plugin-providers'
 import type {} from '@mushin/plugin-storage'
 import { AdapterConfig, sandboxAdapter, simulate } from './adapter'
 import { type DemoFlowKey, demoFlows } from './flows'
-import { DEMO_MODEL, demoProviderType } from './provider'
+import { DEMO_EMBEDDING_MODEL, DEMO_MODEL, demoProviderType } from './provider'
 
 export * from './adapter'
 export * from './flows'
@@ -67,7 +67,7 @@ async function reconcile(ctx: Context, config: Config) {
 
   const providerExists = (id?: string) => !!id && ctx.llm.list().some((item) => item.id === id)
   if (config.provider && !providerExists(state.provider)) {
-    const record = await ctx.llm.create({ name: '演示模型', type: 'demo', config: { latency: 300 }, models: [DEMO_MODEL] })
+    const record = await ctx.llm.create({ name: '演示模型', type: 'demo', config: { latency: 300 }, models: [DEMO_MODEL, DEMO_EMBEDDING_MODEL] })
     state.provider = record.id
     logger.info('created the demo provider')
   } else if (!config.provider && state.provider) {

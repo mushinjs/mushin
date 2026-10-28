@@ -1,7 +1,7 @@
 import { Context, isMasked, mask, MushinError, randomId, Service, toJsonSchema, z } from '@mushin/core'
 import type {} from '@mushin/plugin-storage'
 import type {
-  ChatRequest, LlmChatOptions, LlmResult, ProviderClient, ProviderRecord, ProviderTest, ProviderType, StreamEvent,
+  ChatRequest, LlmChatOptions, LlmEmbedOptions, LlmEmbedResult, LlmResult, ProviderClient, ProviderRecord, ProviderTest, ProviderType, StreamEvent,
 } from './types'
 
 export * from './types'
@@ -29,6 +29,9 @@ export interface LlmCall {
 }
 
 const STORAGE_KEY = 'providers'
+
+/** Most texts sent in one embedding request. */
+export const EMBED_BATCH = 64
 
 interface StoredProviders {
   providers: ProviderRecord[]
@@ -294,6 +297,44 @@ export class LlmService extends Service {
     }
   }
 
+  /** Whether a provider can embed text, for pickers. */
+  canEmbed(id: string) {
+    try {
+      return !!this.client(this.get(id)).embed
+    } catch {
+      return false
+    }
+  }
+
+  /** Embeds texts through a provider, `EMBED_BATCH` at a time; each batch is retried once. */
+  async embed(options: LlmEmbedOptions): Promise<LlmEmbedResult> {
+    const record = options.provider ? this.get(options.provider) : this.defaultProvider()
+    if (!record) throw new MushinError('unavailable', 'No LLM provider is configured. Add one in Providers first.')
+    const client = this.client(record)
+    if (!client.embed) throw new MushinError('unavailable', `Provider "${record.name}" cannot embed text`)
+    const vectors: number[][] = []
+    let tokens = 0
+    const start = Date.now()
+    for (let index = 0; index < options.texts.length; index += EMBED_BATCH) {
+      const input = options.texts.slice(index, index + EMBED_BATCH)
+      let response
+      try {
+        response = await client.embed({ model: options.model, input, signal: options.signal }).catch((error) => {
+          if (options.signal?.aborted) throw error
+          return client.embed!({ model: options.model, input, signal: options.signal })
+        })
+      } catch (error) {
+        this.logRequestError(record, options.model, error, start)
+        throw error
+      }
+      if (response.vectors.length !== input.length) throw new MushinError('unavailable', `Provider "${record.name}" returned ${response.vectors.length} vectors for ${input.length} texts`)
+      vectors.push(...response.vectors)
+      tokens += response.usage?.inputTokens ?? 0
+    }
+    this.home.emit('llm/called', { provider: record.id, providerName: record.name, model: options.model, ok: true, inputTokens: tokens || undefined, latencyMs: Date.now() - start })
+    return { vectors, provider: record.id, model: options.model, dimension: vectors[0]?.length ?? 0, ...(tokens ? { tokens } : {}) }
+  }
+
   private logRequestError(record: ProviderRecord, model: string, error: unknown, start: number) {
     // A caller that gave up (timeout, user stop) is not the provider's fault.
     if (error instanceof Error && error.name === 'AbortError') return
@@ -390,6 +431,14 @@ export class LlmService extends Service {
       risk: 'write',
       input: idInput,
       handler: ({ id }) => this.setDefault(id),
+    })
+
+    yield actions.define({
+      name: 'providers.embedChoices',
+      description: 'Providers that can embed text (for knowledge bases), as ids and names.',
+      risk: 'read',
+      input: z.object({}),
+      handler: () => this.records.filter((record) => this.canEmbed(record.id)).map((record) => ({ value: record.id, label: record.name })),
     })
 
     yield actions.define({

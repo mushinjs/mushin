@@ -1,7 +1,7 @@
 import OpenAI from 'openai'
 import { type Context, field, z } from '@mushin/core'
 import type {
-  ChatRequest, ChatResponse, FinishReason, LlmMessage, ProviderClient, StreamEvent, ToolCall,
+  ChatRequest, ChatResponse, EmbedRequest, EmbedResponse, FinishReason, LlmMessage, ProviderClient, StreamEvent, ToolCall,
 } from '@mushin/plugin-providers'
 
 export const name = 'provider-openai'
@@ -149,6 +149,15 @@ export class OpenAIClient implements ProviderClient {
     }
     const toolCalls = [...calls.values()].map((call) => ({ ...call, arguments: call.arguments || '{}' }))
     yield { type: 'done', response: { text, toolCalls, finishReason, usage } }
+  }
+
+  async embed(request: EmbedRequest): Promise<EmbedResponse> {
+    const response = await this.sdk.embeddings.create(
+      { model: request.model, input: request.input, encoding_format: 'float' },
+      { signal: request.signal },
+    )
+    const vectors = [...response.data].sort((a, b) => a.index - b.index).map((item) => item.embedding)
+    return { vectors, ...(response.usage ? { usage: { inputTokens: response.usage.prompt_tokens } } : {}) }
   }
 
   async listModels(signal?: AbortSignal) {
