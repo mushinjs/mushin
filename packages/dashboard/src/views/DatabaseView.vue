@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArchiveOutline, CloseOutline, CreateOutline, DownloadOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5'
+import { AddOutline, ArchiveOutline, CloseOutline, CreateOutline, DownloadOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5'
 import {
   type DataTableColumns, type DataTableSortState, NAlert, NButton, NDataTable, NDropdown, NEmpty, NIcon, NInput, NModal, NSelect, NSpace, NSpin, NTag,
   useDialog, useMessage,
@@ -276,6 +276,75 @@ async function exportTable(format: string) {
   }
 }
 
+// ---- flow tables ----
+
+const FIELD_TYPES = ['text', 'number', 'integer', 'boolean', 'json'] as const
+type FieldType = typeof FIELD_TYPES[number]
+const FLOW_PREFIX = 'flow_'
+const fieldTypeOptions = computed(() => FIELD_TYPES.map((type) => ({ value: type, label: t(`database.fieldType.${type}`) })))
+
+/** The table being created or given more fields; `existing` fields cannot change. */
+const designing = ref<{ name: string; isNew: boolean; existing: { name: string; type: string }[]; fields: { name: string; type: FieldType }[] }>()
+const flowTable = computed(() => (table.value?.name.startsWith(FLOW_PREFIX) ? table.value.name.slice(FLOW_PREFIX.length) : undefined))
+
+/** A flow table column's type in the words the design form uses. */
+const COLUMN_FIELD_TYPES: Record<string, FieldType> = { string: 'text', text: 'text', double: 'number', integer: 'integer', boolean: 'boolean', json: 'json' }
+const columnTypeLabel = (type: string) => (COLUMN_FIELD_TYPES[type] ? t(`database.fieldType.${COLUMN_FIELD_TYPES[type]}`) : type)
+
+function newFlowTable() {
+  designing.value = { name: '', isNew: true, existing: [], fields: [{ name: '', type: 'text' }] }
+}
+
+function addFields() {
+  if (!table.value || !flowTable.value) return
+  const builtin = ['id', 'createdAt', 'updatedAt']
+  designing.value = {
+    name: flowTable.value,
+    isNew: false,
+    existing: table.value.columns.filter((column) => !builtin.includes(column.name)).map((column) => ({ name: column.name, type: columnTypeLabel(column.type) })),
+    fields: [{ name: '', type: 'text' }],
+  }
+}
+
+async function saveDesign() {
+  if (!designing.value) return
+  const { name, fields, isNew } = designing.value
+  saving.value = true
+  try {
+    await call('flows.tables.define', { name: name.trim(), fields: fields.filter((item) => item.name.trim()).map((item) => ({ ...item, name: item.name.trim() })) })
+    designing.value = undefined
+    message.success(t('common.saved'))
+    await refresh()
+    if (isNew) selectTable(`${FLOW_PREFIX}${name.trim()}`)
+    else await loadRows()
+  } catch (error) {
+    message.error((error as Error).message)
+  } finally {
+    saving.value = false
+  }
+}
+
+function dropFlowTable() {
+  const name = flowTable.value
+  if (!name) return
+  dialog.warning({
+    title: t('database.dropTable'),
+    content: t('database.dropHint', { name }),
+    positiveText: t('common.delete'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: async () => {
+      try {
+        await call('flows.tables.drop', { name })
+        message.success(t('common.deleted'))
+        void router.replace({ query: { ...route.query, table: undefined } })
+        await refresh()
+      } catch (error) {
+        message.error((error as Error).message)
+      }
+    },
+  })
+}
+
 const backingUp = ref(false)
 
 async function backup() {
@@ -299,6 +368,10 @@ async function backup() {
         <p class="page-lead">{{ t('database.lead') }}</p>
       </div>
       <NSpace v-if="available" align="center">
+        <NButton @click="newFlowTable">
+          <template #icon><NIcon><AddOutline /></NIcon></template>
+          {{ t('database.newFlowTable') }}
+        </NButton>
         <NTag v-if="status" :bordered="false">
           {{ status.driver === 'sqlite' ? 'SQLite' : t('database.memory') }}
           <template v-if="status.path"> · <span class="mono">{{ status.path }}</span> · {{ formatBytes(status.size ?? 0) }}</template>
@@ -344,6 +417,13 @@ async function backup() {
             <div class="spacer" />
             <span class="muted">{{ t('database.total', { count: total }) }}</span>
             <IconAction :icon="RefreshOutline" :label="t('common.reload')" @click="loadRows" />
+            <template v-if="flowTable">
+              <NButton size="small" @click="addFields">
+                <template #icon><NIcon><AddOutline /></NIcon></template>
+                {{ t('database.addFields') }}
+              </NButton>
+              <IconAction :icon="TrashOutline" :label="t('database.dropTable')" type="error" @click="dropFlowTable" />
+            </template>
             <NDropdown :options="exportOptions" trigger="click" @select="exportTable">
               <NButton size="small">
                 <template #icon><NIcon><DownloadOutline /></NIcon></template>
@@ -366,6 +446,42 @@ async function backup() {
         </section>
       </div>
     </NSpin>
+
+    <NModal
+      :show="!!designing"
+      preset="card"
+      class="design-modal"
+      :title="designing?.isNew ? t('database.newFlowTable') : t('database.addFieldsTo', { name: designing?.name })"
+      @update:show="(value: boolean) => !value && (designing = undefined)"
+    >
+      <template v-if="designing">
+        <p class="muted">{{ t('database.flowTableHint') }}</p>
+        <NInput v-if="designing.isNew" v-model:value="designing.name" :placeholder="t('database.tableName')" class="design-name">
+          <template #prefix><span class="mono muted">flow_</span></template>
+        </NInput>
+        <div v-for="item in designing.existing" :key="item.name" class="design-row">
+          <NInput :value="item.name" disabled size="small" />
+          <NInput :value="item.type" disabled size="small" class="design-type" />
+          <span class="design-gap" />
+        </div>
+        <div v-for="(item, index) in designing.fields" :key="index" class="design-row">
+          <NInput v-model:value="item.name" size="small" :placeholder="t('database.fieldName')" />
+          <NSelect v-model:value="item.type" size="small" :options="fieldTypeOptions" class="design-type" />
+          <IconAction :icon="CloseOutline" :label="t('common.delete')" @click="designing.fields.splice(index, 1)" />
+        </div>
+        <NButton dashed size="small" @click="designing.fields.push({ name: '', type: 'text' })">
+          <template #icon><NIcon><AddOutline /></NIcon></template>
+          {{ t('database.addField') }}
+        </NButton>
+        <p class="muted small">{{ t('database.builtinColumns') }}</p>
+      </template>
+      <template #footer>
+        <NSpace justify="end">
+          <NButton @click="designing = undefined">{{ t('common.cancel') }}</NButton>
+          <NButton type="primary" :loading="saving" :disabled="!designing?.name.trim()" @click="saveDesign">{{ t('common.save') }}</NButton>
+        </NSpace>
+      </template>
+    </NModal>
 
     <NModal :show="!!viewing" preset="card" :title="viewing?.title" class="json-modal" @update:show="(value: boolean) => !value && (viewing = undefined)">
       <pre class="json mono">{{ viewing?.text }}</pre>
@@ -477,8 +593,25 @@ async function backup() {
   word-break: break-all;
 }
 
-.json-modal {
-  width: min(720px, 92vw);
+.design-name {
+  margin-bottom: 10px;
+}
+
+.design-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.design-type {
+  width: 150px;
+  flex: none;
+}
+
+.design-gap {
+  width: 28px;
+  flex: none;
 }
 
 @media (max-width: 800px) {
@@ -489,5 +622,16 @@ async function backup() {
   .tables {
     position: static;
   }
+}
+</style>
+
+<style>
+/* Modals render outside the page, so their width is set here rather than in the scoped styles. */
+.design-modal {
+  width: min(560px, 92vw);
+}
+
+.json-modal {
+  width: min(720px, 92vw);
 }
 </style>

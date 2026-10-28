@@ -62,7 +62,7 @@ const usable = (type: NodeTypeInfo) => supports(type, props.adapter)
 function hint(type: NodeTypeInfo) {
   const description = localize(type.description, locale.value)
   if (usable(type)) return description
-  const reason = t('flows.nodeNeedsAdapter', {
+  const reason = type.unavailable ? localize(type.unavailable, locale.value) : t('flows.nodeNeedsAdapter', {
     name: (type.platforms ?? []).map(props.adapterName).join(' / '),
     current: props.adapterName(props.adapter ?? ''),
   })
