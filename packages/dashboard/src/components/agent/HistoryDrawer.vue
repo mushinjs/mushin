@@ -17,7 +17,7 @@ const tags = ref<string[]>([])
 const results = ref<AgentSessionSummary[]>([])
 const loading = ref(false)
 
-const SCENES = ['overview', 'setup', 'providers', 'bots', 'botDetail', 'flows', 'flowEditor', 'personas', 'plugins', 'logs', 'agent']
+const SCENES = ['overview', 'setup', 'providers', 'bots', 'botDetail', 'flows', 'flowEditor', 'personas', 'plugins', 'logs', 'settings', 'agent']
 
 /** A tag as the user reads it, e.g. `场景：流程编辑器`. */
 function tagLabel(tag: string) {

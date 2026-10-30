@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
   ChatbubblesOutline, ServerOutline, DocumentTextOutline, GridOutline, ExtensionPuzzleOutline, GitNetworkOutline, KeyOutline, LanguageOutline, LibraryOutline, LogOutOutline,
-  MoonOutline, PersonCircleOutline, RocketOutline, SparklesOutline, SunnyOutline,
+  MoonOutline, PersonCircleOutline, RocketOutline, SettingsOutline, SparklesOutline, SunnyOutline,
 } from '@vicons/ionicons5'
 import {
   type MenuOption, NButton, NDrawer, NIcon, NLayout, NLayoutHeader, NLayoutSider, NMenu, NTooltip,
@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { connection, logout } from '../api'
 import { setLocale } from '../i18n'
+import { prefs } from '../prefs'
 import { useAgentStore } from '../stores/agent'
 import { useAgentSceneStore } from '../stores/agentScene'
 import { useDataStore } from '../stores/data'
@@ -57,18 +58,24 @@ watch(() => data.loadedProviders, (loaded) => {
 const icon = (component: Component) => () => h(NIcon, null, { default: () => h(component) })
 const link = (to: string, label: string) => () => h(RouterLink, { to }, { default: () => label })
 
-const menu = computed<MenuOption[]>(() => [
-  ...(!data.ready ? [{ key: '/setup', label: link('/setup', t('nav.setup')), icon: icon(RocketOutline) }] : []),
+// Pages that Settings → Features can hide are filtered out by key.
+const pages = computed(() => [
   { key: '/overview', label: link('/overview', t('nav.overview')), icon: icon(GridOutline) },
   { key: '/bots', label: link('/bots', t('nav.bots')), icon: icon(ChatbubblesOutline) },
   { key: '/flows', label: link('/flows', t('nav.flows')), icon: icon(GitNetworkOutline) },
   { key: '/personas', label: link('/personas', t('nav.personas')), icon: icon(PersonCircleOutline) },
   { key: '/knowledge', label: link('/knowledge', t('nav.knowledge')), icon: icon(LibraryOutline) },
   { key: '/providers', label: link('/providers', t('nav.providers')), icon: icon(KeyOutline) },
-  { key: '/agent', label: link('/agent', t('nav.agent')), icon: icon(SparklesOutline) },
   { key: '/database', label: link('/database', t('nav.database')), icon: icon(ServerOutline) },
   { key: '/plugins', label: link('/plugins', t('nav.plugins')), icon: icon(ExtensionPuzzleOutline) },
   { key: '/logs', label: link('/logs', t('nav.logs')), icon: icon(DocumentTextOutline) },
+])
+
+const menu = computed<MenuOption[]>(() => [
+  ...(!data.ready ? [{ key: '/setup', label: link('/setup', t('nav.setup')), icon: icon(RocketOutline) }] : []),
+  ...pages.value.filter((item) => !prefs.hiddenPages.includes(item.key.slice(1))),
+  { key: 'divider', type: 'divider' },
+  { key: '/settings', label: link('/settings', t('nav.settings')), icon: icon(SettingsOutline) },
 ])
 
 const activeKey = computed(() => '/' + (route.path.split('/')[1] ?? ''))

@@ -16,6 +16,7 @@ const zhCN: typeof en = {
     personas: '人格',
     database: '数据库',
     knowledge: '知识库',
+    settings: '设置',
   },
   layout: {
     reconnecting: '正在重新连接…',
@@ -1007,6 +1008,7 @@ const zhCN: typeof en = {
       database: '数据库',
       plugins: '插件',
       logs: '日志',
+      settings: '设置',
       agent: '智能体',
     },
     hint: {
@@ -1022,6 +1024,7 @@ const zhCN: typeof en = {
       database: '只读查询各插件的数据表，例如统计消息和变量；修改和删除需要你确认。',
       plugins: '开关插件，解释插件设置，排查加载失败的原因。',
       logs: '阅读日志并解释错误。',
+      settings: '解释控制台的设置，切换主题或语言。',
       agent: '解释智能体的设置和技能。',
     },
     rec: {
@@ -1104,6 +1107,39 @@ const zhCN: typeof en = {
       warning: '注意',
       error: '错误',
       info: '信息',
+    },
+  },
+  settings: {
+    lead: '控制台在此浏览器中的外观和行为、智能体的设置，以及当前实例的运行信息。',
+    sections: {
+      appearance: '外观',
+      features: '功能',
+      agent: '智能体',
+      about: '关于',
+    },
+    appearance: {
+      theme: '主题',
+      themeHelp: '自动会跟随系统。顶部的太阳/月亮按钮也可以切换。',
+      auto: '自动',
+      light: '浅色',
+      dark: '深色',
+      language: '语言',
+      languageHelp: '控制台的显示语言。智能体会用你输入的语言回答。',
+    },
+    features: {
+      agentOpen: '启动时打开智能体面板',
+      agentOpenHelp: '仅在宽窗口中生效。随时可以用顶部的“智能体”按钮打开或关闭。',
+      pages: '侧边栏中的页面',
+      pagesHelp: '隐藏的页面仍可通过链接打开，智能体也仍然可以使用。',
+      plugins: '实例功能',
+      pluginsHelp: 'Mushin.js 本身的功能（例如智能体、流程和知识库）都是插件。',
+      openPlugins: '在插件页面开启或关闭',
+    },
+    about: {
+      instance: '本实例',
+      address: '服务器地址',
+      license: '许可证',
+      builtOn: '基于',
     },
   },
   agentPage: {

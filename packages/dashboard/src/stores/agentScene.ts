@@ -34,7 +34,7 @@ export interface PageFacts {
 }
 
 /** Pages the Agent knows, in the order the Agent page lists them. */
-export const SCENES = ['overview', 'setup', 'providers', 'bots', 'botDetail', 'flows', 'flowEditor', 'personas', 'knowledge', 'database', 'plugins', 'logs', 'agent'] as const
+export const SCENES = ['overview', 'setup', 'providers', 'bots', 'botDetail', 'flows', 'flowEditor', 'personas', 'knowledge', 'database', 'plugins', 'logs', 'settings', 'agent'] as const
 
 /** The built-in suggestions each page can show (each only when its condition holds), for the Agent page. */
 export const SCENE_RECOMMENDATIONS: Record<string, string[]> = {
@@ -50,6 +50,7 @@ export const SCENE_RECOMMENDATIONS: Record<string, string[]> = {
   database: ['dbExplain', 'dbMessages'],
   plugins: ['pluginsFailed'],
   logs: ['connect', 'status', 'provider'],
+  settings: ['connect', 'status', 'provider'],
   agent: ['connect', 'status', 'provider'],
 }
 
@@ -60,6 +61,7 @@ export function sceneKey(path: string) {
   const [, first, id] = path.split('/')
   if (first === 'bots') return id ? 'botDetail' : 'bots'
   if (first === 'flows') return id ? 'flowEditor' : 'flows'
+  if (first === 'settings') return id === 'agent' ? 'agent' : 'settings'
   return (SCENES as readonly string[]).includes(first) ? first : 'overview'
 }
 

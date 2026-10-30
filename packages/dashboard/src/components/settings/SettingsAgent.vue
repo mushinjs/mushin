@@ -3,12 +3,12 @@ import { NTabPane, NTabs } from 'naive-ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import AgentMcp from '../components/agent/AgentMcp.vue'
-import AgentModel from '../components/agent/AgentModel.vue'
-import AgentScenes from '../components/agent/AgentScenes.vue'
-import AgentSkills from '../components/agent/AgentSkills.vue'
-import AgentStyles from '../components/agent/AgentStyles.vue'
-import AgentTools from '../components/agent/AgentTools.vue'
+import AgentMcp from '../agent/AgentMcp.vue'
+import AgentModel from '../agent/AgentModel.vue'
+import AgentScenes from '../agent/AgentScenes.vue'
+import AgentSkills from '../agent/AgentSkills.vue'
+import AgentStyles from '../agent/AgentStyles.vue'
+import AgentTools from '../agent/AgentTools.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -17,14 +17,9 @@ const tab = computed(() => String(route.params.tab || 'scenes'))
 </script>
 
 <template>
-  <div class="page">
-    <div class="page-header">
-      <div>
-        <h1>{{ t('nav.agent') }}</h1>
-        <p class="page-lead">{{ t('agentPage.lead') }}</p>
-      </div>
-    </div>
-    <NTabs :value="tab" type="line" animated @update:value="(next: string) => router.replace(`/agent/${next}`)">
+  <div>
+    <p class="section-lead">{{ t('agentPage.lead') }}</p>
+    <NTabs :value="tab" type="line" animated @update:value="(next: string) => router.replace(`/settings/agent/${next}`)">
       <NTabPane name="scenes" :tab="t('agentPage.tabs.scenes')" display-directive="show:lazy"><AgentScenes /></NTabPane>
       <NTabPane name="skills" :tab="t('agentPage.tabs.skills')" display-directive="show:lazy"><AgentSkills /></NTabPane>
       <NTabPane name="mcp" :tab="t('agentPage.tabs.mcp')" display-directive="show:lazy"><AgentMcp /></NTabPane>

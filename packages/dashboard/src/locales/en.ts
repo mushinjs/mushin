@@ -14,6 +14,7 @@ export default {
     personas: 'Personas',
     database: 'Database',
     knowledge: 'Knowledge',
+    settings: 'Settings',
   },
   layout: {
     reconnecting: 'Reconnecting…',
@@ -1005,6 +1006,7 @@ export default {
       database: 'Database',
       plugins: 'Plugins',
       logs: 'Logs',
+      settings: 'Settings',
       agent: 'Agent',
     },
     hint: {
@@ -1020,6 +1022,7 @@ export default {
       database: 'Query the tables of every plugin read-only, e.g. count messages or look up variables; changing or deleting rows asks you first.',
       plugins: 'Turn plugins on or off, explain their settings, and find out why one failed to load.',
       logs: 'Read the logs and explain errors.',
+      settings: 'Explain the dashboard settings and change the theme or language.',
       agent: 'Explain the Agent settings and skills.',
     },
     rec: {
@@ -1102,6 +1105,39 @@ export default {
       warning: 'Warning',
       error: 'Error',
       info: 'Info',
+    },
+  },
+  settings: {
+    lead: 'How the dashboard looks and behaves in this browser, the Agent\'s settings, and what this instance runs.',
+    sections: {
+      appearance: 'Appearance',
+      features: 'Features',
+      agent: 'Agent',
+      about: 'About',
+    },
+    appearance: {
+      theme: 'Theme',
+      themeHelp: 'Auto follows your system. The sun and moon button at the top switches it too.',
+      auto: 'Auto',
+      light: 'Light',
+      dark: 'Dark',
+      language: 'Language',
+      languageHelp: 'The language of the dashboard. The Agent answers in the language you write in.',
+    },
+    features: {
+      agentOpen: 'Open the Agent panel on start',
+      agentOpenHelp: 'In wide windows. The Agent button at the top opens and closes it any time.',
+      pages: 'Pages in the sidebar',
+      pagesHelp: 'Hidden pages still open by link, and the Agent can still use them.',
+      plugins: 'Instance features',
+      pluginsHelp: 'Features of Mushin.js itself, such as the Agent, flows and the knowledge base, are plugins.',
+      openPlugins: 'Turn them on or off on the Plugins page',
+    },
+    about: {
+      instance: 'This instance',
+      address: 'Server address',
+      license: 'License',
+      builtOn: 'Built with',
     },
   },
   agentPage: {

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { call, on } from '../api'
+import { prefs } from '../prefs'
 import type { AgentCommands, AgentEvent, AgentMessage, AgentScene, AgentSessionSummary, AgentSkill, Risk } from '../types'
 
 export type ToolState = 'running' | 'confirm' | 'ok' | 'error' | 'declined'
@@ -75,7 +76,7 @@ function readSession() {
 }
 
 export const useAgentStore = defineStore('agent', () => {
-  const open = ref(true)
+  const open = ref(prefs.agentOpenOnStart)
   const sessions = ref<AgentSessionSummary[]>([])
   const current = ref<string | undefined>(readSession())
 
