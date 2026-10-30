@@ -7,7 +7,9 @@ import {
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call, on } from '../../api'
+import { providerOptions as toProviderOptions } from '../../models'
 import { useDataStore } from '../../stores/data'
+import ModelSelect from '../ModelSelect.vue'
 import type { KnowledgeCandidate, KnowledgeLearn, KnowledgeSummary } from '../../types'
 import { clone, formatTime } from '../../utils'
 
@@ -23,7 +25,7 @@ watch(() => props.base.learn, (value) => {
   learn.value = clone(value)
 }, { deep: true })
 const saving = ref(false)
-const providerOptions = computed(() => [{ value: '', label: t('knowledge.learn.botProvider') }, ...data.providers.map((provider) => ({ value: provider.id, label: provider.name }))])
+const providerOptions = computed(() => [{ value: '', label: t('knowledge.learn.botProvider') }, ...toProviderOptions(data.providers, data.profiles, t)])
 
 async function save() {
   const invalid = learn.value.channels.find((channel) => !/^(group|private):\S+$/.test(channel))
@@ -160,7 +162,7 @@ const botName = (id: string) => data.bots.find((bot) => bot.id === id)?.name ?? 
           </NGridItem>
           <NGridItem>
             <NFormItem :label="t('knowledge.learn.model')">
-              <NInput v-model:value="learn.model" :placeholder="t('knowledge.learn.providerDefault')" clearable />
+              <ModelSelect :model-value="learn.model || null" :provider="learn.provider" :placeholder="t('knowledge.learn.providerDefault')" @update:model-value="(value) => (learn.model = value ?? '')" />
             </NFormItem>
           </NGridItem>
         </NGrid>

@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import { CreateOutline, FlashOutline, Star, StarOutline, TrashOutline } from '@vicons/ionicons5'
 import IconAction from '../components/IconAction.vue'
-import { AddOutline } from '@vicons/ionicons5'
+import { AddOutline, GitBranchOutline } from '@vicons/ionicons5'
 import {
   type DataTableColumns, NButton, NCard, NDataTable, NEmpty, NIcon, NModal, NSpace, NTag, NTooltip, useDialog, useMessage,
 } from 'naive-ui'
 import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../api'
+import ModelCaps from '../components/ModelCaps.vue'
+import ProfileForm, { type ProfileDraft } from '../components/ProfileForm.vue'
 import ProviderForm from '../components/ProviderForm.vue'
+import { profileModelLabel } from '../models'
 import { useDataStore } from '../stores/data'
-import type { Provider, ProviderDraft, ProviderTest } from '../types'
+import type { ModelProfile, Provider, ProviderDraft, ProviderTest } from '../types'
 import { clone, localize } from '../utils'
 
 const { t, locale } = useI18n()
@@ -41,8 +44,9 @@ function openEdit(provider: Provider) {
 async function save() {
   saving.value = true
   try {
-    if (editing.value) await call('providers.update', { id: editing.value, ...draft.value })
-    else await call('providers.create', draft.value)
+    const body = { ...draft.value, defaultModel: draft.value.defaultModel?.trim() ?? '' }
+    if (editing.value) await call('providers.update', { id: editing.value, ...body })
+    else await call('providers.create', body)
     showEditor.value = false
     message.success(t('common.saved'))
     await data.refreshProviders()
@@ -84,6 +88,72 @@ function remove(provider: Provider) {
   })
 }
 
+// Profiles: a primary model with fallbacks, usable wherever a provider is chosen.
+const editingProfile = ref<string | null>(null)
+const showProfileEditor = ref(false)
+const profileDraft = ref<ProfileDraft>({ name: '', models: [] })
+const savingProfile = ref(false)
+
+function openProfile(profile?: ModelProfile) {
+  editingProfile.value = profile?.id ?? null
+  profileDraft.value = profile ? { name: profile.name, models: profile.models.map((item) => ({ ...item })) } : { name: '', models: [] }
+  showProfileEditor.value = true
+}
+
+async function saveProfile() {
+  savingProfile.value = true
+  try {
+    if (editingProfile.value) await call('providers.updateProfile', { id: editingProfile.value, ...profileDraft.value })
+    else await call('providers.createProfile', profileDraft.value)
+    showProfileEditor.value = false
+    message.success(t('common.saved'))
+    await data.refreshProviders()
+  } catch (error) {
+    message.error((error as Error).message)
+  } finally {
+    savingProfile.value = false
+  }
+}
+
+function removeProfile(profile: ModelProfile) {
+  dialog.warning({
+    title: t('common.confirmDelete', { name: profile.name }),
+    content: t('profiles.deleteHint'),
+    positiveText: t('common.delete'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: async () => {
+      await call('providers.deleteProfile', { id: profile.id })
+      message.success(t('common.deleted'))
+      await data.refreshProviders()
+    },
+  })
+}
+
+const profileColumns = computed<DataTableColumns<ModelProfile>>(() => [
+  { title: t('common.name'), key: 'name', width: 180, render: (row) => h('strong', row.name) },
+  {
+    title: t('profiles.order'),
+    key: 'models',
+    render: (row) => h('div', { class: 'profile-chain' }, row.models.length
+      ? row.models.map((item, index) => h('span', { class: 'profile-step' }, [
+        h(NTag, { size: 'small', bordered: false, type: index === 0 ? 'primary' : 'default' }, () => (index === 0 ? t('profiles.primary') : t('profiles.fallback', { n: index }))),
+        h('span', { class: 'mono' }, profileModelLabel(data.providers, item)),
+        h(ModelCaps, { model: item.model }),
+      ]))
+      : h('span', { style: 'opacity: .5' }, t('profiles.noModels'))),
+  },
+  {
+    title: t('common.actions'),
+    key: 'actions',
+    align: 'right',
+    width: 100,
+    render: (row) => h(NSpace, { size: 2, justify: 'end', wrap: false }, () => [
+      h(IconAction, { icon: CreateOutline, label: t('common.edit'), onClick: () => openProfile(row) }),
+      h(IconAction, { icon: TrashOutline, label: t('common.delete'), type: 'error', onClick: () => removeProfile(row) }),
+    ]),
+  },
+])
+
 const typeName = (id: string) => localize(data.providerTypes.find((type) => type.id === id)?.displayName, locale.value) || id
 
 const columns = computed<DataTableColumns<Provider>>(() => [
@@ -97,7 +167,12 @@ const columns = computed<DataTableColumns<Provider>>(() => [
     ]),
   },
   { title: t('common.type'), key: 'type', width: 170, render: (row) => typeName(row.type) },
-  { title: t('providers.defaultModel'), key: 'defaultModel', width: 170, ellipsis: { tooltip: true }, render: (row) => h('span', { class: 'mono' }, row.defaultModel ?? '-') },
+  {
+    title: t('providers.defaultModel'),
+    key: 'defaultModel',
+    width: 220,
+    render: (row) => (row.defaultModel ? h('span', { class: 'model-label' }, [h('span', { class: 'mono model-label-name' }, row.defaultModel), h(ModelCaps, { model: row.defaultModel })]) : '-'),
+  },
   {
     title: t('providers.lastTest'),
     key: 'lastTest',
@@ -149,6 +224,27 @@ const columns = computed<DataTableColumns<Provider>>(() => [
       </NEmpty>
     </NCard>
 
+    <NCard class="profiles" :title="t('profiles.title')">
+      <template #header-extra>
+        <NButton size="small" :disabled="!data.providers.length" @click="openProfile()">
+          <template #icon><NIcon><GitBranchOutline /></NIcon></template>
+          {{ t('profiles.add') }}
+        </NButton>
+      </template>
+      <p class="profiles-lead">{{ t('profiles.lead') }}</p>
+      <NDataTable v-if="data.profiles.length" :columns="profileColumns" :data="data.profiles" :row-key="(row: ModelProfile) => row.id" :scroll-x="700" />
+    </NCard>
+
+    <NModal v-model:show="showProfileEditor" preset="card" :title="editingProfile ? t('profiles.edit') : t('profiles.add')" style="width: min(640px, calc(100vw - 32px))">
+      <ProfileForm v-model="profileDraft" />
+      <template #footer>
+        <NSpace justify="end">
+          <NButton @click="showProfileEditor = false">{{ t('common.cancel') }}</NButton>
+          <NButton type="primary" :loading="savingProfile" :disabled="!profileDraft.name.trim() || !profileDraft.models.length" @click="saveProfile">{{ t('common.save') }}</NButton>
+        </NSpace>
+      </template>
+    </NModal>
+
     <NModal v-model:show="showEditor" preset="card" :title="editing ? t('providers.edit') : t('providers.add')" style="width: min(600px, calc(100vw - 32px))">
       <ProviderForm v-model="draft" :types="data.providerTypes" :provider-id="editing ?? undefined" />
       <template #footer>
@@ -160,3 +256,28 @@ const columns = computed<DataTableColumns<Provider>>(() => [
     </NModal>
   </div>
 </template>
+
+<style scoped>
+.profiles {
+  margin-top: 16px;
+}
+
+.profiles-lead {
+  margin: 0 0 12px;
+  opacity: 0.7;
+  font-size: 13px;
+}
+
+:deep(.profile-chain) {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+:deep(.profile-step) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+</style>

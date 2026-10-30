@@ -586,10 +586,10 @@ const chatNode: NodeType = {
       { 'zh-CN': { title: '历史来源', description: '本节点：只记录问过它、它回答过的消息。整个会话：机器人消息记录里这个会话的最近消息，包括没有回复的。', options: { node: '本节点', chat: '整个会话' } } },
       { options: { node: 'This node', chat: 'The chat' } },
     )),
-    provider: z.string().optional().meta(field('Provider', 'Provider id; empty uses the persona\'s, then the bot\'s or the global default', {
-      'zh-CN': { title: '提供商', description: '提供商 id；留空依次使用人格、机器人或全局默认' },
-    })),
-    model: z.string().optional().meta(field('Model', 'Empty uses the persona\'s, then the provider\'s default', { 'zh-CN': { title: '模型', description: '留空依次使用人格、提供商的默认模型' } })),
+    provider: z.string().optional().meta(field('Provider', 'Provider or model profile; empty uses the persona\'s, then the bot\'s or the global default', {
+      'zh-CN': { title: '提供商', description: '提供商或配置方案；留空依次使用人格、机器人或全局默认' },
+    }, { choices: 'providers.choices' })),
+    model: z.string().optional().meta(field('Model', 'Empty uses the persona\'s, then the provider\'s default; a profile picks its own models', { 'zh-CN': { title: '模型', description: '留空依次使用人格、提供商的默认模型；配置方案使用它自己的模型' } })),
     maxTokens: z.number().int().min(64).max(64000).default(1000).meta(field('Max tokens', undefined, { 'zh-CN': { title: '最大 Token 数' } })),
     maxInputChars: z.number().int().min(0).default(0).meta(field('Max message length', 'Longer messages are cut to this many characters; 0 means no limit', {
       'zh-CN': { title: '消息长度上限', description: '超过此字数的消息会被截断；0 表示不限制' },
@@ -700,7 +700,7 @@ const classifyNode: NodeType = {
     instructions: z.string().default('').meta(field('Extra instructions', 'Describe what each label means', {
       'zh-CN': { title: '补充说明', description: '说明每个标签的含义' },
     })),
-    provider: z.string().optional().meta(field('Provider', undefined, { 'zh-CN': { title: '提供商' } })),
+    provider: z.string().optional().meta(field('Provider', 'Provider or model profile', { 'zh-CN': { title: '提供商', description: '提供商或配置方案' } }, { choices: 'providers.choices' })),
     model: z.string().optional().meta(field('Model', undefined, { 'zh-CN': { title: '模型' } })),
   }),
   inputs: [{ name: 'text', type: 'text', title: { en: 'Text', 'zh-CN': '文本' } }],
@@ -710,8 +710,8 @@ const classifyNode: NodeType = {
     const { config, inputs, session, provider, signal } = context
     const labels = (config.labels as string[]).map((label) => label.trim()).filter(Boolean)
     const result = await requireLlm(context).chat({
-      provider: config.provider ?? provider,
-      model: config.model,
+      provider: config.provider || provider,
+      model: config.model || undefined,
       maxTokens: 256,
       signal,
       messages: [

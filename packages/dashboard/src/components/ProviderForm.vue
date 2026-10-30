@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { NButton, NForm, NFormItem, NInput, NSelect, NSpace, useMessage } from 'naive-ui'
-import { computed, ref } from 'vue'
+import { NButton, NForm, NFormItem, NInput, NSelect, NSpace, NTag, type SelectOption, useMessage } from 'naive-ui'
+import { computed, h, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../api'
 import type { ProviderDraft, ProviderType } from '../types'
+import { modelOptions as toOptions, renderModel, renderModelOption } from '../models'
 import { localize } from '../utils'
 import SchemaForm from './SchemaForm.vue'
 
@@ -19,6 +20,8 @@ const message = useMessage()
 
 const presetId = ref<string>()
 const fetching = ref(false)
+/** Models from the last fetch, offered in the selects without being added. */
+const fetched = ref<string[]>([])
 
 const type = computed(() => props.types.find((item) => item.id === draft.value.type))
 
@@ -29,7 +32,10 @@ const presetOptions = computed(() => props.types.flatMap((item) => item.presets.
 
 const typeOptions = computed(() => props.types.map((item) => ({ label: localize(item.displayName, locale.value), value: item.id })))
 
-const modelOptions = computed(() => draft.value.models.map((model) => ({ label: model, value: model })))
+const modelOptions = computed(() => toOptions([...new Set([...draft.value.models, ...fetched.value])]))
+
+const renderModelTag = ({ option, handleClose }: { option: SelectOption; handleClose: () => void }) =>
+  h(NTag, { size: 'small', closable: true, onClose: (event: MouseEvent) => { event.stopPropagation(); handleClose() } }, () => renderModel(String(option.value)))
 
 function applyPreset(value: string) {
   presetId.value = value
@@ -58,7 +64,13 @@ async function fetchModels() {
       message.warning(t('providers.noModels'))
       return
     }
-    draft.value = { ...draft.value, models, defaultModel: models.includes(draft.value.defaultModel ?? '') ? draft.value.defaultModel : models[0] }
+    fetched.value = models
+    // Models already entered are kept; the fetched ones are offered in the list to add.
+    if (draft.value.models.length) {
+      message.success(t('providers.modelsFetchedKept', { count: models.length }))
+      return
+    }
+    draft.value = { ...draft.value, models, defaultModel: draft.value.defaultModel || models[0] }
     message.success(t('providers.modelsFetched', { count: models.length }))
   } catch (error) {
     message.error((error as Error).message)
@@ -68,11 +80,11 @@ async function fetchModels() {
 }
 
 function setModels(models: string[]) {
-  draft.value = {
-    ...draft.value,
-    models,
-    defaultModel: models.includes(draft.value.defaultModel ?? '') ? draft.value.defaultModel : models[0],
-  }
+  draft.value = { ...draft.value, models, defaultModel: draft.value.defaultModel || models[0] }
+}
+
+function clearModels() {
+  draft.value = { ...draft.value, models: [] }
 }
 </script>
 
@@ -107,13 +119,27 @@ function setModels(models: string[]) {
             filterable
             tag
             :placeholder="t('providers.modelsPlaceholder')"
+            :render-label="renderModelOption"
+            :render-tag="renderModelTag"
             @update:value="setModels"
           />
-          <NButton size="small" :loading="fetching" :disabled="!draft.type" @click="fetchModels">{{ t('providers.fetchModels') }}</NButton>
+          <NSpace :size="8">
+            <NButton size="small" :loading="fetching" :disabled="!draft.type" @click="fetchModels">{{ t('providers.fetchModels') }}</NButton>
+            <NButton size="small" :disabled="!draft.models.length" @click="clearModels">{{ t('providers.clearModels') }}</NButton>
+          </NSpace>
         </NSpace>
       </NFormItem>
-      <NFormItem :label="t('providers.defaultModel')">
-        <NSelect v-model:value="draft.defaultModel" :options="modelOptions" :disabled="!draft.models.length" />
+      <NFormItem :label="t('providers.defaultModel')" :feedback="t('providers.defaultModelHint')">
+        <NSelect
+          :value="draft.defaultModel || null"
+          :options="modelOptions"
+          :render-label="renderModelOption"
+          filterable
+          tag
+          clearable
+          :placeholder="t('profiles.typeOrPick')"
+          @update:value="(value: string | null) => (draft = { ...draft, defaultModel: value ?? '' })"
+        />
       </NFormItem>
     </NForm>
   </div>

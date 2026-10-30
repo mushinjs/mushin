@@ -10,12 +10,14 @@ import { useRouter } from 'vue-router'
 import { call } from '../api'
 import { useAgentStore } from '../stores/agent'
 import { type Recommendation, useAgentSceneStore } from '../stores/agentScene'
+import { providerOptions as toProviderOptions } from '../models'
 import { useDataStore } from '../stores/data'
 import type { AgentSkill } from '../types'
 import { pretty } from '../utils'
 import AgentMessage from './agent/AgentMessage.vue'
 import CommandPalette, { type PaletteItem } from './agent/CommandPalette.vue'
 import HistoryDrawer from './agent/HistoryDrawer.vue'
+import ModelSelect from './ModelSelect.vue'
 
 defineProps<{ closable?: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -131,11 +133,7 @@ function runBuiltin(name: string) {
   }
 }
 
-const providerOptions = computed(() => data.providers.map((provider) => ({ label: provider.name, value: provider.id })))
-const modelOptions = computed(() => {
-  const provider = data.providers.find((item) => item.id === modelForm.value.provider) ?? data.providers.find((item) => item.isDefault)
-  return (provider?.models ?? []).map((model) => ({ label: model, value: model }))
-})
+const providerOptions = computed(() => toProviderOptions(data.providers, data.profiles, t, { markDefault: true }))
 
 async function openModel() {
   const plugins = await call<{ id: string; package: string; config: Record<string, any> }[]>('plugins.list')
@@ -387,7 +385,7 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
     <NModal v-model:show="showModel" preset="card" :title="t('agentPalette.modelTitle')" :style="{ width: '400px' }">
       <div class="model-form">
         <NSelect v-model:value="modelForm.provider" clearable :options="providerOptions" :placeholder="t('agentPalette.defaultProvider')" />
-        <NSelect v-model:value="modelForm.model" clearable filterable tag :options="modelOptions" :placeholder="t('agentPalette.defaultModel')" />
+        <ModelSelect :model-value="modelForm.model" :provider="modelForm.provider" :placeholder="t('agentPalette.defaultModel')" @update:model-value="(value) => (modelForm.model = value ?? undefined)" />
         <NButton type="primary" @click="saveModel">{{ t('common.save') }}</NButton>
       </div>
     </NModal>

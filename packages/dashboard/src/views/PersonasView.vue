@@ -10,6 +10,8 @@ import { RouterLink } from 'vue-router'
 import { call, on } from '../api'
 import IconAction from '../components/IconAction.vue'
 import { imageAsDataUrl, readPersonaFile } from '../personaCards'
+import ModelSelect from '../components/ModelSelect.vue'
+import { providerOptions as toProviderOptions } from '../models'
 import { useDataStore } from '../stores/data'
 import type { AppPlugin, BotPersonaSettings, Persona, PersonaDraft } from '../types'
 import { clone, downloadJson } from '../utils'
@@ -80,7 +82,7 @@ function insertVariable(variable: string) {
   draft.value.prompt += variable
 }
 
-const providerOptions = computed(() => data.providers.map((provider) => ({ label: provider.name, value: provider.id })))
+const providerOptions = computed(() => toProviderOptions(data.providers, data.profiles, t))
 
 /** Leaves out empty optional fields, so they fall back to the bot's settings. */
 function payload(value: PersonaDraft) {
@@ -312,7 +314,7 @@ const initial = (name: string) => [...name.trim()][0] ?? '?'
               </NGridItem>
               <NGridItem>
                 <NFormItem :label="t('personas.model')">
-                  <NInput v-model:value="draft.model" :placeholder="t('personas.botDefault')" clearable />
+                  <ModelSelect :model-value="draft.model || null" :provider="draft.provider" :placeholder="t('personas.botDefault')" @update:model-value="(value) => (draft.model = value ?? '')" />
                 </NFormItem>
               </NGridItem>
               <NGridItem>

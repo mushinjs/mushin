@@ -3,7 +3,9 @@ import { NAlert, NButton, NCard, NForm, NFormItem, NInputNumber, NProgress, NSel
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
+import { providerOptions as toProviderOptions } from '../../models'
 import { useDataStore } from '../../stores/data'
+import ModelSelect from '../ModelSelect.vue'
 
 interface AgentConfig {
   provider?: string
@@ -32,11 +34,7 @@ async function load() {
 
 onMounted(() => load().catch((error) => message.error(error.message)))
 
-const providerOptions = computed(() => data.providers.map((provider) => ({ label: `${provider.name}${provider.isDefault ? ` (${t('common.default')})` : ''}`, value: provider.id })))
-const modelOptions = computed(() => {
-  const provider = data.providers.find((item) => item.id === config.value.provider) ?? data.providers.find((item) => item.isDefault)
-  return (provider?.models ?? []).map((model) => ({ label: model, value: model }))
-})
+const providerOptions = computed(() => toProviderOptions(data.providers, data.profiles, t, { markDefault: true }))
 
 const used = computed(() => (usage.value ? usage.value.input + usage.value.output : 0))
 const percent = computed(() => (usage.value?.budget ? Math.min(100, Math.round((used.value / usage.value.budget) * 100)) : 0))
@@ -66,7 +64,7 @@ async function save() {
             <NSelect v-model:value="config.provider" clearable :options="providerOptions" :placeholder="t('agentPalette.defaultProvider')" />
           </NFormItem>
           <NFormItem :label="t('agentPage.model.model')">
-            <NSelect v-model:value="config.model" clearable filterable tag :options="modelOptions" :placeholder="t('agentPalette.defaultModel')" />
+            <ModelSelect :model-value="config.model" :provider="config.provider" :placeholder="t('agentPalette.defaultModel')" @update:model-value="(value) => (config.model = value ?? undefined)" />
           </NFormItem>
         </div>
         <div class="row">

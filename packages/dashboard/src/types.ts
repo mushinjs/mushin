@@ -125,6 +125,20 @@ export interface ProviderDraft {
   defaultModel?: string
 }
 
+/** One model of a profile. */
+export interface ProfileModel {
+  provider: string
+  model: string
+}
+
+/** A named model choice with fallbacks; `models[0]` answers first. Its id works wherever a provider id does. */
+export interface ModelProfile {
+  id: string
+  name: string
+  models: ProfileModel[]
+  createdAt: number
+}
+
 export interface Provider {
   id: string
   name: string

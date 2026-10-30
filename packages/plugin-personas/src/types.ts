@@ -13,7 +13,7 @@ export const personaFields = {
   prompt: z.string().min(1).max(20_000).describe('System prompt: character, voice, background. Supports {bot.name}, {user.name}, {user.id}, {group.id}, {time}, {date} and {weekday}'),
   examples: z.array(exampleSchema).max(20).optional().describe('Example exchanges, sent before the conversation (few-shot)'),
   avoid: z.string().max(5000).optional().describe('Things the persona must never say or do; added to the prompt'),
-  provider: z.string().optional().describe('Provider id the persona prefers; empty uses the bot\'s'),
+  provider: z.string().optional().describe('Provider or model profile id the persona prefers; empty uses the bot\'s'),
   model: z.string().optional().describe('Model the persona prefers'),
   temperature: z.number().min(0).max(2).optional(),
   tags: z.array(z.string()).max(20).optional(),

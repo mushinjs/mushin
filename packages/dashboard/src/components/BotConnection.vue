@@ -3,6 +3,7 @@ import { NAlert, NButton, NCard, NForm, NFormItem, NInput, NSelect, NSpace, useM
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../api'
+import { providerOptions as toProviderOptions } from '../models'
 import { useDataStore } from '../stores/data'
 import type { Bot } from '../types'
 import { clone } from '../utils'
@@ -35,7 +36,7 @@ const reverseUrl = computed(() => {
   const base = (serverUrl.value || location.origin).replace(/^http/, 'ws')
   return `${base}${config.value.path || `/onebot/${props.bot.id}`}`
 })
-const providerOptions = computed(() => data.providers.map((item) => ({ label: item.name, value: item.id })))
+const providerOptions = computed(() => toProviderOptions(data.providers, data.profiles, t))
 
 async function save() {
   saving.value = true

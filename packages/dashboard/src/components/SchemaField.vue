@@ -22,7 +22,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [value: any] }>()
-const { locale, t } = useI18n()
+const { locale, t, te } = useI18n()
 
 const value = computed({
   get: () => props.modelValue,
@@ -66,7 +66,20 @@ const choiceOptions = computed(() => {
   const action = schema.value['x-choices'] ?? props.schema['x-choices']
   if (!action) return []
   const fixed = Object.keys(schema.value['x-options'] ?? props.schema['x-options'] ?? {}).map((option) => ({ label: optionLabel(option), value: option }))
-  return [...fixed, ...choicesOf(action).filter((choice) => !fixed.some((item) => item.value === choice.value))]
+  const loaded = choicesOf(action).filter((choice) => !fixed.some((item) => item.value === choice.value))
+  // Choices that name a group (such as providers and profiles) show under its heading.
+  const groups = [...new Set(loaded.flatMap((choice) => (choice.group ? [choice.group] : [])))]
+  if (!groups.length) return [...fixed, ...loaded]
+  return [
+    ...fixed,
+    ...loaded.filter((choice) => !choice.group),
+    ...groups.map((group) => ({
+      type: 'group' as const,
+      key: group,
+      label: te(`choiceGroups.${group}`) ? t(`choiceGroups.${group}`) : group,
+      children: loaded.filter((choice) => choice.group === group).map(({ value, label }) => ({ value, label })),
+    })),
+  ]
 })
 /** In compact forms, up to four choices show as buttons. */
 const asButtons = computed(() => props.compact && kind.value === 'enum' && options.value.length <= 4)
@@ -152,6 +165,7 @@ function onJson(text: string) {
       :options="choiceOptions"
       filterable
       tag
+      :clearable="!required"
       @update:value="(next: string | null) => (value = next ?? '')"
     />
     <NInput

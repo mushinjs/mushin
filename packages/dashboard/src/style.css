@@ -166,3 +166,17 @@ html[data-theme='dark'] img[src='/logo.png'] {
     padding: 16px;
   }
 }
+
+/* A model name with its capability icons (see models.ts). */
+.model-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.model-label-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

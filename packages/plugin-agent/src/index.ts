@@ -89,9 +89,9 @@ const USAGE_KEY = 'agent/settings/usage'
 const MAX_RESULT_CHARS = 16_000
 
 export const Config = z.object({
-  provider: z.string().optional().meta(field('Provider', 'Provider id for the Agent; empty uses the default provider', {
-    'zh-CN': { title: '提供商', description: '智能体使用的提供商 id；留空使用默认提供商' },
-  })),
+  provider: z.string().optional().meta(field('Provider', 'Provider or model profile for the Agent; empty uses the default provider', {
+    'zh-CN': { title: '提供商', description: '智能体使用的提供商或配置方案；留空使用默认提供商' },
+  }, { choices: 'providers.choices' })),
   model: z.string().optional().meta(field('Model', 'Model for the Agent; empty uses the provider\'s default', {
     'zh-CN': { title: '模型', description: '智能体使用的模型；留空使用提供商默认模型' },
   })),

@@ -126,10 +126,27 @@ export interface ProviderRecord {
   createdAt: number
 }
 
+/** One model of a profile: a model name on a saved provider. */
+export interface ProfileModel {
+  provider: string
+  model: string
+}
+
+/**
+ * A named choice of model with fallbacks. The first model answers; when a request to it fails,
+ * the next one is tried, and so on. A profile id works wherever a provider id is taken.
+ */
+export interface ModelProfile {
+  id: string
+  name: string
+  models: ProfileModel[]
+  createdAt: number
+}
+
 export interface LlmChatOptions extends Omit<ChatRequest, 'model'> {
-  /** Provider record id; the default provider when omitted. */
+  /** Provider record id or profile id; the default provider when omitted. */
   provider?: string
-  /** Model name; the provider's default model when omitted. */
+  /** Model name; the provider's default model when omitted. Ignored for a profile, which names its own models. */
   model?: string
 }
 

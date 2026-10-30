@@ -827,7 +827,7 @@ export class BotManager extends Service {
         plugins: z.array(z.object({ package: z.string(), config: z.record(z.string(), z.any()).optional() })).optional()
           .describe('Bot plugins to enable right away, e.g. @mushin/bot-plugin-llm-chat'),
         enabled: z.boolean().optional(),
-        provider: z.string().optional().describe('Default provider id for this bot\'s LLM plugins'),
+        provider: z.string().optional().describe('Default provider or model profile id for this bot\'s LLM plugins'),
         commands: commandSettingsInput.optional(),
       }),
       handler: (input) => this.create(input),

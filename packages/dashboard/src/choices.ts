@@ -4,6 +4,8 @@ import { call, on } from './api'
 export interface Choice {
   value: string
   label: string
+  /** Choices with a group show under its heading, such as `providers` and `profiles`. */
+  group?: string
 }
 
 /**
@@ -43,5 +45,6 @@ export function refreshChoices() {
 on('manager/changed', refreshChoices)
 on('personas/changed', refreshChoices)
 on('knowledge/changed', refreshChoices)
+on('providers/changed', refreshChoices)
 // Flow tables and their fields are choices of the database nodes.
 on('flows/changed', refreshChoices)

@@ -1,11 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { call, on } from '../api'
-import type { AdapterType, Bot, BotStatusInfo, Provider, ProviderType } from '../types'
+import type { AdapterType, Bot, BotStatusInfo, ModelProfile, Provider, ProviderType } from '../types'
 
 /** Providers and bots, shared by pages and the Agent dock, kept fresh by server events. */
 export const useDataStore = defineStore('data', () => {
   const providers = ref<Provider[]>([])
+  const profiles = ref<ModelProfile[]>([])
   const providerTypes = ref<ProviderType[]>([])
   const ready = ref(false)
   const loadedProviders = ref(false)
@@ -15,10 +16,11 @@ export const useDataStore = defineStore('data', () => {
 
   async function refreshProviders() {
     const [list, types] = await Promise.all([
-      call<{ providers: Provider[]; ready: boolean }>('providers.list'),
+      call<{ providers: Provider[]; profiles?: ModelProfile[]; ready: boolean }>('providers.list'),
       call<ProviderType[]>('providers.types'),
     ])
     providers.value = list.providers
+    profiles.value = list.profiles ?? []
     ready.value = list.ready
     providerTypes.value = types
     loadedProviders.value = true
@@ -54,7 +56,7 @@ export const useDataStore = defineStore('data', () => {
   }
 
   return {
-    providers, providerTypes, ready, loadedProviders, bots, adapters, loadedBots,
+    providers, profiles, providerTypes, ready, loadedProviders, bots, adapters, loadedBots,
     refreshProviders, refreshBots, bind,
   }
 })
