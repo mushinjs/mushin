@@ -228,8 +228,9 @@ export class LlmService extends Service {
     record.isDefault = true
   }
 
+  /** Log lines name a provider by its id; the dashboard links it to the provider. */
   private label(record: ProviderRecord) {
-    return `"${record.name}" (${record.type})`
+    return record.id
   }
 
   async setDefault(id: string) {
@@ -262,7 +263,7 @@ export class LlmService extends Service {
     const profile: ModelProfile = { id: randomId(), name: input.name, models: this.checkProfileModels(input.models), createdAt: Date.now() }
     this.profileRecords.push(profile)
     await this.save()
-    this.logger.info('created profile "%s" with %d model(s)', profile.name, profile.models.length)
+    this.logger.info('created profile %s with %d model(s)', profile.id, profile.models.length)
     return profile
   }
 
@@ -271,7 +272,7 @@ export class LlmService extends Service {
     if (patch.name !== undefined) profile.name = patch.name
     if (patch.models !== undefined) profile.models = this.checkProfileModels(patch.models)
     await this.save()
-    this.logger.info('updated profile "%s"', profile.name)
+    this.logger.info('updated profile %s', profile.id)
     return profile
   }
 
@@ -279,7 +280,7 @@ export class LlmService extends Service {
     const profile = this.getProfile(id)
     this.profileRecords = this.profileRecords.filter((item) => item !== profile)
     await this.save()
-    this.logger.info('deleted profile "%s"', profile.name)
+    this.logger.info('deleted profile %s', profile.id)
     return { deleted: id }
   }
 
@@ -331,7 +332,7 @@ export class LlmService extends Service {
     if (signal?.aborted || index === targets.length - 1) return false
     const { record, model } = targets[index]
     const next = targets[index + 1]
-    this.logger.warn('falling back from %s (%s) to %s (%s): %s', record.name, model, next.record.name, next.model, error instanceof Error ? error.message : error)
+    this.logger.warn('falling back from %s (%s) to %s (%s): %s', record.id, model, next.record.id, next.model, error instanceof Error ? error.message : error)
     return true
   }
 

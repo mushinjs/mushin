@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { markRaw, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call, on } from '../api'
 import LogViewer from '../components/LogViewer.vue'
@@ -10,11 +10,12 @@ const lines = ref<LogLine[]>([])
 const MAX = 2000
 
 onMounted(async () => {
-  lines.value = await call<LogLine[]>('logs.recent', { limit: 500 })
+  lines.value = (await call<LogLine[]>('logs.recent', { limit: 500 })).map((line) => markRaw(line))
 })
 
 const off = on('log', (line: LogLine) => {
-  lines.value.push(line)
+  // Lines never change once written; skipping deep reactivity keeps long logs cheap.
+  lines.value.push(markRaw(line))
   if (lines.value.length > MAX) lines.value.splice(0, lines.value.length - MAX)
 })
 onBeforeUnmount(off)
@@ -28,6 +29,6 @@ onBeforeUnmount(off)
         <p class="page-lead">{{ t('logs.lead') }}</p>
       </div>
     </div>
-    <LogViewer :lines="lines" @clear="lines = []" />
+    <LogViewer :lines="lines" height="max(320px, calc(100vh - 320px))" @clear="lines = []" />
   </div>
 </template>

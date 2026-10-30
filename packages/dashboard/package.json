@@ -13,7 +13,9 @@
     "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@tanstack/vue-virtual": "catalog:",
     "@vicons/ionicons5": "catalog:",
+    "ansi_up": "catalog:",
     "@vue-flow/background": "catalog:",
     "@vue-flow/controls": "catalog:",
     "@vue-flow/core": "catalog:",

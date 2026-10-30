@@ -314,7 +314,7 @@ export class FlowService extends Service {
       const next = { ...doc, nodes, edges: migrated.edges, format: FLOW_FORMAT }
       this.docs.set(doc.id, next)
       await this.home.storage.set(`flows/${doc.id}`, next)
-      this.logger.info('migrated flow "%s" to the current format', doc.name)
+      this.logger.info('migrated flow %s to the current format', doc.id)
     }
     this.logger.info('loaded %d flow(s)', this.docs.size)
     this.home.inject(['model', 'database'], async (ctx) => {
@@ -731,8 +731,9 @@ export class FlowService extends Service {
     return { deleted: id }
   }
 
+  /** Log lines name a flow by its id; the dashboard links it to the flow. */
   private label(doc: FlowDocument) {
-    return `"${doc.name}" (${doc.id})`
+    return doc.id
   }
 
   private async saveUsage() {

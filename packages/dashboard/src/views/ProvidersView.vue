@@ -5,8 +5,9 @@ import { AddOutline, GitBranchOutline } from '@vicons/ionicons5'
 import {
   type DataTableColumns, NButton, NCard, NDataTable, NEmpty, NIcon, NModal, NSpace, NTag, NTooltip, useDialog, useMessage,
 } from 'naive-ui'
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, h, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { call } from '../api'
 import ModelCaps from '../components/ModelCaps.vue'
 import ProfileForm, { type ProfileDraft } from '../components/ProfileForm.vue'
@@ -28,6 +29,19 @@ const saving = ref(false)
 const testing = ref<string>()
 
 onMounted(() => data.refreshProviders().catch((error) => message.error(error.message)))
+
+/** /providers?highlight=<id> (e.g. from an id in the logs) scrolls to that provider or profile and makes it stand out. */
+const route = useRoute()
+const highlighted = ref<string>()
+watch(() => [route.query.highlight, data.loadedProviders] as const, async ([target, loaded]) => {
+  if (typeof target !== 'string' || !loaded) return
+  highlighted.value = target
+  await nextTick()
+  document.getElementById(`provider-${target}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  window.setTimeout(() => (highlighted.value = undefined), 2500)
+}, { immediate: true })
+const rowProps = (row: { id: string }) => ({ id: `provider-${row.id}` })
+const rowClass = (row: { id: string }) => (row.id === highlighted.value ? 'highlighted' : '')
 
 function openCreate() {
   editing.value = null
@@ -216,7 +230,7 @@ const columns = computed<DataTableColumns<Provider>>(() => [
     </div>
 
     <NCard>
-      <NDataTable v-if="data.providers.length" :columns="columns" :data="data.providers" :row-key="(row: Provider) => row.id" :scroll-x="900" />
+      <NDataTable v-if="data.providers.length" :columns="columns" :data="data.providers" :row-key="(row: Provider) => row.id" :row-props="rowProps" :row-class-name="rowClass" :scroll-x="900" />
       <NEmpty v-else :description="t('providers.empty')">
         <template #extra>
           <NButton type="primary" @click="openCreate">{{ t('providers.add') }}</NButton>
@@ -232,7 +246,7 @@ const columns = computed<DataTableColumns<Provider>>(() => [
         </NButton>
       </template>
       <p class="profiles-lead">{{ t('profiles.lead') }}</p>
-      <NDataTable v-if="data.profiles.length" :columns="profileColumns" :data="data.profiles" :row-key="(row: ModelProfile) => row.id" :scroll-x="700" />
+      <NDataTable v-if="data.profiles.length" :columns="profileColumns" :data="data.profiles" :row-key="(row: ModelProfile) => row.id" :row-props="rowProps" :row-class-name="rowClass" :scroll-x="700" />
     </NCard>
 
     <NModal v-model:show="showProfileEditor" preset="card" :title="editingProfile ? t('profiles.edit') : t('profiles.add')" style="width: min(640px, calc(100vw - 32px))">
@@ -258,6 +272,11 @@ const columns = computed<DataTableColumns<Provider>>(() => [
 </template>
 
 <style scoped>
+:deep(.highlighted td) {
+  background: rgba(32, 128, 240, 0.12) !important;
+  transition: background-color 0.4s;
+}
+
 .profiles {
   margin-top: 16px;
 }

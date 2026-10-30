@@ -445,8 +445,9 @@ export class BotManager extends Service {
     return this.status(id)
   }
 
+  /** Log lines name a bot by its id; the dashboard links it to the bot. */
   private label(record: BotRecord | string) {
-    return typeof record === 'string' ? record : `"${record.name}" (${record.id})`
+    return typeof record === 'string' ? record : record.id
   }
 
   // ---- bot plugins ----

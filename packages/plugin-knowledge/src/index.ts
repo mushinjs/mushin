@@ -372,7 +372,7 @@ export class Knowledge extends Service {
       updatedAt: now,
     }
     await this.db.upsert('knowledge_base', [base])
-    this.logger.info('created knowledge base "%s"%s', base.name, model ? ` with ${model}` : '')
+    this.logger.info('created knowledge base %s%s', base.id, model ? ` with ${model}` : '')
     this.changed(base.id)
     return base
   }
@@ -406,7 +406,7 @@ export class Knowledge extends Service {
     this.indexes.delete(id)
     this.changed(id)
     if (modelChanged) {
-      this.logger.info('knowledge base "%s" now uses %s', next.name, model || 'keywords only')
+      this.logger.info('knowledge base %s now uses %s', next.id, model || 'keywords only')
       if (provider) void this.reindex(id)
       else await this.db.set('knowledge_chunk', { base: id }, { vector: new ArrayBuffer(0) })
     }
@@ -421,7 +421,7 @@ export class Knowledge extends Service {
     await this.db.remove('knowledge_base', { id })
     await rm(this.fileDir(id), { recursive: true, force: true })
     this.indexes.delete(id)
-    this.logger.info('deleted knowledge base "%s"', base.name)
+    this.logger.info('deleted knowledge base %s', base.id)
     this.changed(id)
     return { ok: true }
   }
@@ -504,7 +504,7 @@ export class Knowledge extends Service {
     await mkdir(this.fileDir(base.id), { recursive: true })
     await writeFile(this.filePath(doc), bytes)
     await this.db.upsert('knowledge_doc', [doc])
-    this.logger.info('added "%s" to knowledge base "%s"', doc.title, base.name)
+    this.logger.info('added "%s" to knowledge base %s', doc.title, base.id)
     this.changed(base.id)
     this.enqueue(() => this.process(doc.id))
     return doc
@@ -633,9 +633,9 @@ export class Knowledge extends Service {
           this.progress({ base: id, stage: 'reindex', done, total: rows.length })
         }) ?? []
         await this.db.upsert('knowledge_chunk', rows.map((row, index) => ({ ...row, vector: vectorBytes(vectors[index]) })))
-        this.logger.info('embedded %d chunk(s) of "%s" again', rows.length, base.name)
+        this.logger.info('embedded %d chunk(s) of %s again', rows.length, base.id)
       } catch (error) {
-        if (!this.abort.signal.aborted) this.logger.warn('embedding "%s" again failed: %s', base.name, errorText(error))
+        if (!this.abort.signal.aborted) this.logger.warn('embedding %s again failed: %s', base.id, errorText(error))
       }
       this.indexes.delete(id)
       this.progress({ base: id, stage: 'done', done: rows.length, total: rows.length })
@@ -891,7 +891,7 @@ export class Knowledge extends Service {
       { source: id, sourceHandle: 'exec:empty', target: chat.id, targetHandle: 'exec' },
     ]
     await flows.update(flowId, { nodes, edges })
-    this.logger.info('flow "%s" now searches knowledge before asking the LLM', doc.name)
+    this.logger.info('flow %s now searches knowledge before asking the LLM', doc.id)
     return { flow: flowId, node: id, added: true }
   }
 

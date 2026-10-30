@@ -45,6 +45,8 @@ catalog:
   '@types/markdown-it': ^14.2.0
   highlight.js: ^11.12.0
   mermaid: ^12.1.0
+  ansi_up: ^6.0.6
+  '@tanstack/vue-virtual': ^3.13.12
 
 minimumReleaseAgeExclude:
   - '@anthropic-ai/sdk@0.134.0'

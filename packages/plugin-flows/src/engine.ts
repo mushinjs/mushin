@@ -471,7 +471,7 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
     }
   } catch (error) {
     trace.error = String((error as Error)?.message ?? error)
-    env.logger.warn('flow "%s" stopped: %s', flow.doc.name, trace.error)
+    env.logger.warn('flow %s stopped: %s', flow.doc.id, trace.error)
   } finally {
     budget?.dispose()
     env.locks?.releaseAll(trace.id)

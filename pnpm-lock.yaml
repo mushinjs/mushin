@@ -18,6 +18,9 @@ catalogs:
     '@minatojs/driver-sqlite':
       specifier: 5.0.3
       version: 5.0.3
+    '@tanstack/vue-virtual':
+      specifier: ^3.13.12
+      version: 3.13.49
     '@types/markdown-it':
       specifier: ^14.2.0
       version: 14.2.0
@@ -48,6 +51,9 @@ catalogs:
     '@vue-flow/minimap':
       specifier: ^1.5.4
       version: 1.5.4
+    ansi_up:
+      specifier: ^6.0.6
+      version: 6.0.6
     cordis:
       specifier: 4.0.0-rc.11
       version: 4.0.0-rc.11
@@ -262,6 +268,9 @@ importers:
 
   packages/dashboard:
     dependencies:
+      '@tanstack/vue-virtual':
+        specifier: 'catalog:'
+        version: 3.13.49(vue@3.5.44(typescript@6.0.3))
       '@vicons/ionicons5':
         specifier: 'catalog:'
         version: 0.13.0
@@ -277,6 +286,9 @@ importers:
       '@vue-flow/minimap':
         specifier: 'catalog:'
         version: 1.5.4(@vue-flow/core@1.48.2(vue@3.5.44(typescript@6.0.3)))(vue@3.5.44(typescript@6.0.3))
+      ansi_up:
+        specifier: 'catalog:'
+        version: 6.0.6
       echarts:
         specifier: 'catalog:'
         version: 5.6.0
@@ -1026,6 +1038,14 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
+  '@tanstack/virtual-core@3.19.8':
+    resolution: {integrity: sha512-Oz/SYBo/aVPyQkwtOw7Q23myITUgFIof2glQqydYJAPL6mH2SkJDkvDKZTklB+7gv5jGLZQhyTcd7SO1A1EODQ==}
+
+  '@tanstack/vue-virtual@3.13.49':
+    resolution: {integrity: sha512-+hh0M+apciv9RYYVGnaEmcTncH6dpo3e2MTexNlOaTo7WXdLvQ6JSvtmiZCMbcBacZxibXGvVzp7sa1WsmZRHA==}
+    peerDependencies:
+      vue: ^2.7.0 || ^3.0.0
+
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
 
@@ -1299,6 +1319,9 @@ packages:
 
   alien-signals@3.2.1:
     resolution: {integrity: sha512-I8FjmltrfnDFoZedi5CG8DghVYNhzb/Ijluz7tCSJH0xpd0484Kowhbb1XDYOxfJpU1p5wnM2X54dA+IfGyD1g==}
+
+  ansi_up@6.0.6:
+    resolution: {integrity: sha512-yIa1x3Ecf8jWP4UWEunNjqNX6gzE4vg2gGz+xqRGY+TBSucnYp6RRdPV4brmtg6bQ1ljD48mZ5iGSEj7QEpRKA==}
 
   argparse@3.0.4:
     resolution: {integrity: sha512-fwWK3Zq22l4XJJjx5mcBHGikIk+hJqO+32dPm0Jur7+rtG5x1scOjSfdT9ZKeWHPpsya/l0HHK4tDImBkTrtvA==}
@@ -2522,6 +2545,13 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
+  '@tanstack/virtual-core@3.19.8': {}
+
+  '@tanstack/vue-virtual@3.13.49(vue@3.5.44(typescript@6.0.3))':
+    dependencies:
+      '@tanstack/virtual-core': 3.19.8
+      vue: 3.5.44(typescript@6.0.3)
+
   '@types/chai@5.2.3':
     dependencies:
       '@types/deep-eql': 4.0.2
@@ -2868,6 +2898,8 @@ snapshots:
   acorn@8.19.0: {}
 
   alien-signals@3.2.1: {}
+
+  ansi_up@6.0.6: {}
 
   argparse@3.0.4: {}
 

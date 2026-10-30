@@ -241,8 +241,8 @@ describe('bots over OneBot', () => {
     const global = await app.call<any[]>('logs.recent', { limit: 1000 })
     const has = (tag: string, pattern: RegExp) => global.some((line) => line.tag === tag && pattern.test(line.text))
     expect(has('plugin', /^bots is active$/)).toBe(true)
-    expect(has('bot', /^started bot ".+" \(.+\) with the onebot adapter$/)).toBe(true)
-    expect(has('bot', /^bot ".+" \(.+\) is online$/)).toBe(true)
+    expect(has('bot', /^started bot \S+ with the onebot adapter$/)).toBe(true)
+    expect(has('bot', /^bot \S+ is online$/)).toBe(true)
     expect(has('provider', /^provider type openai is available$/)).toBe(true)
     expect(has('flow', /^loaded \d+ flow\(s\)$/)).toBe(true)
 
