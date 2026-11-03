@@ -96,6 +96,10 @@ const zhCN: typeof en = {
     goBots: '前往机器人',
   },
   providers: {
+    emptyHint: '添加一个大模型服务（DeepSeek、通义千问、OpenAI、Anthropic…），智能体和机器人的大模型插件都会用它。',
+    modelCount: '没有模型 | 1 个模型 | {count} 个模型',
+    unreachable: '连接失败',
+    retest: '重新测试',
     lead: '智能体和机器人插件可以使用的大模型服务。',
     add: '添加提供商',
     edit: '编辑提供商',
@@ -121,6 +125,7 @@ const zhCN: typeof en = {
     deleteHint: '使用此提供商的机器人和智能体将改用默认提供商。',
   },
   profiles: {
+    none: '还没有配置方案。需要主模型失败时自动换用其他模型，就新建一个。',
     title: '配置方案',
     lead: '一个配置方案由主模型和若干降级模型组成：主模型请求失败时按顺序改用下一个。凡是能选提供商的地方都能选配置方案。',
     add: '新建配置方案',
@@ -210,6 +215,8 @@ const zhCN: typeof en = {
     noErrors: '没有错误或警告。',
   },
   bots: {
+    emptyTitle: '还没有机器人',
+    emptyHint: '连接 NapCat 添加一个，或让智能体帮你设置。',
     search: '搜索机器人',
     filterLabel: '按状态筛选',
     filter: { all: '全部', online: '在线', problem: '连接异常', stopped: '已停用' },
@@ -671,6 +678,13 @@ const zhCN: typeof en = {
     groupRoleOwner: '群主',
   },
   plugins: {
+    search: '搜索插件',
+    filterLabel: '按状态筛选',
+    filter: { all: '全部', on: '已启用', problem: '需要处理', off: '未启用' },
+    needsAttention: '需要处理',
+    neededBy: '没有插件依赖它 | 被 1 个插件依赖 | 被 {count} 个插件依赖',
+    noDeps: '没有依赖关系。',
+    noMatch: '没有符合条件的插件。',
     lead: '应用插件扩展 Mushin.js 本身；机器人插件在各机器人的“插件”页中单独启用。',
     appPlugins: '应用插件',
     botPlugins: '已安装的机器人插件',
@@ -826,6 +840,8 @@ const zhCN: typeof en = {
     openPlugins: '打开插件页',
   },
   personas: {
+    emptyTitle: '还没有人格',
+    emptyHint: '新建一个，或导入导出过的 JSON、角色卡（JSON 或 PNG）。',
     lead: '带有性格、说话风格、背景和示例对话的人格。机器人可以按群、用户或时间段选择人格（在每个机器人的「人格」标签页设置），大模型对话和流程会以它的口吻说话。',
     add: '新建人格',
     edit: '编辑人格',
@@ -907,6 +923,7 @@ const zhCN: typeof en = {
     llmChatHint: '何时回复、怎么回复都在流程里调整；停用插件会删除这个流程。',
   },
   knowledge: {
+    emptyHint: '把文档、网页和常见问答放进来，机器人回答前会先查这里。',
     lead: '把文档、网页和常见问答放进知识库，机器人回答时先查资料再说话。没有嵌入模型时按关键词检索，有嵌入模型时还能按意思检索。',
     add: '新建知识库',
     empty: '还没有知识库',

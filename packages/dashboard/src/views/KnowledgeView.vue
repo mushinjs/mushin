@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { AddOutline, ArrowBackOutline, LibraryOutline } from '@vicons/ionicons5'
 import {
-  NAlert, NButton, NCard, NEmpty, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NModal, NSpace, NSpin, NTabPane, NTabs, NTag, useMessage,
+  NAlert, NButton, NCard, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NModal, NSpace, NSpin, NTabPane, NTabs, NTag, useMessage,
 } from 'naive-ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { call, on } from '../api'
+import EmptyState from '../components/EmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
 import EmbeddingPicker from '../components/knowledge/EmbeddingPicker.vue'
 import KnowledgeChunks from '../components/knowledge/KnowledgeChunks.vue'
@@ -127,13 +128,9 @@ const botNames = (ids: string[]) => ids.map((bot) => data.bots.find((item) => it
           {{ t('knowledge.unavailableHint') }}
           <RouterLink to="/plugins?highlight=@mushin/plugin-knowledge">{{ t('permissions.openPlugins') }}</RouterLink>
         </NAlert>
-        <NCard v-else-if="!bases.length && !loading">
-          <NEmpty :description="t('knowledge.empty')">
-            <template #extra>
-              <NButton type="primary" @click="openCreate">{{ t('knowledge.add') }}</NButton>
-            </template>
-          </NEmpty>
-        </NCard>
+        <EmptyState v-else-if="!bases.length && !loading" :icon="LibraryOutline" :title="t('knowledge.empty')" :hint="t('knowledge.emptyHint')">
+          <NButton type="primary" @click="openCreate">{{ t('knowledge.add') }}</NButton>
+        </EmptyState>
         <NGrid v-else cols="1 700:2 1100:3" responsive="self" :x-gap="16" :y-gap="16">
           <NGridItem v-for="item in bases" :key="item.id">
             <RouterLink :to="`/knowledge/${item.id}/docs`" class="card-link">

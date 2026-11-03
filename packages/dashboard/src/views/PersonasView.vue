@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { AddOutline, CloudDownloadOutline, CloudUploadOutline, CopyOutline, CreateOutline, DownloadOutline, TrashOutline } from '@vicons/ionicons5'
+import { AddOutline, CloudDownloadOutline, CloudUploadOutline, CopyOutline, CreateOutline, DownloadOutline, PersonCircleOutline, TrashOutline } from '@vicons/ionicons5'
 import {
-  NAlert, NAvatar, NButton, NCard, NCollapse, NCollapseItem, NDynamicTags, NEmpty, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NInputNumber,
+  NAlert, NAvatar, NButton, NCard, NCollapse, NCollapseItem, NDynamicTags, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NInputNumber,
   NModal, NSelect, NSpace, NSpin, NTag, useDialog, useMessage,
 } from 'naive-ui'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { call, on } from '../api'
+import EmptyState from '../components/EmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
 import IconAction from '../components/IconAction.vue'
 import { imageAsDataUrl, readPersonaFile } from '../personaCards'
@@ -217,16 +218,10 @@ const initial = (name: string) => [...name.trim()][0] ?? '?'
         {{ t('personas.unavailableHint') }}
         <RouterLink to="/plugins?highlight=@mushin/plugin-personas">{{ t('permissions.openPlugins') }}</RouterLink>
       </NAlert>
-      <NCard v-else-if="!personas.length && !loading">
-        <NEmpty :description="t('personas.empty')">
-          <template #extra>
-            <NSpace justify="center">
-              <NButton type="primary" @click="openCreate">{{ t('personas.add') }}</NButton>
-              <NButton @click="importInput?.click()">{{ t('personas.import') }}</NButton>
-            </NSpace>
-          </template>
-        </NEmpty>
-      </NCard>
+      <EmptyState v-else-if="!personas.length && !loading" :icon="PersonCircleOutline" :title="t('personas.emptyTitle')" :hint="t('personas.emptyHint')">
+        <NButton type="primary" @click="openCreate">{{ t('personas.add') }}</NButton>
+        <NButton @click="importInput?.click()">{{ t('personas.import') }}</NButton>
+      </EmptyState>
       <NGrid v-else cols="1 700:2 1100:3" responsive="self" :x-gap="16" :y-gap="16">
         <NGridItem v-for="persona in personas" :key="persona.id">
           <NCard size="small" class="persona" hoverable>

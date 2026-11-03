@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { CreateOutline, FlashOutline, Star, StarOutline, TrashOutline } from '@vicons/ionicons5'
-import PageHeader from '../components/PageHeader.vue'
-import IconAction from '../components/IconAction.vue'
-import { AddOutline, GitBranchOutline } from '@vicons/ionicons5'
 import {
-  type DataTableColumns, NButton, NCard, NDataTable, NEmpty, NIcon, NModal, NSpace, NTag, NTooltip, useDialog, useMessage,
-} from 'naive-ui'
-import { computed, h, nextTick, onMounted, ref, watch } from 'vue'
+  AddOutline, ArrowForwardOutline, CreateOutline, EllipsisHorizontal, FlashOutline, GitBranchOutline, KeyOutline, Star, StarOutline, TrashOutline,
+} from '@vicons/ionicons5'
+import { type DropdownOption, NButton, NDropdown, NIcon, NModal, NSpace, NTooltip, useDialog, useMessage } from 'naive-ui'
+import { type Component, h, nextTick, onMounted, ref, watch } from 'vue'
+import IconAction from '../components/IconAction.vue'
+import EmptyState from '../components/EmptyState.vue'
+import PageHeader from '../components/PageHeader.vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { call } from '../api'
@@ -41,8 +41,6 @@ watch(() => [route.query.highlight, data.loadedProviders] as const, async ([targ
   document.getElementById(`provider-${target}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   window.setTimeout(() => (highlighted.value = undefined), 2500)
 }, { immediate: true })
-const rowProps = (row: { id: string }) => ({ id: `provider-${row.id}` })
-const rowClass = (row: { id: string }) => (row.id === highlighted.value ? 'highlighted' : '')
 
 function openCreate() {
   editing.value = null
@@ -144,77 +142,36 @@ function removeProfile(profile: ModelProfile) {
   })
 }
 
-const profileColumns = computed<DataTableColumns<ModelProfile>>(() => [
-  { title: t('common.name'), key: 'name', width: 180, render: (row) => h('strong', row.name) },
-  {
-    title: t('profiles.order'),
-    key: 'models',
-    render: (row) => h('div', { class: 'profile-chain' }, row.models.length
-      ? row.models.map((item, index) => h('span', { class: 'profile-step' }, [
-        h(NTag, { size: 'small', bordered: false, type: index === 0 ? 'primary' : 'default' }, () => (index === 0 ? t('profiles.primary') : t('profiles.fallback', { n: index }))),
-        h('span', { class: 'mono' }, profileModelLabel(data.providers, item)),
-        h(ModelCaps, { model: item.model }),
-      ]))
-      : h('span', { style: 'opacity: .5' }, t('profiles.noModels'))),
-  },
-  {
-    title: t('common.actions'),
-    key: 'actions',
-    align: 'right',
-    width: 100,
-    render: (row) => h(NSpace, { size: 2, justify: 'end', wrap: false }, () => [
-      h(IconAction, { icon: CreateOutline, label: t('common.edit'), onClick: () => openProfile(row) }),
-      h(IconAction, { icon: TrashOutline, label: t('common.delete'), type: 'error', onClick: () => removeProfile(row) }),
-    ]),
-  },
-])
-
 const typeName = (id: string) => localize(data.providerTypes.find((type) => type.id === id)?.displayName, locale.value) || id
 
-const columns = computed<DataTableColumns<Provider>>(() => [
-  {
-    title: t('common.name'),
-    key: 'name',
-    render: (row) => h(NSpace, { size: 6, align: 'center' }, () => [
-      h('strong', row.name),
-      row.isDefault ? h(NTag, { size: 'small', type: 'primary', bordered: false }, () => t('common.default')) : null,
-      !row.typeAvailable ? h(NTag, { size: 'small', type: 'warning', bordered: false }, () => t('providers.typeMissing')) : null,
-    ]),
-  },
-  { title: t('common.type'), key: 'type', width: 170, render: (row) => typeName(row.type) },
-  {
-    title: t('providers.defaultModel'),
-    key: 'defaultModel',
-    width: 220,
-    render: (row) => (row.defaultModel ? h('span', { class: 'model-label' }, [h('span', { class: 'mono model-label-name' }, row.defaultModel), h(ModelCaps, { model: row.defaultModel })]) : '-'),
-  },
-  {
-    title: t('providers.lastTest'),
-    key: 'lastTest',
-    width: 110,
-    render: (row) => {
-      if (!row.lastTest) return h('span', { style: 'opacity: .5' }, t('providers.untested'))
-      if (row.lastTest.ok) return h(NTag, { size: 'small', type: 'success', bordered: false }, () => `${row.lastTest!.latencyMs} ms`)
-      return h(NTooltip, null, {
-        trigger: () => h(NTag, { size: 'small', type: 'error', bordered: false }, () => t('status.failed')),
-        default: () => row.lastTest!.error,
-      })
-    },
-  },
-  {
-    title: t('common.actions'),
-    key: 'actions',
-    align: 'right',
-    fixed: 'right',
-    width: 150,
-    render: (row) => h(NSpace, { size: 2, justify: 'end', wrap: false }, () => [
-      h(IconAction, { icon: FlashOutline, label: t('common.test'), type: 'primary', loading: testing.value === row.id, onClick: () => test(row) }),
-      h(IconAction, { icon: row.isDefault ? Star : StarOutline, label: row.isDefault ? t('common.default') : t('providers.makeDefault'), disabled: row.isDefault, onClick: () => setDefault(row) }),
-      h(IconAction, { icon: CreateOutline, label: t('common.edit'), onClick: () => openEdit(row) }),
-      h(IconAction, { icon: TrashOutline, label: t('common.delete'), type: 'error', onClick: () => remove(row) }),
-    ]),
-  },
-])
+// ---- rows ----
+
+const icon = (component: Component) => () => h(NIcon, null, { default: () => h(component) })
+
+/** The row's menu: what is not on the row itself. */
+function menuOf(provider: Provider): DropdownOption[] {
+  return [
+    { key: 'default', label: t('providers.makeDefault'), icon: icon(StarOutline), disabled: provider.isDefault },
+    { key: 'edit', label: t('common.edit'), icon: icon(CreateOutline) },
+    { key: 'divider', type: 'divider' },
+    { key: 'delete', label: () => h('span', { style: 'color: var(--bad)' }, t('common.delete')), icon: () => h(NIcon, { color: 'var(--bad)' }, { default: () => h(TrashOutline) }) },
+  ]
+}
+
+function onMenu(provider: Provider, key: string) {
+  if (key === 'default') void setDefault(provider)
+  else if (key === 'edit') openEdit(provider)
+  else if (key === 'delete') remove(provider)
+}
+
+// A provider has no logo of its own: its initial on a colour picked from its type, the same every time.
+const badgeColors = ['#5B6CE0', '#2F9E77', '#C46A2B', '#B84C8C', '#3B8FC4', '#8A63D2', '#B5962A', '#D0574F']
+function badgeColor(provider: Provider) {
+  let hash = 0
+  for (const char of provider.name + provider.type) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
+  return badgeColors[hash % badgeColors.length]
+}
+const initial = (provider: Provider) => [...provider.name.trim()][0]?.toUpperCase() ?? '?'
 </script>
 
 <template>
@@ -226,25 +183,102 @@ const columns = computed<DataTableColumns<Provider>>(() => [
       </NButton>
     </PageHeader>
 
-    <NCard>
-      <NDataTable v-if="data.providers.length" :columns="columns" :data="data.providers" :row-key="(row: Provider) => row.id" :row-props="rowProps" :row-class-name="rowClass" :scroll-x="900" />
-      <NEmpty v-else :description="t('providers.empty')">
-        <template #extra>
-          <NButton type="primary" @click="openCreate">{{ t('providers.add') }}</NButton>
-        </template>
-      </NEmpty>
-    </NCard>
+    <ul v-if="data.providers.length" class="rows">
+      <li
+        v-for="provider in data.providers"
+        :id="`provider-${provider.id}`"
+        :key="provider.id"
+        class="row"
+        :class="{ highlighted: highlighted === provider.id }"
+        tabindex="0"
+        @click="openEdit(provider)"
+        @keyup.enter.self="openEdit(provider)"
+      >
+        <span class="badge" :style="{ background: badgeColor(provider) }" aria-hidden="true">{{ initial(provider) }}</span>
+        <div class="main">
+          <div class="title">
+            <strong>{{ provider.name }}</strong>
+            <span v-if="provider.isDefault" class="tag primary"><NIcon :size="12"><Star /></NIcon>{{ t('common.default') }}</span>
+            <span v-if="!provider.typeAvailable" class="tag warn">{{ t('providers.typeMissing') }}</span>
+          </div>
+          <div class="sub">
+            <span>{{ typeName(provider.type) }}</span>
+            <span class="sep">·</span>
+            <span>{{ t('providers.modelCount', provider.models.length) }}</span>
+            <template v-if="provider.defaultModel">
+              <span class="sep">·</span>
+              <span class="model-label"><span class="mono model-label-name">{{ provider.defaultModel }}</span><ModelCaps :model="provider.defaultModel" /></span>
+            </template>
+          </div>
+        </div>
+        <div class="health" @click.stop>
+          <NTooltip v-if="provider.lastTest && !provider.lastTest.ok" :style="{ maxWidth: '320px' }">
+            <template #trigger>
+              <span class="pill bad"><span class="dot" />{{ t('providers.unreachable') }}</span>
+            </template>
+            {{ provider.lastTest.error }}
+          </NTooltip>
+          <span v-else-if="provider.lastTest" class="pill ok"><span class="dot" />{{ provider.lastTest.latencyMs }} ms</span>
+          <NButton size="small" :secondary="!provider.lastTest" :quaternary="!!provider.lastTest" :type="provider.lastTest ? 'default' : 'primary'" :loading="testing === provider.id" @click="test(provider)">
+            <template #icon><NIcon><FlashOutline /></NIcon></template>
+            {{ provider.lastTest ? t('providers.retest') : t('common.test') }}
+          </NButton>
+          <NDropdown trigger="click" placement="bottom-end" :options="menuOf(provider)" @select="(key: string) => onMenu(provider, key)">
+            <NButton size="small" quaternary circle :aria-label="t('common.actions')">
+              <template #icon><NIcon><EllipsisHorizontal /></NIcon></template>
+            </NButton>
+          </NDropdown>
+        </div>
+      </li>
+    </ul>
+    <EmptyState v-else :icon="KeyOutline" :title="t('providers.empty')" :hint="t('providers.emptyHint')">
+      <NButton type="primary" @click="openCreate">{{ t('providers.add') }}</NButton>
+    </EmptyState>
 
-    <NCard class="profiles" :title="t('profiles.title')">
-      <template #header-extra>
-        <NButton size="small" :disabled="!data.providers.length" @click="openProfile()">
+    <section class="profiles">
+      <header class="section-head">
+        <div>
+          <h2>{{ t('profiles.title') }}</h2>
+          <p class="section-lead" :title="t('profiles.lead')">{{ t('profiles.lead') }}</p>
+        </div>
+        <NButton :disabled="!data.providers.length" @click="openProfile()">
           <template #icon><NIcon><GitBranchOutline /></NIcon></template>
           {{ t('profiles.add') }}
         </NButton>
-      </template>
-      <p class="profiles-lead">{{ t('profiles.lead') }}</p>
-      <NDataTable v-if="data.profiles.length" :columns="profileColumns" :data="data.profiles" :row-key="(row: ModelProfile) => row.id" :row-props="rowProps" :row-class-name="rowClass" :scroll-x="700" />
-    </NCard>
+      </header>
+      <ul v-if="data.profiles.length" class="rows">
+        <li
+          v-for="profile in data.profiles"
+          :id="`provider-${profile.id}`"
+          :key="profile.id"
+          class="row profile"
+          :class="{ highlighted: highlighted === profile.id }"
+          tabindex="0"
+          @click="openProfile(profile)"
+          @keyup.enter.self="openProfile(profile)"
+        >
+          <span class="badge chain-badge" aria-hidden="true"><NIcon :size="16"><GitBranchOutline /></NIcon></span>
+          <div class="main">
+            <div class="title"><strong>{{ profile.name }}</strong></div>
+            <div class="chain">
+              <template v-for="(item, index) in profile.models" :key="index">
+                <NIcon v-if="index" :size="12" class="chain-arrow"><ArrowForwardOutline /></NIcon>
+                <span class="step" :class="{ first: !index }">
+                  <span class="mono">{{ profileModelLabel(data.providers, item) }}</span>
+                  <ModelCaps :model="item.model" />
+                </span>
+              </template>
+              <span v-if="!profile.models.length" class="faint">{{ t('profiles.noModels') }}</span>
+            </div>
+          </div>
+          <div class="health" @click.stop>
+            <IconAction :icon="CreateOutline" :label="t('common.edit')" @click="openProfile(profile)" />
+            <IconAction :icon="TrashOutline" :label="t('common.delete')" type="error" @click="removeProfile(profile)" />
+          </div>
+        </li>
+      </ul>
+      <p v-else class="faint none">{{ t('profiles.none') }}</p>
+    </section>
 
     <NModal v-model:show="showProfileEditor" preset="card" :title="editingProfile ? t('profiles.edit') : t('profiles.add')" style="width: min(640px, calc(100vw - 32px))">
       <ProfileForm v-model="profileDraft" />
@@ -269,31 +303,210 @@ const columns = computed<DataTableColumns<Provider>>(() => [
 </template>
 
 <style scoped>
-:deep(.highlighted td) {
-  background: rgba(32, 128, 240, 0.12) !important;
-  transition: background-color 0.4s;
-}
-
-.profiles {
-  margin-top: 16px;
-}
-
-.profiles-lead {
-  margin: 0 0 12px;
-  opacity: 0.7;
-  font-size: 13px;
-}
-
-:deep(.profile-chain) {
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
+  gap: 8px;
 }
 
-:deep(.profile-step) {
+.row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 64px;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--s1);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, background-color 0.4s;
+}
+
+.row:hover {
+  border-color: var(--primary);
+  box-shadow: var(--shadow);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.row.highlighted {
+  background: var(--primary-soft);
+}
+
+.badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 650;
+  font-size: 16px;
+}
+
+.chain-badge {
+  background: var(--s2);
+  color: var(--fg2);
+}
+
+.main {
+  min-width: 0;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 10px;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.tag.primary { color: var(--primary); background: var(--primary-soft); }
+.tag.warn { color: var(--warn); background: var(--warn-soft); }
+
+.sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--fg2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sep {
+  color: var(--fg3);
+}
+
+.health {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: default;
+}
+
+.pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.pill .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.pill.ok { color: var(--ok); background: var(--ok-soft); }
+.pill.bad { color: var(--bad); background: var(--bad-soft); }
+
+.profiles {
+  margin-top: 32px;
+}
+
+.section-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.section-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.section-head .section-lead {
+  margin: 4px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--fg2);
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: var(--s2);
+}
+
+.step.first {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.chain-arrow {
+  color: var(--fg3);
+}
+
+.faint {
+  color: var(--fg3);
+  font-size: 13px;
+}
+
+.none {
+  margin: 0;
+  padding: 16px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .row {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .health {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
 }
 </style>

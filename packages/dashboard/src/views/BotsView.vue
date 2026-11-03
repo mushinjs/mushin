@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { AddOutline, AlertCircleOutline, ArrowBackOutline, ArrowForwardOutline, PlayOutline, SearchOutline, StopOutline, TimeOutline } from '@vicons/ionicons5'
+import { AddOutline, AlertCircleOutline, ArrowBackOutline, ChatbubblesOutline, ArrowForwardOutline, PlayOutline, SearchOutline, StopOutline, TimeOutline } from '@vicons/ionicons5'
 import { NButton, NEmpty, NIcon, NInput, useMessage } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { call } from '../api'
 import BotEditor from '../components/BotEditor.vue'
+import EmptyState from '../components/EmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
 import BotActivity from '../components/runs/BotActivity.vue'
 import { useDataStore } from '../stores/data'
@@ -202,13 +203,9 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
 
     <NEmpty v-if="data.bots.length && !shown.length" :description="t('bots.noMatch')" class="no-match" />
 
-    <div v-else-if="!data.bots.length && data.loadedBots" class="empty">
-      <NEmpty :description="t('bots.empty')">
-        <template #extra>
-          <NButton type="primary" @click="showCreate = true">{{ t('bots.add') }}</NButton>
-        </template>
-      </NEmpty>
-    </div>
+    <EmptyState v-else-if="!data.bots.length && data.loadedBots" :icon="ChatbubblesOutline" :title="t('bots.emptyTitle')" :hint="t('bots.emptyHint')">
+      <NButton type="primary" @click="showCreate = true">{{ t('bots.add') }}</NButton>
+    </EmptyState>
 
     <BotEditor v-model:show="showCreate" @created="(bot) => router.push(`/bots/${bot.id}`)" />
   </div>
@@ -508,12 +505,5 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
 
 .no-match {
   padding: 48px 0;
-}
-
-.empty {
-  padding: 64px 0;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--s1);
 }
 </style>

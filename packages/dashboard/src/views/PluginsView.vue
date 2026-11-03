@@ -1,15 +1,14 @@
 <script setup lang="ts">
-import { RefreshOutline, SettingsOutline } from '@vicons/ionicons5'
-import PageHeader from '../components/PageHeader.vue'
+import { ChevronDownOutline, RefreshOutline, SearchOutline, SettingsOutline } from '@vicons/ionicons5'
+import { NButton, NEmpty, NIcon, NInput, NModal, NSpace, NSpin, NSwitch, NTooltip, useDialog, useMessage } from 'naive-ui'
 import IconAction from '../components/IconAction.vue'
-import { NButton, NCard, NInput, NList, NListItem, NModal, NSpace, NSpin, NSwitch, NTag, NThing, NTooltip, useDialog, useMessage } from 'naive-ui'
+import PageHeader from '../components/PageHeader.vue'
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { call, on } from '../api'
 import DependencyTags from '../components/DependencyTags.vue'
 import SchemaForm from '../components/SchemaForm.vue'
-import StatusBadge from '../components/StatusBadge.vue'
 import type { AppPlugin, CatalogEntry, DependencyPlan, PluginDependencies } from '../types'
 import { clone, localize } from '../utils'
 
@@ -186,6 +185,66 @@ function configure(plugin: AppPlugin) {
   jsonDraft.value = JSON.stringify(plugin.config, null, 2)
 }
 
+// ---- search, filters and the rows' details ----
+
+type Filter = 'all' | 'on' | 'problem' | 'off'
+const query = ref('')
+const filter = ref<Filter>('all')
+const expanded = ref(new Set<string>())
+
+/** Something the person should look at: it failed, waits on a dependency, or needs one that is missing. */
+function hasProblem(plugin: AppPlugin) {
+  if (plugin.status === 'failed' || plugin.status === 'missing' || plugin.status === 'pending') return true
+  return !!depsOf(plugin)?.requires.some((dep) => dep.problem && dep.problem !== 'not-app')
+}
+
+function stateOf(plugin: AppPlugin): { cls: string, text: string } {
+  if (plugin.status === 'failed') return { cls: 'bad', text: t('status.failed') }
+  if (plugin.status === 'missing' || plugin.status === 'pending') return { cls: 'warn', text: t(`status.${plugin.status}`) }
+  if (plugin.status === 'loading' || plugin.status === 'unloading') return { cls: 'warn', text: t(`status.${plugin.status}`) }
+  if (plugin.status === 'active') return { cls: 'ok', text: t('status.active') }
+  return { cls: 'idle', text: t('status.disabled') }
+}
+
+const counts = computed(() => ({
+  all: appPlugins.value.length,
+  on: appPlugins.value.filter((plugin) => plugin.enabled).length,
+  problem: appPlugins.value.filter(hasProblem).length,
+  off: appPlugins.value.filter((plugin) => !plugin.enabled).length,
+}))
+
+const filters = computed(() => (['all', 'on', 'problem', 'off'] as const).filter((key) => key === 'all' || counts.value[key] > 0 || filter.value === key))
+
+const matches = (text: string, ...values: (string | undefined)[]) => !text || values.some((value) => value?.toLowerCase().includes(text))
+
+const shownApp = computed(() => {
+  const text = query.value.trim().toLowerCase()
+  return appPlugins.value.filter((plugin) => {
+    if (filter.value === 'on' && !plugin.enabled) return false
+    if (filter.value === 'off' && plugin.enabled) return false
+    if (filter.value === 'problem' && !hasProblem(plugin)) return false
+    return matches(text, plugin.package, localize(plugin.manifest?.displayName, locale.value), localize(plugin.manifest?.description, locale.value))
+  })
+})
+
+const shownBot = computed(() => {
+  const text = query.value.trim().toLowerCase()
+  if (filter.value !== 'all') return []
+  return botPlugins.value.filter((entry) => matches(text, entry.package, localize(entry.manifest.displayName, locale.value), localize(entry.manifest.description, locale.value)))
+})
+
+/** "Needed by N plugins" on the row; the names are in the details. */
+const dependentCount = (plugin: AppPlugin) => (depsOf(plugin)?.dependents ?? []).filter((dep) => !dep.optional).length
+
+function toggleDetails(key: string) {
+  const next = new Set(expanded.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expanded.value = next
+}
+
+const asPlugin = (entry: CatalogEntry): AppPlugin => ({ id: '', package: entry.package, enabled: false, config: {}, manifest: entry.manifest, status: 'disabled' })
+
 async function save() {
   if (!editing.value) return
   saving.value = true
@@ -206,66 +265,110 @@ async function save() {
 <template>
   <div class="page">
     <PageHeader :title="t('nav.plugins')" :lead="t('plugins.lead')">
-      <NButton :loading="loading" @click="rescan">{{ t('plugins.rescan') }}</NButton>
+      <NButton :loading="loading" @click="rescan">
+        <template #icon><NIcon><RefreshOutline /></NIcon></template>
+        {{ t('plugins.rescan') }}
+      </NButton>
     </PageHeader>
 
-    <NSpin :show="loading">
-      <NCard :title="t('plugins.appPlugins')" class="section">
-        <NList hoverable>
-          <NListItem v-for="plugin in appPlugins" :id="`plugin-${plugin.package}`" :key="keyOf(plugin)" :class="{ highlighted: highlighted === plugin.package }">
-            <NThing>
-              <template #header>
-                <NSpace align="center" :size="8">
-                  <span>{{ localize(plugin.manifest?.displayName, locale) || plugin.package }}</span>
-                  <StatusBadge :status="plugin.status" :error="plugin.error" />
-                  <NTooltip v-if="plugin.manifest?.essential">
-                    <template #trigger><NTag size="tiny" :bordered="false">{{ t('plugins.essential') }}</NTag></template>
-                    {{ t('plugins.essentialHint') }}
-                  </NTooltip>
-                </NSpace>
-              </template>
-              <template #description>
-                <span class="mono sub">{{ plugin.package }}{{ plugin.version ? `@${plugin.version}` : '' }}</span>
-              </template>
-              {{ localize(plugin.manifest?.description, locale) }}
-              <DependencyTags :deps="depsOf(plugin)" :catalog="catalog" show-dependents @enable-deps="enableDeps(plugin)" />
-            </NThing>
-            <template #suffix>
-              <NSpace :wrap="false" align="center">
-                <IconAction :icon="RefreshOutline" :label="t('common.reload')" :disabled="!plugin.enabled" @click="reload(plugin)" />
-                <IconAction :icon="SettingsOutline" :label="t('common.configure')" :disabled="!plugin.id" @click="configure(plugin)" />
-                <NSwitch
-                  :value="plugin.enabled"
-                  :disabled="plugin.manifest?.essential && plugin.enabled"
-                  :loading="busy === keyOf(plugin)"
-                  @update:value="(value: boolean) => toggle(plugin, value)"
-                />
-              </NSpace>
-            </template>
-          </NListItem>
-        </NList>
-      </NCard>
+    <div class="toolbar">
+      <NInput v-model:value="query" clearable :placeholder="t('plugins.search')" class="search">
+        <template #prefix><NIcon><SearchOutline /></NIcon></template>
+      </NInput>
+      <div class="chips" role="radiogroup" :aria-label="t('plugins.filterLabel')">
+        <button
+          v-for="key in filters"
+          :key="key"
+          type="button"
+          role="radio"
+          class="chip"
+          :class="{ on: filter === key }"
+          :aria-checked="filter === key"
+          @click="filter = key"
+        >
+          <span v-if="key !== 'all'" class="dot" :class="{ ok: key === 'on', bad: key === 'problem' }" />
+          {{ t(`plugins.filter.${key}`) }}
+          <span class="count">{{ counts[key] }}</span>
+        </button>
+      </div>
+    </div>
 
-      <NCard :title="t('plugins.botPlugins')" class="section">
-        <p class="sub">{{ t('plugins.botPluginsHint') }}</p>
-        <NList>
-          <NListItem v-for="entry in botPlugins" :key="entry.package">
-            <NThing :title="localize(entry.manifest.displayName, locale) || entry.package">
-              <template #description>
-                <span class="mono sub">{{ entry.package }}@{{ entry.version }}</span>
-              </template>
-              {{ localize(entry.manifest.description, locale) }}
-              <DependencyTags :deps="depsOf({ id: '', package: entry.package, enabled: false, config: {}, manifest: entry.manifest, status: 'disabled' })" :catalog="catalog" />
-            </NThing>
-            <template #suffix>
-              <NSpace :wrap="false">
-                <NTag v-for="platform in entry.manifest.platforms ?? []" :key="platform" size="small" :bordered="false">{{ platform }}</NTag>
-                <NTag v-if="entry.local" size="small" type="warning" :bordered="false">{{ t('plugins.local') }}</NTag>
-              </NSpace>
-            </template>
-          </NListItem>
-        </NList>
-      </NCard>
+    <NSpin :show="loading">
+      <section class="section">
+        <h2 class="section-title">{{ t('plugins.appPlugins') }} <span class="count">{{ shownApp.length }}</span></h2>
+        <ul v-if="shownApp.length" class="rows">
+          <li
+            v-for="plugin in shownApp"
+            :id="`plugin-${plugin.package}`"
+            :key="keyOf(plugin)"
+            class="row"
+            :class="{ highlighted: highlighted === plugin.package, off: !plugin.enabled, open: expanded.has(keyOf(plugin)) }"
+          >
+            <button type="button" class="row-main" :aria-expanded="expanded.has(keyOf(plugin))" @click="toggleDetails(keyOf(plugin))">
+              <span class="title">
+                <strong>{{ localize(plugin.manifest?.displayName, locale) || plugin.package }}</strong>
+                <NTooltip v-if="plugin.error" :style="{ maxWidth: '320px' }">
+                  <template #trigger><span class="pill" :class="stateOf(plugin).cls"><span class="dot" />{{ stateOf(plugin).text }}</span></template>
+                  {{ plugin.error }}
+                </NTooltip>
+                <span v-else class="pill" :class="stateOf(plugin).cls"><span class="dot" />{{ stateOf(plugin).text }}</span>
+                <NTooltip v-if="plugin.manifest?.essential">
+                  <template #trigger><span class="tag">{{ t('plugins.essential') }}</span></template>
+                  {{ t('plugins.essentialHint') }}
+                </NTooltip>
+                <span v-if="hasProblem(plugin) && plugin.status !== 'failed'" class="tag warn">{{ t('plugins.needsAttention') }}</span>
+              </span>
+              <span class="desc">{{ localize(plugin.manifest?.description, locale) }}</span>
+              <span class="meta">
+                <span class="mono">{{ plugin.package }}{{ plugin.version ? `@${plugin.version}` : '' }}</span>
+                <template v-if="dependentCount(plugin)">
+                  <span class="sep">·</span>
+                  <span>{{ t('plugins.neededBy', dependentCount(plugin)) }}</span>
+                </template>
+                <NIcon :size="14" class="chevron"><ChevronDownOutline /></NIcon>
+              </span>
+            </button>
+            <div class="actions">
+              <IconAction :icon="RefreshOutline" :label="t('common.reload')" :disabled="!plugin.enabled" @click="reload(plugin)" />
+              <IconAction :icon="SettingsOutline" :label="t('common.configure')" :disabled="!plugin.id" @click="configure(plugin)" />
+              <NSwitch
+                :value="plugin.enabled"
+                :disabled="plugin.manifest?.essential && plugin.enabled"
+                :loading="busy === keyOf(plugin)"
+                :aria-label="localize(plugin.manifest?.displayName, locale) || plugin.package"
+                @update:value="(value: boolean) => toggle(plugin, value)"
+              />
+            </div>
+            <div v-if="expanded.has(keyOf(plugin)) || hasProblem(plugin)" class="details">
+              <DependencyTags :deps="depsOf(plugin)" :catalog="catalog" :show-dependents="expanded.has(keyOf(plugin))" @enable-deps="enableDeps(plugin)" />
+              <p v-if="expanded.has(keyOf(plugin)) && !depsOf(plugin)?.requires.length && !depsOf(plugin)?.optional.length && !dependentCount(plugin)" class="faint">{{ t('plugins.noDeps') }}</p>
+            </div>
+          </li>
+        </ul>
+        <NEmpty v-else-if="!loading" :description="t('plugins.noMatch')" class="none" />
+      </section>
+
+      <section v-if="filter === 'all'" class="section">
+        <h2 class="section-title">{{ t('plugins.botPlugins') }} <span class="count">{{ shownBot.length }}</span></h2>
+        <p class="section-lead">{{ t('plugins.botPluginsHint') }}</p>
+        <ul v-if="shownBot.length" class="rows">
+          <li v-for="entry in shownBot" :key="entry.package" class="row static">
+            <div class="row-main">
+              <span class="title">
+                <strong>{{ localize(entry.manifest.displayName, locale) || entry.package }}</strong>
+                <span v-for="platform in entry.manifest.platforms ?? []" :key="platform" class="tag">{{ platform }}</span>
+                <span v-if="entry.local" class="tag warn">{{ t('plugins.local') }}</span>
+              </span>
+              <span class="desc">{{ localize(entry.manifest.description, locale) }}</span>
+              <span class="meta"><span class="mono">{{ entry.package }}@{{ entry.version }}</span></span>
+            </div>
+            <div class="details">
+              <DependencyTags :deps="depsOf(asPlugin(entry))" :catalog="catalog" />
+            </div>
+          </li>
+        </ul>
+        <p v-else-if="!loading" class="faint none">{{ query ? t('plugins.noMatch') : t('plugins.noBotPlugins') }}</p>
+      </section>
     </NSpin>
 
     <NModal
@@ -277,7 +380,7 @@ async function save() {
     >
       <SchemaForm v-if="editing?.configSchema" v-model="draft" :schema="editing.configSchema" />
       <template v-else-if="editing">
-        <p class="sub">{{ t('plugins.rawConfig') }}</p>
+        <p class="faint">{{ t('plugins.rawConfig') }}</p>
         <NInput v-model:value="jsonDraft" type="textarea" class="mono" :autosize="{ minRows: 6, maxRows: 20 }" />
       </template>
       <template #footer>
@@ -291,21 +394,265 @@ async function save() {
 </template>
 
 <style scoped>
-.highlighted {
-  background: rgba(32, 128, 240, 0.12) !important;
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 20px;
+}
+
+.search {
+  width: 240px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--s1);
+  color: var(--fg2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  color: var(--fg);
+}
+
+.chip.on {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.chip:focus-visible,
+.row-main:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.count {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fg3);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--idle);
+}
+
+.dot.ok { background: var(--ok); }
+.dot.bad { background: var(--bad); }
+
+.section + .section {
+  margin-top: 32px;
+}
+
+.section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--s1);
+  overflow: hidden;
+}
+
+/* One line of name and status, one of description, one of package and dependents. */
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0 16px;
+  padding: 12px 16px;
   transition: background-color 0.4s;
 }
 
-.section {
-  margin-bottom: 16px;
+.row + .row {
+  border-top: 1px solid var(--line);
 }
 
-.sub {
+.row.highlighted {
+  background: var(--primary-soft);
+}
+
+.row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.row.static .row-main {
+  cursor: default;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.title strong {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row.off .title strong,
+.row.off .desc {
+  color: var(--fg2);
+}
+
+.desc {
+  font-size: 13px;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
-  opacity: 0.6;
+  color: var(--fg3);
+  min-width: 0;
 }
 
-p.sub {
-  margin: 0 0 8px;
+.meta .mono {
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sep {
+  color: var(--fg3);
+}
+
+.chevron {
+  flex: none;
+  transition: transform 0.2s;
+}
+
+.row.open .chevron {
+  transform: rotate(180deg);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.details {
+  grid-column: 1 / -1;
+  margin-top: 8px;
+}
+
+.details:empty {
+  display: none;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.pill .dot {
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+}
+
+.pill.ok { color: var(--ok); background: var(--ok-soft); }
+.pill.warn { color: var(--warn); background: var(--warn-soft); }
+.pill.bad { color: var(--bad); background: var(--bad-soft); }
+.pill.idle { color: var(--fg2); background: var(--s2); }
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 10px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  color: var(--fg2);
+  background: var(--s2);
+}
+
+.tag.warn {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.faint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--fg3);
+}
+
+.none {
+  padding: 24px 0;
+}
+
+@media (max-width: 640px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .actions {
+    justify-content: flex-end;
+  }
+
+  .desc {
+    white-space: normal;
+  }
 }
 </style>

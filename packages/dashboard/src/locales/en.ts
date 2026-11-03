@@ -94,6 +94,10 @@ export default {
     goBots: 'Go to bots',
   },
   providers: {
+    emptyHint: 'Add a model service (DeepSeek, Qwen, OpenAI, Anthropic…). The Agent and the bots\' model plugins use it.',
+    modelCount: 'No models | 1 model | {count} models',
+    unreachable: 'Unreachable',
+    retest: 'Test again',
     lead: 'LLM services that the Agent and bot plugins can use.',
     add: 'Add provider',
     edit: 'Edit provider',
@@ -119,6 +123,7 @@ export default {
     deleteHint: 'Bots and the Agent using this provider will fall back to the default provider.',
   },
   profiles: {
+    none: 'No profiles yet. Create one to fall back to other models when the main one fails.',
     title: 'Profiles',
     lead: 'A profile is a primary model plus fallbacks: when a request to one fails, the next is tried in order. Anywhere you choose a provider, you can choose a profile.',
     add: 'New profile',
@@ -208,6 +213,8 @@ export default {
     noErrors: 'No errors or warnings.',
   },
   bots: {
+    emptyTitle: 'No bots yet',
+    emptyHint: 'Connect NapCat to add one, or let the Agent set it up.',
     search: 'Search bots',
     filterLabel: 'Filter by status',
     filter: { all: 'All', online: 'Online', problem: 'Connection problem', stopped: 'Stopped' },
@@ -669,6 +676,13 @@ export default {
     groupRoleOwner: 'Group owner',
   },
   plugins: {
+    search: 'Search plugins',
+    filterLabel: 'Filter by status',
+    filter: { all: 'All', on: 'On', problem: 'Needs attention', off: 'Off' },
+    needsAttention: 'Needs attention',
+    neededBy: 'Nothing needs it | Needed by 1 plugin | Needed by {count} plugins',
+    noDeps: 'No dependencies.',
+    noMatch: 'No plugins match.',
     lead: 'App plugins extend Mushin.js itself. Bot plugins are enabled per bot, on each bot\'s Plugins tab.',
     appPlugins: 'App plugins',
     botPlugins: 'Installed bot plugins',
@@ -824,6 +838,8 @@ export default {
     openPlugins: 'Open the plugins page',
   },
   personas: {
+    emptyTitle: 'No personas yet',
+    emptyHint: 'Create one, or import exported JSON or a character card (JSON or PNG).',
     lead: 'Characters with a voice, background and example exchanges. Bots pick one per group, user or time of day (each bot\'s Personas tab), and LLM chat and flows speak as it.',
     add: 'New persona',
     edit: 'Edit persona',
@@ -905,6 +921,7 @@ export default {
     llmChatHint: 'Edit when and how it replies in the flow; turning the plugin off removes the flow.',
   },
   knowledge: {
+    emptyHint: 'Put documents, web pages and FAQs here; bots look things up before they answer.',
     lead: 'Put documents, web pages and FAQs in a knowledge base, and bots look things up before they answer. Without an embedding model it searches by keywords; with one it also searches by meaning.',
     add: 'New knowledge base',
     empty: 'No knowledge bases yet',
