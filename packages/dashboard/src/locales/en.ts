@@ -29,7 +29,6 @@ export default {
     account: 'Account and preferences',
     mainNav: 'Main navigation',
     breadcrumb: 'You are here',
-    connected: 'Connected',
     collapse: 'Collapse sidebar',
     expand: 'Expand sidebar',
   },

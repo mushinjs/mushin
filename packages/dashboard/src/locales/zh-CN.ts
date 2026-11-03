@@ -31,7 +31,6 @@ const zhCN: typeof en = {
     account: '账户与偏好',
     mainNav: '主导航',
     breadcrumb: '当前位置',
-    connected: '已连接',
     collapse: '收起侧栏',
     expand: '展开侧栏',
   },

@@ -9,7 +9,6 @@ import { gsap } from 'gsap'
 import { NIcon, NTooltip } from 'naive-ui'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { connection } from '../api'
 
 import type { NavGroup } from './nav'
 
@@ -28,7 +27,7 @@ let ctx: gsap.Context | undefined
 let timeline: gsap.core.Timeline | undefined
 let reduced = false
 
-/** Everything that fades: item labels, the brand name, group titles and the footer text. */
+/** Everything that fades: item labels, the brand name and group titles. */
 const fading = () => root.value!.querySelectorAll<HTMLElement>('[data-fade]')
 
 function apply(next: boolean, animate: boolean) {
@@ -105,10 +104,6 @@ watch(() => props.groups, () => requestAnimationFrame(() => apply(collapsed.valu
     </nav>
 
     <div class="foot">
-      <span class="link-state" :class="{ off: !connection.connected }" data-fade>
-        <span class="dot" />
-        {{ connection.connected ? t('layout.connected') : t('layout.reconnecting') }}
-      </span>
       <NTooltip placement="right" :disabled="!collapsed" :show-arrow="false">
         <template #trigger>
           <button type="button" class="toggle" :aria-label="collapsed ? t('layout.expand') : t('layout.collapse')" :aria-expanded="!collapsed" @click="collapsed = !collapsed">
@@ -238,31 +233,7 @@ watch(() => props.groups, () => requestAnimationFrame(() => apply(collapsed.valu
   position: relative;
   flex: none;
   height: 48px;
-  display: flex;
-  align-items: center;
-  padding-left: 22px;
   border-top: 1px solid var(--line);
-  font-size: 12px;
-  color: var(--fg3);
-}
-
-.link-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: none;
-  background: var(--ok);
-}
-
-.off .dot {
-  background: var(--bad);
 }
 
 /* Anchored to the right edge, so it slides with the panel and ends up centred in the rail. */
