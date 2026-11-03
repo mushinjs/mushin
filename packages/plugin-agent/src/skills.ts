@@ -71,6 +71,22 @@ export const BUILTIN_SKILLS: SkillDefinition[] = [
     scenes: ['flows', 'flowEditor'],
   },
   {
+    id: 'flow-from-chat',
+    name: '根据会话创建流程',
+    description: '从引用的会话消息出发，搭建并用真实消息验证一个流程',
+    whenToUse: '在会话里引用了一条消息，想让机器人对这类消息做出回应',
+    instructions: [
+      '1. 读消息里的 <quote>：被 → 标出的是用户选中的消息，记下机器人、会话和消息 id。',
+      '2. 用 flows.history（带 message）看这条消息已经触发了哪些流程；用 flows.route 看现在发同样内容会被谁处理。',
+      '3. 和用户确认想要的效果（触发方式、回复内容、谁能用）；能从引用的会话推断的不必再问。',
+      '4. 用 flows.nodeTypes 选节点，用 flows.create 创建流程并绑定到这个机器人。',
+      '5. 用 flows.test 带上 sample（引用里给出的 bot、id、channel）验证真实消息能走通；有 AI 节点时用 flows.preview 检查发给模型的内容。再用一两条不该触发的消息测试。',
+      '6. 用 ui.navigate 打开 /flows/<id>?sample=<bot>:<channel>:<id>，让用户直接看到样本下的效果。',
+    ].join('\n'),
+    tools: ['flows.history', 'flows.route', 'flows.nodeTypes', 'flows.create', 'flows.update', 'flows.test', 'flows.preview', 'ui.navigate'],
+    scenes: ['botDetail', 'flows', 'flowEditor'],
+  },
+  {
     id: 'fix-flow',
     name: '修复流程问题',
     description: '读出流程的校验问题，逐个修好并重新测试',

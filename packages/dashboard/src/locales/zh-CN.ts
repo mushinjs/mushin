@@ -504,6 +504,14 @@ const zhCN: typeof en = {
     sendAs: '以 {name} 的身份发送…',
     offline: '机器人不在线',
     send: '发送',
+    actions: '消息操作',
+    actionRuns: '查看触发的流程',
+    actionNewFlow: '基于此消息新建流程',
+    actionAgent: '引用到 Agent',
+    runsTitle: '这条消息触发的流程',
+    noRuns: '这条消息没有触发任何流程。',
+    newFlowName: '回复「{text}」',
+    newFlowReply: '收到：{message}',
   },
   hover: {
     type: '消息类型',
@@ -980,6 +988,7 @@ const zhCN: typeof en = {
     },
   },
   agent: {
+    quoted: '引用：{label}',
     float: '浮动窗口',
     dock: '停靠到右侧',
     resize: '拖动调整宽度，双击恢复默认',

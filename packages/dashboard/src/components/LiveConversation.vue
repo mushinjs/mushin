@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { PeopleOutline, PersonOutline, SendOutline } from '@vicons/ionicons5'
-import { NButton, NCard, NEmpty, NIcon, NInput, useMessage } from 'naive-ui'
+import { EllipsisHorizontal, PeopleOutline, PersonOutline, SendOutline } from '@vicons/ionicons5'
+import { NButton, NCard, NDropdown, NEmpty, NIcon, NInput, NModal, NSpin, NTag, useMessage } from 'naive-ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { call, on } from '../api'
+import { useAgentStore } from '../stores/agent'
 import { useDataStore } from '../stores/data'
 import type { ChannelSummary, MessageRecord } from '../types'
 import { formatTime, segmentsText } from '../utils'
@@ -13,6 +15,89 @@ const props = defineProps<{ botId: string }>()
 const { t } = useI18n()
 const message = useMessage()
 const data = useDataStore()
+const router = useRouter()
+const agent = useAgentStore()
+
+// ---- what to do with a message: the flows it started, a new flow from it, or quote it to the Agent ----
+
+interface RunRow {
+  id: string
+  flowId: string
+  flowName: string
+  status: string
+  startedAt: number
+  error?: string
+  node?: { label?: string; type: string }
+}
+
+const actionOptions = computed(() => [
+  { key: 'runs', label: t('live.actionRuns') },
+  { key: 'newFlow', label: t('live.actionNewFlow') },
+  { key: 'agent', label: t('live.actionAgent') },
+])
+
+const runsFor = ref<MessageRecord>()
+const runRows = ref<RunRow[]>([])
+const loadingRuns = ref(false)
+
+async function showRuns(record: MessageRecord) {
+  runsFor.value = record
+  runRows.value = []
+  loadingRuns.value = true
+  try {
+    runRows.value = (await call<{ runs: RunRow[] }>('flows.history', { bot: props.botId, message: record.id, limit: 20 })).runs
+  } catch (error) {
+    message.error((error as Error).message)
+  } finally {
+    loadingRuns.value = false
+  }
+}
+
+const openRun = (row: RunRow) => router.push({ path: `/flows/${row.flowId}`, query: { run: row.id } })
+const sampleQuery = (record: MessageRecord) => `${record.botId}:${record.channel.id}:${record.id}`
+
+/** A trigger guessed from the message: a command when it starts with one of the bot's prefixes, else a keyword. */
+function guessTrigger(text: string) {
+  const prefixes = bot.value?.commands?.prefixes?.filter(Boolean).length ? bot.value.commands!.prefixes! : ['/']
+  const prefix = [...prefixes].sort((a, b) => b.length - a.length).find((item) => text.startsWith(item))
+  const word = (prefix ? text.slice(prefix.length) : text).trim().split(/\s+/)[0] ?? ''
+  if (prefix && word) return { id: 'trigger', type: 'trigger.command', config: { name: word } }
+  return { id: 'trigger', type: 'trigger.keyword', config: { keywords: [word.slice(0, 20) || text.slice(0, 20)], mode: 'contains' } }
+}
+
+async function newFlow(record: MessageRecord) {
+  const text = segmentsText(record.segments).trim()
+  try {
+    const flow = await call<{ id: string }>('flows.create', {
+      name: t('live.newFlowName', { text: text.slice(0, 12) }),
+      bots: [props.botId],
+      nodes: [
+        { ...guessTrigger(text), position: { x: 80, y: 120 } },
+        { id: 'reply', type: 'action.reply', config: { text: t('live.newFlowReply') }, position: { x: 400, y: 120 } },
+      ],
+      edges: [{ source: 'trigger', sourceHandle: 'exec:next', target: 'reply', targetHandle: 'exec' }],
+    })
+    await router.push({ path: `/flows/${flow.id}`, query: { sample: sampleQuery(record) } })
+  } catch (error) {
+    message.error((error as Error).message)
+  }
+}
+
+function quoteToAgent(record: MessageRecord) {
+  agent.quote = {
+    bot: props.botId,
+    channel: record.channel.id,
+    id: record.id,
+    label: `${record.user.name ?? record.user.id}：${segmentsText(record.segments).slice(0, 40)}`,
+  }
+  agent.open = true
+}
+
+function onAction(key: string, record: MessageRecord) {
+  if (key === 'runs') void showRuns(record)
+  else if (key === 'newFlow') void newFlow(record)
+  else if (key === 'agent') quoteToAgent(record)
+}
 
 const channels = ref<ChannelSummary[]>([])
 const selected = ref<string>()
@@ -116,7 +201,14 @@ async function send() {
         </header>
         <div ref="list" class="messages">
           <NEmpty v-if="!records.length" :description="t('live.empty')" class="messages-empty" />
-          <MessageBubble v-for="record in records" :key="record.id" :record="record" />
+          <div v-for="record in records" :key="record.id" class="message-row" :class="{ out: record.direction === 'out' }">
+            <MessageBubble :record="record" />
+            <NDropdown v-if="record.direction === 'in'" trigger="click" :options="actionOptions" size="small" @select="(key: string) => onAction(key, record)">
+              <NButton quaternary circle size="tiny" class="message-actions" :aria-label="t('live.actions')">
+                <template #icon><NIcon><EllipsisHorizontal /></NIcon></template>
+              </NButton>
+            </NDropdown>
+          </div>
         </div>
         <footer v-if="current" class="composer">
           <NInput
@@ -132,9 +224,107 @@ async function send() {
       </section>
     </div>
   </NCard>
+
+  <NModal :show="!!runsFor" preset="card" :title="t('live.runsTitle')" :style="{ width: 'min(520px, calc(100vw - 32px))' }" @update:show="(show: boolean) => { if (!show) runsFor = undefined }">
+    <template v-if="runsFor">
+      <p class="muted quoted">{{ runsFor.user.name ?? runsFor.user.id }}：{{ segmentsText(runsFor.segments) }}</p>
+      <NSpin :show="loadingRuns">
+        <p v-if="!runRows.length && !loadingRuns" class="muted small">{{ t('live.noRuns') }}</p>
+        <ul class="run-list">
+          <li v-for="row in runRows" :key="row.id">
+            <button type="button" class="run-row" @click="openRun(row)">
+              <strong>{{ row.flowName }}</strong>
+              <NTag size="small" :bordered="false" :type="row.status === 'ok' ? 'success' : row.status === 'error' ? 'error' : 'default'">{{ t(`runs.status.${row.status}`) }}</NTag>
+              <span class="muted small">{{ formatTime(row.startedAt) }}</span>
+              <span v-if="row.error" class="small run-error">{{ row.error }}</span>
+            </button>
+          </li>
+        </ul>
+      </NSpin>
+      <div class="run-actions">
+        <NButton size="small" @click="newFlow(runsFor!); runsFor = undefined">{{ t('live.actionNewFlow') }}</NButton>
+        <NButton size="small" @click="quoteToAgent(runsFor!); runsFor = undefined">{{ t('live.actionAgent') }}</NButton>
+      </div>
+    </template>
+  </NModal>
 </template>
 
 <style scoped>
+.message-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.message-row.out {
+  flex-direction: row-reverse;
+}
+
+.message-row > :first-child {
+  min-width: 0;
+}
+
+.message-actions {
+  margin-top: 22px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.message-row:hover .message-actions,
+.message-actions:focus-visible {
+  opacity: 1;
+}
+
+.quoted {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+
+.run-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.run-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid rgba(127, 127, 127, 0.2);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.run-row:hover {
+  background: rgba(127, 127, 127, 0.08);
+}
+
+.run-error {
+  color: var(--error, #d03050);
+  width: 100%;
+}
+
+.run-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+@media (hover: none) {
+  .message-actions {
+    opacity: 1;
+  }
+}
+
 .live {
   display: flex;
   height: min(70vh, 720px);

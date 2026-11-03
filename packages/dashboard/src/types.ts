@@ -297,6 +297,8 @@ export interface AgentMessage {
   display?: string
   /** Names of the skills picked for this message. */
   skills?: string[]
+  /** A bot's chat quoted into the message. */
+  quote?: { bot: string; botName: string; channel: { type: 'group' | 'private'; id: string; name?: string }; focus: string; lines: { id: string; user: string; text: string }[] }
   toolCalls?: ToolCall[]
   toolCallId?: string
   isError?: boolean

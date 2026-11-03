@@ -502,6 +502,14 @@ export default {
     sendAs: 'Send as {name}…',
     offline: 'The bot is not online',
     send: 'Send',
+    actions: 'Message actions',
+    actionRuns: 'Flows it started',
+    actionNewFlow: 'New flow from this message',
+    actionAgent: 'Quote to the Agent',
+    runsTitle: 'Flows this message started',
+    noRuns: 'This message did not start any flow.',
+    newFlowName: 'Reply to "{text}"',
+    newFlowReply: 'Got it: {message}',
   },
   hover: {
     type: 'Message type',
@@ -978,6 +986,7 @@ export default {
     },
   },
   agent: {
+    quoted: 'Quoting: {label}',
     float: 'Float in a window',
     dock: 'Dock on the right',
     resize: 'Drag to resize, double-click to reset',

@@ -7,7 +7,7 @@ import type { AgentCommands, AgentEvent, AgentMessage, AgentScene, AgentSessionS
 export type ToolState = 'running' | 'confirm' | 'ok' | 'error' | 'declined'
 
 export type ChatItem =
-  | { kind: 'user'; text: string; skills?: string[] }
+  | { kind: 'user'; text: string; skills?: string[]; quote?: string }
   | { kind: 'assistant'; text: string }
   | { kind: 'tool'; id: string; action: string; input: unknown; risk?: Risk; state: ToolState; result?: unknown; error?: string }
   | { kind: 'error'; text: string }
@@ -29,7 +29,9 @@ function toItems(messages: AgentMessage[]): ChatItem[] {
   for (const message of messages) {
     if (message.role === 'user') {
       const text = message.display ?? (typeof message.content === 'string' ? message.content : '')
-      if (text || message.skills?.length) items.push({ kind: 'user', text, ...(message.skills?.length ? { skills: message.skills } : {}) })
+      const focus = message.quote?.lines.find((line) => line.id === message.quote!.focus)
+      const quote = focus ? `${focus.user}：${focus.text.slice(0, 40)}` : message.quote ? message.quote.channel.name ?? message.quote.channel.id : undefined
+      if (text || message.skills?.length || quote) items.push({ kind: 'user', text, ...(message.skills?.length ? { skills: message.skills } : {}), ...(quote ? { quote } : {}) })
     } else if (message.role === 'assistant') {
       if (message.content) items.push({ kind: 'assistant', text: message.content })
       for (const call of message.toolCalls ?? []) {
@@ -100,6 +102,8 @@ export const useAgentStore = defineStore('agent', () => {
   const asks = ref<AskItem[]>([])
   let askSeq = 0
   const commands = ref<AgentCommands>({ builtin: [], bots: [] })
+  /** A chat message to quote into the next message, picked in a conversation view. */
+  const quote = ref<{ bot: string; channel: string; id: string; label: string }>()
 
   async function refreshSessions() {
     sessions.value = await call<AgentSessionSummary[]>('agent.sessions')
@@ -224,8 +228,10 @@ export const useAgentStore = defineStore('agent', () => {
 
   async function send(text: string, options: { skills?: AgentSkill[]; scene?: AgentScene } = {}) {
     const picked = options.skills ?? []
-    if (running.value || (!text.trim() && !picked.length)) return
-    items.value.push({ kind: 'user', text, ...(picked.length ? { skills: picked.map((skill) => skill.name) } : {}) })
+    const quoted = quote.value
+    if (running.value || (!text.trim() && !picked.length && !quoted)) return
+    items.value.push({ kind: 'user', text, ...(picked.length ? { skills: picked.map((skill) => skill.name) } : {}), ...(quoted ? { quote: quoted.label } : {}) })
+    quote.value = undefined
     running.value = true
     adopting = !current.value
     try {
@@ -234,6 +240,7 @@ export const useAgentStore = defineStore('agent', () => {
         text,
         ...(options.scene ? { scene: options.scene } : {}),
         ...(picked.length ? { skills: picked.map((skill) => skill.id) } : {}),
+        ...(quoted ? { quote: { bot: quoted.bot, channel: quoted.channel, id: quoted.id } } : {}),
       })
       current.value ??= result.session
     } catch (error) {
@@ -280,7 +287,7 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   return {
-    open, sessions, current, items, streaming, running, usage, skills, commands, toolsStale, asks,
+    open, sessions, current, items, streaming, running, usage, skills, commands, toolsStale, asks, quote,
     refreshSessions, refreshPickers, load, newChat, note, ask, answer, send, confirm, cancel, remove, bind,
   }
 })

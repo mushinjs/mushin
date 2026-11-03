@@ -35,6 +35,24 @@ afterAll(async () => {
 })
 
 describe('agent scenes and skills', () => {
+  it('quotes a chat around the picked message, with its record id for samples', async () => {
+    await app.call('demo.say', { text: '第一句', userId: '30001', userName: 'Cat' })
+    await app.call('demo.say', { text: '我想要签到功能', userId: '30001', userName: 'Cat' })
+    const record = await waitFor(async () => (await app.call<any[]>('bots.messages', { id: botId, limit: 500 }))
+      .find((item) => item.direction === 'in' && JSON.stringify(item.segments).includes('我想要签到功能')))
+    llm.enqueue({ text: 'Sure.' })
+    const { session } = await app.call('agent.send', { text: 'Make a flow for this', quote: { bot: botId, channel: record.channel.id, id: record.id } })
+    await waitFor(async () => !(await app.call('agent.session', { id: session })).running || undefined)
+    const user = llm.requests.at(-1).messages.at(-1).content as string
+    expect(user).toContain(`<quote bot="${botId}" chat="${record.channel.id}" message="${record.id}">`)
+    expect(user).toMatch(/ {2}\[\d\d:\d\d\] Cat \(30001\): 第一句/)
+    expect(user).toMatch(/→ \[\d\d:\d\d\] Cat \(30001\): 我想要签到功能/)
+    expect(user.endsWith('\n\nMake a flow for this')).toBe(true)
+    const stored = await app.call('agent.session', { id: session })
+    expect(stored.messages[0]).toMatchObject({ display: 'Make a flow for this', quote: { bot: botId, focus: record.id } })
+    await app.call('agent.deleteSession', { id: session })
+  })
+
   it('puts the scene and the picked skill into the user message, and tags the conversation', async () => {
     llm.enqueue({ text: 'Looking at the logs.' })
     const { session } = await app.call('agent.send', {

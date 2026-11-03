@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  AddOutline, AlertCircleOutline, BrowsersOutline, CheckmarkCircle, CloseCircleOutline, CloseOutline, ExtensionPuzzleOutline, HandLeftOutline,
+  AddOutline, AlertCircleOutline, BrowsersOutline, ChatbubbleEllipsesOutline, CheckmarkCircle, CloseCircleOutline, CloseOutline, ExtensionPuzzleOutline, HandLeftOutline,
   HelpCircleOutline, InformationCircleOutline, SendOutline, SparklesOutline, StopCircleOutline, TrashOutline,
 } from '@vicons/ionicons5'
 import { NButton, NIcon, NInput, NModal, NPopover, NPopselect, NSelect, NSpin, NTag, NTooltip } from 'naive-ui'
@@ -64,7 +64,7 @@ const trigger = computed(() => {
 watch(input, () => (paletteClosed.value = false))
 
 async function send(text = input.value) {
-  if ((!text.trim() && !picked.value.length) || agent.running) return
+  if ((!text.trim() && !picked.value.length && !agent.quote) || agent.running) return
   const skills = picked.value
   const scene = { ...scenes.scene }
   const bot = commandBot.value
@@ -281,6 +281,7 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
           <div v-if="item.skills?.length" class="msg-skills">
             <span v-for="name in item.skills" :key="name" class="msg-skill"><NIcon><ExtensionPuzzleOutline /></NIcon>{{ name }}</span>
           </div>
+          <div v-if="item.quote" class="msg-quote"><NIcon><ChatbubbleEllipsesOutline /></NIcon>{{ item.quote }}</div>
           {{ item.text }}
         </div>
         <div v-else-if="item.kind === 'assistant'" class="msg assistant"><AgentMessage :text="item.text" /></div>
@@ -371,7 +372,11 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
         @pick="onPick"
       />
       <div class="input-box">
-        <div v-if="picked.length" class="chips">
+        <div v-if="picked.length || agent.quote" class="chips">
+          <NTag v-if="agent.quote" size="small" type="info" closable :bordered="false" class="quote-chip" :title="agent.quote.label" @close="agent.quote = undefined">
+            <template #icon><NIcon><ChatbubbleEllipsesOutline /></NIcon></template>
+            {{ t('agent.quoted', { label: agent.quote.label }) }}
+          </NTag>
           <NTag v-for="skill in picked" :key="skill.id" size="small" type="success" closable :bordered="false" @close="picked = picked.filter((item) => item.id !== skill.id)">
             <template #icon><NIcon><ExtensionPuzzleOutline /></NIcon></template>
             {{ skill.name }}
@@ -389,7 +394,7 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
       <NButton v-if="agent.running" type="warning" secondary :aria-label="t('agent.stop')" @click="agent.cancel()">
         <template #icon><NIcon><StopCircleOutline /></NIcon></template>
       </NButton>
-      <NButton v-else type="primary" :disabled="!input.trim() && !picked.length" :aria-label="t('agent.send')" @click="send()">
+      <NButton v-else type="primary" :disabled="!input.trim() && !picked.length && !agent.quote" :aria-label="t('agent.send')" @click="send()">
         <template #icon><NIcon><SendOutline /></NIcon></template>
       </NButton>
     </footer>
@@ -657,6 +662,25 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+.quote-chip {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.msg-quote {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  opacity: 0.75;
+  padding-left: 6px;
+  margin-bottom: 4px;
+  border-left: 2px solid rgba(127, 127, 127, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dock-palette {

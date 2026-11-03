@@ -1,5 +1,5 @@
 import {
-  type ActionInfo, Context, field, fromToolName, MushinError, randomId, Service, toToolName, z,
+  type ActionInfo, Context, field, fromToolName, MushinError, randomId, segmentsToText, Service, toToolName, z,
 } from '@mushin/core'
 import type { LlmMessage, LlmResult, ToolCall, ToolDefinition } from '@mushin/plugin-providers'
 import type {} from '@mushin/plugin-storage'
@@ -40,7 +40,23 @@ export type AgentEvent = { session: string } & (
  * A stored message; `display` holds the user's own words when the content carries a context note,
  * and `skills` the names of the skills picked for it.
  */
-export type AgentMessage = LlmMessage & { display?: string; skills?: string[]; at: number }
+export type AgentMessage = LlmMessage & {
+  display?: string
+  skills?: string[]
+  /** A chat quoted into the message, as the dashboard shows it: who said what, and where. */
+  quote?: QuotedChat
+  at: number
+}
+
+/** Messages of a bot's chat quoted into an Agent message, around one picked message. */
+export interface QuotedChat {
+  bot: string
+  botName: string
+  channel: { type: 'group' | 'private'; id: string; name?: string }
+  /** The picked message's record id; a sample for flows.test and flows.preview. */
+  focus: string
+  lines: { id: string; direction: 'in' | 'out'; user: string; userId: string; text: string; at: number }[]
+}
 
 /** Where a conversation was started, for the history list. */
 export interface SessionScene {
@@ -71,6 +87,8 @@ export interface SendOptions {
   scene?: SceneInfo
   /** Ids of skills whose instructions go into this message. */
   skills?: string[]
+  /** A message of a bot's chat to quote, with a few messages around it. */
+  quote?: { bot: string; channel: string; id: string; before?: number; after?: number }
 }
 
 /** Commands the dashboard runs itself, without asking the model. */
@@ -404,6 +422,31 @@ export class Agent extends Service {
     }
   }
 
+  /** A bot's chat around one message, for quoting into an Agent message. */
+  private async quoteChat(input: NonNullable<SendOptions['quote']>): Promise<QuotedChat> {
+    const bots = this.home.get('bots')
+    if (!bots) throw new MushinError('unavailable', 'Quoting a chat needs the bots plugin')
+    const record = bots.get(input.bot)
+    const list = await bots.messages(input.bot, { channel: input.channel, limit: 300 })
+    const index = list.findIndex((item) => item.id === input.id)
+    if (index < 0) throw new MushinError('not_found', 'That message is no longer in the chat\'s recent messages')
+    const picked = list.slice(Math.max(0, index - (input.before ?? 6)), index + 1 + (input.after ?? 2))
+    return {
+      bot: input.bot,
+      botName: record.name,
+      channel: { type: list[index].channel.type, id: list[index].channel.id, ...(list[index].channel.name ? { name: list[index].channel.name } : {}) },
+      focus: input.id,
+      lines: picked.map((item) => ({
+        id: item.id,
+        direction: item.direction,
+        user: item.user.name ?? item.user.id,
+        userId: item.user.id,
+        text: segmentsToText(item.segments).trim().slice(0, 500),
+        at: item.timestamp,
+      })),
+    }
+  }
+
   /** Starts a turn and returns once it finishes. Progress streams as `agent/event` events. */
   async send(sessionId: string | undefined, text: string, options: SendOptions = {}) {
     if (!this.home.llm.list().length) {
@@ -423,11 +466,13 @@ export class Agent extends Service {
       session.scene = { key: options.scene.key, ...(options.scene.label ? { label: options.scene.label } : {}), ...(options.page ? { page: options.page } : {}) }
     }
     session.tags = [...new Set([...session.tags ?? [], ...turnTags(text, options, skills)])]
+    const quote = options.quote ? await this.quoteChat(options.quote) : undefined
     session.messages.push({
       role: 'user',
-      content: [contextNote(this.turnContext(options.page, options.scene)), ...skills.map(skillBlock), text].filter(Boolean).join('\n\n'),
+      content: [contextNote(this.turnContext(options.page, options.scene)), ...skills.map(skillBlock), quote ? quoteBlock(quote) : '', text].filter(Boolean).join('\n\n'),
       display: text,
       ...(skills.length ? { skills: skills.map((skill) => skill.name) } : {}),
+      ...(quote ? { quote } : {}),
       at: Date.now(),
     })
     await this.save(session)
@@ -621,6 +666,13 @@ export class Agent extends Service {
           resource: z.string().max(200).optional(),
         }).optional().describe('The dashboard page as the dashboard describes it'),
         skills: z.array(z.string()).max(5).optional().describe('Skill ids to apply to this message'),
+        quote: z.object({
+          bot: z.string(),
+          channel: z.string().describe('The chat\'s id'),
+          id: z.string().describe('The quoted message\'s record id, from bots.messages'),
+          before: z.number().int().min(0).max(30).optional(),
+          after: z.number().int().min(0).max(10).optional(),
+        }).optional().describe('A message of a bot\'s chat to quote, with a few messages around it'),
       }).refine((input) => input.text.trim() || input.skills?.length, 'Send some text or pick a skill'),
       handler: ({ session, text, ...options }, caller) => this.send(session, text, { client: caller.client, ...options }),
     })
@@ -799,6 +851,22 @@ function describeTool(action: ActionInfo) {
 }
 
 /** Search tags for one message: its scene, skills, a leading command, and the page's resource. */
+/** A quoted chat as the model reads it; the picked message is marked, with its record id for samples. */
+function quoteBlock(quote: QuotedChat) {
+  const where = quote.channel.type === 'group' ? `group ${quote.channel.name ? `${quote.channel.name} ` : ''}(${quote.channel.id})` : `private chat with ${quote.channel.id}`
+  const lines = quote.lines.map((line) => {
+    const time = new Date(line.at).toISOString().slice(11, 16)
+    const who = line.direction === 'out' ? `${quote.botName} (bot)` : `${line.user} (${line.userId})`
+    return `${line.id === quote.focus ? '→ ' : '  '}[${time}] ${who}: ${line.text}`
+  })
+  return [
+    `<quote bot="${quote.bot}" chat="${quote.channel.id}" message="${quote.focus}">`,
+    `Messages from ${quote.botName} in the ${where}; the user picked the one marked →. To build or check a flow for it, pass sample { bot: "${quote.bot}", id: "${quote.focus}", channel: "${quote.channel.id}" } to flows.test or flows.preview.`,
+    ...lines,
+    '</quote>',
+  ].join('\n')
+}
+
 function turnTags(text: string, options: SendOptions, skills: AgentSkill[]) {
   const tags: string[] = []
   if (options.scene) tags.push(`scene:${options.scene.key}`)
@@ -810,7 +878,7 @@ function turnTags(text: string, options: SendOptions, skills: AgentSkill[]) {
 }
 
 function stripMeta(message: AgentMessage): LlmMessage {
-  const { display, skills, at, ...rest } = message
+  const { display, skills, quote, at, ...rest } = message
   return rest as LlmMessage
 }
 
