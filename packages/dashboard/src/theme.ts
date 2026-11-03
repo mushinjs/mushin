@@ -99,6 +99,16 @@ function overridesFor(c: typeof palettes.light): GlobalThemeOverrides {
 const lightOverrides = overridesFor(palettes.light)
 const darkOverrides = overridesFor(palettes.dark)
 
+/**
+ * Series colours for charts, in a fixed order (series 1 is always the first colour). Five slots,
+ * checked for colour-blind separation on each theme's card surface; a sixth series and beyond are
+ * folded into "other" by the chart.
+ */
+export const chartColors = {
+  light: ['#4F5BD5', '#1F9E8E', '#D4762A', '#B84C8C', '#3D8FD0'],
+  dark: ['#6874EA', '#1FA593', '#CF7029', '#C65A96', '#4E9AD8'],
+}
+
 export function useTheme() {
   const os = useOsTheme()
   const isDark = computed(() => themeMode.value === 'dark' || (themeMode.value === 'auto' && os.value === 'dark'))

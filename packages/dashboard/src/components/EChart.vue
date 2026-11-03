@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { LineChart } from 'echarts/charts'
+import { BarChart, LineChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
 import { type ComposeOption, type ECharts, init, use } from 'echarts/core'
-import type { LineSeriesOption } from 'echarts/charts'
+import type { BarSeriesOption, LineSeriesOption } from 'echarts/charts'
 import type { GridComponentOption, LegendComponentOption, TooltipComponentOption } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useTheme } from '../theme'
 
-// Only line charts are used, so only they are bundled.
-use([LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer])
+// Only line and bar charts are used, so only they are bundled.
+use([BarChart, LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer])
 
-export type ChartOption = ComposeOption<LineSeriesOption | GridComponentOption | LegendComponentOption | TooltipComponentOption>
+export type ChartOption = ComposeOption<BarSeriesOption | LineSeriesOption | GridComponentOption | LegendComponentOption | TooltipComponentOption>
 
 const props = defineProps<{ option: ChartOption; height?: number }>()
 const { isDark } = useTheme()
