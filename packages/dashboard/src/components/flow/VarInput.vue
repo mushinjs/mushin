@@ -10,7 +10,7 @@ export interface VarGroup {
   items: { ref: string; label: string; type: string }[]
 }
 
-const props = defineProps<{ groups: VarGroup[]; placeholder?: string }>()
+const props = defineProps<{ groups: VarGroup[]; placeholder?: string; multiline?: boolean }>()
 const value = defineModel<string>({ default: '' })
 const { t } = useI18n()
 
@@ -24,12 +24,18 @@ const options = computed(() => props.groups.map((group) => ({
 /** An empty input or a lone reference is replaced; other text gets the reference appended. */
 function insert(ref: string) {
   const current = value.value ?? ''
-  value.value = !current.trim() || wholeRef(current) ? ref : `${current}${ref}`
+  value.value = !current.trim() || (!props.multiline && wholeRef(current)) ? ref : `${current}${ref}`
 }
 </script>
 
 <template>
-  <NInput v-model:value="value" size="small" clearable :placeholder="placeholder ?? t('flows.varsPlaceholder')">
+  <div v-if="multiline" class="multi">
+    <NInput v-model:value="value" size="small" type="textarea" :autosize="{ minRows: 2, maxRows: 10 }" :placeholder="placeholder ?? t('flows.varsPlaceholder')" />
+    <NDropdown trigger="click" :options="options" scrollable size="small" placement="bottom-end" style="max-height: 320px" @select="insert">
+      <NButton text size="tiny" class="var-button corner" :title="t('flows.varsInsert')">(x)</NButton>
+    </NDropdown>
+  </div>
+  <NInput v-else v-model:value="value" size="small" clearable :placeholder="placeholder ?? t('flows.varsPlaceholder')">
     <template #suffix>
       <NDropdown trigger="click" :options="options" scrollable size="small" placement="bottom-end" style="max-height: 320px" @select="insert">
         <NButton text size="tiny" class="var-button" :title="t('flows.varsInsert')">(x)</NButton>
@@ -39,6 +45,16 @@ function insert(ref: string) {
 </template>
 
 <style scoped>
+.multi {
+  position: relative;
+}
+
+.corner {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+}
+
 .var-button {
   font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
   font-size: 12px;

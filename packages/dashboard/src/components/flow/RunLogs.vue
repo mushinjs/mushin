@@ -11,6 +11,8 @@ import { nodeIcon } from './icons'
 
 export interface TestInput {
   text: string
+  /** Run the editor's sample message instead of the text, while one is picked. */
+  useSample: boolean
   userName: string
   /** The sender's id and group; empty uses the test defaults. */
   userId: string
@@ -44,6 +46,8 @@ const props = defineProps<{
   live?: string[]
   /** Test runs the flow's nodes call for, offered as one-click choices. */
   quick?: TestOption[]
+  /** The editor's sample message, shown in place of the text box when runs use it. */
+  sample?: { text: string; user: string }
 }>()
 const emit = defineEmits<{ run: []; clear: []; show: [trace: RunTrace]; select: [nodeId: string] }>()
 const test = defineModel<TestInput>('test', { required: true })
@@ -151,6 +155,7 @@ function pickEvent(name: string) {
 const ready = computed(() => {
   if (test.value.mode === 'event') return !!test.value.eventName.trim()
   if (test.value.mode === 'schedule') return !!test.value.schedule
+  if (props.sample && test.value.useSample) return true
   return !!test.value.text.trim()
 })
 
@@ -212,8 +217,14 @@ const iconOf = (nodeId: string) => {
       </div>
       <span class="spacer" />
       <template v-if="tab === 'logs'">
+        <div v-if="test.mode === 'message' && sample && test.useSample" class="test-text sample-chip" :title="sample.text">
+          <NTag size="small" type="info" :bordered="false" closable @close="test.useSample = false">
+            {{ t('flows.sampleRun', { user: sample.user }) }}
+          </NTag>
+          <span class="sample-text">{{ sample.text }}</span>
+        </div>
         <NInput
-          v-if="test.mode === 'message'"
+          v-else-if="test.mode === 'message'"
           ref="input"
           v-model:value="test.text"
           size="small"
@@ -248,6 +259,7 @@ const iconOf = (nodeId: string) => {
             </NButton>
           </template>
           <NSpace vertical size="small" class="test-options">
+            <NCheckbox v-if="sample" v-model:checked="test.useSample">{{ t('flows.sampleUse') }}</NCheckbox>
             <template v-if="quick?.length">
               <span class="muted small">{{ t('flows.testQuick') }}</span>
               <div class="quick">
@@ -402,6 +414,21 @@ const iconOf = (nodeId: string) => {
 </template>
 
 <style scoped>
+.sample-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sample-text {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .quick {
   display: flex;
   flex-wrap: wrap;

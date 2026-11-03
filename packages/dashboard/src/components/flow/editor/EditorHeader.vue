@@ -4,6 +4,7 @@ import { ArrowBackOutline, ContractOutline, ExpandOutline } from '@vicons/ionico
 import { NButton, NIcon, NInput, NSelect, NSwitch, NTag, NTooltip } from 'naive-ui'
 import { useEditor } from './editor'
 import PanelIcon from './PanelIcon.vue'
+import SamplePicker from './SamplePicker.vue'
 
 const {
   t, router, name, bots, enabled, toggling, currentAdapter, adapterOptions, setAdapter, botOptions, setEnabled,
@@ -43,6 +44,7 @@ const {
     <NTag v-if="errorCount" type="error" size="small" :bordered="false">{{ t('flows.errorCount', errorCount) }}</NTag>
     <NTag v-else-if="warningCount" type="warning" size="small" :bordered="false">{{ t('flows.warningCount', warningCount) }}</NTag>
     <span class="spacer" />
+    <SamplePicker />
     <span class="save-state">{{ dirty ? t('flows.unsavedShort') : t('flows.savedShort') }}</span>
     <div class="view-tools" role="group" :aria-label="t('flows.layout')">
       <NTooltip :show-arrow="false">

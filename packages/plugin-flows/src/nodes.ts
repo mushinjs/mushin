@@ -1,4 +1,4 @@
-import { type ChannelInfo, field, segmentsToText, z } from '@mushin/core'
+import { type ChannelInfo, field, seg, type Segment, segmentsToText, z } from '@mushin/core'
 import { type CommandArg, commandMatches, parseArgs, roleAtLeast, splitCommand, usageReply } from '@mushin/plugin-bots'
 import { FlowError, TriggerReply } from './engine'
 import type { FlowSession, LlmLike, NodeContext, NodeType, PersonaLike, VariableScope } from './types'
@@ -758,6 +758,39 @@ const chatNode: NodeType = {
   },
 }
 
+/**
+ * Message parts written into reply text: `[at:10001]` mentions someone, `[image:https://…]` sends a
+ * picture, `[face:14]` a platform face. Values filled in from references are escaped first (see
+ * `escapeParts`), so text from a chat cannot add parts of its own.
+ */
+const PART = /(?<!\\)\[(at|image|face):([^\]\s]+)\]/g
+
+/** Escapes `[` and `\` in a value filled into reply text, so it stays plain text. */
+export const escapeParts = (value: string) => value.replace(/[\\[]/g, (char) => `\\${char}`)
+const unescapeParts = (text: string) => text.replace(/\\([\\[])/g, '$1')
+
+/** Reply text as segments: plain text, with `[at:…]`, `[image:…]` and `[face:…]` parts. */
+export function messageSegments(text: string): Segment[] {
+  const segments: Segment[] = []
+  let last = 0
+  for (const match of text.matchAll(PART)) {
+    if (match.index > last) segments.push(seg.text(unescapeParts(text.slice(last, match.index))))
+    const [, kind, value] = match
+    segments.push(kind === 'at' ? seg.at(value) : kind === 'image' ? seg.image(value) : seg.face(value))
+    last = match.index + match[0].length
+  }
+  if (last < text.length) segments.push(seg.text(unescapeParts(text.slice(last))))
+  return segments.filter((segment) => segment.type !== 'text' || segment.data.text)
+}
+
+/** What a reply or send node sends: text alone, or segments when the text has parts. */
+function messageContent(text: string, parts: boolean, source: ReturnType<typeof replySource>) {
+  if (!parts) return { text, source }
+  const segments = messageSegments(text)
+  if (segments.every((segment) => segment.type === 'text')) return { text: unescapeParts(text), source }
+  return { segments, text: segmentsToText(segments), source }
+}
+
 /** Where a reply came from: the flow and node, the last LLM reply's model and persona, and the knowledge passages found. */
 function replySource(flow: { name: string }, node: { label: string }, run: NodeContext<any>['run']) {
   return {
@@ -842,20 +875,22 @@ const replyNode: NodeType = {
   title: { en: 'Reply', 'zh-CN': '回复' },
   description: { en: 'Replies in the same chat with the input text, or the fixed text when the input is not set', 'zh-CN': '在当前会话回复输入的文本；未设置输入时回复固定文本' },
   config: z.object({
-    text: z.string().default('Hi, {user}!').meta(field('Fixed text', 'Supports {user}, {message} and references such as {{n1.rest}}', {
-      'zh-CN': { title: '固定文本', description: '支持 {user}、{message} 和 {{n1.rest}} 这样的变量引用' },
-    })),
+    text: z.string().default('Hi, {user}!').meta(field('Fixed text', 'Supports {user}, {message}, references such as {{n1.rest}} and parts: [at:id], [image:url], [face:id]', {
+      'zh-CN': { title: '固定文本', description: '支持 {user}、{message}、{{n1.rest}} 这样的变量引用，以及 [at:QQ号]、[image:链接]、[face:表情ID] 消息段' },
+    }, { widget: 'message' })),
     quote: z.boolean().default(false).meta(field('Quote the message', undefined, { 'zh-CN': { title: '引用原消息' } })),
   }),
+  escapeConfig: { text: escapeParts },
   inputs: [{ name: 'text', type: 'text', title: { en: 'Text', 'zh-CN': '文本' } }],
   outputs: [{ name: 'messageId', type: 'text', title: { en: 'Sent message id', 'zh-CN': '发出的消息 ID' } }],
   async run(context) {
     const { config, inputs, session, flow, node, run } = context
-    const text = inputs.text !== undefined && inputs.text !== ''
+    const wired = inputs.text !== undefined && inputs.text !== ''
+    const text = wired
       ? String(inputs.text)
-      : await inVoice(context, fillTemplate(config.text, { user: session.user.name ?? session.user.id, message: session.text }))
+      : await inVoice(context, fillTemplate(config.text, { user: escapeParts(session.user.name ?? session.user.id), message: escapeParts(session.text) }))
     if (!text.trim()) return { outputs: { messageId: '' } }
-    const content = { text, source: replySource(flow, node, run) }
+    const content = messageContent(text, !wired, replySource(flow, node, run))
     const sent = await (config.quote ? session.reply(content) : session.send(content))
     return { outputs: { messageId: sent?.messageId ?? '' } }
   },
@@ -893,18 +928,20 @@ const sendNode: NodeType = {
   description: { en: 'Sends the text to the current chat or to a given group or person', 'zh-CN': '把文本发到当前会话，或指定的群、个人' },
   config: z.object({
     ...targetFields,
-    text: z.string().default('').meta(field('Fixed text', 'Used when the input is not set', { 'zh-CN': { title: '固定文本', description: '未设置输入时使用' } })),
+    text: z.string().default('').meta(field('Fixed text', 'Used when the input is not set; supports parts: [at:id], [image:url], [face:id]', { 'zh-CN': { title: '固定文本', description: '未设置输入时使用；支持 [at:QQ号]、[image:链接]、[face:表情ID] 消息段' } }, { widget: 'message' })),
   }),
+  escapeConfig: { text: escapeParts },
   inputs: [{ name: 'text', type: 'text', title: { en: 'Text', 'zh-CN': '文本' } }],
   outputs: [{ name: 'messageId', type: 'text', title: { en: 'Sent message id', 'zh-CN': '发出的消息 ID' } }],
   execOut: ['next', 'failed'],
   async run(context) {
     const { config, inputs, session, bot, flow, node, run, logger } = context
-    const text = inputs.text !== undefined && inputs.text !== '' ? String(inputs.text) : await inVoice(context, String(config.text ?? ''))
+    const wired = inputs.text !== undefined && inputs.text !== ''
+    const text = wired ? String(inputs.text) : await inVoice(context, String(config.text ?? ''))
     const channel = resolveTarget(config, session.channel)
     if (!channel) throw new FlowError('Set the group or user id to send to')
     if (!text.trim()) return { outputs: { messageId: '' } }
-    const content = { text, source: replySource(flow, node, run) }
+    const content = messageContent(text, !wired, replySource(flow, node, run))
     try {
       const sent = channel === session.channel || !bot ? await session.send(content) : await bot.send(channel, content)
       return { outputs: { messageId: sent?.messageId ?? '' } }

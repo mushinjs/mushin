@@ -190,7 +190,10 @@ export function configSummary(type: NodeTypeInfo, config: Record<string, any>, l
     if (Array.isArray(value) ? !value.length : typeof value === 'object') continue
     const label = field['x-i18n']?.[locale]?.title ?? field.title ?? humanize(key)
     const options = { ...(field['x-options'] ?? field.items?.['x-options']), ...field['x-i18n']?.[locale]?.options }
-    const show = (item: unknown) => options[String(item)] ?? (field['x-choices'] && choiceLabel(field['x-choices'], String(item))) ?? String(item)
+    // Lists of objects (a command's arguments, a prompt's blocks) show their names or kinds.
+    const show = (item: unknown) => (item && typeof item === 'object'
+      ? String((item as { name?: unknown; kind?: unknown }).name ?? (item as { kind?: unknown }).kind ?? '…')
+      : options[String(item)] ?? (field['x-choices'] && choiceLabel(field['x-choices'], String(item))) ?? String(item))
     lines.push({ key, label, value: Array.isArray(value) ? value.map(show).join(', ') : value === true ? '✓' : show(value) })
     if (lines.length >= limit) break
   }

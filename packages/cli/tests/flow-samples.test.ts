@@ -72,4 +72,13 @@ describe('flows and real messages', () => {
     expect(edited.messages.map((line: any) => line.kind)).toEqual(['default', 'message'])
     expect(edited.messages[1].content).toBe('只说：天气')
   })
+  it('tells which triggers a real message starts, with unsaved nodes', async () => {
+    const [record] = await incoming('今天天气怎样')
+    const saved = await app.call('flows.get', { id: flowId })
+    const result = await app.call('flows.sampleMatch', { id: flowId, sample: { bot: botId, id: record.id } })
+    expect(result.sys).toMatchObject({ userId: '20001', text: '今天天气怎样' })
+    expect(result.triggers).toEqual([expect.objectContaining({ nodeId: 'kw', matched: true, outputs: expect.objectContaining({ keyword: '天气' }) })])
+    const nodes = saved.nodes.map((node: any) => (node.id === 'kw' ? { ...node, config: { ...node.config, keywords: ['下雨'] } } : node))
+    expect((await app.call('flows.sampleMatch', { id: flowId, sample: { bot: botId, id: record.id }, nodes })).triggers[0].matched).toBe(false)
+  })
 })

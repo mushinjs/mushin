@@ -37,6 +37,8 @@ export interface FlowEditorContext {
   /** Nodes test runs pause before. */
   breakpoints: Ref<Set<string>>
   toggleBreakpoint(nodeId: string): void
+  /** How the picked sample message takes each trigger, while one is picked. */
+  sampleTriggers: ComputedRef<Map<string, { matched: boolean; reply?: string }>>
 }
 
 export const flowEditorKey: InjectionKey<FlowEditorContext> = Symbol('flow-editor')

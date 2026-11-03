@@ -14,13 +14,15 @@ import { nodeIcon } from '../icons'
 import VarInput from '../VarInput.vue'
 import { useEditor } from './editor'
 import CommandEditor from './CommandEditor.vue'
+import MessageEditor from './MessageEditor.vue'
+import PromptEditor from './PromptEditor.vue'
 import NodeWiring from './NodeWiring.vue'
 import TriggerOrder from './TriggerOrder.vue'
 import { refExamples, useNodeWiring } from './useNodeWiring'
 
 const {
   t, locale, message, types, selected, selectedId, selectedInfo, selectedIsTrigger, order, nodeTab, typeTitle, portLabel, issuesByNode,
-  inheritedSkip, blockedNodes, blockedSlots, toggleSkip, deleteSelected, updateSelected, openTrigger, bots,
+  inheritedSkip, blockedNodes, blockedSlots, toggleSkip, deleteSelected, updateSelected, openTrigger, bots, sampleValue,
 } = useEditor()
 const { wiring, varGroups, setInput } = useNodeWiring()
 
@@ -59,6 +61,16 @@ function convertToCommand() {
   })
   message.success(t('flows.convertedToCommand', { name: `/${unprefixed(first)}` }))
 }
+
+/** Fields with an editor of their own: an LLM node's prompt blocks, a reply's message text. */
+const widgetFields = computed(() => Object.entries<Record<string, any>>(selectedInfo.value?.configSchema?.properties ?? {})
+  .filter(([, field]) => field['x-widget'] === 'prompt' || field['x-widget'] === 'message')
+  .map(([key, field]) => ({ key, widget: field['x-widget'] as 'prompt' | 'message', label: field['x-i18n']?.[locale.value]?.title ?? field.title ?? key })))
+const hiddenFields = computed(() => [
+  ...(selected.value?.data!.typeId === COMMAND ? COMMAND_FIELDS : leadFields.value),
+  ...widgetFields.value.map((item) => item.key),
+])
+const setField = (key: string, value: unknown) => updateSelected({ config: clone({ ...selected.value!.data!.config, [key]: value }) })
 
 /** Settings fields shown above the conversion hint: the keywords of a keyword node. */
 const leadFields = computed(() => (selected.value?.data!.typeId === KEYWORD ? ['keywords'] : []))
@@ -136,7 +148,12 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
                 {{ portLabel(item.port) }}
                 <span class="port-type" :style="{ color: portColors[item.port.type] }">{{ item.port.type }}</span>
               </template>
-              <VarInput :model-value="item.binding" :groups="varGroups" @update:model-value="(value: string) => setInput(item.port.name, value)" />
+              <div class="input-cell">
+                <VarInput :model-value="item.binding" :groups="varGroups" @update:model-value="(value: string) => setInput(item.port.name, value)" />
+                <span v-if="sampleValue(item.binding) !== undefined" class="muted small sample-value" :title="sampleValue(item.binding)">
+                  {{ t('flows.sampleValue', { value: sampleValue(item.binding) || '""' }) }}
+                </span>
+              </div>
             </NFormItem>
           </NForm>
           <p class="muted small vars-hint">{{ t('flows.varsHint', refExamples) }}</p>
@@ -156,6 +173,21 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
             :hidden="otherFields(selectedInfo.configSchema, leadFields)"
             @update:model-value="(config: Record<string, any>) => updateSelected({ config: clone(config) })"
           />
+          <template v-for="item in widgetFields" :key="item.key">
+            <PromptEditor
+              v-if="item.widget === 'prompt'"
+              :node-id="selected.id"
+              :config="selected.data!.config"
+              @update="(config: Record<string, any>) => updateSelected({ config: clone(config) })"
+            />
+            <MessageEditor
+              v-else
+              :label="item.label"
+              :model-value="selected.data!.config[item.key] ?? ''"
+              :quote="!!selected.data!.config.quote"
+              @update:model-value="(value: string) => setField(item.key, value)"
+            />
+          </template>
           <NAlert v-if="commandLike" type="info" :show-icon="false" class="convert-hint">
             {{ t('flows.suggestCommand', { name: commandLike }) }}
             <NButton size="tiny" secondary type="primary" @click="convertToCommand">{{ t('flows.convertToCommand') }}</NButton>
@@ -164,7 +196,7 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
             compact
             :model-value="selected.data!.config"
             :schema="selectedInfo.configSchema"
-            :hidden="selected.data!.typeId === COMMAND ? COMMAND_FIELDS : leadFields"
+            :hidden="hiddenFields"
             @update:model-value="(config: Record<string, any>) => updateSelected({ config: clone(config) })"
           />
         </template>
@@ -298,6 +330,18 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
 
 .convert-hint :deep(.n-button) {
   margin-left: 6px;
+}
+
+.input-cell {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+}
+
+.sample-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .guide-notes {

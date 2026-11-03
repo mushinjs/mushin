@@ -2,7 +2,7 @@
  * Runs on the canvas: test runs started here, runs going on on a bot, a run opened from a bot's run
  * list, and the debugger that pauses test runs at breakpoints.
  */
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, type Ref, ref, watch } from 'vue'
 import { call, on } from '../../../api'
 import { portsOf } from '../../../flow'
 import { isLive, useRunsStore } from '../../../stores/runs'
@@ -14,7 +14,7 @@ import type { EditorState } from './state'
 /** Runs kept in the logs. */
 const KEEP = 20
 
-export function useRuns(s: EditorState, actions: { save: () => Promise<void> }) {
+export function useRuns(s: EditorState, actions: { save: () => Promise<void>; sample: Ref<{ bot: string; id: string; channel: string } | undefined> }) {
   const { t, message, flowId, runs, logsRun, viewing, breakpoints, paused, testing, executing, highlight, nodes, edges, realNodes, types, logs } = s
 
   let clearTimer: number | undefined
@@ -189,7 +189,7 @@ export function useRuns(s: EditorState, actions: { save: () => Promise<void> }) 
   // ---- test runs ----
 
   const test = ref<TestInput>({
-    text: '', userName: '', userId: '', groupId: '', private: false, mentioned: false, role: 'user', groupRole: '', mode: 'message', eventName: '', eventData: '{}', schedule: '', replies: '',
+    text: '', useSample: true, userName: '', userId: '', groupId: '', private: false, mentioned: false, role: 'user', groupRole: '', mode: 'message', eventName: '', eventData: '{}', schedule: '', replies: '',
   })
   const schedules = computed(() => nodes.value
     .filter((node) => node.data?.typeId === 'trigger.schedule')
@@ -230,6 +230,10 @@ export function useRuns(s: EditorState, actions: { save: () => Promise<void> }) 
       return { event: { name: eventName.trim(), data }, userName, ...common }
     }
     if (mode === 'schedule') return schedule ? { schedule, ...common } : undefined
+    // A picked sample runs as the real message; the pretended role still applies when set.
+    if (actions.sample.value && test.value.useSample) {
+      return { sample: actions.sample.value, ...(test.value.role !== 'user' ? { role: test.value.role } : {}), ...common }
+    }
     if (!text.trim()) return
     const roles = { ...(test.value.role !== 'user' ? { role: test.value.role } : {}), ...(test.value.groupRole && !test.value.private ? { groupRole: test.value.groupRole } : {}) }
     const ids = { ...(test.value.userId.trim() ? { userId: test.value.userId.trim() } : {}), ...(test.value.groupId.trim() && !test.value.private ? { groupId: test.value.groupId.trim() } : {}) }

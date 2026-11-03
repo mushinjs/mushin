@@ -2,11 +2,11 @@ import { type ChannelInfo, Context, MushinError, randomId, seg, type Segment, se
 import { type BotEvent, type BotRole, BUILTIN_PRIORITY, type CommandArg, type CommandEntry, commandMatches, type GroupRole, helpText, requiredRole, roleAtLeast, splitCommand } from '@mushin/plugin-bots'
 import type {} from '@mushin/plugin-providers'
 import type {} from '@mushin/plugin-storage'
-import { FlowError, localDay, matchTriggers, MemoryUsage, type PauseAction, type PauseInfo, runFlow, type RunEnvironment, type TriggerMatch } from './engine'
+import { FlowError, localDay, matchTriggers, TriggerReply, MemoryUsage, type PauseAction, type PauseInfo, runFlow, type RunEnvironment, type TriggerMatch } from './engine'
 import { compile, type CompiledFlow, FLOW_FORMAT, interceptOf, layout, migrateIntercept, triggerPriority } from './graph'
 import { builtinNodes, commandName, scheduleTarget } from './nodes'
 import { overlap, triggerOrder, triggerSummary, type TriggerSlot } from './order'
-import { migrateDataEdges } from './refs'
+import { migrateDataEdges, sysValues } from './refs'
 import { branchSteps, candidates, type CaseResult, check, judgeWith, MOCK_REPLY, mockLlm, newCase, scratchVars, snapshot, type TestCase, TestCaseInput, type TestRunSummary, type TestsDocument } from './tests'
 import { FIELD_TYPES, TableField, TableName, tableNodes, TableStore } from './tables'
 import { ResourceLocks } from './locks'
@@ -1176,6 +1176,37 @@ export class FlowService extends Service {
   }
 
   /**
+   * How a flow's triggers take a real message, without running anything: which ones it starts
+   * (or answers with a usage reply), their outputs, and the `sys` values. `nodes` checks unsaved
+   * edits of the flow's nodes.
+   */
+  async sampleMatch(id: string, sample: { bot: string; id: string; channel?: string }, nodes?: { id: string; type: string; config?: Record<string, any>; skip?: boolean; priority?: number }[]) {
+    const saved = this.get(id)
+    const compiled = nodes
+      ? compile({ ...saved, nodes: nodes.map((node) => ({ position: { x: 0, y: 0 }, ...node, config: node.config ?? {} })) }, this.types)
+      : this.compiledOf(saved)
+    const found = await this.sampleSession(sample.bot, sample.id, sample.channel)
+    const session: FlowSession = {
+      ...found.session,
+      ...testRoles(found.role, found.session.isDirect ? undefined : groupRoleOf(found.session.user.role)),
+      send: async () => undefined,
+      reply: async () => undefined,
+    }
+    const matches = matchTriggers(compiled, { session, vars: scratchVars([]) as Variables })
+    return {
+      message: { text: found.session.text, user: found.record.user, channel: found.record.channel, at: found.record.timestamp },
+      role: found.role,
+      sys: sysValues(session),
+      triggers: [...compiled.triggers].map((nodeId) => {
+        const match = matches.find((item) => item.nodeId === nodeId)
+        if (!match) return { nodeId, matched: false }
+        if (match.outputs instanceof TriggerReply) return { nodeId, matched: false, reply: match.outputs.reply }
+        return { nodeId, matched: true, outputs: match.outputs }
+      }),
+    }
+  }
+
+  /**
    * What an ai.chat node would send, without calling the model: the flow runs as a test up to the
    * node (earlier LLM nodes get a placeholder answer) and the node's messages are returned, each
    * with the prompt block it came from. `config` previews unsaved edits of the node.
@@ -1586,6 +1617,17 @@ export class FlowService extends Service {
         if (caller.kind !== 'api') delete input.breakpoints
         return this.test(id, input)
       },
+    })
+
+    yield actions.define({
+      name: 'flows.sampleMatch',
+      description: 'Editor only: which triggers of a flow a real message of a bot starts, with their outputs and the message\'s sys values; nothing runs.',
+      risk: 'read',
+      input: idInput.extend({
+        sample: z.object({ bot: z.string(), id: z.string(), channel: z.string().optional() }),
+        nodes: z.array(z.object({ id: z.string(), type: z.string(), config: z.record(z.string(), z.any()).optional(), skip: z.boolean().optional(), priority: z.number().optional() })).optional(),
+      }),
+      handler: ({ id, sample, nodes }) => this.sampleMatch(id, sample, nodes),
     })
 
     yield actions.define({

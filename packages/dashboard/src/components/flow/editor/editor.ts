@@ -15,6 +15,7 @@ import { useEditing } from './useEditing'
 import { useGroups } from './useGroups'
 import { useMenu } from './useMenu'
 import { useRuns } from './useRuns'
+import { useSample } from './useSample'
 import { useTriggerOrder } from './useTriggerOrder'
 
 /** Room kept around the nodes, in canvas units: panning stops there, and the minimap shows it. */
@@ -35,8 +36,9 @@ export function createFlowEditor() {
   const s = createEditorState()
   const groups = useGroups(s)
   const editing = useEditing(s)
+  const sample = useSample(s)
   // Test runs save pending edits first; saving comes from the document part, made further down.
-  const runs = useRuns(s, { save: () => doc.save() })
+  const runs = useRuns(s, { save: () => doc.save(), sample: sample.samplePayload })
   const menu = useMenu(s, groups, editing, runs)
   const order = useTriggerOrder(s, editing)
   const doc = useDocument(s, { groups, editing, runs, order })
@@ -58,6 +60,7 @@ export function createFlowEditor() {
     stepOf: runs.stepOf,
     breakpoints: s.breakpoints,
     toggleBreakpoint: runs.toggleBreakpoint,
+    sampleTriggers: sample.sampleTriggers,
   })
   const nodeTypes = { mushin: markRaw(FlowNodeCard), [BOX]: markRaw(FlowGroupBox) } as any
 
@@ -175,7 +178,7 @@ export function createFlowEditor() {
   onBeforeRouteLeave(() => !s.dirty.value || window.confirm(s.t('flows.unsaved')))
 
   const editor = {
-    ...s, ...groups, ...editing, ...runs, ...menu, ...order, ...doc,
+    ...s, ...groups, ...editing, ...sample, ...runs, ...menu, ...order, ...doc,
     nodeTypes, extent, minimapColor, togglePalette, togglePanel, toggleImmersive,
   }
   provide(editorKey, editor)

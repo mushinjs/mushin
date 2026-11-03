@@ -486,3 +486,27 @@ describe('trigger order', () => {
     expect(triggerOrder([compile(loose, types)]).map((slot) => slot.certain)).toEqual([undefined, false, undefined])
   })
 })
+
+describe('reply parts', () => {
+  it('sends [at:…], [image:…] and [face:…] as segments, keeping values from the chat as text', async () => {
+    const doc = flow([
+      { id: 'kw', type: 'trigger.keyword', config: { keywords: ['hi'], mode: 'startsWith' } },
+      { id: 'say', type: 'action.reply', config: { text: '[at:{{sys.userId}}] 你说 {{kw.rest}} [face:14]' } },
+    ], [['kw', 'exec:next', 'say', 'exec']])
+    const { sent } = await run(doc, 'hi [at:all] \\[x')
+    expect(sent[0].segments).toEqual([
+      { type: 'at', data: { qq: '42' } },
+      { type: 'text', data: { text: ' 你说 [at:all] \\[x ' } },
+      { type: 'face', data: { id: '14' } },
+    ])
+  })
+
+  it('sends plain text when there are no parts', async () => {
+    const doc = flow([
+      { id: 'kw', type: 'trigger.keyword', config: { keywords: ['hi'], mode: 'startsWith' } },
+      { id: 'say', type: 'action.reply', config: { text: 'got {{kw.rest}}' } },
+    ], [['kw', 'exec:next', 'say', 'exec']])
+    expect((await run(doc, 'hi [x]')).sent[0]).toMatchObject({ text: 'got [x]' })
+    expect((await run(doc, 'hi [x]')).sent[0].segments).toBeUndefined()
+  })
+})

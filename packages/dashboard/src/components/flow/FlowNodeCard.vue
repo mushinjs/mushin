@@ -18,7 +18,8 @@ const info = computed(() => editor.types.value.get(props.data.typeId))
 const ports = computed(() => (info.value ? portsOf(info.value, props.data.config) : undefined))
 const typeTitle = computed(() => {
   // A command node reads as the command it answers, e.g. "Command /checkin".
-  const command = props.data.typeId === 'trigger.command' && props.data.config?.name ? ` /${props.data.config.name}` : ''
+  const prefix = (Array.isArray(props.data.config?.prefixes) && props.data.config.prefixes[0]) || '/'
+  const command = props.data.typeId === 'trigger.command' && props.data.config?.name ? ` ${prefix}${props.data.config.name}` : ''
   return `${localize(info.value?.title, locale.value) || props.data.typeId}${command}`
 })
 const issues = computed(() => editor.issuesByNode.value.get(props.id) ?? [])
@@ -34,6 +35,8 @@ const skippedBy = computed(() => (props.data.skip ? undefined : editor.inherited
 const blocked = computed(() => (props.data.skip || skippedBy.value ? undefined : editor.blocked.value.get(props.id)))
 const uncovered = computed(() => editor.uncovered.value.has(props.id))
 const breakpoint = computed(() => editor.breakpoints.value.has(props.id))
+/** How the editor's sample message takes this trigger, while one is picked. */
+const sampleMark = computed(() => editor.sampleTriggers.value.get(props.id))
 
 // A node with only `next` keeps its exec output on the header; branching nodes list one row per branch, like CASE / ELSE.
 const execOut = computed(() => ports.value?.execOut ?? [])
@@ -98,6 +101,12 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
       <span v-if="data.skip" class="off-tag">{{ t('flows.nodeSkipped') }}</span>
       <span v-else-if="skippedBy" class="off-tag">{{ t('flows.upstreamSkipped') }}</span>
       <span v-else-if="blocked" class="off-tag blocked-tag">{{ t('flows.blockedTag') }}</span>
+      <span
+        v-if="sampleMark"
+        class="off-tag sample-tag"
+        :class="{ hit: sampleMark.matched, usage: !!sampleMark.reply }"
+        :title="sampleMark.reply ? t('flows.sampleUsageReply', { reply: sampleMark.reply }) : sampleMark.matched ? t('flows.sampleHitHint') : t('flows.sampleMissHint')"
+      >{{ sampleMark.matched ? t('flows.sampleHit') : sampleMark.reply ? t('flows.sampleUsage') : t('flows.sampleMiss') }}</span>
       <span v-if="uncovered" class="off-tag uncovered-tag" :title="t('flowTests.uncoveredHint')">{{ t('flowTests.uncoveredTag') }}</span>
       <span v-if="data.priority" class="priority" :title="t('flows.priority')">{{ data.priority > 0 ? `+${data.priority}` : data.priority }}</span>
       <span class="number">{{ number }}</span>
@@ -300,6 +309,16 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
 
 .flow-node.skip > :not(.handle) {
   opacity: 0.45;
+}
+
+.sample-tag.hit {
+  color: #18a058;
+  background: rgba(24, 160, 88, 0.14);
+}
+
+.sample-tag.usage {
+  color: #d08a00;
+  background: rgba(240, 160, 32, 0.16);
 }
 
 /* Never runs on some bot: an earlier trigger keeps the message. */
