@@ -1,17 +1,18 @@
 <script setup lang="ts">
 import {
   AddOutline, AlertCircleOutline, AppsOutline, ChatbubblesOutline, CloseCircleOutline, ExtensionPuzzleOutline, FilterOutline, GitNetworkOutline,
-  LayersOutline, ListOutline, NotificationsOutline, PauseCircleOutline, PlayCircleOutline, SearchOutline, SparklesOutline, SwapVerticalOutline, TimeOutline,
-  TrashOutline,
+  LayersOutline, ListOutline, NotificationsOutline, SearchOutline, SparklesOutline, SwapVerticalOutline, TimeOutline, TrashOutline,
 } from '@vicons/ionicons5'
 import {
-  type DataTableColumns, NBadge, NButton, NCard, NDataTable, NEmpty, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NModal, NPopover,
+  type DataTableColumns, NBadge, NButton, NCard, NDataTable, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NPopover,
   NRadioButton, NRadioGroup, NSelect, type SelectOption, NSwitch, NTag, useDialog, useMessage,
 } from 'naive-ui'
 import { type Component, computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { call, on } from '../api'
+import { avatarColor, initial } from '../botAvatar'
+import EmptyState from '../components/EmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { nodeIcon } from '../components/flow/icons'
 import IconAction from '../components/IconAction.vue'
@@ -50,7 +51,7 @@ type View = 'cards' | 'list'
 type Group = 'none' | 'trigger' | 'adapter' | 'bot' | 'recent'
 type Sort = 'updated' | 'created' | 'name'
 type TriggerKind = 'message' | 'keyword' | 'command' | 'regex' | 'schedule' | 'event'
-type Status = 'enabled' | 'disabled' | 'errors'
+type State = 'all' | 'on' | 'problem' | 'off'
 
 const VIEW_KEY = 'mushin.flows.view'
 const list = (value: unknown) => (typeof value === 'string' && value ? value.split(',') : [])
@@ -70,9 +71,10 @@ const sort = ref<Sort>((route.query.sort as Sort) || 'updated')
 const triggerFilter = ref<string[]>(list(route.query.trigger))
 const adapterFilter = ref<string[]>(list(route.query.adapter))
 const botFilter = ref<string[]>(list(route.query.bot))
-const statusFilter = ref<string[]>(list(route.query.status))
+const states: State[] = ['all', 'on', 'problem', 'off']
+const state = ref<State>(states.includes(route.query.status as State) ? route.query.status as State : 'all')
 
-watch([search, view, group, sort, triggerFilter, adapterFilter, botFilter, statusFilter], () => {
+watch([search, view, group, sort, triggerFilter, adapterFilter, botFilter, state], () => {
   const query: Record<string, string> = {}
   if (search.value) query.q = search.value
   if (view.value !== 'cards') query.view = view.value
@@ -81,7 +83,7 @@ watch([search, view, group, sort, triggerFilter, adapterFilter, botFilter, statu
   if (triggerFilter.value.length) query.trigger = triggerFilter.value.join(',')
   if (adapterFilter.value.length) query.adapter = adapterFilter.value.join(',')
   if (botFilter.value.length) query.bot = botFilter.value.join(',')
-  if (statusFilter.value.length) query.status = statusFilter.value.join(',')
+  if (state.value !== 'all') query.status = state.value
   router.replace({ query })
   try {
     localStorage.setItem(VIEW_KEY, view.value)
@@ -114,7 +116,6 @@ function adapterOf(flow: FlowSummary) {
 }
 
 const kindIcon = (kind: string): Component => (kind === 'event' ? NotificationsOutline : nodeIcon(`trigger.${kind}`, 'trigger'))
-const statusIcons: Record<Status, Component> = { enabled: PlayCircleOutline, disabled: PauseCircleOutline, errors: AlertCircleOutline }
 const groupIcons: Record<Group, Component> = { none: AppsOutline, trigger: NotificationsOutline, adapter: ExtensionPuzzleOutline, bot: ChatbubblesOutline, recent: TimeOutline }
 const icon = (component: Component, size = 15) => h(NIcon, { size, style: { flex: 'none' } }, { default: () => h(component) })
 
@@ -137,7 +138,6 @@ const filterSections = computed(() => [
   { key: 'trigger', title: t('flows.filterTrigger'), model: triggerFilter, items: triggerKinds.map((kind) => ({ value: kind, label: t(`flows.kind.${kind}`), icon: kindIcon(kind) })) },
   { key: 'adapter', title: t('flows.filterAdapter'), model: adapterFilter, items: adapterIds.value.map((id) => ({ value: id, label: adapterLabel(id || undefined), icon: ExtensionPuzzleOutline })) },
   { key: 'bot', title: t('flows.filterBot'), model: botFilter, items: data.bots.map((bot) => ({ value: bot.id, label: bot.name, icon: ChatbubblesOutline })) },
-  { key: 'status', title: t('flows.filterStatus'), model: statusFilter, items: (['enabled', 'disabled', 'errors'] as Status[]).map((value) => ({ value, label: t(`flows.status.${value}`), icon: statusIcons[value] })) },
 ])
 
 function toggleFilter(model: { value: string[] }, value: string) {
@@ -149,15 +149,49 @@ const activeFilters = computed(() => filterSections.value.flatMap((section) => s
   .filter((item) => section.model.value.includes(item.value))
   .map((item) => ({ key: `${section.key}:${item.value}`, label: item.label, icon: item.icon, remove: () => toggleFilter(section.model, item.value) }))))
 const filterCount = computed(() => activeFilters.value.length)
-const filtered = computed(() => !!(search.value || filterCount.value))
+const filtered = computed(() => !!(search.value || filterCount.value || state.value !== 'all'))
 
 function clearFilters() {
   search.value = ''
   triggerFilter.value = []
   adapterFilter.value = []
   botFilter.value = []
-  statusFilter.value = []
+  state.value = 'all'
 }
+
+// ---- one status per flow, as on the bot cards ----
+// An enabled flow that cannot run (errors, or every trigger shadowed) needs attention; warnings do not.
+
+function stateOf(flow: FlowSummary): Exclude<State, 'all'> {
+  if (!flow.enabled) return 'off'
+  return flow.errors || flow.blocked === 'all' ? 'problem' : 'on'
+}
+
+const stateClass = { on: 'ok', problem: 'bad', off: 'idle' } as const
+
+const counts = computed(() => {
+  const result = { all: flows.value.length, on: 0, problem: 0, off: 0 }
+  for (const flow of flows.value) result[stateOf(flow)]++
+  return result
+})
+
+const stateChips = computed(() => states
+  .filter((key) => key === 'all' || counts.value[key] > 0 || state.value === key)
+  .map((key) => ({ key, dot: key === 'all' ? '' : stateClass[key] })))
+
+/** What is wrong with a flow, in one line, for its card. */
+function issueOf(flow: FlowSummary) {
+  if (flow.errors) return { tone: 'bad', text: t('flows.errorCount', flow.errors) }
+  if (flow.blocked) return { tone: 'warn', text: flow.blocked === 'all' ? t('flows.blockedTag') : t('flows.partlyBlocked') }
+  if (flow.warnings) return { tone: 'warn', text: t('flows.warningCount', flow.warnings) }
+  return undefined
+}
+
+/** How many triggers a card shows before "+N". */
+const TRIGGER_COUNT = 3
+const activeTriggers = (flow: FlowSummary) => flow.triggers.filter((item) => !item.skip)
+
+const open = (flow: FlowSummary) => router.push(`/flows/${flow.id}`)
 
 const shown = computed(() => {
   const words = search.value.trim().toLowerCase()
@@ -166,10 +200,7 @@ const shown = computed(() => {
     if (triggerFilter.value.length && !kindsOf(flow).some((kind) => triggerFilter.value.includes(kind))) return false
     if (adapterFilter.value.length && !adapterFilter.value.includes(adapterOf(flow))) return false
     if (botFilter.value.length && !flow.bots.some((bot) => botFilter.value.includes(bot))) return false
-    if (statusFilter.value.length) {
-      const states: Status[] = [flow.enabled ? 'enabled' : 'disabled', ...(flow.errors ? ['errors' as const] : [])]
-      if (!statusFilter.value.some((status) => states.includes(status as Status))) return false
-    }
+    if (state.value !== 'all' && stateOf(flow) !== state.value) return false
     return true
   })
   const compare: Record<Sort, (a: FlowSummary, b: FlowSummary) => number> = {
@@ -196,6 +227,8 @@ interface Bucket {
   key: string
   label: string
   icon?: Component
+  /** The bot a group is for, shown with its avatar. */
+  bot?: string
   items: FlowSummary[]
 }
 
@@ -212,9 +245,9 @@ const groups = computed<Bucket[]>(() => {
   }]
   if (group.value === 'none') return [...recent, { key: 'all', label: t('flows.allFlows'), icon: AppsOutline, items: shown.value }]
   const buckets = new Map<string, Bucket>()
-  const add = (key: string, label: string, flow: FlowSummary, bucketIcon?: Component) => {
+  const add = (key: string, label: string, flow: FlowSummary, bucketIcon?: Component, bot?: string) => {
     let bucket = buckets.get(key)
-    if (!bucket) buckets.set(key, bucket = { key, label, icon: bucketIcon, items: [] })
+    if (!bucket) buckets.set(key, bucket = { key, label, icon: bucketIcon, bot, items: [] })
     bucket.items.push(flow)
   }
   for (const flow of shown.value) {
@@ -228,7 +261,7 @@ const groups = computed<Bucket[]>(() => {
       add(adapter, adapterLabel(adapter || undefined), flow, ExtensionPuzzleOutline)
     } else if (group.value === 'bot') {
       if (!flow.bots.length) add('', t('flows.runsOnNone'), flow, ChatbubblesOutline)
-      for (const bot of flow.bots) add(bot, botName(bot), flow, ChatbubblesOutline)
+      for (const bot of flow.bots) add(bot, botName(bot), flow, undefined, bot)
     } else {
       const key = recency(flow.updatedAt)
       add(key, t(`flows.recent.${key}`), flow, TimeOutline)
@@ -269,7 +302,15 @@ const columns = computed<DataTableColumns<FlowSummary>>(() => [
     render: (flow) => (flow.bots.length ? flow.bots.map(botName).join('、') : h('span', { class: 'sub' }, t('flows.runsOnNone'))),
   },
   { title: t('flows.colNodes'), key: 'nodes', width: 70, align: 'right' },
-  { title: t('flows.colIssues'), key: 'issues', width: 180, render: (flow) => h('div', { class: 'tag-row' }, tagsOf(flow)) },
+  {
+    title: t('flows.colIssues'),
+    key: 'issues',
+    width: 220,
+    render: (flow) => h('div', { class: 'tag-row' }, [
+      h('span', { class: ['pill', stateClass[stateOf(flow)]] }, [h('span', { class: 'dot' }), t(`flows.state.${stateOf(flow)}`)]),
+      ...tagsOf(flow),
+    ]),
+  },
   { title: t('flows.colUpdated'), key: 'updatedAt', width: 130, render: (flow) => formatTime(flow.updatedAt) },
   {
     title: t('flows.colEnabled'),
@@ -295,6 +336,8 @@ onMounted(() => {
 })
 
 const ownedByPlugin = (flow: FlowSummary) => flow.source?.kind === 'plugin'
+const pluginName = (flow: FlowSummary) => pluginNames.value.get(flow.source?.plugin ?? '') ?? flow.source?.plugin
+const openPlugin = (flow: FlowSummary) => router.push({ path: '/plugins', query: { highlight: flow.source?.plugin } })
 
 /** Where a flow came from, as a tag: a plugin's flows link to that plugin. */
 function sourceTag(flow: FlowSummary) {
@@ -322,14 +365,13 @@ function tagsOf(flow: FlowSummary) {
   const tags = []
   const source = sourceTag(flow)
   if (source) tags.push(source)
-  if (!flow.enabled) tags.push(h(NTag, { size: 'small', bordered: false }, () => t('flows.disabledTag')))
   if (flow.blocked) tags.push(h(NTag, { size: 'small', bordered: false, type: 'warning' }, () => (flow.blocked === 'all' ? t('flows.blockedTag') : t('flows.partlyBlocked'))))
   if (flow.errors) tags.push(h(NTag, { size: 'small', bordered: false, type: 'error' }, () => t('flows.errorCount', flow.errors)))
   else if (flow.warnings) tags.push(h(NTag, { size: 'small', bordered: false, type: 'warning' }, () => t('flows.warningCount', flow.warnings)))
   return tags
 }
 
-const rowProps = (flow: FlowSummary) => ({ class: ['flow-row', { off: !flow.enabled }], onClick: () => router.push(`/flows/${flow.id}`) })
+const rowProps = (flow: FlowSummary) => ({ class: ['flow-row', { off: !flow.enabled }], onClick: () => open(flow) })
 
 // ---- creating, switching and deleting ----
 
@@ -386,6 +428,7 @@ function remove(flow: FlowSummary) {
 }
 </script>
 
+
 <template>
   <div class="page">
     <PageHeader :title="t('nav.flows')" :lead="t('flows.lead')">
@@ -403,7 +446,23 @@ function remove(flow: FlowSummary) {
       <NInput v-model:value="search" clearable :placeholder="t('flows.searchPlaceholder')" class="search">
         <template #prefix><NIcon><SearchOutline /></NIcon></template>
       </NInput>
-      <NPopover trigger="click" placement="bottom-start" :show-arrow="false" class="filter-popover">
+      <div class="chips" role="radiogroup" :aria-label="t('flows.filterLabel')">
+        <button
+          v-for="item in stateChips"
+          :key="item.key"
+          type="button"
+          role="radio"
+          class="chip"
+          :class="{ on: state === item.key }"
+          :aria-checked="state === item.key"
+          @click="state = item.key"
+        >
+          <span v-if="item.dot" class="dot" :class="item.dot" />
+          {{ t(`flows.state.${item.key}`) }}
+          <span class="count">{{ counts[item.key] }}</span>
+        </button>
+      </div>
+      <NPopover trigger="click" placement="bottom-start" :show-arrow="false">
         <template #trigger>
           <NBadge :value="filterCount" :show="filterCount > 0" :offset="[-4, 4]">
             <NButton :type="filterCount ? 'primary' : 'default'" :secondary="!!filterCount">
@@ -413,7 +472,7 @@ function remove(flow: FlowSummary) {
           </NBadge>
         </template>
         <div class="filter-panel">
-          <section v-for="section in filterSections" :key="section.key" class="filter-section">
+          <section v-for="section in filterSections" :key="section.key">
             <div class="filter-title">{{ section.title }}</div>
             <div class="chips">
               <button
@@ -452,36 +511,84 @@ function remove(flow: FlowSummary) {
     </div>
 
     <template v-if="shown.length">
-      <section v-for="bucket in groups" :key="bucket.key" class="bucket">
-        <button v-if="group !== 'none' || groups.length > 1" type="button" class="bucket-head" @click="toggleGroup(bucket.key)">
+      <section v-for="(bucket, index) in groups" :key="bucket.key" class="bucket">
+        <button
+          v-if="group !== 'none' || groups.length > 1"
+          type="button"
+          class="bucket-head"
+          :aria-expanded="!collapsed.has(bucket.key)"
+          @click="toggleGroup(bucket.key)"
+        >
           <span class="caret" :class="{ closed: collapsed.has(bucket.key) }">▾</span>
-          <NIcon v-if="bucket.icon" :size="16" class="bucket-icon"><component :is="bucket.icon" /></NIcon>
+          <span v-if="bucket.bot" class="mini-avatar" :style="{ background: avatarColor(bucket.bot) }" aria-hidden="true">{{ initial(bucket.label) }}</span>
+          <NIcon v-else-if="bucket.icon" :size="16" class="bucket-icon"><component :is="bucket.icon" /></NIcon>
           <strong>{{ bucket.label }}</strong>
-          <span class="sub">{{ bucket.items.length }}</span>
+          <span class="count">{{ bucket.items.length }}</span>
         </button>
         <template v-if="!collapsed.has(bucket.key)">
-          <NGrid v-if="view === 'cards'" cols="1 640:2 1000:3" :x-gap="16" :y-gap="16">
-            <NGridItem v-for="flow in bucket.items" :key="flow.id">
-              <NCard hoverable class="flow-card" :class="{ off: !flow.enabled }" @click="router.push(`/flows/${flow.id}`)">
-                <div class="flow-head">
-                  <div class="flow-avatar"><NIcon size="22"><GitNetworkOutline /></NIcon></div>
-                  <div class="flow-title">
-                    <strong>{{ flow.name }}</strong>
-                    <span class="sub">{{ t('flows.nodeCount', flow.nodes) }} · {{ formatTime(flow.updatedAt) }}</span>
-                  </div>
-                  <NSwitch size="small" :value="flow.enabled" :title="flow.enabled ? t('flows.enabledHint') : t('flows.disabledHint')" @click.stop @update:value="(value: boolean) => setEnabled(flow, value)" />
-                  <IconAction v-if="!ownedByPlugin(flow)" :icon="TrashOutline" :label="t('common.delete')" type="error" @click="remove(flow)" />
+          <div v-if="view === 'cards'" class="flow-grid">
+            <article
+              v-for="flow in bucket.items"
+              :key="flow.id"
+              class="flow"
+              :class="{ off: !flow.enabled }"
+              tabindex="0"
+              :aria-label="flow.name"
+              @click="open(flow)"
+              @keyup.enter.self="open(flow)"
+            >
+              <div class="flow-head">
+                <div class="flow-icon" aria-hidden="true"><NIcon :size="20"><GitNetworkOutline /></NIcon></div>
+                <div class="flow-title">
+                  <strong class="name" :title="flow.name">{{ flow.name }}</strong>
+                  <span class="meta">{{ t('flows.nodeCount', flow.nodes) }} · {{ t('flows.editedAt', { time: formatTime(flow.updatedAt) }) }}</span>
                 </div>
-                <p v-if="flow.description" class="flow-desc">{{ flow.description }}</p>
-                <p v-if="triggerText(flow)" class="flow-triggers">{{ triggerText(flow) }}</p>
-                <div class="flow-tags">
-                  <component :is="tag" v-for="(tag, index) in tagsOf(flow)" :key="index" />
-                  <NTag v-for="bot in flow.bots" :key="bot" size="small" :bordered="false" type="info">{{ botName(bot) }}</NTag>
-                  <span v-if="!flow.bots.length" class="sub">{{ t('flows.runsOnNone') }}</span>
+                <span class="pill" :class="stateClass[stateOf(flow)]"><span class="dot" />{{ t(`flows.state.${stateOf(flow)}`) }}</span>
+              </div>
+
+              <div class="flow-body">
+                <p v-if="flow.description" class="desc" :title="flow.description">{{ flow.description }}</p>
+                <div v-if="issueOf(flow)" class="note" :class="issueOf(flow)!.tone">
+                  <NIcon :size="15"><AlertCircleOutline /></NIcon>
+                  <span>{{ issueOf(flow)!.text }}</span>
                 </div>
-              </NCard>
-            </NGridItem>
-          </NGrid>
+                <div class="triggers">
+                  <span v-for="trigger in activeTriggers(flow).slice(0, TRIGGER_COUNT)" :key="trigger.id" class="trigger" :title="trigger.summary">
+                    <NIcon :size="13"><component :is="kindIcon(kindOf(trigger))" /></NIcon>
+                    <span>{{ trigger.summary || t(`flows.kind.${kindOf(trigger)}`) }}</span>
+                  </span>
+                  <span v-if="activeTriggers(flow).length > TRIGGER_COUNT" class="trigger more">{{ t('flows.moreTriggers', { count: activeTriggers(flow).length - TRIGGER_COUNT }) }}</span>
+                  <span v-if="!activeTriggers(flow).length" class="none">{{ t('flows.kind.none') }}</span>
+                </div>
+              </div>
+
+              <div class="flow-foot" @click.stop>
+                <div class="runs-on" :title="flow.bots.map(botName).join('、')">
+                  <template v-if="flow.bots.length">
+                    <span class="avatars" aria-hidden="true">
+                      <span v-for="bot in flow.bots.slice(0, 3)" :key="bot" class="mini-avatar" :style="{ background: avatarColor(bot) }">{{ initial(botName(bot)) }}</span>
+                    </span>
+                    <span class="bot-names">{{ flow.bots.map(botName).join('、') }}</span>
+                  </template>
+                  <span v-else class="none">{{ t('flows.runsOnNone') }}</span>
+                </div>
+                <button v-if="ownedByPlugin(flow)" type="button" class="source" :title="`${t('flows.sourcePlugin', { name: pluginName(flow) })}\n${t('flows.sourcePluginHint')}`" @click="openPlugin(flow)">
+                  <NIcon :size="14"><ExtensionPuzzleOutline /></NIcon>{{ t('flows.sourcePluginShort') }}
+                </button>
+                <span v-else-if="flow.source?.kind === 'agent'" class="source" :title="t('flows.sourceAgent')">
+                  <NIcon :size="14"><SparklesOutline /></NIcon>{{ t('flows.sourceAgentShort') }}
+                </span>
+                <NSwitch size="small" :value="flow.enabled" :title="flow.enabled ? t('flows.enabledHint') : t('flows.disabledHint')" @update:value="(value: boolean) => setEnabled(flow, value)" />
+                <IconAction v-if="!ownedByPlugin(flow)" :icon="TrashOutline" :label="t('common.delete')" type="error" @click="remove(flow)" />
+              </div>
+            </article>
+
+            <button v-if="!filtered && index === groups.length - 1" type="button" class="add-card" @click="openCreate">
+              <span class="plus"><NIcon :size="20"><AddOutline /></NIcon></span>
+              <strong>{{ t('flows.add') }}</strong>
+              <span class="hint">{{ t('flows.addHint') }}</span>
+            </button>
+          </div>
           <NCard v-else size="small" class="table-card">
             <NDataTable :columns="columns" :data="bucket.items" :row-key="(flow: FlowSummary) => flow.id" :row-props="rowProps" size="small" :bordered="false" :scroll-x="980" />
           </NCard>
@@ -489,21 +596,15 @@ function remove(flow: FlowSummary) {
       </section>
     </template>
 
-    <NCard v-else-if="loaded && flows.length">
-      <NEmpty :description="t('flows.noMatch')">
-        <template #extra>
-          <NButton v-if="filtered" @click="clearFilters">{{ t('flows.clearFilters') }}</NButton>
-        </template>
-      </NEmpty>
-    </NCard>
+    <NEmpty v-else-if="loaded && flows.length" :description="t('flows.noMatch')" class="no-match">
+      <template #extra>
+        <NButton @click="clearFilters">{{ t('flows.clearFilters') }}</NButton>
+      </template>
+    </NEmpty>
 
-    <NCard v-else-if="loaded">
-      <NEmpty :description="t('flows.empty')">
-        <template #extra>
-          <NButton type="primary" @click="openCreate">{{ t('flows.add') }}</NButton>
-        </template>
-      </NEmpty>
-    </NCard>
+    <EmptyState v-else-if="loaded" :icon="GitNetworkOutline" :title="t('flows.emptyTitle')" :hint="t('flows.empty')">
+      <NButton type="primary" @click="openCreate">{{ t('flows.add') }}</NButton>
+    </EmptyState>
 
     <NModal v-model:show="showCreate" preset="card" :title="t('flows.add')" class="create-modal" :style="{ width: 'min(560px, calc(100vw - 32px))' }">
       <NForm label-placement="top" @submit.prevent="create">
@@ -549,69 +650,15 @@ function remove(flow: FlowSummary) {
 }
 
 .search {
-  width: 240px;
+  width: 220px;
 }
 
 .small-select {
-  width: 140px;
+  width: 124px;
 }
 
 .active-filter {
   max-width: 180px;
-}
-
-.filter-panel {
-  width: min(420px, calc(100vw - 48px));
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 4px 2px;
-}
-
-.filter-title {
-  font-size: 12px;
-  opacity: 0.65;
-  margin-bottom: 6px;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(127, 127, 127, 0.3);
-  background: none;
-  color: inherit;
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s;
-}
-
-.chip:hover {
-  background: var(--row-hover);
-}
-
-.chip.on {
-  border-color: var(--primary);
-  background: rgba(32, 128, 240, 0.12);
-  color: var(--primary);
-}
-
-.filter-foot {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.bucket-icon {
-  opacity: 0.7;
 }
 
 .spacer {
@@ -622,8 +669,93 @@ function remove(flow: FlowSummary) {
   vertical-align: -2px;
 }
 
+/* ---- chips: the status row, and the toggles in the filter panel ---- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--s1);
+  color: var(--fg2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  color: var(--fg);
+}
+
+.chip.on {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.chip:focus-visible,
+.flow:focus-visible,
+.add-card:focus-visible,
+.bucket-head:focus-visible,
+.source:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.count {
+  font-size: 12px;
+  color: var(--fg3);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--idle);
+}
+
+.dot.ok { background: var(--ok); }
+.dot.bad { background: var(--bad); }
+
+.filter-panel {
+  width: min(420px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 2px;
+}
+
+.filter-panel .chip {
+  height: 26px;
+  padding: 0 10px;
+  gap: 5px;
+}
+
+.filter-title {
+  font-size: 12px;
+  color: var(--fg3);
+  margin-bottom: 6px;
+}
+
+.filter-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ---- groups ---- */
+
 .bucket + .bucket {
-  margin-top: 20px;
+  margin-top: 24px;
 }
 
 .bucket-head {
@@ -633,20 +765,313 @@ function remove(flow: FlowSummary) {
   margin: 0 0 10px;
   padding: 0;
   border: 0;
+  border-radius: 4px;
   background: none;
-  color: inherit;
+  color: var(--fg);
   font: inherit;
+  font-size: 13.5px;
   cursor: pointer;
 }
 
 .caret {
   display: inline-block;
+  color: var(--fg3);
   transition: transform 0.15s;
 }
 
 .caret.closed {
   transform: rotate(-90deg);
 }
+
+.bucket-icon {
+  color: var(--fg3);
+}
+
+.mini-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex: none;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+/* ---- cards ---- */
+
+.flow-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.flow {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 188px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--s1);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.flow:hover {
+  border-color: var(--primary);
+  box-shadow: var(--shadow);
+}
+
+.flow.off {
+  background: color-mix(in srgb, var(--s1) 70%, var(--bg));
+}
+
+.flow-head {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 16px 10px;
+}
+
+.flow-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.off .flow-icon {
+  background: var(--s2);
+  color: var(--fg3);
+}
+
+.flow-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.name,
+.meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name {
+  font-size: 15px;
+}
+
+.meta {
+  font-size: 12.5px;
+  color: var(--fg3);
+}
+
+.pill,
+.table-card :deep(.pill) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.pill .dot,
+.table-card :deep(.pill .dot) {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  background: currentColor;
+}
+
+.pill.ok,
+.table-card :deep(.pill.ok) { color: var(--ok); background: var(--ok-soft); }
+.pill.bad,
+.table-card :deep(.pill.bad) { color: var(--bad); background: var(--bad-soft); }
+.pill.idle,
+.table-card :deep(.pill.idle) { color: var(--fg2); background: var(--s2); }
+
+.flow-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 16px 12px;
+}
+
+.desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+}
+
+.note.bad { color: var(--bad); }
+.note.warn { color: var(--warn); }
+
+/* Triggers sit at the bottom of the body, one line, so cards in a row line up. */
+.triggers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 24px;
+  margin-top: auto;
+  overflow: hidden;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--s2);
+  color: var(--fg2);
+  font-size: 12px;
+}
+
+.trigger > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trigger.more {
+  color: var(--fg3);
+}
+
+.none {
+  font-size: 12.5px;
+  color: var(--fg3);
+}
+
+.flow-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  height: 44px;
+  padding: 0 10px 0 16px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+  color: var(--fg2);
+  cursor: default;
+}
+
+.runs-on {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.avatars {
+  display: flex;
+  flex: none;
+}
+
+/* Overlapping avatars, each ringed with the card colour. */
+.avatars .mini-avatar {
+  box-shadow: 0 0 0 2px var(--s1);
+}
+
+.avatars .mini-avatar + .mini-avatar {
+  margin-left: -6px;
+}
+
+.bot-names {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg3);
+  font: inherit;
+  font-size: 12px;
+}
+
+button.source {
+  cursor: pointer;
+}
+
+button.source:hover {
+  color: var(--primary);
+}
+
+.add-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 188px;
+  border: 1.5px dashed var(--line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--fg2);
+  font: inherit;
+  cursor: pointer;
+}
+
+.add-card:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.plus {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 6px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.add-card .hint {
+  font-size: 12.5px;
+  color: var(--fg3);
+}
+
+.no-match {
+  padding: 48px 0;
+}
+
+/* ---- list ---- */
 
 .table-card :deep(.flow-row) {
   cursor: pointer;
@@ -689,77 +1114,13 @@ function remove(flow: FlowSummary) {
   cursor: pointer;
 }
 
-.flow-triggers {
-  margin: 8px 0 0;
-  font-size: 12px;
-  opacity: 0.7;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.flow-card.off {
-  opacity: 0.6;
-}
-
-.flow-card {
-  cursor: pointer;
-}
-
-.flow-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.flow-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(32, 128, 240, 0.12);
-  color: var(--primary);
-  flex: none;
-}
-
-.flow-title {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.flow-title strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .sub,
 .table-card :deep(.sub) {
   font-size: 12px;
-  opacity: 0.6;
+  color: var(--fg3);
 }
 
-.flow-desc {
-  margin: 12px 0 0;
-  opacity: 0.75;
-  font-size: 13px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.flow-tags {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: 12px;
-}
+/* ---- create ---- */
 
 .templates {
   display: grid;
@@ -777,14 +1138,14 @@ function remove(flow: FlowSummary) {
   color: inherit;
   padding: 10px 12px;
   border-radius: 8px;
-  border: 1px solid rgba(127, 127, 127, 0.3);
+  border: 1px solid var(--line);
   background: transparent;
   cursor: pointer;
 }
 
 .template.active {
-  border-color: #5b6bc0;
-  box-shadow: 0 0 0 2px rgba(91, 107, 192, 0.3);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
 }
 
 .modal-actions {

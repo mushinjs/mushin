@@ -9,6 +9,7 @@ import BotEditor from '../components/BotEditor.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
 import BotActivity from '../components/runs/BotActivity.vue'
+import { avatarColor, initial } from '../botAvatar'
 import { useDataStore } from '../stores/data'
 import type { Bot } from '../types'
 
@@ -89,17 +90,6 @@ const shown = computed(() => {
   })
 })
 
-// ---- avatar ----
-// Bots have no picture of their own yet: a coloured initial, the same colour every time for a bot.
-
-const avatarColors = ['#5B6CE0', '#2F9E77', '#C46A2B', '#B84C8C', '#3B8FC4', '#8A63D2', '#B5962A', '#D0574F']
-function avatarColor(bot: Bot) {
-  let hash = 0
-  for (const char of bot.id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
-  return avatarColors[hash % avatarColors.length]
-}
-const initial = (bot: Bot) => [...bot.name.trim()][0]?.toUpperCase() ?? '?'
-
 const account = (bot: Bot) => (bot.selfName ? `${bot.selfName} · ${bot.selfId}` : bot.selfId ?? t('bots.notLoggedIn'))
 const enabledPlugins = (bot: Bot) => bot.plugins.filter((plugin) => plugin.enabled).length
 const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
@@ -148,8 +138,8 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
         @keyup.enter.self="open(bot)"
       >
         <div class="bot-head">
-          <div class="avatar" :style="{ background: avatarColor(bot) }" aria-hidden="true">
-            {{ initial(bot) }}
+          <div class="avatar" :style="{ background: avatarColor(bot.id) }" aria-hidden="true">
+            {{ initial(bot.name) }}
             <span class="dot" :class="stateClass[stateOf(bot)]" />
           </div>
           <div class="bot-title">
