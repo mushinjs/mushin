@@ -93,20 +93,6 @@ function overridesFor(c: typeof palettes.light): GlobalThemeOverrides {
     },
     // Inputs are filled surfaces; the border shows on hover and focus only.
     Input: { border: '1px solid transparent', borderHover: `1px solid ${c.line}` },
-    Menu: {
-      itemTextColor: c.fg2,
-      itemIconColor: c.fg2,
-      itemTextColorActive: c.primary,
-      itemIconColorActive: c.primary,
-      itemTextColorActiveHover: c.primary,
-      itemIconColorActiveHover: c.primary,
-      itemColorActive: `${c.primary}1F`,
-      itemColorActiveHover: `${c.primary}29`,
-      itemColorHover: c.s2,
-      groupTextColor: c.fg3,
-      itemHeight: '38px',
-      borderRadius: '8px',
-    },
   }
 }
 

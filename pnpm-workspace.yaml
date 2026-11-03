@@ -32,6 +32,7 @@ catalog:
   '@vitejs/plugin-vue': ^6.0.10
   vue-tsc: ^3.3.13
   naive-ui: ^2.45.3
+  gsap: ^3.15.0
   pinia: ^4.1.0
   vue-router: ^5.4.0
   vue-i18n: ^11.4.14

@@ -21,6 +21,7 @@
     "@vue-flow/core": "catalog:",
     "@vue-flow/minimap": "catalog:",
     "echarts": "catalog:",
+    "gsap": "catalog:",
     "highlight.js": "catalog:",
     "markdown-it": "catalog:",
     "mermaid": "catalog:",

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import {
-  ChatbubblesOutline, ChevronBackOutline, ChevronForwardOutline, ServerOutline, DocumentTextOutline, GridOutline, ExtensionPuzzleOutline, GitNetworkOutline, KeyOutline,
+  ChatbubblesOutline, ServerOutline, DocumentTextOutline, GridOutline, ExtensionPuzzleOutline, GitNetworkOutline, KeyOutline,
   LanguageOutline, LibraryOutline, LogOutOutline, MoonOutline, PersonCircleOutline, PersonOutline, RocketOutline, SettingsOutline, SparklesOutline, SunnyOutline,
 } from '@vicons/ionicons5'
 import {
-  type DropdownOption, type MenuOption, NButton, NDrawer, NDropdown, NIcon, NLayout, NLayoutHeader, NLayoutSider, NMenu, NTooltip,
+  type DropdownOption, NButton, NDrawer, NDropdown, NIcon, NLayout, NLayoutHeader,
 } from 'naive-ui'
 import { type Component, computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -18,6 +18,8 @@ import { useDataStore } from '../stores/data'
 import { useRunsStore } from '../stores/runs'
 import { themeMode, useTheme } from '../theme'
 import AgentDock from './AgentDock.vue'
+import type { NavGroup, NavItem } from './nav'
+import SideNav from './SideNav.vue'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -33,7 +35,22 @@ const onResize = () => (width.value = window.innerWidth)
 onMounted(() => window.addEventListener('resize', onResize))
 onBeforeUnmount(() => window.removeEventListener('resize', onResize))
 const narrow = computed(() => width.value < 1100)
-const collapsed = ref(window.innerWidth < 800)
+// The sidebar remembers whether it was collapsed; on a narrow window it always starts collapsed.
+const SIDEBAR_KEY = 'mushin.sidebar'
+function readCollapsed() {
+  if (window.innerWidth < 800) return true
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === 'collapsed'
+  } catch {
+    return false
+  }
+}
+const collapsed = ref(readCollapsed())
+watch(collapsed, (value) => {
+  try {
+    localStorage.setItem(SIDEBAR_KEY, value ? 'collapsed' : 'expanded')
+  } catch {}
+})
 if (window.innerWidth < 1100) agent.open = false
 
 data.bind()
@@ -56,17 +73,14 @@ watch(() => data.loadedProviders, (loaded) => {
 }, { immediate: true })
 
 const icon = (component: Component) => () => h(NIcon, null, { default: () => h(component) })
-const link = (to: string, label: string) => () => h(RouterLink, { to }, { default: () => label })
 
 // The menu is grouped by what each page is for: building bots, the resources they use, and the system.
-// Pages that Settings → Features can hide are filtered out by key.
-interface Page { key: string, label: string, icon: Component }
-const groups = computed<{ key: string, label?: string, pages: Page[] }[]>(() => [
-  { key: 'home', pages: [{ key: '/overview', label: t('nav.overview'), icon: GridOutline }] },
+const allGroups = computed<NavGroup[]>(() => [
+  { key: 'home', items: [{ key: '/overview', label: t('nav.overview'), icon: GridOutline }] },
   {
     key: 'build',
     label: t('nav.groupBuild'),
-    pages: [
+    items: [
       { key: '/bots', label: t('nav.bots'), icon: ChatbubblesOutline },
       { key: '/flows', label: t('nav.flows'), icon: GitNetworkOutline },
       { key: '/personas', label: t('nav.personas'), icon: PersonCircleOutline },
@@ -76,7 +90,7 @@ const groups = computed<{ key: string, label?: string, pages: Page[] }[]>(() => 
   {
     key: 'resources',
     label: t('nav.groupResources'),
-    pages: [
+    items: [
       { key: '/providers', label: t('nav.providers'), icon: KeyOutline },
       { key: '/plugins', label: t('nav.plugins'), icon: ExtensionPuzzleOutline },
     ],
@@ -84,7 +98,7 @@ const groups = computed<{ key: string, label?: string, pages: Page[] }[]>(() => 
   {
     key: 'system',
     label: t('nav.groupSystem'),
-    pages: [
+    items: [
       { key: '/logs', label: t('nav.logs'), icon: DocumentTextOutline },
       { key: '/database', label: t('nav.database'), icon: ServerOutline },
       { key: '/settings', label: t('nav.settings'), icon: SettingsOutline },
@@ -92,25 +106,20 @@ const groups = computed<{ key: string, label?: string, pages: Page[] }[]>(() => 
   },
 ])
 
-const visible = (page: Page) => page.key === '/settings' || !prefs.hiddenPages.includes(page.key.slice(1))
-const item = (page: Page): MenuOption => ({ key: page.key, label: link(page.key, page.label), icon: icon(page.icon) })
-
-const menu = computed<MenuOption[]>(() => {
-  const options: MenuOption[] = !data.ready ? [{ key: '/setup', label: link('/setup', t('nav.setup')), icon: icon(RocketOutline) }] : []
-  for (const group of groups.value) {
-    const pages = group.pages.filter(visible)
-    if (!pages.length) continue
-    // Collapsed, the group titles have no room; the items stay in the same order.
-    if (!group.label || collapsed.value) options.push(...pages.map(item))
-    else options.push({ type: 'group', key: group.key, label: group.label, children: pages.map(item) })
-  }
-  return options
+// Pages that Settings → Features can hide are left out; quick setup shows until a provider exists.
+const visible = (item: NavItem) => item.key === '/settings' || !prefs.hiddenPages.includes(item.key.slice(1))
+const navGroups = computed<NavGroup[]>(() => {
+  const groups = allGroups.value
+    .map((group) => ({ ...group, items: group.items.filter(visible) }))
+    .filter((group) => group.items.length)
+  if (!data.ready) groups[0] = { ...groups[0], items: [{ key: '/setup', label: t('nav.setup'), icon: RocketOutline }, ...groups[0].items] }
+  return groups
 })
 
 // The top bar names where you are: the page, and on a bot's pages the bot.
 const crumbs = computed(() => {
   const key = '/' + (route.path.split('/')[1] ?? '')
-  const page = groups.value.flatMap((group) => group.pages).find((entry) => entry.key === key)
+  const page = allGroups.value.flatMap((group) => group.items).find((entry) => entry.key === key)
   const label = page?.label ?? (key === '/setup' ? t('nav.setup') : '')
   const list: { label: string, to?: string }[] = []
   if (!label) return list
@@ -125,7 +134,6 @@ const crumbs = computed(() => {
 })
 
 const activeKey = computed(() => '/' + (route.path.split('/')[1] ?? ''))
-const logoFailed = ref(false)
 
 // Language, theme and signing out live in one menu behind the account button.
 const accountMenu = computed<DropdownOption[]>(() => [
@@ -147,36 +155,7 @@ function onAccount(key: string) {
 
 <template>
   <NLayout has-sider position="absolute">
-    <NLayoutSider
-      bordered
-      collapse-mode="width"
-      :collapsed-width="64"
-      :width="224"
-      :collapsed="collapsed"
-      content-style="display: flex; flex-direction: column; height: 100%;"
-    >
-      <div class="brand" :class="{ collapsed }">
-        <img v-if="!logoFailed" src="/logo.png" alt="" class="brand-logo" @error="logoFailed = true">
-        <span v-if="!collapsed" class="brand-name">Mushin.js <span class="brand-kanji">無心</span></span>
-      </div>
-      <nav class="nav" :aria-label="t('layout.mainNav')">
-        <NMenu :value="activeKey" :options="menu" :collapsed="collapsed" :collapsed-width="64" :icon-size="18" :root-indent="18" :indent="0" />
-      </nav>
-      <div class="side-foot" :class="{ collapsed }">
-        <span v-if="!collapsed" class="link-state" :class="{ off: !connection.connected }">
-          <span class="dot" />
-          {{ connection.connected ? t('layout.connected') : t('layout.reconnecting') }}
-        </span>
-        <NTooltip :disabled="!collapsed" placement="right">
-          <template #trigger>
-            <NButton quaternary circle size="small" :aria-label="collapsed ? t('layout.expand') : t('layout.collapse')" @click="collapsed = !collapsed">
-              <template #icon><NIcon><ChevronForwardOutline v-if="collapsed" /><ChevronBackOutline v-else /></NIcon></template>
-            </NButton>
-          </template>
-          {{ t('layout.expand') }}
-        </NTooltip>
-      </div>
-    </NLayoutSider>
+    <SideNav v-model:collapsed="collapsed" :groups="navGroups" :active="activeKey" />
 
     <NLayout content-style="display: flex; flex-direction: column; height: 100%;">
       <NLayoutHeader bordered class="topbar">
@@ -216,100 +195,6 @@ function onAccount(key: string) {
 </template>
 
 <style scoped>
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 56px;
-  flex: none;
-  padding: 0 18px;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.brand.collapsed {
-  justify-content: center;
-  padding: 0;
-}
-
-.brand-logo {
-  width: 28px;
-  height: 28px;
-  flex: none;
-}
-
-.brand-name {
-  font-weight: 650;
-  font-size: 15px;
-}
-
-.brand-kanji {
-  font-weight: 400;
-  color: var(--fg3);
-  margin-left: 2px;
-}
-
-.nav {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding-bottom: 8px;
-}
-
-/* Group titles are small and quiet, so the items carry the menu. */
-.nav :deep(.n-menu-item-group-title) {
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  padding-top: 10px;
-}
-
-.nav :deep(.n-menu-item-content--selected .n-menu-item-content-header) {
-  font-weight: 600;
-}
-
-.nav :deep(a) {
-  color: inherit;
-  text-decoration: none;
-}
-
-.side-foot {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 48px;
-  padding: 0 10px 0 18px;
-  border-top: 1px solid var(--line);
-  font-size: 12px;
-  color: var(--fg3);
-}
-
-.side-foot.collapsed {
-  justify-content: center;
-  padding: 0;
-}
-
-.link-state {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-.link-state .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: none;
-  background: var(--ok);
-}
-
-.link-state.off .dot {
-  background: var(--bad);
-}
-
 .topbar {
   height: 56px;
   flex: none;
