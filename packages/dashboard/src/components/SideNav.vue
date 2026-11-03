@@ -52,16 +52,17 @@ function apply(next: boolean, animate: boolean) {
       // Closing: the words leave first, then the panel narrows under the icons.
       timeline
         .to(labels, { autoAlpha: 0, x: -6, duration: 0.16, ease: 'power1.in', stagger: 0.008 })
-        .to(el, { width, duration: 0.36, ease: 'power3.inOut' }, 0.06)
-        .fromTo(dividers, { autoAlpha: 0, scaleX: 0.3 }, { autoAlpha: 1, scaleX: 1, duration: 0.24, ease: 'power2.out' }, 0.2)
-        .to(chevron, { rotation: 180, duration: 0.36, ease: 'power3.inOut' }, 0.06)
+        .to(el, { width, duration: 0.42, ease: 'power2.inOut' }, 0.06)
+        .fromTo(dividers, { autoAlpha: 0, scaleX: 0.3 }, { autoAlpha: 1, scaleX: 1, duration: 0.24, ease: 'power2.out' }, 0.24)
+        .to(chevron, { rotation: 180, duration: 0.42, ease: 'power2.inOut' }, 0.06)
     } else {
       // Opening: the panel widens, and the words follow it in.
       timeline
         .to(dividers, { autoAlpha: 0, duration: 0.12, ease: 'power1.in' })
-        .to(el, { width, duration: 0.38, ease: 'power3.inOut' }, 0)
-        .fromTo(labels, { autoAlpha: 0, x: -8 }, { autoAlpha: 1, x: 0, duration: 0.26, ease: 'power2.out', stagger: 0.012 }, 0.16)
-        .to(chevron, { rotation: 0, duration: 0.38, ease: 'power3.inOut' }, 0)
+        // A gentle ease over a longer span: the panel should not outrun the words that follow it.
+        .to(el, { width, duration: 0.56, ease: 'power2.inOut' }, 0)
+        .fromTo(labels, { autoAlpha: 0, x: -8 }, { autoAlpha: 1, x: 0, duration: 0.3, ease: 'power2.out', stagger: 0.014 }, 0.24)
+        .to(chevron, { rotation: 0, duration: 0.56, ease: 'power2.inOut' }, 0)
     }
   })
 }
