@@ -115,7 +115,7 @@ export class Personas extends Service {
     this.logger.info('loaded %d persona(s)', this.items.size)
     yield* this.defineActions()
     yield this.home.bots.defineCommand(
-      { name: 'persona', description: '查看或切换人格', usage: '[名称|reset]' },
+      { name: 'persona', description: '查看或切换人格', args: [{ name: '名称', type: 'text', optional: true, description: '人格名，或 reset 恢复默认' }] },
       (session) => this.command(session),
       // Only on bots that have personas to show.
       { bots: (botId) => this.botSettings(botId).command.enabled && this.available(botId).length > 0 },

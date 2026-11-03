@@ -913,7 +913,7 @@ export class Knowledge extends Service {
     yield this.home.on('knowledge/changed', () => void refresh())
     const only = { bots: (botId: string) => hasBases.has(botId) }
 
-    yield bots.defineCommand({ name: '记住', aliases: ['remember'], description: '把一句话记进知识库', usage: '<内容...>' }, async (session) => {
+    yield bots.defineCommand({ name: '记住', aliases: ['remember'], description: '把一句话记进知识库', args: [{ name: '内容', type: 'text', rest: true }] }, async (session) => {
       const base = await this.allowed(session)
       if (!base) return
       const text = session.command?.rest.trim() ?? ''
@@ -935,7 +935,7 @@ export class Knowledge extends Service {
       await session.send(`已收录到知识库「${base.name}」`)
     }, only)
 
-    yield bots.defineCommand({ name: '忘记', aliases: ['forget'], description: '从知识库删除记住的内容', usage: '<内容...>' }, async (session) => {
+    yield bots.defineCommand({ name: '忘记', aliases: ['forget'], description: '从知识库删除记住的内容', args: [{ name: '内容', type: 'text', rest: true }] }, async (session) => {
       const base = await this.allowed(session)
       if (!base) return
       const text = session.command?.rest.trim() ?? ''

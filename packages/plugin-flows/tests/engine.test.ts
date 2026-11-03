@@ -383,7 +383,7 @@ describe('layout', () => {
 
 describe('command trigger', () => {
   const scoreFlow = () => flow([
-    { id: 'score', type: 'trigger.command', config: { name: 'score', aliases: ['分数'], usage: '<分数:number> [备注]' } },
+    { id: 'score', type: 'trigger.command', config: { name: 'score', aliases: ['分数'], args: [{ name: '分数', type: 'number' }, { name: '备注', type: 'text', optional: true }] } },
     { id: 'say', type: 'action.reply', config: { text: '{{score.分数}} / {{score.备注}} / {{score.command}}' } },
   ], [['score', 'exec:next', 'say', 'exec']])
 
@@ -403,8 +403,27 @@ describe('command trigger', () => {
   it('replies with the usage when the arguments do not fit, and does not run', async () => {
     const result = await run(scoreFlow(), '/score abc')
     expect(result).toMatchObject({ matched: true, consumed: false })
-    expect(replyText(result.sent)).toEqual(['用法：/score <分数:number> [备注]'])
+    expect(replyText(result.sent)).toEqual(['用法：/score <分数:数字> [备注]'])
     expect(result.trace.steps.map((step) => step.nodeId)).toEqual(['score'])
+  })
+
+  it('matches only its own prefixes when it has some', async () => {
+    const doc = flow([
+      { id: 'c', type: 'trigger.command', config: { name: 'roll', prefixes: ['#'] } },
+      { id: 'say', type: 'action.reply', config: { text: 'rolled' } },
+    ], [['c', 'exec:next', 'say', 'exec']])
+    expect(replyText((await run(doc, '#roll')).sent)).toEqual(['rolled'])
+    expect((await run(doc, '/roll')).matched).toBe(false)
+  })
+
+  it('suggests test messages that run it', () => {
+    const type = types.get('trigger.command')!
+    const config = type.config!.parse({ name: 'score', permission: 'admin', args: [{ name: 'n', type: 'number' }] })
+    expect(type.testOptions!(config).map((option) => option.input)).toEqual([
+      { text: '/score 1', role: 'admin' },
+      { text: '/score', role: 'admin' },
+      { text: '/score 1' },
+    ])
   })
 
   it('uses the prefix the bot parsed, and keeps admin-only commands to admins', async () => {

@@ -1,5 +1,6 @@
 import { randomId, z } from '@mushin/core'
-import { parseSignature } from '@mushin/plugin-bots'
+import type { CommandArg } from '@mushin/plugin-bots'
+import { sampleArg } from './nodes'
 import type { CompiledFlow } from './graph'
 import type { LlmLike, RunTrace, Variables, VariableScope } from './types'
 
@@ -261,15 +262,15 @@ export function candidates(flow: CompiledFlow, prefix = '/'): Candidate[] {
         break
       }
       case 'trigger.command': {
-        const name = `${prefix}${String(config.name).replace(/^[/#!！]+/, '')}`
-        const args = parseSignature(config.usage)
-        const fill = (arg: { type: string }, value?: string) => value ?? (arg.type === 'number' ? '1' : 'test')
+        const name = `${(config.prefixes as string[] | undefined)?.find(Boolean) ?? prefix}${String(config.name).replace(/^[/#!！]+/, '')}`
+        const args = (config.args ?? []) as CommandArg[]
+        const fill = (arg: CommandArg, value?: string) => value ?? sampleArg(arg)
         const required = args.filter((arg) => !arg.optional)
         add({ text: [name, ...required.map((arg) => fill(arg))].join(' ') })
         if (required.length) add({ text: name }, ['no arguments'])
         const first = args[0]
         if (first) {
-          for (const value of first.type === 'number' ? numbers : [...words, ...numbers]) {
+          for (const value of first.type === 'number' ? numbers : first.type === 'text' ? [...words, ...numbers] : []) {
             add({ text: [name, value, ...args.slice(1).filter((arg) => !arg.optional).map((arg) => fill(arg))].join(' ') })
           }
         }
@@ -340,3 +341,4 @@ export function snapshot(flow: CompiledFlow, trace: RunTrace): Assertion[] {
 export function newCase(input: TestCaseInput, now = Date.now()): TestCase {
   return { ...input, id: randomId(6), createdAt: now, updatedAt: now }
 }
+

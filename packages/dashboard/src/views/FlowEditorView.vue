@@ -31,7 +31,7 @@ const {
   isValidConnection, onEdgeUpdateStart, onEdgeUpdate, onEdgeUpdateEnd, onConnect, onConnectStart, onConnectEnd,
   onNodesInitialized, onNodeClick, onNodeDragStop, toggleGroup, openMenu, onNodeContextMenu,
   menu, menuOptions, onMenuSelect, onMenuClickOutside, picker, pickerTypes, pickerTitle, onPick,
-  test, liveRuns, schedules, runTest, clearRuns, showTrace, selectFromLogs, nodeOptions, execOptions, saveBeforeTests, showCaseTrace,
+  test, quickTests, liveRuns, schedules, runTest, clearRuns, showTrace, selectFromLogs, nodeOptions, execOptions, saveBeforeTests, showCaseTrace,
 } = createFlowEditor()
 </script>
 
@@ -124,6 +124,7 @@ const {
           v-model:tab="logsTab"
           v-model:current="logsRun"
           :live="liveRuns"
+          :quick="quickTests"
           :tests="testStatus"
           :runs="runs"
           :schedules="schedules"

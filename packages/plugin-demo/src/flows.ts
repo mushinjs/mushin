@@ -37,7 +37,7 @@ export const demoFlows: Record<DemoFlowKey, DemoFlow> = {
     nodes: [
       command('ping', 'ping', '回复 pong'),
       reply('pong', '回复 pong', 'pong！{{sys.user}} 🏓'),
-      command('echo', 'echo', '复读你说的话', { usage: '<内容>' }),
+      command('echo', 'echo', '复读你说的话', { args: [{ name: '内容', type: 'text' }] }),
       reply('say', '复读参数', '{{echo.内容}}'),
     ],
     edges: [then('ping', 'next', 'pong'), then('echo', 'next', 'say')],
@@ -60,7 +60,7 @@ export const demoFlows: Record<DemoFlowKey, DemoFlow> = {
     name: '演示：条件分支',
     description: '/score <分数>：参数声明为数字，写错时机器人回复用法；再用「条件判断」比较分数，大于 59 走 true 分支，否则走 false 分支。',
     nodes: [
-      command('score', 'score', '判断分数是否及格', { usage: '<分数:number>' }),
+      command('score', 'score', '判断分数是否及格', { args: [{ name: '分数', type: 'number' }] }),
       { id: 'check', type: 'logic.compare', label: '及格了吗', config: { op: 'greater', value: '59' }, inputs: { a: '{{score.分数}}' } },
       reply('pass', '及格', '{{score.分数}} 分，及格了 🎉'),
       reply('fail', '不及格', '{{score.分数}} 分，还没及格，继续加油 💪'),
@@ -104,7 +104,7 @@ export const demoFlows: Record<DemoFlowKey, DemoFlow> = {
     name: '演示：大模型回复',
     description: '/ai <问题>：把问题交给大模型，再引用原消息回复它的回答。没有真实模型时可以用演示提供商。',
     nodes: [
-      command('ask', 'ai', '问大模型一个问题', { usage: '<问题>' }),
+      command('ask', 'ai', '问大模型一个问题', { args: [{ name: '问题', type: 'text' }] }),
       {
         id: 'chat',
         type: 'ai.chat',
@@ -120,7 +120,7 @@ export const demoFlows: Record<DemoFlowKey, DemoFlow> = {
     name: '演示：意图分类',
     description: '/客服 <问题>：大模型判断是「退款」还是「发货」，各回一段固定话术；都不是时交给大模型自由回答。',
     nodes: [
-      command('support', '客服', '咨询退款或发货', { aliases: ['support'], usage: '<问题>' }),
+      command('support', '客服', '咨询退款或发货', { aliases: ['support'], args: [{ name: '问题', type: 'text' }] }),
       {
         id: 'intent',
         type: 'ai.classify',

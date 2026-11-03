@@ -70,7 +70,7 @@ describe('demo plugin', () => {
     const reply = await waitFor(async () => (await outgoing())[0])
     expect(reply).toContain('我是演示机器人，可以试试这些指令：')
     expect(reply).toContain('/quiz（/答题） —— 答一道题（30 秒内回复）')
-    expect(reply).toContain('/score <分数:number> —— 判断分数是否及格')
+    expect(reply).toContain('/score <分数:数字> —— 判断分数是否及格')
   })
 
   it('lists the demo commands with their flows', async () => {
@@ -86,7 +86,7 @@ describe('demo plugin', () => {
     expect(await say('大家早上好')).toBe('Demo user，早上好！☀️ 今天也要元气满满。')
     expect(await say('/score 85')).toBe('85 分，及格了 🎉')
     expect(await say('/score 30')).toBe('30 分，还没及格，继续加油 💪')
-    expect(await say('/score abc')).toBe('用法：/score <分数:number>')
+    expect(await say('/score abc')).toBe('用法：/score <分数:数字>')
     expect(await say('/签到', { userId: '10009', userName: 'Eve' })).toBe('签到成功！Eve 现在有 10 积分。')
   })
 

@@ -6,7 +6,7 @@ import {
 import type {} from '@mushin/plugin-storage'
 import { MessageArchive } from './archive'
 import { Bot, type BotHooks, type Session } from './bot'
-import { type CommandDef, type CommandEntry, commandConflicts, type CommandSettings, commandMatches, helpText, requiredRole } from './commands'
+import { type CommandArg, type CommandDef, type CommandEntry, commandConflicts, type CommandSettings, commandMatches, commandUsage, DEFAULT_PREFIXES, helpText, parseArgs, requiredRole, splitCommand } from './commands'
 import { type AdapterType, type BotPluginEntry, type BotRecord, type BotStatus, type PermissionProvider, roleAtLeast } from './types'
 
 declare module '@mushin/core' {
@@ -783,6 +783,39 @@ export class BotManager extends Service {
     return [...seen.values()].sort((a, b) => b.lastAt - a.lastAt)
   }
 
+  /** How a command reads a message; see the `bots.tryCommand` action. */
+  tryCommand(input: { name: string; aliases?: string[]; prefixes?: string[]; args: CommandArg[]; text: string; bot?: string }) {
+    const own = input.prefixes?.filter(Boolean) ?? []
+    const record = input.bot ? this.records.find((item) => item.id === input.bot) : undefined
+    const prefixes = own.length ? own : record?.commands?.prefixes?.filter(Boolean).length ? record.commands.prefixes!.filter(Boolean) : DEFAULT_PREFIXES
+    const def = { name: input.name, args: input.args, prefixes }
+    const usage = commandUsage(def)
+    const parsed = splitCommand(input.text, prefixes)
+    if (!parsed) return { matched: false as const, reason: 'prefix' as const, prefixes, usage }
+    if (!commandMatches({ name: input.name, aliases: input.aliases }, parsed.name)) return { matched: false as const, reason: 'name' as const, prefixes, usage }
+    return { matched: true as const, prefix: parsed.prefix, rest: parsed.rest, usage, ...parseArgs(input.args, parsed.rest) }
+  }
+
+  /**
+   * People or groups the bots have seen recently, newest first, as `{ value, label, group }`
+   * choices: the label is `name (id)`, the group the bot's name. For lists such as a permission
+   * node's allow and block lists.
+   */
+  async seen(kind: 'user' | 'group') {
+    const found = new Map<string, { value: string; label: string; group: string; at: number }>()
+    for (const record of this.records) {
+      for (const message of await this.messages(record.id, { limit: BUFFER_SIZE }).catch(() => [])) {
+        const id = kind === 'user' ? (message.direction === 'in' ? message.user.id : '') : message.channel.type === 'group' ? message.channel.id : ''
+        if (!id) continue
+        const name = kind === 'user' ? message.user.name : message.channel.name
+        const previous = found.get(id)
+        const label = name || (previous?.label.endsWith(`(${id})`) ? previous.label : '')
+        found.set(id, { value: id, label: label && !label.endsWith(`(${id})`) ? `${label} (${id})` : label || id, group: record.name, at: message.timestamp })
+      }
+    }
+    return [...found.values()].sort((a, b) => b.at - a.at).map(({ at: _, ...choice }) => choice)
+  }
+
   async sendManual(id: string, channel: ChannelInfo, text: string) {
     const bot = this.bot(id)
     if (!bot) throw new MushinError('unavailable', 'The bot is not running')
@@ -951,6 +984,44 @@ export class BotManager extends Service {
       risk: 'read',
       input: idInput,
       handler: ({ id }) => this.channels(id),
+    })
+
+    yield actions.define({
+      name: 'bots.tryCommand',
+      description: 'Check how a message would be read by a command (name, prefixes, arguments) without running anything: whether it matches and the value of each argument, or what is wrong.',
+      risk: 'read',
+      input: z.object({
+        name: z.string(),
+        aliases: z.array(z.string()).optional(),
+        prefixes: z.array(z.string()).optional().describe('The command\'s own prefixes; empty uses the bot\'s'),
+        args: z.array(z.object({
+          name: z.string(),
+          type: z.enum(['text', 'number', 'boolean', 'user', 'choice']),
+          optional: z.boolean().optional(),
+          rest: z.boolean().optional(),
+          default: z.union([z.string(), z.number(), z.boolean()]).optional(),
+          choices: z.array(z.string()).optional(),
+        })).default([]),
+        text: z.string(),
+        bot: z.string().optional().describe('Bot whose prefixes apply when the command has none of its own'),
+      }),
+      handler: (input) => this.tryCommand(input),
+    })
+
+    yield actions.define({
+      name: 'bots.userChoices',
+      description: 'People the bots have seen recently, as { value: user id, label, group: bot } choices.',
+      risk: 'read',
+      input: z.object({}),
+      handler: () => this.seen('user'),
+    })
+
+    yield actions.define({
+      name: 'bots.groupChoices',
+      description: 'Groups the bots have seen recently, as { value: group id, label, group: bot } choices.',
+      risk: 'read',
+      input: z.object({}),
+      handler: () => this.seen('group'),
     })
 
     yield actions.define({

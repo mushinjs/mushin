@@ -3,7 +3,7 @@ import {
   Service, toSegments,
 } from '@mushin/core'
 import {
-  type CommandDef, type CommandEntry, commandMatches, DEFAULT_PREFIXES, parseArgs, type ParsedCommand, parseSignature, requiredRole, splitCommand,
+  type ArgValue, type CommandDef, type CommandEntry, commandMatches, DEFAULT_PREFIXES, parseArgs, type ParsedCommand, requiredRole, splitCommand,
   usageReply,
 } from './commands'
 import {
@@ -42,7 +42,7 @@ export interface BotHooks {
   appCommand?(bot: Bot, entry: CommandEntry): ((session: Session) => Promise<unknown> | unknown) | undefined
 }
 
-export type CommandHandler = (session: Session, args: Record<string, string | number>, command: ParsedCommand) => Promise<unknown> | unknown
+export type CommandHandler = (session: Session, args: Record<string, ArgValue>, command: ParsedCommand) => Promise<unknown> | unknown
 
 /** Replies from built-in commands such as `/help` are attributed to the bots plugin. */
 const BUILTIN_PLUGIN = 'bots'
@@ -252,11 +252,20 @@ export class Bot extends Service {
     return prefixes?.length ? prefixes : DEFAULT_PREFIXES
   }
 
-  /** Splits text into a command by this bot's prefixes, with the registered command it names. */
+  /**
+   * Splits text into a command, with the registered command it names. Commands with prefixes of
+   * their own (such as `#`) are matched by those only; the rest by the bot's prefixes.
+   */
   parseCommand(text: string): ParsedCommand | undefined {
+    const entries = this.hooks.commands?.(this) ?? []
+    for (const entry of entries) {
+      if (!entry.prefixes?.length) continue
+      const parsed = splitCommand(text, entry.prefixes)
+      if (parsed && commandMatches(entry, parsed.name)) return { ...parsed, entry }
+    }
     const parsed = splitCommand(text, this.prefixes)
     if (!parsed) return
-    const entry = this.hooks.commands?.(this).find((item) => commandMatches(item, parsed.name))
+    const entry = entries.find((item) => !item.prefixes?.length && commandMatches(item, parsed.name))
     return entry ? { ...parsed, entry } : parsed
   }
 
@@ -285,14 +294,13 @@ export class Bot extends Service {
   }
 
   /**
-   * Registers a command, e.g. `bot.command({ name: 'roll', usage: '[sides:number]' }, handler)`.
-   * It shows in `/help`, and the handler gets the parsed arguments; when they do not fit the
-   * usage, the bot replies with how to write the command.
+   * Registers a command, e.g. `bot.command({ name: 'roll', args: [{ name: 'sides', type: 'number', optional: true }] }, handler)`.
+   * It shows in `/help`, and the handler gets the parsed arguments; when they do not fit, the bot
+   * replies with how to write the command.
    */
   command(def: CommandDef, handler: CommandHandler) {
     const ctx = this.ctx
     const entry = { def, plugin: ctx.fiber.name }
-    const args = parseSignature(def.usage)
     ctx.effect(() => {
       this.ownCommands.add(entry)
       return () => this.ownCommands.delete(entry)
@@ -300,8 +308,9 @@ export class Bot extends Service {
     return this.middleware(async (session, next) => {
       const parsed = session.command
       if (!parsed || !commandMatches(def, parsed.name)) return next()
+      if (def.prefixes?.length ? !def.prefixes.includes(parsed.prefix) : parsed.entry?.prefixes?.length) return next()
       if (!this.allows(def, session)) return
-      const values = parseArgs(args, parsed.rest)
+      const values = parseArgs(def.args ?? [], parsed.rest, session.segments)
       if (!values.ok) {
         await session.reply(usageReply(def, parsed.prefix))
         return

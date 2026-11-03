@@ -17,12 +17,13 @@ export interface PortDef {
 export type NodeCategory = 'trigger' | 'event' | 'logic' | 'data' | 'ai' | 'action' | 'manage' | 'platform'
 
 /**
- * Outputs read from a config value: `signature` turns `<score:number> [note]` into outputs `score`
- * and `note`; `names` makes one output per name in a list, such as the columns a query returns.
+ * Outputs read from a config value: `args` makes one output per command argument (a list of
+ * `CommandArg`), typed by the argument; `names` one output per name in a list, such as the columns
+ * a query returns.
  */
 export interface OutputsFromConfig {
   key: string
-  format: 'signature' | 'names'
+  format: 'args' | 'names'
 }
 
 /** Exec outputs taken from a config array, e.g. one branch per intent label plus `other`. */
@@ -58,10 +59,55 @@ interface NodeTypeBase<C> {
    */
   restricted?: boolean
   /**
+   * Ways to run the flow that this node's config calls for, which the editor's test panel offers
+   * as one-click choices: a permission check suggests a user on its allow list and one on its
+   * block list, a command node a message that runs it.
+   */
+  testOptions?(config: C): TestOption[]
+  /**
+   * A hover tutorial: an example the palette plays as an animation, from a real test run of it,
+   * plus short notes shown at the bottom of the node's settings.
+   */
+  guide?: NodeGuide
+  /**
    * Why the node cannot run right now, such as a plugin it needs being off; nothing when it can.
    * The editor greys it out with this text, and flows using it get an error.
    */
   unavailable?(): LocalizedText | undefined
+}
+
+/** A suggested test run; `input` fills the test panel's fields. */
+export interface TestOption {
+  label: LocalizedText
+  input: {
+    text?: string
+    userId?: string
+    userName?: string
+    groupId?: string
+    private?: boolean
+    mentioned?: boolean
+    role?: BotRole
+    groupRole?: GroupRole
+  }
+}
+
+/** A node's tutorial; see `NodeTypeBase.guide`. */
+export interface NodeGuide {
+  /**
+   * A small flow that shows the node at work. Node ids are local; the node being explained is the
+   * one whose type matches, and its config defaults to the type's defaults.
+   */
+  example?: {
+    nodes: { id: string; type: string; config?: Record<string, any>; inputs?: Record<string, string> }[]
+    /** `[from, to]` node ids, or `[from, to, exec output]`. */
+    edges: ([string, string] | [string, string, string])[]
+    /** The message (or test input) that runs it. */
+    input: TestOption['input']
+  }
+  /** One line per step of the animation, in order of the nodes that run; extra steps are ignored. */
+  captions?: LocalizedText[]
+  /** At most three short notes on what is easy to get wrong, shown under the node's settings. */
+  notes?: LocalizedText[]
 }
 
 /**

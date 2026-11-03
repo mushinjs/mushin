@@ -203,6 +203,8 @@ function onJson(text: string) {
       multiple
       filterable
       clearable
+      :tag="widget === 'people'"
+      :placeholder="widget === 'people' ? t('common.peoplePlaceholder') : undefined"
       @update:value="(next: string[]) => (value = next)"
     />
     <div v-else-if="kind === 'object'" class="nested">

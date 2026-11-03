@@ -1,5 +1,4 @@
 import { z } from '@mushin/core'
-import { parseSignature } from '@mushin/plugin-bots'
 import { refsIn, SCOPES } from './refs'
 import type { FlowDocument, FlowIssue, FlowNode, Intercept, NodeType, PortDef, PortType } from './types'
 
@@ -22,13 +21,20 @@ export function configOutputs(type: NodeType, config: Record<string, any> | unde
   const value = config?.[type.outputsFrom.key]
   const args = type.outputsFrom.format === 'names'
     ? (Array.isArray(value) ? value : []).filter((name): name is string => typeof name === 'string' && !!name.trim()).map((name) => ({ name: name.trim(), type: 'any' as PortType }))
-    : parseSignature(String(value ?? ''))
+    : argOutputs(value)
   for (const arg of args) {
     if (taken.has(arg.name)) continue
     taken.add(arg.name)
     extra.push({ name: arg.name, type: arg.type, title: arg.name })
   }
   return [...outputs, ...extra]
+}
+
+/** Outputs for command arguments: numbers and yes/no stay typed, the rest is text. */
+export function argOutputs(value: unknown): { name: string; type: PortType }[] {
+  return (Array.isArray(value) ? value : [])
+    .filter((arg): arg is { name: string; type?: string } => !!arg && typeof arg === 'object' && typeof arg.name === 'string' && !!arg.name.trim())
+    .map((arg) => ({ name: arg.name.trim(), type: arg.type === 'number' ? 'number' : arg.type === 'boolean' ? 'boolean' : 'text' }))
 }
 
 /** The ports a node has with a given config; classify nodes grow one exec output per label. */

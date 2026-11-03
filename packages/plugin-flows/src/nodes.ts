@@ -1,5 +1,5 @@
 import { type ChannelInfo, field, segmentsToText, z } from '@mushin/core'
-import { commandMatches, parseArgs, parseSignature, roleAtLeast, splitCommand, usageReply } from '@mushin/plugin-bots'
+import { type CommandArg, commandMatches, parseArgs, roleAtLeast, splitCommand, usageReply } from '@mushin/plugin-bots'
 import { FlowError, TriggerReply } from './engine'
 import type { FlowSession, LlmLike, NodeContext, NodeType, PersonaLike, VariableScope } from './types'
 
@@ -119,6 +119,28 @@ export function senderRole(session: FlowSession) {
   return session.role ? session.role() : session.isAdmin ? 'admin' : undefined
 }
 
+/** One argument of a command node, as the editor's argument list writes it. */
+export const commandArgSchema = z.object({
+  name: z.string().min(1),
+  type: z.enum(['text', 'number', 'boolean', 'user', 'choice']).default('text'),
+  optional: z.boolean().default(false),
+  rest: z.boolean().default(false),
+  default: z.union([z.string(), z.number(), z.boolean()]).optional(),
+  choices: z.array(z.string()).default([]),
+  description: z.string().default(''),
+})
+
+/** A value that fits a command argument, for suggested and generated test messages. */
+export function sampleArg(arg: CommandArg) {
+  switch (arg.type) {
+    case 'number': return '1'
+    case 'boolean': return '是'
+    case 'user': return '10001'
+    case 'choice': return arg.choices?.[0] ?? 'test'
+    default: return 'test'
+  }
+}
+
 /** A command name as stored: without a leading prefix or spaces. */
 export const commandName = (name: unknown) => String(name ?? '').trim().replace(/^[/#!！]+/, '')
 
@@ -143,15 +165,18 @@ export const commandTrigger: NodeType = {
     name: z.string().min(1).default('hello').meta(field('Command', 'Without the prefix, e.g. checkin', {
       'zh-CN': { title: '指令名', description: '不带前缀，例如 签到' },
     })),
+    prefixes: z.array(z.string().min(1)).default([]).meta(field('Prefixes', 'Empty follows the bot\'s prefixes (set on its Commands tab)', {
+      'zh-CN': { title: '前缀', description: '留空时跟随机器人的前缀（在机器人的「指令」页设置）' },
+    })),
     aliases: z.array(z.string()).default([]).meta(field('Aliases', 'Other names that run the same command', {
       'zh-CN': { title: '别名', description: '也能触发这条指令的其他名字' },
     })),
     description: z.string().default('').meta(field('Description', 'Shown in /help', { 'zh-CN': { title: '说明', description: '显示在 /help 里' } })),
-    usage: z.string().default('').meta(field(
+    args: z.array(commandArgSchema).default([]).meta(field(
       'Arguments',
-      'e.g. <score:number> [note]: <> required, [] optional, :number a number; the last text argument takes the rest. Each argument becomes an output of the same name.',
-      { 'zh-CN': { title: '参数', description: '例如 <分数:number> [备注]：<> 必填，[] 可选，:number 表示数字，最后一个文本参数接收剩余内容。每个参数都会成为同名输出。' } },
-      { hint: 'inline' },
+      'What follows the command, in order. Each argument becomes an output of the same name.',
+      { 'zh-CN': { title: '参数', description: '指令后面依次跟的内容。每个参数都会成为同名输出。' } },
+      { widget: 'commandArgs' },
     )),
     usageHint: z.boolean().default(true).meta(field('Reply with usage on wrong arguments', undefined, {
       'zh-CN': { title: '参数不对时回复用法' },
@@ -162,14 +187,27 @@ export const commandTrigger: NodeType = {
     }, { options: { all: 'Everyone', admin: 'Admins and masters', master: 'Masters only' } })),
   }),
   outputs: commandOutputs,
-  outputsFrom: { key: 'usage', format: 'signature' },
+  outputsFrom: { key: 'args', format: 'args' },
+  testOptions(config) {
+    const name = `${(config.prefixes as string[]).find(Boolean) ?? '/'}${commandName(config.name)}`
+    const args = config.args as CommandArg[]
+    const role = config.permission === 'admin' || config.permission === 'master' ? { role: config.permission as 'admin' | 'master' } : {}
+    const text = [name, ...args.filter((arg) => !arg.optional && arg.default === undefined).map(sampleArg)].join(' ')
+    const options = [{ label: { en: `Send ${text}`, 'zh-CN': `发送 ${text}` }, input: { text, ...role } }]
+    if (args.some((arg) => !arg.optional && arg.default === undefined)) {
+      options.push({ label: { en: `Send ${name} without arguments`, 'zh-CN': `只发 ${name}，不带参数` }, input: { text: name, ...role } })
+    }
+    if (role.role) options.push({ label: { en: `Send ${text} as an ordinary user`, 'zh-CN': `以普通用户发送 ${text}` }, input: { text } })
+    return options
+  },
   match({ config, session }) {
-    const parsed = session.command ?? splitCommand(session.text)
+    const own = (config.prefixes as string[] | undefined)?.filter(Boolean) ?? []
+    const parsed = own.length ? splitCommand(session.text, own) : session.command?.entry?.prefixes?.length ? undefined : session.command ?? splitCommand(session.text)
     const name = commandName(config.name)
     if (!parsed || !name || !commandMatches({ name, aliases: (config.aliases as string[]).map(commandName) }, parsed.name)) return
     if ((config.permission === 'admin' || config.permission === 'master') && !roleAtLeast(senderRole(session), config.permission)) return
-    const args = parseArgs(parseSignature(config.usage), parsed.rest)
-    if (!args.ok) return config.usageHint ? new TriggerReply(usageReply({ name, usage: config.usage }, parsed.prefix)) : undefined
+    const args = parseArgs(config.args as CommandArg[], parsed.rest, session.segments)
+    if (!args.ok) return config.usageHint ? new TriggerReply(usageReply({ name, args: config.args }, parsed.prefix)) : undefined
     const named = Object.fromEntries(Object.entries(args.values).filter(([key]) => !commandOutputNames.has(key)))
     return { ...sessionValues(session), command: name, rest: parsed.rest, args: args.values, ...named }
   },

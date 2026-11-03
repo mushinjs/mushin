@@ -14,15 +14,11 @@ export interface NodePorts {
   outputs: PortDef[]
 }
 
-// Same as the server's command signatures: `<name>` required, `[name]` optional, `:number` a number, `...` the rest.
-const SIGNATURE_ARG = /<([^<>\s:.]+)(?::(\w+))?(\.\.\.)?>|\[([^[\]\s:.]+)(?::(\w+))?(\.\.\.)?\]/g
-
-export function parseSignature(usage: string | undefined) {
-  if (!usage) return []
-  return [...usage.matchAll(SIGNATURE_ARG)].map((match) => {
-    const optional = match[4] !== undefined
-    return { name: optional ? match[4] : match[1], type: ((optional ? match[5] : match[2]) === 'number' ? 'number' : 'text') as PortType, optional }
-  })
+/** Same as the server: one output per command argument, numbers and yes/no keeping their type. */
+export function argOutputs(value: unknown): { name: string; type: PortType }[] {
+  return (Array.isArray(value) ? value : [])
+    .filter((arg): arg is { name: string; type?: string } => !!arg && typeof arg === 'object' && typeof arg.name === 'string' && !!arg.name.trim())
+    .map((arg) => ({ name: arg.name.trim(), type: (arg.type === 'number' ? 'number' : arg.type === 'boolean' ? 'boolean' : 'text') as PortType }))
 }
 
 /** Same rule as the server: classify-style nodes get one exec output per configured label, command nodes one output per argument. */
@@ -39,7 +35,7 @@ export function portsOf(type: NodeTypeInfo, config: Record<string, any>): NodePo
     const value = config?.[type.outputsFrom.key]
     const args = type.outputsFrom.format === 'names'
       ? (Array.isArray(value) ? value : []).filter((name): name is string => typeof name === 'string' && !!name.trim()).map((name) => ({ name: name.trim(), type: 'any' as const }))
-      : parseSignature(String(value ?? ''))
+      : argOutputs(value)
     const extra = args.filter((arg) => !taken.has(arg.name) && !!taken.add(arg.name))
     outputs = [...outputs, ...extra.map((arg) => ({ name: arg.name, type: arg.type, title: arg.name }))]
   }

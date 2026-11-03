@@ -78,8 +78,12 @@ export interface FieldText {
 export interface FieldDisplay {
   /** English labels of an enum's values, by value; translations go in `translations[locale].options`. */
   options?: Record<string, string>
-  /** How compact forms (the flow editor) show a boolean: a checkbox (default) or a switch, for settings that change behavior. */
-  widget?: 'checkbox' | 'switch'
+  /**
+   * How compact forms (the flow editor) show a field: for booleans a checkbox (default) or a
+   * switch, for settings that change behavior; otherwise the name of an editor the dashboard
+   * provides, such as `commandArgs` (a command's argument list) or `people` (users or groups).
+   */
+  widget?: 'checkbox' | 'switch' | 'commandArgs' | 'people'
   /** Compact forms fold descriptions into a hint icon; `inline` keeps this one visible. */
   hint?: 'inline'
   /**

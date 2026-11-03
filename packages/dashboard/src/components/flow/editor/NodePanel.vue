@@ -5,7 +5,7 @@
  */
 import { BanOutline, InformationCircleOutline, TrashOutline } from '@vicons/ionicons5'
 import { NAlert, NButton, NEmpty, NForm, NFormItem, NIcon, NInput, NTabPane, NTabs, NTooltip } from 'naive-ui'
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { categoryColors, portColors, schemaDefaults } from '../../../flow'
 import { clone, localize } from '../../../utils'
@@ -13,13 +13,14 @@ import SchemaForm from '../../SchemaForm.vue'
 import { nodeIcon } from '../icons'
 import VarInput from '../VarInput.vue'
 import { useEditor } from './editor'
+import CommandEditor from './CommandEditor.vue'
 import NodeWiring from './NodeWiring.vue'
 import TriggerOrder from './TriggerOrder.vue'
 import { refExamples, useNodeWiring } from './useNodeWiring'
 
 const {
   t, locale, message, types, selected, selectedId, selectedInfo, selectedIsTrigger, order, nodeTab, typeTitle, portLabel, issuesByNode,
-  inheritedSkip, blockedNodes, blockedSlots, toggleSkip, deleteSelected, updateSelected, openTrigger,
+  inheritedSkip, blockedNodes, blockedSlots, toggleSkip, deleteSelected, updateSelected, openTrigger, bots,
 } = useEditor()
 const { wiring, varGroups, setInput } = useNodeWiring()
 
@@ -30,6 +31,8 @@ const selectedIcon = computed(() => selected.value && nodeIcon(selected.value.da
 // ---- keyword and command triggers ----
 
 const COMMAND = 'trigger.command'
+/** Fields the command editor shows itself. */
+const COMMAND_FIELDS = ['name', 'prefixes', 'aliases', 'args']
 const KEYWORD = 'trigger.keyword'
 const unprefixed = (text: string) => text.trim().replace(/^\/+/, '')
 const keywordsOf = (config: Record<string, any>): string[] => (Array.isArray(config.keywords) ? config.keywords.map((item: unknown) => String(item).trim()) : [])
@@ -55,33 +58,6 @@ function convertToCommand() {
     },
   })
   message.success(t('flows.convertedToCommand', { name: `/${unprefixed(first)}` }))
-}
-
-/** What the command field shows. Kept apart from the stored name so the `/` can be deleted while typing. */
-const commandText = ref('')
-watch(() => [selectedId.value, selected.value?.data!.typeId, selected.value?.data!.config.name] as const, ([id, typeId, name], previous) => {
-  if (typeId !== COMMAND) return
-  if (id !== previous?.[0] || unprefixed(commandText.value) !== (name ?? '')) commandText.value = `/${name ?? ''}`
-}, { immediate: true })
-
-function updateCommandName(value: string) {
-  const node = selected.value
-  if (!node) return
-  commandText.value = value
-  updateSelected({ config: { ...node.data!.config, name: unprefixed(value) } })
-}
-
-/** Turns the selected command node into a keyword node matching the text in the command field and the aliases. */
-function convertToKeyword() {
-  const keyword = types.value.get(KEYWORD)
-  if (!keyword || !selected.value) return
-  const config = selected.value.data!.config
-  const aliases: string[] = Array.isArray(config.aliases) ? config.aliases : []
-  updateSelected({
-    typeId: KEYWORD,
-    config: { ...schemaDefaults(keyword.configSchema), keywords: [commandText.value.trim(), ...aliases].filter(Boolean), mode: 'startsWith' },
-  })
-  message.success(t('flows.convertedToKeyword'))
 }
 
 /** Settings fields shown above the conversion hint: the keywords of a keyword node. */
@@ -165,15 +141,12 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
           </NForm>
           <p class="muted small vars-hint">{{ t('flows.varsHint', refExamples) }}</p>
         </template>
-        <NForm v-if="selected.data!.typeId === COMMAND" label-placement="top" size="small">
-          <NFormItem :label="t('flows.commandName')" :feedback="t('flows.commandNameHint')">
-            <NInput :value="commandText" @update:value="updateCommandName" />
-          </NFormItem>
-        </NForm>
-        <NAlert v-if="selected.data!.typeId === COMMAND && commandText.trim() && !commandText.trim().startsWith('/')" type="info" :show-icon="false" class="convert-hint">
-          {{ t('flows.suggestKeyword', { name: `/${unprefixed(commandText)}` }) }}
-          <NButton size="tiny" secondary type="primary" @click="convertToKeyword">{{ t('flows.convertToKeyword') }}</NButton>
-        </NAlert>
+        <CommandEditor
+          v-if="selected.data!.typeId === COMMAND"
+          :config="selected.data!.config"
+          :bots="bots"
+          @update="(config: Record<string, any>) => updateSelected({ config: clone(config) })"
+        />
         <template v-if="selectedInfo.configSchema">
           <SchemaForm
             v-if="leadFields.length"
@@ -191,7 +164,7 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
             compact
             :model-value="selected.data!.config"
             :schema="selectedInfo.configSchema"
-            :hidden="selected.data!.typeId === COMMAND ? ['name'] : leadFields"
+            :hidden="selected.data!.typeId === COMMAND ? COMMAND_FIELDS : leadFields"
             @update:model-value="(config: Record<string, any>) => updateSelected({ config: clone(config) })"
           />
         </template>
@@ -200,6 +173,10 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
           {{ issue.message }}
           <RouterLink v-if="issue.plugin" :to="`/plugins?highlight=${issue.plugin}`" class="issue-link">{{ t('flows.enablePlugin') }}</RouterLink>
         </NAlert>
+        <!-- The type's notes on what is easy to get wrong, under everything else. -->
+        <ul v-if="selectedInfo.guide?.notes?.length" class="guide-notes muted small">
+          <li v-for="(note, index) in selectedInfo.guide.notes.slice(0, 3)" :key="index">{{ localize(note, locale) }}</li>
+        </ul>
       </NTabPane>
 
       <NTabPane name="io" :tab="t('flows.nodeIO')">
@@ -321,6 +298,13 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
 
 .convert-hint :deep(.n-button) {
   margin-left: 6px;
+}
+
+.guide-notes {
+  margin: 14px 0 4px;
+  padding: 10px 0 0 18px;
+  border-top: 1px dashed rgba(127, 127, 127, 0.25);
+  line-height: 1.6;
 }
 
 .panel-empty {

@@ -90,7 +90,7 @@ describe('chat members and rules', () => {
       name: 'Ban',
       bots: [botId],
       nodes: [
-        { id: 'cmd', type: 'trigger.command', config: { name: 'ban', usage: '<qq>' } },
+        { id: 'cmd', type: 'trigger.command', config: { name: 'ban', args: [{ name: 'qq', type: 'text' }] } },
         { id: 'act', type: 'perm.member', config: { action: 'addTag', user: '{{cmd.qq}}', value: 'banned' } },
         { id: 'info', type: 'perm.memberInfo', config: { user: '{{cmd.qq}}', tag: 'banned' } },
         { id: 'say', type: 'action.reply', config: { text: '{{info.hasTag}} {{info.tags}}' } },

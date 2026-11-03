@@ -1,5 +1,5 @@
 import { type ChannelInfo, Context, MushinError, randomId, seg, Service, toJsonSchema, type UserInfo, z } from '@mushin/core'
-import { type BotEvent, type BotRole, BUILTIN_PRIORITY, type CommandEntry, commandMatches, type GroupRole, helpText, requiredRole, roleAtLeast, splitCommand } from '@mushin/plugin-bots'
+import { type BotEvent, type BotRole, BUILTIN_PRIORITY, type CommandArg, type CommandEntry, commandMatches, type GroupRole, helpText, requiredRole, roleAtLeast, splitCommand } from '@mushin/plugin-bots'
 import type {} from '@mushin/plugin-providers'
 import type {} from '@mushin/plugin-storage'
 import { FlowError, localDay, matchTriggers, MemoryUsage, type PauseAction, type PauseInfo, runFlow, type RunEnvironment, type TriggerMatch } from './engine'
@@ -171,6 +171,10 @@ export interface TestInput {
   breakpoints?: string[]
   text?: string
   userName?: string
+  /** The sender's user id; `10000` when unset. */
+  userId?: string
+  /** The group the message is in; `test` when unset. Ignored for private chats. */
+  groupId?: string
   private?: boolean
   mentioned?: boolean
   /** Pretend the sender is one of the bot's admins. Same as `role: 'admin'`. */
@@ -390,7 +394,23 @@ export class FlowService extends Service {
       execOutFrom: type.kind === 'action' ? type.execOutFrom : undefined,
       ...(type.restricted ? { restricted: true } : {}),
       ...(type.unavailable?.() ? { unavailable: type.unavailable() } : {}),
+      ...(type.guide ? { guide: type.guide } : {}),
     }))
+  }
+
+  /** The test runs the nodes' configs call for (see `testOptions` on node types), by node. */
+  testOptions(nodes: { id: string; type: string; config?: Record<string, any> }[]) {
+    return nodes.flatMap((node) => {
+      const type = this.types.get(node.type)
+      if (!type?.testOptions) return []
+      try {
+        const parsed = type.config ? type.config.safeParse(node.config ?? {}) : undefined
+        return type.testOptions(parsed?.success ? parsed.data : node.config ?? {}).map((option) => ({ nodeId: node.id, ...option }))
+      } catch (error) {
+        this.logger.warn('test options of %s: %s', node.type, error)
+        return []
+      }
+    })
   }
 
   /**
@@ -566,7 +586,8 @@ export class FlowService extends Service {
         name,
         aliases: (Array.isArray(config.aliases) ? config.aliases : []).map(commandName).filter(Boolean),
         ...(config.description ? { description: String(config.description) } : {}),
-        ...(config.usage ? { usage: String(config.usage) } : {}),
+        ...(Array.isArray(config.args) && config.args.length ? { args: config.args as CommandArg[] } : {}),
+        ...(Array.isArray(config.prefixes) && config.prefixes.filter(Boolean).length ? { prefixes: (config.prefixes as string[]).filter(Boolean) } : {}),
         ...(config.showInHelp === false ? { hidden: true } : {}),
         ...(config.permission === 'admin' || config.permission === 'master' ? { permission: config.permission as 'admin' | 'master' } : {}),
         ...(node.priority ? { priority: node.priority } : {}),
@@ -1028,10 +1049,10 @@ export class FlowService extends Service {
     const data = input.event?.data ?? {}
     const user: UserInfo = input.event
       ? { id: String(data.user_id ?? data.operator_id ?? '10000'), name: input.userName || undefined }
-      : { id: '10000', name: input.userName || 'Tester' }
+      : { id: input.userId || '10000', name: input.userName || 'Tester' }
     const channel: ChannelInfo = input.event
       ? (data.group_id ? { type: 'group', id: String(data.group_id) } : { type: 'private', id: user.id })
-      : input.private ? { type: 'private', id: user.id } : { type: 'group', id: 'test' }
+      : input.private ? { type: 'private', id: user.id } : { type: 'group', id: input.groupId || 'test' }
     const prefixes = (() => {
       try {
         return this.home.get('bots')?.get(doc.bots[0])?.commands?.prefixes
@@ -1441,6 +1462,8 @@ export class FlowService extends Service {
         schedule: z.string().optional().describe('Id of a schedule trigger node to fire'),
         replies: z.array(z.string()).optional().describe('Messages that answer the flow\'s "wait for reply" nodes, in order; a wait with none left times out'),
         userName: z.string().optional(),
+        userId: z.string().optional().describe('The sender\'s user id, e.g. to test allow and block lists'),
+        groupId: z.string().optional().describe('The group the message is in'),
         private: z.boolean().optional().describe('Pretend the message is a private chat'),
         mentioned: z.boolean().optional().describe('Pretend the message @-mentions the bot'),
         admin: z.boolean().optional().describe('Pretend the sender is a bot admin, for admin-only commands; same as role "admin"'),
@@ -1455,6 +1478,14 @@ export class FlowService extends Service {
         if (caller.kind !== 'api') delete input.breakpoints
         return this.test(id, input)
       },
+    })
+
+    yield actions.define({
+      name: 'flows.testOptions',
+      description: 'Editor only: test runs that a flow\'s nodes call for, such as a user on a permission check\'s allow list, for the test panel\'s quick choices.',
+      risk: 'read',
+      input: z.object({ nodes: z.array(z.object({ id: z.string(), type: z.string(), config: z.record(z.string(), z.any()).optional() })) }),
+      handler: ({ nodes }) => this.testOptions(nodes),
     })
 
     yield actions.define({

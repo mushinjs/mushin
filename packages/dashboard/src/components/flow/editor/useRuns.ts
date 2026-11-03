@@ -6,7 +6,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { call, on } from '../../../api'
 import { portsOf } from '../../../flow'
 import { isLive, useRunsStore } from '../../../stores/runs'
-import type { FlowPause, FlowRunInfo, RunStep, RunTrace, TraceStep } from '../../../types'
+import type { FlowPause, FlowRunInfo, RunStep, RunTrace, TestOption, TraceStep } from '../../../types'
 import type { FlowHighlight, RunStatus } from '../context'
 import type { TestInput } from '../RunLogs.vue'
 import type { EditorState } from './state'
@@ -189,11 +189,29 @@ export function useRuns(s: EditorState, actions: { save: () => Promise<void> }) 
   // ---- test runs ----
 
   const test = ref<TestInput>({
-    text: '', userName: '', private: false, mentioned: false, role: 'user', groupRole: '', mode: 'message', eventName: '', eventData: '{}', schedule: '', replies: '',
+    text: '', userName: '', userId: '', groupId: '', private: false, mentioned: false, role: 'user', groupRole: '', mode: 'message', eventName: '', eventData: '{}', schedule: '', replies: '',
   })
   const schedules = computed(() => nodes.value
     .filter((node) => node.data?.typeId === 'trigger.schedule')
     .map((node) => ({ id: node.id, name: s.nodeName(node.id) })))
+
+  /** Quick choices for the test settings, from the nodes' configs (a permission check's lists, a command's arguments). */
+  const quickTests = ref<TestOption[]>([])
+  let quickTimer: ReturnType<typeof setTimeout> | undefined
+  watch(() => JSON.stringify(realNodes.value.map((node) => [node.id, node.data?.typeId, node.data?.config])), () => {
+    clearTimeout(quickTimer)
+    quickTimer = setTimeout(async () => {
+      const list = realNodes.value
+        .filter((node) => node.data?.typeId && types.value.get(node.data.typeId))
+        .map((node) => ({ id: node.id, type: node.data!.typeId, config: node.data!.config }))
+      try {
+        quickTests.value = list.length ? await call<TestOption[]>('flows.testOptions', { nodes: list }) : []
+      } catch {
+        quickTests.value = []
+      }
+    }, 400)
+  }, { immediate: true })
+  onBeforeUnmount(() => clearTimeout(quickTimer))
 
   /** The flows.test input for the current test settings, or undefined when something is missing. */
   function testPayload() {
@@ -214,7 +232,8 @@ export function useRuns(s: EditorState, actions: { save: () => Promise<void> }) 
     if (mode === 'schedule') return schedule ? { schedule, ...common } : undefined
     if (!text.trim()) return
     const roles = { ...(test.value.role !== 'user' ? { role: test.value.role } : {}), ...(test.value.groupRole && !test.value.private ? { groupRole: test.value.groupRole } : {}) }
-    return { text, userName, private: test.value.private, mentioned, ...roles, ...common }
+    const ids = { ...(test.value.userId.trim() ? { userId: test.value.userId.trim() } : {}), ...(test.value.groupId.trim() && !test.value.private ? { groupId: test.value.groupId.trim() } : {}) }
+    return { text, userName, private: test.value.private, mentioned, ...ids, ...roles, ...common }
   }
 
   /** Runs the saved flow with the test message; with a node, only the path up to that node runs. */
@@ -338,7 +357,7 @@ export function useRuns(s: EditorState, actions: { save: () => Promise<void> }) 
 
   return {
     showTrace, stepOf, lastStep, openRun, closeRun, stopViewing, viewingBot, now, liveRuns,
-    test, schedules, runTest, showCaseTrace, saveBeforeTests, nodeOptions, execOptions, clearRuns, selectFromLogs,
+    test, quickTests, schedules, runTest, showCaseTrace, saveBeforeTests, nodeOptions, execOptions, clearRuns, selectFromLogs,
     loadBreakpoints, toggleBreakpoint, debug,
   }
 }

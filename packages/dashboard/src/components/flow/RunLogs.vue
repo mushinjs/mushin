@@ -4,14 +4,17 @@ import { NButton, NCheckbox, NIcon, NInput, NPopover, NRadioButton, NRadioGroup,
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { categoryColors, eventSamples } from '../../flow'
-import type { RunTrace, Segment, TraceStep } from '../../types'
-import { formatTime, pretty, segmentsText } from '../../utils'
+import type { RunTrace, Segment, TestOption, TraceStep } from '../../types'
+import { formatTime, localize, pretty, segmentsText } from '../../utils'
 import { useFlowEditor } from './context'
 import { nodeIcon } from './icons'
 
 export interface TestInput {
   text: string
   userName: string
+  /** The sender's id and group; empty uses the test defaults. */
+  userId: string
+  groupId: string
   private: boolean
   mentioned: boolean
   /** Pretended role on the bot and in the group. */
@@ -39,14 +42,40 @@ const props = defineProps<{
   tests?: { failed: number; total: number }
   /** Runs still going on, by id: their trace is only what happened so far. */
   live?: string[]
+  /** Test runs the flow's nodes call for, offered as one-click choices. */
+  quick?: TestOption[]
 }>()
 const emit = defineEmits<{ run: []; clear: []; show: [trace: RunTrace]; select: [nodeId: string] }>()
 const test = defineModel<TestInput>('test', { required: true })
 const open = defineModel<boolean>('open', { required: true })
 /** Which tab the panel shows: run logs, or the flow's test cases (the `tests` slot). */
 const tab = defineModel<'logs' | 'tests'>('tab', { default: 'logs' })
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const editor = useFlowEditor()
+
+/** Fills the test settings from a quick choice: everything it does not set goes back to the defaults. */
+function applyQuick(option: TestOption) {
+  const input = option.input
+  test.value = {
+    ...test.value,
+    mode: 'message',
+    ...(input.text !== undefined ? { text: input.text } : {}),
+    userId: input.userId ?? '',
+    userName: input.userName ?? '',
+    groupId: input.groupId ?? '',
+    private: !!input.private,
+    mentioned: !!input.mentioned,
+    role: input.role ?? 'user',
+    groupRole: input.groupRole ?? '',
+  }
+}
+const quickKey = (option: TestOption) => JSON.stringify(option.input)
+const quickActive = (option: TestOption) => {
+  const input = option.input
+  return (input.text === undefined || input.text === test.value.text)
+    && (input.userId ?? '') === test.value.userId && (input.groupId ?? '') === test.value.groupId
+    && (input.role ?? 'user') === test.value.role && (input.groupRole ?? '') === test.value.groupRole && !!input.private === test.value.private
+}
 
 /** The run shown; the editor uses it for the node cards' hover. */
 const runId = defineModel<string>('current')
@@ -219,6 +248,19 @@ const iconOf = (nodeId: string) => {
             </NButton>
           </template>
           <NSpace vertical size="small" class="test-options">
+            <template v-if="quick?.length">
+              <span class="muted small">{{ t('flows.testQuick') }}</span>
+              <div class="quick">
+                <NTag
+                  v-for="option in quick"
+                  :key="quickKey(option)"
+                  size="small"
+                  checkable
+                  :checked="quickActive(option)"
+                  @update:checked="applyQuick(option)"
+                >{{ localize(option.label, locale) }}</NTag>
+              </div>
+            </template>
             <span class="muted small">{{ t('flows.testMode') }}</span>
             <NRadioGroup v-model:value="test.mode" size="small">
               <NRadioButton value="message">{{ t('flows.testModeMessage') }}</NRadioButton>
@@ -226,7 +268,11 @@ const iconOf = (nodeId: string) => {
               <NRadioButton value="schedule">{{ t('flows.testModeSchedule') }}</NRadioButton>
             </NRadioGroup>
             <template v-if="test.mode === 'message'">
-              <NInput v-model:value="test.userName" size="small" :placeholder="`${t('flows.testUser')}: Tester`" />
+              <div class="who">
+                <NInput v-model:value="test.userName" size="small" :placeholder="`${t('flows.testUser')}: Tester`" />
+                <NInput v-model:value="test.userId" size="small" :placeholder="`${t('flows.testUserId')}: 10000`" />
+                <NInput v-if="!test.private" v-model:value="test.groupId" size="small" :placeholder="`${t('flows.testGroupId')}: test`" />
+              </div>
               <NCheckbox v-model:checked="test.private">{{ t('flows.testPrivate') }}</NCheckbox>
               <NCheckbox v-model:checked="test.mentioned">{{ t('flows.testMentioned') }}</NCheckbox>
               <span class="muted small">{{ t('flows.testRole') }}</span>
@@ -356,6 +402,23 @@ const iconOf = (nodeId: string) => {
 </template>
 
 <style scoped>
+.quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 340px;
+}
+
+.who {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.who > :first-child {
+  grid-column: 1 / -1;
+}
+
 .logs {
   flex: none;
   display: flex;

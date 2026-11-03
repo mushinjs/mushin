@@ -1,6 +1,6 @@
 import { type ChannelInfo, Context, field, MushinError, Service, type UserInfo, z } from '@mushin/core'
-import { type BotRole, type GroupRole, roleAtLeast, type Session } from '@mushin/plugin-bots'
-import type { FlowSession, NodeType } from '@mushin/plugin-flows'
+import { type BotRole, type CommandArg, type GroupRole, roleAtLeast, type Session } from '@mushin/plugin-bots'
+import type { FlowSession, NodeType, TestOption } from '@mushin/plugin-flows'
 import type {} from '@mushin/plugin-storage'
 import { applyMemberAction, channelKey, type ChatMember, type ChatMemberPatch, ChatStore, type MemberAction, memberNodes, RuleInput } from './chats'
 
@@ -382,17 +382,19 @@ export class Permissions extends Service {
   // ---- chat commands ----
 
   private *defineChatCommands() {
-    const commands: { name: string; description: string; usage: string; action: MemberAction; needsBotAdmin?: boolean; done: string }[] = [
-      { name: '拉黑', description: '在本群拉黑某人（管理员）', usage: '<@某人>', action: 'block', done: '已在本群拉黑 {user}' },
-      { name: '解除拉黑', description: '在本群解除拉黑（管理员）', usage: '<@某人>', action: 'unblock', done: '已解除 {user} 的拉黑' },
-      { name: '设为管理', description: '设为本群管理（机器人管理员）', usage: '<@某人>', action: 'setAdmin', needsBotAdmin: true, done: '已把 {user} 设为本群管理' },
-      { name: '取消管理', description: '取消本群管理（机器人管理员）', usage: '<@某人>', action: 'unsetAdmin', needsBotAdmin: true, done: '已取消 {user} 的本群管理' },
-      { name: '加标签', description: '给本群成员加标签（管理员）', usage: '<@某人> <标签>', action: 'addTag', done: '已给 {user} 加上标签“{tag}”' },
-      { name: '去标签', description: '移除本群成员的标签（管理员）', usage: '<@某人> <标签>', action: 'removeTag', done: '已移除 {user} 的标签“{tag}”' },
+    const WHO: CommandArg = { name: '成员', type: 'user' }
+    const TAG: CommandArg = { name: '标签', type: 'text' }
+    const commands: { name: string; description: string; args: CommandArg[]; action: MemberAction; needsBotAdmin?: boolean; done: string }[] = [
+      { name: '拉黑', description: '在本群拉黑某人（管理员）', args: [WHO], action: 'block', done: '已在本群拉黑 {user}' },
+      { name: '解除拉黑', description: '在本群解除拉黑（管理员）', args: [WHO], action: 'unblock', done: '已解除 {user} 的拉黑' },
+      { name: '设为管理', description: '设为本群管理（机器人管理员）', args: [WHO], action: 'setAdmin', needsBotAdmin: true, done: '已把 {user} 设为本群管理' },
+      { name: '取消管理', description: '取消本群管理（机器人管理员）', args: [WHO], action: 'unsetAdmin', needsBotAdmin: true, done: '已取消 {user} 的本群管理' },
+      { name: '加标签', description: '给本群成员加标签（管理员）', args: [WHO, TAG], action: 'addTag', done: '已给 {user} 加上标签“{tag}”' },
+      { name: '去标签', description: '移除本群成员的标签（管理员）', args: [WHO, TAG], action: 'removeTag', done: '已移除 {user} 的标签“{tag}”' },
     ]
     for (const command of commands) {
       yield this.home.bots.defineCommand(
-        { name: command.name, description: command.description, usage: command.usage },
+        { name: command.name, description: command.description, args: command.args },
         (session) => this.runChatCommand(session, command),
         { bots: (botId) => !!this.data.bots[botId]?.chatCommands && this.chats.available },
       )
@@ -468,6 +470,34 @@ const featureField = z.string().default('').meta(field(
   { 'zh-CN': { title: '功能名', description: '会话规则里用来指代这里所保护功能的名字，例如“抽奖”。留空时用触发这次运行的指令名。' } },
 ))
 
+const peopleField = (kind: 'user' | 'group', list: 'allow' | 'block') => z.array(z.string().min(1)).default([]).meta(field(
+  kind === 'user' ? (list === 'allow' ? 'User allow list' : 'User block list') : (list === 'allow' ? 'Group allow list' : 'Group block list'),
+  list === 'allow'
+    ? `When not empty, only these ${kind === 'user' ? 'users' : 'groups'} pass${kind === 'group' ? '; private chats are let through' : ''}`
+    : `These ${kind === 'user' ? 'users' : 'groups'} never pass, whatever their role`,
+  {
+    'zh-CN': {
+      title: kind === 'user' ? (list === 'allow' ? '用户白名单' : '用户黑名单') : (list === 'allow' ? '群白名单' : '群黑名单'),
+      description: list === 'allow'
+        ? `不为空时只有这些${kind === 'user' ? '用户' : '群'}能通过${kind === 'group' ? '；私聊不受影响' : ''}`
+        : `这些${kind === 'user' ? '用户' : '群'}无论什么角色都不能通过`,
+    },
+  },
+  { widget: 'people', choices: kind === 'user' ? 'bots.userChoices' : 'bots.groupChoices' },
+))
+
+type PermissionConfig = { allowUsers?: string[]; blockUsers?: string[]; allowGroups?: string[]; blockGroups?: string[] }
+
+/** Why the allow and block lists turn the sender away; nothing when they let them on to the role check. */
+export function listVerdict(config: PermissionConfig, session: Pick<FlowSession, 'user' | 'channel' | 'isDirect'>) {
+  const user = session.user.id
+  const group = session.isDirect ? undefined : session.channel.id
+  if (config.blockUsers?.includes(user)) return '你在黑名单中'
+  if (group && config.blockGroups?.includes(group)) return '本群不能使用'
+  if (config.allowUsers?.length && !config.allowUsers.includes(user)) return '你不在白名单中'
+  if (group && config.allowGroups?.length && !config.allowGroups.includes(group)) return '本群不在白名单中'
+}
+
 /** The permission check node: branches on `allow` or `deny`, and stays silent itself. */
 export function permissionNode(permissions: Permissions): NodeType {
   return {
@@ -476,10 +506,18 @@ export function permissionNode(permissions: Permissions): NodeType {
     category: 'logic',
     title: { en: 'Permission check', 'zh-CN': '权限检测' },
     description: {
-      en: 'Continues on "allow" when the sender has one of the allowed roles, otherwise on "deny". It sends nothing itself; put a reply after "deny" if you want one, e.g. with {{<this node>.reason}}.',
-      'zh-CN': '发送者满足允许的角色时走 allow，否则走 deny。节点本身不回复；需要提示时在 deny 后接回复节点，例如用 {{<本节点>.reason}}。',
+      en: 'Continues on "allow" when the sender passes the allow and block lists and has one of the allowed roles, otherwise on "deny". It sends nothing itself; put a reply after "deny" if you want one, e.g. with {{<this node>.reason}}.',
+      'zh-CN': '发送者通过黑白名单且满足允许的角色时走 allow，否则走 deny。节点本身不回复；需要提示时在 deny 后接回复节点，例如用 {{<本节点>.reason}}。',
     },
-    config: z.object({ allow: allowField, source: sourceField, feature: featureField }),
+    config: z.object({
+      allow: allowField,
+      source: sourceField,
+      feature: featureField,
+      allowUsers: peopleField('user', 'allow'),
+      blockUsers: peopleField('user', 'block'),
+      allowGroups: peopleField('group', 'allow'),
+      blockGroups: peopleField('group', 'block'),
+    }),
     outputs: [
       { name: 'role', type: 'text', title: { en: 'Bot role (master / admin / user)', 'zh-CN': '机器人角色（master / admin / user）' } },
       { name: 'groupRole', type: 'text', title: { en: 'Group role (owner / admin / member)', 'zh-CN': '群身份（owner / admin / member）' } },
@@ -487,10 +525,34 @@ export function permissionNode(permissions: Permissions): NodeType {
       { name: 'tags', type: 'any', title: { en: 'Tags in this chat', 'zh-CN': '本会话中的标签' } },
     ],
     execOut: ['allow', 'deny'],
+    testOptions(config) {
+      const options: TestOption[] = []
+      const allowed = config.allow as Allowed[]
+      const group = (config.allowGroups as string[])[0]
+      const inGroup = group ? { groupId: group } : {}
+      for (const id of (config.allowUsers as string[]).slice(0, 2)) options.push({ label: { en: `As ${id} (allow list)`, 'zh-CN': `以 ${id} 发送（白名单）` }, input: { userId: id, ...inGroup, role: 'master' } })
+      if ((config.allowUsers as string[]).length) options.push({ label: { en: 'As someone not on the allow list', 'zh-CN': '以白名单外的人发送' }, input: { userId: '10000', ...inGroup, role: 'master' } })
+      for (const id of (config.blockUsers as string[]).slice(0, 2)) options.push({ label: { en: `As ${id} (block list)`, 'zh-CN': `以 ${id} 发送（黑名单）` }, input: { userId: id, ...inGroup, role: 'master' } })
+      if (group) options.push({ label: { en: `In group ${group} (allow list)`, 'zh-CN': `在群 ${group} 发送（白名单）` }, input: { groupId: group, role: 'master' } })
+      if ((config.allowGroups as string[]).length) options.push({ label: { en: 'In a group not on the allow list', 'zh-CN': '在白名单外的群发送' }, input: { groupId: 'test', role: 'master' } })
+      for (const id of (config.blockGroups as string[]).slice(0, 1)) options.push({ label: { en: `In group ${id} (block list)`, 'zh-CN': `在群 ${id} 发送（黑名单）` }, input: { groupId: id, role: 'master' } })
+      // Roles: the lowest allowed one passes, an ordinary member does not.
+      const roleOption: Record<string, TestOption> = {
+        master: { label: { en: 'As a master', 'zh-CN': '以主人发送' }, input: { role: 'master' } },
+        admin: { label: { en: 'As a bot admin', 'zh-CN': '以机器人管理员发送' }, input: { role: 'admin' } },
+        groupOwner: { label: { en: 'As the group owner', 'zh-CN': '以群主发送' }, input: { groupRole: 'owner' } },
+        groupAdmin: { label: { en: 'As a group admin', 'zh-CN': '以群管理员发送' }, input: { groupRole: 'admin' } },
+      }
+      for (const item of allowed) if (roleOption[item]) options.push(roleOption[item])
+      if (!allowed.includes('user')) options.push({ label: { en: 'As an ordinary member', 'zh-CN': '以普通群员发送' }, input: { role: 'user', groupRole: 'member' } })
+      return options
+    },
     async run({ config, session, bot }) {
       const allowed = config.allow as Allowed[]
       const source = (config.source ?? 'bot') as CheckSource
       const role = sessionRole(session, bot?.id, permissions)
+      const listed = listVerdict(config, session)
+      if (listed) return { exec: 'deny', outputs: { role, groupRole: '', reason: listed, tags: [] } }
       const needsGroup = allowed.includes('groupOwner') || allowed.includes('groupAdmin')
       const groupRole = needsGroup || session.groupRole ? await session.groupRole?.() : undefined
       const feature = String(config.feature ?? '').trim() || session.command?.entry?.name || session.command?.name || ''

@@ -20,7 +20,7 @@ async function scoreFlow() {
   return app.call('flows.create', {
     name: 'Score',
     nodes: [
-      { id: 'cmd', type: 'trigger.command', config: { name: 'score', usage: '<n:number>' } },
+      { id: 'cmd', type: 'trigger.command', config: { name: 'score', args: [{ name: 'n', type: 'number' }] } },
       { id: 'cmp', type: 'logic.compare', config: { op: 'greater', value: '59' }, inputs: { a: '{{cmd.n}}' } },
       { id: 'pass', type: 'action.reply', config: { text: 'passed with {{cmd.n}}' } },
       { id: 'fail', type: 'action.reply', config: { text: 'try again' } },

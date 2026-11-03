@@ -52,7 +52,7 @@ describe('permissions plugin', () => {
       name: 'Mute',
       bots: [botId],
       nodes: [
-        { id: 'cmd', type: 'trigger.command', config: { name: 'mute', usage: '<qq>' } },
+        { id: 'cmd', type: 'trigger.command', config: { name: 'mute', args: [{ name: 'qq', type: 'text' }] } },
         { id: 'check', type: 'logic.permission', config: { allow: ['admin'] } },
         { id: 'yes', type: 'action.reply', config: { text: 'muted {{cmd.qq}}' } },
         { id: 'no', type: 'action.reply', config: { text: '{{check.reason}}' } },
@@ -112,6 +112,42 @@ describe('permissions plugin', () => {
     expect((await run({ role: 'master' })).replies).toEqual(['ok'])
     const denied = await run({ role: 'admin', private: true })
     expect(denied.steps.find((step: any) => step.nodeId === 'check')).toMatchObject({ exec: 'deny', outputs: { role: 'admin', groupRole: '' } })
+  })
+
+  it('turns away block-listed people and groups, and keeps allow lists', async () => {
+    const flow = await app.call('flows.create', {
+      name: 'Lists',
+      nodes: [
+        { id: 'kw', type: 'trigger.keyword', config: { keywords: ['go'] } },
+        { id: 'check', type: 'logic.permission', config: { allow: ['user'], allowUsers: ['11', '12'], blockUsers: ['12'], blockGroups: ['900'] } },
+        { id: 'yes', type: 'action.reply', config: { text: 'ok' } },
+        { id: 'no', type: 'action.reply', config: { text: '{{check.reason}}' } },
+      ],
+      edges: [
+        { source: 'kw', sourceHandle: 'exec:next', target: 'check', targetHandle: 'exec' },
+        { source: 'check', sourceHandle: 'exec:allow', target: 'yes', targetHandle: 'exec' },
+        { source: 'check', sourceHandle: 'exec:deny', target: 'no', targetHandle: 'exec' },
+      ],
+    })
+    const reply = async (input: Record<string, unknown>) => (await app.call('flows.test', { id: flow.id, text: 'go', ...input })).trace.replies
+    expect(await reply({ userId: '11' })).toEqual(['ok'])
+    expect(await reply({ userId: '12' })).toEqual(['你在黑名单中'])
+    expect(await reply({ userId: '13' })).toEqual(['你不在白名单中'])
+    expect(await reply({ userId: '11', groupId: '900' })).toEqual(['本群不能使用'])
+    expect(await reply({ userId: '11', groupId: '900', private: true })).toEqual(['ok'])
+    // The test panel's quick choices come from the lists.
+    const saved = await app.call('flows.get', { id: flow.id })
+    const options = await app.call<any[]>('flows.testOptions', { nodes: saved.nodes })
+    expect(options.map((option) => option.input)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ userId: '11' }),
+      expect.objectContaining({ userId: '12' }),
+      expect.objectContaining({ groupId: '900' }),
+    ]))
+  })
+
+  it('lists people and groups the bots have seen, for the lists', async () => {
+    await say('/help', '4242')
+    expect(await app.call<any[]>('bots.userChoices')).toEqual(expect.arrayContaining([expect.objectContaining({ value: '4242', label: 'u4242 (4242)' })]))
   })
 
   it('names the plugin to enable when the node type is missing', async () => {

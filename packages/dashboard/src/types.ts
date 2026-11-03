@@ -373,6 +373,33 @@ export interface PortDef {
   title?: LocalizedText
 }
 
+/** A suggested test run, from a node's config (see `testOptions` on the server). */
+export interface TestOption {
+  nodeId: string
+  label: LocalizedText
+  input: {
+    text?: string
+    userId?: string
+    userName?: string
+    groupId?: string
+    private?: boolean
+    mentioned?: boolean
+    role?: 'master' | 'admin' | 'user'
+    groupRole?: 'owner' | 'admin' | 'member'
+  }
+}
+
+/** A node type's tutorial: an example flow the palette plays, captions per step, notes for the settings. */
+export interface NodeGuide {
+  example?: {
+    nodes: { id: string; type: string; config?: Record<string, any>; inputs?: Record<string, string> }[]
+    edges: ([string, string] | [string, string, string])[]
+    input: TestOption['input']
+  }
+  captions?: LocalizedText[]
+  notes?: LocalizedText[]
+}
+
 export interface NodeTypeInfo {
   type: string
   kind: 'trigger' | 'action' | 'data'
@@ -386,8 +413,10 @@ export interface NodeTypeInfo {
   execIn: boolean
   execOut: string[]
   execOutFrom?: { key: string; extra?: string[] }
-  /** More outputs read from config: `signature` makes one output per command argument. */
-  outputsFrom?: { key: string; format: 'signature' | 'names' }
+  /** More outputs read from config: `args` makes one output per command argument. */
+  outputsFrom?: { key: string; format: 'args' | 'names' }
+  /** The hover tutorial and the notes under the node's settings. */
+  guide?: NodeGuide
   /** Adapter ids the node works with; omitted means every adapter. */
   platforms?: string[]
   /** Why the node cannot be used now, e.g. a plugin it needs is off. */
