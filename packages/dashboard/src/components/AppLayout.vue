@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
   ChatbubblesOutline, ServerOutline, DocumentTextOutline, GridOutline, ExtensionPuzzleOutline, GitNetworkOutline, KeyOutline,
-  LanguageOutline, LibraryOutline, LogOutOutline, MoonOutline, PersonCircleOutline, PersonOutline, RocketOutline, SettingsOutline, SparklesOutline, SunnyOutline,
+  LanguageOutline, LibraryOutline, LogOutOutline, MoonOutline, PersonCircleOutline, PersonOutline, RocketOutline, SearchOutline, SettingsOutline, SparklesOutline, SunnyOutline,
 } from '@vicons/ionicons5'
 import {
   type DropdownOption, NButton, NDrawer, NDropdown, NIcon, NLayout, NLayoutHeader,
@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { connection, logout } from '../api'
 import { setLocale } from '../i18n'
+import { clampFloat, clampWidth, DOCK_WIDTH, dockLayout, maxDockWidth } from '../agentDock'
 import { prefs } from '../prefs'
 import { useAgentStore } from '../stores/agent'
 import { useAgentSceneStore } from '../stores/agentScene'
@@ -18,6 +19,7 @@ import { useDataStore } from '../stores/data'
 import { useRunsStore } from '../stores/runs'
 import { themeMode, useTheme } from '../theme'
 import AgentDock from './AgentDock.vue'
+import GlobalSearch from './GlobalSearch.vue'
 import type { NavGroup, NavItem } from './nav'
 import SideNav from './SideNav.vue'
 
@@ -31,7 +33,10 @@ const runs = useRunsStore()
 const { isDark } = useTheme()
 
 const width = ref(window.innerWidth)
-const onResize = () => (width.value = window.innerWidth)
+const onResize = () => {
+  width.value = window.innerWidth
+  if (dockLayout.mode === 'floating') Object.assign(dockLayout.float, clampFloat())
+}
 onMounted(() => window.addEventListener('resize', onResize))
 onBeforeUnmount(() => window.removeEventListener('resize', onResize))
 const narrow = computed(() => width.value < 1100)
@@ -63,6 +68,92 @@ onMounted(() => {
   agent.refreshSessions().catch(() => {})
   agent.refreshPickers().catch(() => {})
 })
+
+// ---- the Agent: docked at a width you drag, or floating where you put it ----
+
+const dockWidth = computed(() => {
+  void width.value
+  return Math.min(dockLayout.width, maxDockWidth())
+})
+const floatStyle = computed(() => {
+  void width.value
+  const float = clampFloat()
+  return { left: `${float.x}px`, top: `${float.y}px`, width: `${float.w}px`, height: `${float.h}px` }
+})
+const dragging = ref<'resize' | 'move' | 'size'>()
+
+/** Follows the pointer until it is let go; `apply` gets how far it moved since it went down. */
+function track(event: PointerEvent, kind: 'resize' | 'move' | 'size', apply: (dx: number, dy: number) => void) {
+  event.preventDefault()
+  const startX = event.clientX
+  const startY = event.clientY
+  // Only a real drag puts up the sheet, so a double-click still reaches the handle.
+  const move = (next: PointerEvent) => {
+    const dx = next.clientX - startX
+    const dy = next.clientY - startY
+    if (!dragging.value && Math.abs(dx) + Math.abs(dy) < 3) return
+    dragging.value = kind
+    apply(dx, dy)
+  }
+  const up = () => {
+    dragging.value = undefined
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', up)
+    window.removeEventListener('pointercancel', up)
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', up)
+  window.addEventListener('pointercancel', up)
+}
+
+function startResize(event: PointerEvent) {
+  const start = dockWidth.value
+  track(event, 'resize', (dx) => (dockLayout.width = clampWidth(start - dx)))
+}
+
+function nudgeWidth(event: KeyboardEvent) {
+  const step = event.shiftKey ? 48 : 16
+  if (event.key === 'ArrowLeft') dockLayout.width = clampWidth(dockWidth.value + step)
+  else if (event.key === 'ArrowRight') dockLayout.width = clampWidth(dockWidth.value - step)
+  else return
+  event.preventDefault()
+}
+
+/** The floating window moves by its header, but not when a button or field in it is pressed. */
+function startMove(event: PointerEvent) {
+  const target = event.target as HTMLElement
+  if (event.button !== 0 || !target.closest('.dock-head') || target.closest('button, a, input, textarea, [role="button"]')) return
+  const start = clampFloat()
+  track(event, 'move', (dx, dy) => Object.assign(dockLayout.float, clampFloat({ ...start, x: start.x + dx, y: start.y + dy })))
+}
+
+function startSize(event: PointerEvent) {
+  const start = clampFloat()
+  track(event, 'size', (dx, dy) => Object.assign(dockLayout.float, clampFloat({ ...start, w: start.w + dx, h: start.h + dy })))
+}
+
+function toggleDockMode() {
+  if (dockLayout.mode === 'docked') {
+    // Float where the dock was, at its width.
+    const w = dockWidth.value
+    Object.assign(dockLayout.float, clampFloat({ ...dockLayout.float, w, x: window.innerWidth - w - 24 }))
+    dockLayout.mode = 'floating'
+  } else {
+    dockLayout.mode = 'docked'
+  }
+}
+
+// ---- search: Ctrl+K (⌘K) anywhere ----
+
+const searching = ref(false)
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform)
+function onSearchKey(event: KeyboardEvent) {
+  if (event.key.toLowerCase() !== 'k' || !(isMac ? event.metaKey : event.ctrlKey) || event.altKey || event.shiftKey) return
+  event.preventDefault()
+  searching.value = !searching.value
+}
+onMounted(() => window.addEventListener('keydown', onSearchKey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onSearchKey))
 
 // First visit with nothing configured: start at the setup page.
 let checkedSetup = false
@@ -167,6 +258,11 @@ function onAccount(key: string) {
           </template>
         </nav>
         <span v-if="!connection.connected" class="offline">{{ t('layout.reconnecting') }}</span>
+        <button type="button" class="search-button" :aria-label="t('search.title')" data-agent-target="search.open" @click="searching = true">
+          <NIcon :size="16"><SearchOutline /></NIcon>
+          <span class="search-label">{{ t('search.button') }}</span>
+          <span class="search-keys"><kbd>{{ isMac ? '⌘' : 'Ctrl' }}</kbd><kbd>K</kbd></span>
+        </button>
         <NButton :type="agent.open ? 'primary' : 'default'" :secondary="agent.open" data-agent-target="agent.toggle" @click="agent.open = !agent.open">
           <template #icon><NIcon><SparklesOutline /></NIcon></template>
           {{ t('nav.agent') }}
@@ -182,11 +278,38 @@ function onAccount(key: string) {
         <main class="content">
           <RouterView />
         </main>
-        <aside v-if="agent.open && !narrow" class="dock">
-          <AgentDock />
+        <aside v-if="agent.open && !narrow && dockLayout.mode === 'docked'" class="dock" :style="{ width: `${dockWidth}px` }">
+          <div
+            class="dock-resizer"
+            :class="{ active: dragging === 'resize' }"
+            role="separator"
+            aria-orientation="vertical"
+            tabindex="0"
+            :aria-label="t('agent.resize')"
+            :aria-valuenow="dockWidth"
+            :title="t('agent.resize')"
+            @pointerdown="startResize"
+            @dblclick="dockLayout.width = DOCK_WIDTH"
+            @keydown="nudgeWidth"
+          />
+          <AgentDock mode="docked" @toggle-mode="toggleDockMode" />
         </aside>
       </div>
+      <aside
+        v-if="agent.open && !narrow && dockLayout.mode === 'floating'"
+        class="dock floating"
+        :class="{ moving: dragging === 'move' }"
+        :style="floatStyle"
+        @pointerdown="startMove"
+      >
+        <AgentDock mode="floating" closable @toggle-mode="toggleDockMode" @close="agent.open = false" />
+        <div class="float-resizer" :title="t('agent.resizeFloat')" @pointerdown.stop="startSize" />
+      </aside>
+      <!-- While dragging, a sheet over the page keeps the pointer from selecting text or entering frames. -->
+      <div v-if="dragging" class="drag-sheet" :class="dragging" />
     </NLayout>
+
+    <GlobalSearch v-model:show="searching" :pages="navGroups" />
 
     <NDrawer v-if="narrow" v-model:show="agent.open" :width="Math.min(420, width)" placement="right">
       <AgentDock closable @close="agent.open = false" />
@@ -248,6 +371,69 @@ a.crumb:hover {
   background: var(--bad-soft);
 }
 
+.search-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  min-width: 0;
+  padding: 0 6px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--s2);
+  color: var(--fg3);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.search-button:hover {
+  color: var(--fg2);
+  border-color: color-mix(in srgb, var(--fg3) 50%, var(--line));
+}
+
+.search-button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.search-label {
+  min-width: 96px;
+  text-align: left;
+}
+
+.search-keys {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.search-keys kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--s1);
+  color: var(--fg3);
+  font: 11px/1 var(--mono);
+}
+
+/* On a small screen the search is an icon. */
+@media (max-width: 700px) {
+  .search-button {
+    width: 34px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .search-label,
+  .search-keys {
+    display: none;
+  }
+}
+
 .account {
   width: 34px;
   height: 34px;
@@ -284,12 +470,97 @@ a.crumb:hover {
 }
 
 .dock {
-  width: 400px;
+  position: relative;
   flex: none;
   border-left: 1px solid var(--line);
   display: flex;
   flex-direction: column;
   min-height: 0;
   background: var(--s1);
+}
+
+/* The left edge of the docked Agent: a thin line that thickens under the pointer. */
+.dock-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  z-index: 3;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.dock-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+  transition: background-color 0.15s;
+}
+
+.dock-resizer:hover::after,
+.dock-resizer:focus-visible::after,
+.dock-resizer.active::after {
+  background: var(--primary);
+}
+
+.dock-resizer:focus-visible {
+  outline: none;
+}
+
+.dock.floating {
+  position: fixed;
+  z-index: 60;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(10, 12, 30, 0.22), 0 2px 8px rgba(10, 12, 30, 0.12);
+}
+
+.floating :deep(.dock-head) {
+  cursor: grab;
+  user-select: none;
+}
+
+.floating.moving :deep(.dock-head) {
+  cursor: grabbing;
+}
+
+/* The bottom-right corner of the floating Agent, drawn as two short diagonal lines. */
+.float-resizer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  touch-action: none;
+  background:
+    linear-gradient(135deg, transparent 0 55%, var(--fg3) 55% 62%, transparent 62% 75%, var(--fg3) 75% 82%, transparent 82%);
+  opacity: 0.6;
+}
+
+.float-resizer:hover {
+  opacity: 1;
+}
+
+.drag-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  cursor: col-resize;
+}
+
+.drag-sheet.move {
+  cursor: grabbing;
+}
+
+.drag-sheet.size {
+  cursor: nwse-resize;
 }
 </style>

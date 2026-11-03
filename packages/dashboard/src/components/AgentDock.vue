@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  AddOutline, AlertCircleOutline, CheckmarkCircle, CloseCircleOutline, CloseOutline, ExtensionPuzzleOutline, HandLeftOutline,
+  AddOutline, AlertCircleOutline, BrowsersOutline, CheckmarkCircle, CloseCircleOutline, CloseOutline, ExtensionPuzzleOutline, HandLeftOutline,
   HelpCircleOutline, InformationCircleOutline, SendOutline, SparklesOutline, StopCircleOutline, TrashOutline,
 } from '@vicons/ionicons5'
 import { NButton, NIcon, NInput, NModal, NPopover, NPopselect, NSelect, NSpin, NTag, NTooltip } from 'naive-ui'
@@ -17,10 +17,12 @@ import { pretty } from '../utils'
 import AgentMessage from './agent/AgentMessage.vue'
 import CommandPalette, { type PaletteItem } from './agent/CommandPalette.vue'
 import HistoryDrawer from './agent/HistoryDrawer.vue'
+import PanelIcon from './flow/editor/PanelIcon.vue'
 import ModelSelect from './ModelSelect.vue'
 
-defineProps<{ closable?: boolean }>()
-const emit = defineEmits<{ close: [] }>()
+/** `mode` is set where the Agent can float or dock; the button switches between the two. */
+defineProps<{ closable?: boolean; mode?: 'docked' | 'floating' }>()
+const emit = defineEmits<{ close: []; toggleMode: [] }>()
 
 const { t } = useI18n()
 const router = useRouter()
@@ -238,6 +240,17 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
             </NButton>
           </template>
           {{ t('agent.newChat') }}
+        </NTooltip>
+        <NTooltip v-if="mode">
+          <template #trigger>
+            <NButton size="small" quaternary circle :aria-label="mode === 'docked' ? t('agent.float') : t('agent.dock')" data-agent-target="agent.mode" @click="emit('toggleMode')">
+              <template #icon>
+                <NIcon v-if="mode === 'docked'"><BrowsersOutline /></NIcon>
+                <PanelIcon v-else side="right" :open="true" />
+              </template>
+            </NButton>
+          </template>
+          {{ mode === 'docked' ? t('agent.float') : t('agent.dock') }}
         </NTooltip>
         <NButton v-if="closable" size="small" quaternary circle :aria-label="t('agent.close')" @click="emit('close')">
           <template #icon><NIcon><CloseOutline /></NIcon></template>

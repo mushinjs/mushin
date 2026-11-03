@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { AddOutline, CloudDownloadOutline, CloudUploadOutline, CopyOutline, CreateOutline, DownloadOutline, PersonCircleOutline, TrashOutline } from '@vicons/ionicons5'
 import {
-  NAlert, NAvatar, NButton, NCard, NCollapse, NCollapseItem, NDynamicTags, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NInputNumber,
-  NModal, NSelect, NSpace, NSpin, NTag, useDialog, useMessage,
+  AddOutline, ArrowBackOutline, CloudDownloadOutline, CloudUploadOutline, CopyOutline, DownloadOutline, PersonCircleOutline, SearchOutline, TrashOutline,
+} from '@vicons/ionicons5'
+import {
+  NAlert, NAvatar, NButton, NDynamicTags, NEmpty, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NInputNumber,
+  NSelect, NSpace, NSpin, NTag, useDialog, useMessage,
 } from 'naive-ui'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink } from 'vue-router'
+import { onBeforeRouteLeave, RouterLink, useRoute, useRouter } from 'vue-router'
 import { call, on } from '../api'
+import { avatarColor } from '../botAvatar'
 import EmptyState from '../components/EmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
+import SaveBar from '../components/SaveBar.vue'
 import IconAction from '../components/IconAction.vue'
 import { imageAsDataUrl, readPersonaFile } from '../personaCards'
 import ModelSelect from '../components/ModelSelect.vue'
@@ -19,6 +23,8 @@ import type { AppPlugin, BotPersonaSettings, Persona, PersonaDraft } from '../ty
 import { clone, downloadJson } from '../utils'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const data = useDataStore()
 const message = useMessage()
 const dialog = useDialog()
@@ -37,6 +43,7 @@ async function refresh() {
     available.value = plugins.some((plugin) => plugin.package === '@mushin/plugin-personas' && plugin.status === 'active')
     if (!available.value) return
     personas.value = await call<Persona[]>('personas.list')
+    reconcile()
     if (!data.loadedBots) await data.refreshBots()
     const uses: Record<string, string[]> = {}
     await Promise.all(data.bots.map(async (bot) => {
@@ -59,26 +66,100 @@ onMounted(() => {
 const offs = [on('personas/changed', refresh), on('manager/changed', refresh)]
 onBeforeUnmount(() => offs.forEach((off) => off()))
 
-// ---- editing ----
+// ---- the list on the left, the selected persona on the right ----
+// The selection lives in the URL (?persona=<id>, or "new"), so a persona can be linked to.
 
+const NEW = 'new'
 const blank = (): PersonaDraft => ({ name: '', prompt: '', description: '', examples: [], avoid: '', tags: [] })
-const showEditor = ref(false)
-const editing = ref<string | null>(null)
+const selectedId = ref<string | undefined>(typeof route.query.persona === 'string' ? route.query.persona : undefined)
 const draft = ref<PersonaDraft>(blank())
+/** The draft as it was loaded, to tell whether anything changed. */
+const original = ref('')
 const saving = ref(false)
+const query = ref('')
 
-function openCreate() {
-  editing.value = null
-  draft.value = blank()
-  showEditor.value = true
+const selected = computed(() => personas.value.find((persona) => persona.id === selectedId.value))
+const creating = computed(() => selectedId.value === NEW)
+const dirty = computed(() => !!selectedId.value && JSON.stringify(payload(draft.value)) !== original.value)
+
+const shown = computed(() => {
+  const text = query.value.trim().toLowerCase()
+  if (!text) return personas.value
+  return personas.value.filter((persona) => [persona.name, persona.description, ...persona.tags].some((value) => value?.toLowerCase().includes(text)))
+})
+
+function load(id: string | undefined) {
+  selectedId.value = id
+  const persona = personas.value.find((item) => item.id === id)
+  if (persona) {
+    const { id: _id, createdAt: _created, updatedAt: _updated, ...fields } = clone(persona)
+    draft.value = { ...blank(), ...fields }
+  } else {
+    draft.value = blank()
+  }
+  original.value = JSON.stringify(payload(draft.value))
 }
 
-function openEdit(persona: Persona) {
-  editing.value = persona.id
-  const { id: _id, createdAt: _created, updatedAt: _updated, ...fields } = clone(persona)
-  draft.value = { ...blank(), ...fields }
-  showEditor.value = true
+/** Asks before unsaved changes are thrown away; resolves true when it is fine to go on. */
+function confirmDiscard() {
+  if (!dirty.value) return Promise.resolve(true)
+  return new Promise<boolean>((resolve) => {
+    dialog.warning({
+      title: t('personas.unsavedTitle'),
+      content: t('personas.unsavedHint'),
+      positiveText: t('personas.discard'),
+      negativeText: t('common.cancel'),
+      onPositiveClick: () => resolve(true),
+      onNegativeClick: () => resolve(false),
+      onClose: () => resolve(false),
+      onMaskClick: () => resolve(false),
+    })
+  })
 }
+
+async function select(id: string | undefined) {
+  if (id === selectedId.value) return
+  if (!(await confirmDiscard())) return
+  load(id)
+}
+
+const openCreate = () => select(NEW)
+
+/** After the list changes: keep the selection if it still exists, else fall back to the first persona on a wide page. */
+function reconcile() {
+  const id = selectedId.value
+  if (id === NEW) return
+  if (id && personas.value.some((persona) => persona.id === id)) {
+    // Reload unless the user is in the middle of an edit.
+    if (!dirty.value) load(id)
+    return
+  }
+  load(narrow.value ? undefined : personas.value[0]?.id)
+}
+
+watch(selectedId, (id) => {
+  const current = typeof route.query.persona === 'string' ? route.query.persona : undefined
+  if (id !== current) router.replace({ query: { ...route.query, persona: id } })
+})
+
+onBeforeRouteLeave(() => confirmDiscard())
+
+function onBeforeUnload(event: BeforeUnloadEvent) {
+  if (dirty.value) event.preventDefault()
+}
+window.addEventListener('beforeunload', onBeforeUnload)
+onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
+
+// The list and the editor sit side by side; on a narrow page one shows at a time.
+const root = ref<HTMLElement>()
+const width = ref(1200)
+const narrow = computed(() => width.value < 640)
+let observer: ResizeObserver | undefined
+onMounted(() => {
+  observer = new ResizeObserver(([entry]) => (width.value = entry.contentRect.width))
+  if (root.value) observer.observe(root.value)
+})
+onBeforeUnmount(() => observer?.disconnect())
 
 function insertVariable(variable: string) {
   draft.value.prompt += variable
@@ -110,13 +191,16 @@ async function save() {
   saving.value = true
   try {
     const body = payload(draft.value)
-    if (editing.value) {
+    let id = selectedId.value
+    if (id && id !== NEW) {
       // Cleared optional fields are sent empty so the old value goes away.
-      await call('personas.update', { id: editing.value, avatar: '', description: '', avoid: '', provider: '', model: '', ...body })
+      await call('personas.update', { id, avatar: '', description: '', avoid: '', provider: '', model: '', ...body })
     } else {
-      await call('personas.create', body)
+      id = (await call<Persona>('personas.create', body)).id
     }
-    showEditor.value = false
+    // Marked saved before the list reloads, so the reload replaces the draft.
+    original.value = JSON.stringify(body)
+    selectedId.value = id
     message.success(t('common.saved'))
     await refresh()
   } catch (error) {
@@ -127,10 +211,12 @@ async function save() {
 }
 
 async function duplicate(persona: Persona) {
+  if (!(await confirmDiscard())) return
   try {
     const { id: _id, createdAt: _created, updatedAt: _updated, ...fields } = persona
-    await call('personas.import', { data: { ...fields, name: persona.name } })
+    const result = await call<{ created: Persona[] }>('personas.import', { data: { ...fields, name: persona.name } })
     await refresh()
+    if (result.created[0]) load(result.created[0].id)
   } catch (error) {
     message.error((error as Error).message)
   }
@@ -145,6 +231,8 @@ function remove(persona: Persona) {
     onPositiveClick: async () => {
       await call('personas.delete', { id: persona.id })
       message.success(t('common.deleted'))
+      // The deleted persona's draft is gone with it.
+      original.value = JSON.stringify(payload(draft.value))
       await refresh()
     },
   })
@@ -194,7 +282,7 @@ const initial = (name: string) => [...name.trim()][0] ?? '?'
 </script>
 
 <template>
-  <div class="page">
+  <div ref="root" class="page" :class="{ narrow }">
     <PageHeader :title="t('nav.personas')" :lead="t('personas.lead')">
       <NSpace v-if="available">
         <NButton @click="importInput?.click()">
@@ -218,183 +306,409 @@ const initial = (name: string) => [...name.trim()][0] ?? '?'
         {{ t('personas.unavailableHint') }}
         <RouterLink to="/plugins?highlight=@mushin/plugin-personas">{{ t('permissions.openPlugins') }}</RouterLink>
       </NAlert>
-      <EmptyState v-else-if="!personas.length && !loading" :icon="PersonCircleOutline" :title="t('personas.emptyTitle')" :hint="t('personas.emptyHint')">
+      <EmptyState v-else-if="!personas.length && !creating && !loading" :icon="PersonCircleOutline" :title="t('personas.emptyTitle')" :hint="t('personas.emptyHint')">
         <NButton type="primary" @click="openCreate">{{ t('personas.add') }}</NButton>
         <NButton @click="importInput?.click()">{{ t('personas.import') }}</NButton>
       </EmptyState>
-      <NGrid v-else cols="1 700:2 1100:3" responsive="self" :x-gap="16" :y-gap="16">
-        <NGridItem v-for="persona in personas" :key="persona.id">
-          <NCard size="small" class="persona" hoverable>
-            <div class="head">
-              <NAvatar round :size="44" :src="persona.avatar || undefined">{{ initial(persona.name) }}</NAvatar>
-              <div class="title">
-                <strong>{{ persona.name }}</strong>
-                <span class="muted desc">{{ persona.description || persona.prompt }}</span>
-              </div>
-              <NSpace :size="2" :wrap="false">
-                <IconAction :icon="CreateOutline" :label="t('common.edit')" @click="openEdit(persona)" />
-                <IconAction :icon="CopyOutline" :label="t('personas.duplicate')" @click="duplicate(persona)" />
-                <IconAction :icon="DownloadOutline" :label="t('personas.export')" @click="exportPersonas([persona.id], persona.name)" />
-                <IconAction :icon="TrashOutline" :label="t('common.delete')" type="error" @click="remove(persona)" />
-              </NSpace>
-            </div>
-            <div class="meta">
-              <NTag v-for="tag in persona.tags" :key="tag" size="small" :bordered="false">{{ tag }}</NTag>
-              <NTag v-if="persona.examples.length" size="small" :bordered="false" type="info">{{ t('personas.exampleCount', { count: persona.examples.length }) }}</NTag>
-              <NTag v-if="persona.model" size="small" :bordered="false" class="mono">{{ persona.model }}</NTag>
-            </div>
-            <div class="muted used">
-              {{ usedBy[persona.id]?.length ? t('personas.usedBy', { bots: usedBy[persona.id].join('、') }) : t('personas.unused') }}
-            </div>
-          </NCard>
-        </NGridItem>
-      </NGrid>
-    </NSpin>
 
-    <NModal v-model:show="showEditor" preset="card" :title="editing ? t('personas.edit') : t('personas.add')" style="width: min(760px, 96vw)">
-      <NForm label-placement="top">
-        <div class="identity">
-          <div class="avatar">
-            <NAvatar round :size="64" :src="draft.avatar || undefined">{{ initial(draft.name || '?') }}</NAvatar>
-            <NSpace :size="4" vertical align="center">
-              <NButton size="tiny" @click="avatarInput?.click()">{{ t('personas.uploadAvatar') }}</NButton>
-              <NButton v-if="draft.avatar" size="tiny" quaternary @click="draft.avatar = ''">{{ t('common.remove') }}</NButton>
-            </NSpace>
-            <input ref="avatarInput" type="file" accept="image/*" hidden @change="pickAvatar">
+      <div v-else-if="available" class="split">
+        <!-- The list -->
+        <aside v-if="!narrow || !selectedId" class="list" :aria-label="t('nav.personas')">
+          <NInput v-if="personas.length > 4" v-model:value="query" clearable size="small" :placeholder="t('personas.search')" class="list-search">
+            <template #prefix><NIcon><SearchOutline /></NIcon></template>
+          </NInput>
+          <div class="items" role="listbox" :aria-label="t('nav.personas')">
+            <button
+              v-for="persona in shown"
+              :key="persona.id"
+              type="button"
+              role="option"
+              class="item"
+              :class="{ active: persona.id === selectedId }"
+              :aria-selected="persona.id === selectedId"
+              @click="select(persona.id)"
+            >
+              <NAvatar round :size="36" :src="persona.avatar || undefined" class="item-avatar" :style="persona.avatar ? undefined : { background: avatarColor(persona.id) }">{{ initial(persona.name) }}</NAvatar>
+              <span class="item-text">
+                <strong>
+                  {{ persona.id === selectedId && dirty ? draft.name || persona.name : persona.name }}
+                  <span v-if="persona.id === selectedId && dirty" class="unsaved-dot" :title="t('personas.unsavedTitle')" />
+                </strong>
+                <span class="item-sub">{{ persona.description || persona.prompt }}</span>
+              </span>
+              <span class="item-use" :class="{ on: usedBy[persona.id]?.length }" :title="usedBy[persona.id]?.length ? t('personas.usedBy', { bots: usedBy[persona.id].join('、') }) : t('personas.unused')">
+                {{ usedBy[persona.id]?.length ?? 0 }}
+              </span>
+            </button>
+            <button v-if="creating" type="button" class="item active" aria-selected="true">
+              <NAvatar round :size="36" :src="draft.avatar || undefined" class="item-avatar" :style="draft.avatar ? undefined : { background: avatarColor(NEW) }">{{ initial(draft.name || '?') }}</NAvatar>
+              <span class="item-text">
+                <strong>{{ draft.name || t('personas.untitled') }}</strong>
+                <span class="item-sub">{{ t('personas.notSaved') }}</span>
+              </span>
+            </button>
+            <p v-if="!shown.length && !creating" class="no-match">{{ t('personas.noMatch') }}</p>
           </div>
-          <div class="fields">
-            <NFormItem :label="t('common.name')" required>
-              <NInput v-model:value="draft.name" :maxlength="60" />
-            </NFormItem>
-            <NFormItem :label="t('personas.description')" :feedback="t('personas.descriptionHint')">
-              <NInput v-model:value="draft.description" :maxlength="500" />
-            </NFormItem>
-          </div>
-        </div>
-        <NFormItem :label="t('personas.prompt')" required>
-          <div class="prompt">
-            <NInput v-model:value="draft.prompt" type="textarea" :autosize="{ minRows: 6, maxRows: 16 }" :placeholder="t('personas.promptPlaceholder')" />
-            <div class="variables">
-              <span class="muted">{{ t('personas.variables') }}</span>
-              <NTag v-for="variable in VARIABLES" :key="variable" size="small" class="mono clickable" :bordered="false" @click="insertVariable(variable)">{{ variable }}</NTag>
-            </div>
-          </div>
-        </NFormItem>
-        <NFormItem :label="t('personas.examples')" :feedback="t('personas.examplesHint')">
-          <div class="examples">
-            <div v-for="(example, index) in draft.examples" :key="index" class="example">
-              <NInput v-model:value="example.user" :placeholder="t('personas.exampleUser')" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" />
-              <NInput v-model:value="example.assistant" :placeholder="t('personas.exampleAssistant')" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" />
-              <IconAction :icon="TrashOutline" :label="t('common.remove')" type="error" @click="draft.examples.splice(index, 1)" />
-            </div>
-            <NButton size="small" dashed @click="draft.examples.push({ user: '', assistant: '' })">
-              <template #icon><NIcon><AddOutline /></NIcon></template>
-              {{ t('personas.addExample') }}
+        </aside>
+
+        <!-- The editor -->
+        <section v-if="selectedId && (selected || creating)" class="detail">
+          <header class="detail-head">
+            <NButton v-if="narrow" quaternary circle :aria-label="t('common.back')" @click="select(undefined)">
+              <template #icon><NIcon><ArrowBackOutline /></NIcon></template>
             </NButton>
-          </div>
-        </NFormItem>
-        <NFormItem :label="t('personas.avoid')" :feedback="t('personas.avoidHint')">
-          <NInput v-model:value="draft.avoid" type="textarea" :autosize="{ minRows: 2, maxRows: 6 }" />
-        </NFormItem>
-        <NCollapse>
-          <NCollapseItem :title="t('personas.advanced')" name="advanced">
-            <NGrid cols="1 600:3" responsive="self" :x-gap="12">
-              <NGridItem>
-                <NFormItem :label="t('personas.provider')">
-                  <NSelect v-model:value="draft.provider" :options="providerOptions" clearable :placeholder="t('personas.botDefault')" />
-                </NFormItem>
-              </NGridItem>
-              <NGridItem>
-                <NFormItem :label="t('personas.model')">
-                  <ModelSelect :model-value="draft.model || null" :provider="draft.provider" :placeholder="t('personas.botDefault')" @update:model-value="(value) => (draft.model = value ?? '')" />
-                </NFormItem>
-              </NGridItem>
-              <NGridItem>
-                <NFormItem :label="t('personas.temperature')">
-                  <NInputNumber v-model:value="draft.temperature" :min="0" :max="2" :step="0.1" clearable :placeholder="t('personas.botDefault')" style="width: 100%" />
-                </NFormItem>
-              </NGridItem>
-            </NGrid>
-            <NFormItem :label="t('personas.tags')">
-              <NDynamicTags v-model:value="draft.tags" />
-            </NFormItem>
-          </NCollapseItem>
-        </NCollapse>
-      </NForm>
-      <template #footer>
-        <NSpace justify="end">
-          <NButton @click="showEditor = false">{{ t('common.cancel') }}</NButton>
-          <NButton type="primary" :loading="saving" @click="save">{{ t('common.save') }}</NButton>
-        </NSpace>
-      </template>
-    </NModal>
+            <div class="avatar-edit">
+              <NAvatar round :size="56" :src="draft.avatar || undefined" :style="draft.avatar ? undefined : { background: avatarColor(selectedId ?? '') }">{{ initial(draft.name || '?') }}</NAvatar>
+              <button type="button" class="avatar-change" @click="avatarInput?.click()">{{ draft.avatar ? t('personas.changeAvatar') : t('personas.uploadAvatar') }}</button>
+              <button v-if="draft.avatar" type="button" class="avatar-change" @click="draft.avatar = ''">{{ t('common.remove') }}</button>
+              <input ref="avatarInput" type="file" accept="image/*" hidden @change="pickAvatar">
+            </div>
+            <div class="identity">
+              <NInput v-model:value="draft.name" :maxlength="60" :placeholder="t('common.name')" class="name-input" :aria-label="t('common.name')" />
+              <span class="used">
+                {{ creating ? t('personas.notSaved') : usedBy[selectedId]?.length ? t('personas.usedBy', { bots: usedBy[selectedId].join('、') }) : t('personas.unused') }}
+              </span>
+            </div>
+            <NSpace v-if="selected" :size="2" :wrap="false" class="detail-actions">
+              <IconAction :icon="CopyOutline" :label="t('personas.duplicate')" @click="duplicate(selected)" />
+              <IconAction :icon="DownloadOutline" :label="t('personas.export')" @click="exportPersonas([selected.id], selected.name)" />
+              <IconAction :icon="TrashOutline" :label="t('common.delete')" type="error" @click="remove(selected)" />
+            </NSpace>
+          </header>
+
+          <NForm label-placement="top" class="form" @submit.prevent="save">
+            <section class="block">
+              <NFormItem :label="t('personas.description')" :feedback="t('personas.descriptionHint')">
+                <NInput v-model:value="draft.description" :maxlength="500" />
+              </NFormItem>
+              <NFormItem :label="t('personas.prompt')" required>
+                <div class="stack">
+                  <NInput v-model:value="draft.prompt" type="textarea" :autosize="{ minRows: 8, maxRows: 24 }" :placeholder="t('personas.promptPlaceholder')" />
+                  <div class="variables">
+                    <span class="muted">{{ t('personas.variables') }}</span>
+                    <NTag v-for="variable in VARIABLES" :key="variable" size="small" class="mono clickable" :bordered="false" @click="insertVariable(variable)">{{ variable }}</NTag>
+                  </div>
+                </div>
+              </NFormItem>
+            </section>
+
+            <section class="block">
+              <h3 class="block-title">{{ t('personas.examples') }} <span class="count">{{ draft.examples.length || '' }}</span></h3>
+              <p class="block-hint">{{ t('personas.examplesHint') }}</p>
+              <div class="stack">
+                <div v-for="(example, index) in draft.examples" :key="index" class="example">
+                  <NInput v-model:value="example.user" :placeholder="t('personas.exampleUser')" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" />
+                  <NInput v-model:value="example.assistant" :placeholder="t('personas.exampleAssistant')" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" />
+                  <IconAction :icon="TrashOutline" :label="t('common.remove')" type="error" @click="draft.examples.splice(index, 1)" />
+                </div>
+                <NButton size="small" dashed class="add-example" @click="draft.examples.push({ user: '', assistant: '' })">
+                  <template #icon><NIcon><AddOutline /></NIcon></template>
+                  {{ t('personas.addExample') }}
+                </NButton>
+              </div>
+            </section>
+
+            <section class="block">
+              <NFormItem :label="t('personas.avoid')" :feedback="t('personas.avoidHint')">
+                <NInput v-model:value="draft.avoid" type="textarea" :autosize="{ minRows: 2, maxRows: 6 }" />
+              </NFormItem>
+            </section>
+
+            <section class="block">
+              <h3 class="block-title">{{ t('personas.advanced') }}</h3>
+              <NGrid cols="1 600:3" responsive="self" :x-gap="12">
+                <NGridItem>
+                  <NFormItem :label="t('personas.provider')">
+                    <NSelect v-model:value="draft.provider" :options="providerOptions" clearable :placeholder="t('personas.botDefault')" />
+                  </NFormItem>
+                </NGridItem>
+                <NGridItem>
+                  <NFormItem :label="t('personas.model')">
+                    <ModelSelect :model-value="draft.model || null" :provider="draft.provider" :placeholder="t('personas.botDefault')" @update:model-value="(value) => (draft.model = value ?? '')" />
+                  </NFormItem>
+                </NGridItem>
+                <NGridItem>
+                  <NFormItem :label="t('personas.temperature')">
+                    <NInputNumber v-model:value="draft.temperature" :min="0" :max="2" :step="0.1" clearable :placeholder="t('personas.botDefault')" style="width: 100%" />
+                  </NFormItem>
+                </NGridItem>
+              </NGrid>
+              <NFormItem :label="t('personas.tags')" :show-feedback="false">
+                <NDynamicTags v-model:value="draft.tags" />
+              </NFormItem>
+            </section>
+          </NForm>
+
+          <SaveBar
+            :show="dirty"
+            :saving="saving"
+            :text="creating ? t('personas.newUnsaved') : t('personas.unsavedTitle')"
+            :discard-text="creating ? t('common.cancel') : t('personas.discard')"
+            :save-text="creating ? t('common.create') : t('common.save')"
+            @discard="creating ? (original = JSON.stringify(payload(draft)), select(personas[0]?.id)) : load(selectedId)"
+            @save="save"
+          />
+        </section>
+
+        <div v-else-if="!narrow" class="detail detail-empty">
+          <NEmpty :description="t('personas.pick')" />
+        </div>
+      </div>
+    </NSpin>
   </div>
 </template>
 
 <style scoped>
-.persona {
-  height: 100%;
+/* ---- the two columns ---- */
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
 }
 
-.head {
+.narrow .split {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.list {
+  position: sticky;
+  top: 16px;
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100vh - 140px);
+  min-height: 0;
 }
 
-.title {
-  flex: 1;
-  min-width: 0;
+.narrow .list {
+  position: static;
+  max-height: none;
+}
+
+.items {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--s1);
 }
 
-.desc {
-  font-size: 13px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+.item {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 10px;
+.item:hover {
+  background: var(--row-hover);
 }
 
-.used {
-  margin-top: 8px;
-  font-size: 12px;
+.item.active {
+  background: var(--primary-soft);
 }
 
-.identity {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
+.item:focus-visible,
+.avatar-change:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
 }
 
-.avatar {
+.item-avatar {
+  flex: none;
+}
+
+.item-text {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding-top: 24px;
-}
-
-.fields {
-  flex: 1;
   min-width: 0;
 }
 
-.prompt,
-.examples {
+.item-text strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.active .item-text strong {
+  color: var(--primary);
+}
+
+.item-sub {
+  overflow: hidden;
+  font-size: 12.5px;
+  color: var(--fg3);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.unsaved-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--warn);
+}
+
+/* How many bots use a persona: green when any do. */
+.item-use {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--s2);
+  color: var(--fg3);
+  font-size: 11.5px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.item-use.on {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.no-match {
+  margin: 0;
+  padding: 16px 8px;
+  font-size: 13px;
+  color: var(--fg3);
+  text-align: center;
+}
+
+/* ---- the editor ---- */
+
+.detail {
+  min-width: 0;
+}
+
+.detail-empty {
+  display: grid;
+  place-items: center;
+  min-height: 320px;
+  border: 1.5px dashed var(--line);
+  border-radius: var(--radius);
+}
+
+.detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 18px 18px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--s1);
+}
+
+.avatar-edit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.avatar-change {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.avatar-edit .avatar-change:first-of-type {
+  margin-top: 6px;
+}
+
+.identity {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.name-input :deep(input) {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.used {
+  font-size: 12.5px;
+  color: var(--fg3);
+}
+
+.form {
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--s1);
+}
+
+.block {
+  padding: 16px 18px 4px;
+}
+
+.block + .block {
+  border-top: 1px solid var(--line);
+}
+
+.block-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.block-title .count {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fg3);
+}
+
+.block-hint {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  color: var(--fg3);
+}
+
+.stack {
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.block > .stack {
+  margin-bottom: 16px;
+}
+
+.add-example {
+  align-self: flex-start;
 }
 
 .variables {
@@ -403,6 +717,10 @@ const initial = (name: string) => [...name.trim()][0] ?? '?'
   align-items: center;
   gap: 4px;
   font-size: 12px;
+}
+
+.muted {
+  color: var(--fg3);
 }
 
 .clickable {
@@ -416,14 +734,26 @@ const initial = (name: string) => [...name.trim()][0] ?? '?'
   align-items: start;
 }
 
-@media (max-width: 600px) {
-  .identity {
-    flex-direction: column;
-    align-items: stretch;
-  }
+.narrow .example {
+  grid-template-columns: 1fr;
+}
 
-  .example {
-    grid-template-columns: 1fr;
-  }
+.narrow .detail-head {
+  flex-wrap: wrap;
+}
+
+.narrow .detail-head {
+  align-items: center;
+}
+
+.narrow .detail-actions {
+  margin-left: auto;
+}
+
+/* On a phone the name takes its own row under the avatar. */
+.narrow .identity {
+  order: 5;
+  flex-basis: 100%;
+  padding-top: 0;
 }
 </style>

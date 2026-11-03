@@ -3,7 +3,7 @@ import { AddOutline, AlertCircleOutline, ArrowBackOutline, ChatbubblesOutline, A
 import { NButton, NEmpty, NIcon, NInput, useMessage } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { call } from '../api'
 import BotEditor from '../components/BotEditor.vue'
 import EmptyState from '../components/EmptyState.vue'
@@ -17,7 +17,13 @@ const { t } = useI18n()
 const router = useRouter()
 const data = useDataStore()
 const message = useMessage()
+const route = useRoute()
 const showCreate = ref(false)
+// /bots?new=1 (from search) opens the add dialog.
+if (route.query.new) {
+  showCreate.value = true
+  router.replace({ query: { ...route.query, new: undefined } })
+}
 const busy = ref<string>()
 
 onMounted(() => data.refreshBots().catch((error) => message.error(error.message)))

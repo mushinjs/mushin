@@ -384,6 +384,12 @@ function openCreate() {
   showCreate.value = true
 }
 
+// /flows?new=1 (from search) opens the new-flow dialog.
+if (route.query.new) {
+  openCreate()
+  router.replace({ query: { ...route.query, new: undefined } })
+}
+
 async function create() {
   if (!form.value.name.trim()) return
   const template = flowTemplates.find((item) => item.id === form.value.template) ?? flowTemplates[0]
