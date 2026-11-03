@@ -569,7 +569,9 @@ export interface StatsTopRow {
   key: string
   name: string
   count: number
+  /** The bot's name, for chats and users; botId is its id. */
   bot?: string
+  botId?: string
   id?: string
   errors?: number
   tokens?: number

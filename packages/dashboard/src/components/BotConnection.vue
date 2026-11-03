@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NAlert, NButton, NCard, NForm, NFormItem, NInput, NSelect, NSpace, useMessage } from 'naive-ui'
+import { NAlert, NButton, NCard, NForm, NFormItem, NInput, NSelect, useMessage } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../api'
@@ -22,11 +22,19 @@ const serverUrl = ref('')
 
 call<{ baseUrl: string }>('system.info').then((info) => (serverUrl.value = info.baseUrl)).catch(() => {})
 
-watch(() => props.bot.id, () => {
+function reset() {
   name.value = props.bot.name
   config.value = clone(props.bot.adapter.config)
   provider.value = props.bot.provider ?? null
-}, { immediate: true })
+  saved.value = snapshot()
+}
+
+// What was last loaded or saved, to tell whether the form has changes worth a save bar.
+const snapshot = () => JSON.stringify({ name: name.value, config: config.value, provider: provider.value })
+const saved = ref('')
+const dirty = computed(() => snapshot() !== saved.value)
+
+watch(() => props.bot.id, reset, { immediate: true })
 
 const adapter = computed(() => data.adapters.find((item) => item.id === props.bot.adapter.type))
 const mode = computed(() => config.value.mode ?? 'forward')
@@ -47,6 +55,7 @@ async function save() {
       adapter: { type: props.bot.adapter.type, config: config.value },
       provider: provider.value,
     })
+    saved.value = snapshot()
     message.success(t('common.saved'))
     await data.refreshBots()
   } catch (error) {
@@ -85,13 +94,75 @@ async function save() {
       </NFormItem>
     </NForm>
 
-    <NSpace justify="end">
-      <NButton type="primary" :loading="saving" @click="save">{{ t('bot.saveAndRestart') }}</NButton>
-    </NSpace>
   </NCard>
+
+  <!-- Stays at the bottom of the window while there are unsaved changes, so saving never needs a scroll. -->
+  <Transition name="savebar">
+    <div v-if="dirty || saving" class="savebar" role="region" :aria-label="t('bot.unsaved')">
+      <span class="savebar-text"><span class="savebar-dot" />{{ t('bot.unsaved') }}</span>
+      <NButton quaternary class="savebar-undo" :disabled="saving" @click="reset">{{ t('bot.discard') }}</NButton>
+      <NButton type="primary" :loading="saving" @click="save">{{ t('bot.saveAndRestart') }}</NButton>
+    </div>
+  </Transition>
 </template>
 
 <style scoped>
+.savebar {
+  position: sticky;
+  bottom: 16px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 10px 12px 10px 18px;
+  border-radius: var(--radius);
+  background: #1B1D29;
+  color: #E8E9F0;
+  box-shadow: 0 8px 24px rgba(10, 12, 30, 0.28);
+}
+
+html[data-theme='dark'] .savebar {
+  background: #2A2D3A;
+}
+
+.savebar-text {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.savebar-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+.savebar-undo {
+  color: inherit;
+}
+
+.savebar-enter-active,
+.savebar-leave-active {
+  transition: transform 0.24s ease, opacity 0.24s ease;
+}
+
+.savebar-enter-from,
+.savebar-leave-to {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .savebar-enter-active,
+  .savebar-leave-active {
+    transition: none;
+  }
+}
+
 .hint {
   margin-bottom: 16px;
   white-space: pre-line;
