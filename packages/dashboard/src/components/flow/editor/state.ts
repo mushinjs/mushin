@@ -1,0 +1,217 @@
+/**
+ * The flow editor's shared state: the document on the canvas, what is selected and which panels
+ * are open, plus the small helpers every part of the editor reads. The other modules here add the
+ * behaviour on top; `useFlowEditorView` puts them together.
+ */
+import { type Edge, type Node, useVueFlow } from '@vue-flow/core'
+import { useDialog, useMessage } from 'naive-ui'
+import { computed, type Ref, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
+import { useDataStore } from '../../../stores/data'
+import type { FlowDoc, FlowGroupDoc, FlowIssue, FlowPause, FlowRunInfo, NodeTypeInfo, RunTrace } from '../../../types'
+import { localize } from '../../../utils'
+import type { CanvasNodeData, FlowHighlight, RunStatus } from '../context'
+import type RunLogs from '../RunLogs.vue'
+
+// A collapsed group is drawn as one box node (type `mushinGroup`, id `group:<group id>`) with its
+// nodes hidden; connections that cross the group are drawn to the box as `virt:<edge id>`. Boxes
+// and those edges exist only on the canvas and are never saved.
+export const BOX = 'mushinGroup'
+export const isBox = (node: { type?: string }) => node.type === BOX
+export const isVirtual = (edge: { id: string }) => edge.id.startsWith('virt:')
+/** Edges drawn round a skipped step, from the steps before it to the ones after its first exit. Never saved. */
+export const BYPASS = 'bypass:'
+
+const edgeColors: Record<RunStatus, string> = { running: '#2080f0', ok: '#18a058', error: '#d03050', skipped: '#18a058', paused: '#f0a020' }
+
+/** Below this width the palette and panel float over the canvas instead of squeezing it. */
+const NARROW = 1000
+
+export function createEditorState() {
+  const { t, locale } = useI18n()
+  const route = useRoute()
+  const router = useRouter()
+  const message = useMessage()
+  const dialog = useDialog()
+  const data = useDataStore()
+  const flow = useVueFlow('flow-editor')
+  const flowId = computed(() => String(route.params.id))
+
+  const types = ref(new Map<string, NodeTypeInfo>())
+  // Typed by assertion: Vue's deep ref unwrapping of Vue Flow's node types is too deep for TypeScript.
+  const nodes = ref([]) as Ref<Node<CanvasNodeData>[]>
+  const edges = ref([]) as Ref<Edge[]>
+  /** Nodes framed together; only the editor uses them. */
+  const groups = ref<FlowGroupDoc[]>([])
+  const name = ref('')
+  const description = ref('')
+  const bots = ref<string[]>([])
+  const enabled = ref(true)
+  const toggling = ref(false)
+  /** The adapter saved on the flow; see `currentAdapter` for the one in effect. */
+  const adapter = ref<string>()
+  const issues = ref<FlowIssue[]>([])
+  const blockedSlots = ref<NonNullable<FlowDoc['blocked']>>([])
+
+  const runs = ref<RunTrace[]>([])
+  /** The run the logs panel shows; node cards show its inputs and outputs on hover. */
+  const logsRun = ref<string>()
+  /** A run on a bot opened from its run list (`?run=<id>`), drawn on the canvas until closed. */
+  const viewing = ref<FlowRunInfo>()
+  /** Nodes test runs pause before; kept in this browser for each flow. */
+  const breakpoints = ref(new Set<string>())
+  /** The test run waiting at a breakpoint. */
+  const paused = ref<FlowPause>()
+  const testing = ref(false)
+  /** The node a single-step run is executing right now. */
+  const executing = ref<string>()
+  const highlight = ref<FlowHighlight>({ nodes: new Map(), edges: new Map() })
+  /** Test case count and failures of the last run, shown on the tests tab. */
+  const testStatus = ref({ failed: 0, total: 0 })
+  const uncovered = ref(new Set<string>())
+
+  const loaded = ref(false)
+  const saving = ref(false)
+  const savedSignature = ref('')
+  const selectedId = ref<string>()
+  const tab = ref<'node' | 'flow'>('flow')
+  const nodeTab = ref<'settings' | 'io'>('settings')
+
+  const canvas = ref<HTMLElement>()
+  const root = ref<HTMLElement>()
+  const logs = ref<InstanceType<typeof RunLogs>>()
+  const width = ref(1200)
+  const narrow = computed(() => width.value < NARROW)
+  const showPalette = ref(true)
+  const showPanel = ref(true)
+  const showLogs = ref(true)
+  const logsTab = ref<'logs' | 'tests'>('logs')
+  /** The editor fills the window, over the app's sidebar, top bar and Agent. */
+  const immersive = ref(false)
+
+  const realNodes = computed(() => nodes.value.filter((node) => !isBox(node)))
+  const order = computed(() => new Map(realNodes.value.map((node, index) => [node.id, index])))
+  const issuesByNode = computed(() => {
+    const map = new Map<string, FlowIssue[]>()
+    for (const issue of issues.value) {
+      if (issue.nodeId) map.set(issue.nodeId, [...(map.get(issue.nodeId) ?? []), issue])
+    }
+    return map
+  })
+  const errorCount = computed(() => issues.value.filter((issue) => issue.severity === 'error').length)
+  const warningCount = computed(() => issues.value.length - errorCount.value)
+
+  const selected = computed(() => nodes.value.find((node) => node.id === selectedId.value))
+  const selectedInfo = computed(() => selected.value && types.value.get(selected.value.data!.typeId))
+  const selectedIsTrigger = computed(() => selectedInfo.value?.kind === 'trigger')
+
+  /** The flow's adapter: the one set on it, else the one its bots all use, else the only one installed. */
+  const currentAdapter = computed(() => {
+    if (adapter.value) return adapter.value
+    const used = new Set(bots.value.map((id) => data.bots.find((bot) => bot.id === id)?.adapter.type).filter(Boolean))
+    if (used.size === 1) return [...used][0]
+    return data.adapters.length === 1 ? data.adapters[0].id : undefined
+  })
+  const adapterName = (id: string) => localize(data.adapters.find((item) => item.id === id)?.displayName, locale.value) || id
+
+  const typeTitle = (typeId: string) => localize(types.value.get(typeId)?.title, locale.value) || typeId
+  const nodeName = (id: string) => {
+    const node = nodes.value.find((item) => item.id === id)
+    return node ? node.data!.label || typeTitle(node.data!.typeId) : id
+  }
+  const nodeType = (id: string) => nodes.value.find((item) => item.id === id)?.data!.typeId
+  const botName = (id: string) => data.bots.find((bot) => bot.id === id)?.name ?? id
+  const portLabel = (port: { name: string; title?: any }) => localize(port.title, locale.value) || port.name
+  const groupOf = (groupId: string | undefined) => groups.value.find((group) => group.id === groupId)
+
+  function toDoc() {
+    return {
+      name: name.value,
+      description: description.value,
+      adapter: adapter.value ?? '',
+      bots: bots.value,
+      nodes: realNodes.value.map((node) => ({
+        id: node.id,
+        type: node.data!.typeId,
+        ...(node.data!.label ? { label: node.data!.label } : {}),
+        position: { x: Math.round(node.position.x), y: Math.round(node.position.y) },
+        config: node.data!.config,
+        ...(node.data!.inputs && Object.keys(node.data!.inputs).length ? { inputs: node.data!.inputs } : {}),
+        ...(node.data!.skip ? { skip: true } : {}),
+        ...(node.data!.priority ? { priority: node.data!.priority } : {}),
+        ...(node.data!.intercept ? { intercept: node.data!.intercept } : {}),
+      })),
+      edges: edges.value.filter((edge) => !isVirtual(edge)).map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        sourceHandle: edge.sourceHandle ?? '',
+        target: edge.target,
+        targetHandle: edge.targetHandle ?? '',
+      })),
+      groups: groups.value,
+    }
+  }
+
+  const signature = () => JSON.stringify(toDoc())
+  const dirty = computed(() => loaded.value && signature() !== savedSignature.value)
+
+  /**
+   * Every edge means "run next". Grey by default; during a run the edge into a running node is a
+   * moving dashed line, then green or red once that node succeeds or fails. Invalid edges are red
+   * and dashed. Direction is left to right, so no arrowheads.
+   */
+  function edgeLook(edge: Pick<Edge, 'id' | 'source' | 'target'>): Partial<Edge> {
+    // A connection drawn to a collapsed group looks like the real one.
+    const id = edge.id.replace(/^virt:/, '')
+    const bypass = id.startsWith(BYPASS)
+    const status = highlight.value.edges.get(id)
+    const broken = issues.value.some((issue) => issue.edgeId === id)
+    // A skipped node's own connections are dashed; runs go round it on the bypass drawn instead.
+    const skipped = !bypass && [edge.source, edge.target].some((node) => flow.findNode(node)?.data?.skip)
+    const color = status ? edgeColors[status] : broken ? '#d03050' : '#8c8c8c'
+    const dashed = (broken && !status) || skipped
+    return {
+      type: 'default',
+      animated: status === 'running',
+      updatable: !edge.id.startsWith('virt:'),
+      class: [status ? `edge-${status}` : '', skipped ? 'edge-skipped' : '', bypass ? 'edge-bypass' : ''].filter(Boolean).join(' ') || undefined,
+      style: { stroke: color, strokeWidth: status ? 2.5 : 2, ...(dashed ? { strokeDasharray: skipped ? '6 5' : '4 4' } : {}), ...(skipped && !status ? { opacity: 0.6 } : {}) },
+    }
+  }
+
+  function restyleEdges() {
+    edges.value = edges.value.map((edge) => ({ ...edge, ...edgeLook(edge) }))
+  }
+
+  /** A new edge between two handles, styled for the canvas. */
+  function link(source: string, sourceHandle: string, target: string, targetHandle = 'exec') {
+    const edge = { id: `e-${Math.random().toString(36).slice(2, 8)}`, source, sourceHandle, target, targetHandle }
+    return { ...edge, ...edgeLook(edge) }
+  }
+
+  /** On a narrow screen only one side panel shows at a time, floating over the canvas. */
+  function openPanel() {
+    showPanel.value = true
+    if (narrow.value) showPalette.value = false
+  }
+
+  /** Opens a node's settings without moving the canvas. */
+  function selectNode(id: string) {
+    selectedId.value = id
+    tab.value = 'node'
+  }
+
+  return {
+    t, locale, route, router, message, dialog, data, flow, flowId,
+    types, nodes, edges, groups, name, description, bots, enabled, toggling, adapter, issues, blockedSlots,
+    runs, logsRun, viewing, breakpoints, paused, testing, executing, highlight, testStatus, uncovered,
+    loaded, saving, savedSignature, selectedId, tab, nodeTab,
+    canvas, root, logs, width, narrow, showPalette, showPanel, showLogs, logsTab, immersive,
+    realNodes, order, issuesByNode, errorCount, warningCount, selected, selectedInfo, selectedIsTrigger,
+    currentAdapter, adapterName, typeTitle, nodeName, nodeType, botName, portLabel, groupOf,
+    toDoc, signature, dirty, edgeLook, restyleEdges, link, openPanel, selectNode,
+  }
+}
+
+export type EditorState = ReturnType<typeof createEditorState>

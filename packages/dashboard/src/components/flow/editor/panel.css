@@ -1,0 +1,43 @@
+/* Bits of text shared by the inspector's panels. */
+.muted {
+  opacity: 0.65;
+  font-size: 13px;
+}
+
+.small {
+  font-size: 12px;
+}
+
+.section {
+  margin: 16px 0 8px;
+  font-size: 13px;
+}
+
+.inputs-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.type-hint {
+  cursor: help;
+  opacity: 0.6;
+}
+
+.label-with-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.issue {
+  margin-bottom: 8px;
+}
+
+.issue-link {
+  margin-left: 6px;
+}
+
+.issue.clickable {
+  cursor: pointer;
+}
