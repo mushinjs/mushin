@@ -6,7 +6,9 @@ import { useI18n } from 'vue-i18n'
 import { categories, categoryColors, refOf, supports } from '../../flow'
 import type { NodeCategory, NodeTypeInfo } from '../../types'
 import { localize } from '../../utils'
+import { useGuideHover } from './guide'
 import { nodeIcon } from './icons'
+import NodeGuideCard from './NodeGuideCard.vue'
 
 const props = defineProps<{
   types: NodeTypeInfo[]
@@ -18,6 +20,8 @@ const props = defineProps<{
 const emit = defineEmits<{ add: [typeId: string] }>()
 const { t, locale } = useI18n()
 const query = ref('')
+const guide = useGuideHover()
+const palette = ref<HTMLElement>()
 
 // Collapsed categories are remembered in this browser only.
 const STORAGE_KEY = 'mushin.flows.collapsed'
@@ -58,10 +62,10 @@ const groups = computed(() => {
 
 const usable = (type: NodeTypeInfo) => supports(type, props.adapter)
 
-/** The tooltip: the description, and for greyed-out nodes why they are unavailable. */
+/** The tooltip of greyed-out nodes: why they are unavailable. Usable ones show the tutorial card instead. */
 function hint(type: NodeTypeInfo) {
   const description = localize(type.description, locale.value)
-  if (usable(type)) return description
+  if (usable(type)) return undefined
   const reason = type.unavailable ? localize(type.unavailable, locale.value) : t('flows.nodeNeedsAdapter', {
     name: (type.platforms ?? []).map(props.adapterName).join(' / '),
     current: props.adapterName(props.adapter ?? ''),
@@ -70,6 +74,7 @@ function hint(type: NodeTypeInfo) {
 }
 
 function onDragStart(event: DragEvent, type: NodeTypeInfo) {
+  guide.hide()
   if (!usable(type)) {
     event.preventDefault()
     return
@@ -84,7 +89,7 @@ function onClick(type: NodeTypeInfo) {
 </script>
 
 <template>
-  <aside class="palette">
+  <aside ref="palette" class="palette">
     <NInput v-model:value="query" size="small" clearable :placeholder="t('flows.searchNodes')" />
     <div v-for="group in groups" :key="group.category" class="group">
       <button
@@ -113,6 +118,10 @@ function onClick(type: NodeTypeInfo) {
           :style="{ '--accent': categoryColors[type.category] }"
           @dragstart="onDragStart($event, type)"
           @click="onClick(type)"
+          @mouseenter="usable(type) ? guide.enter(type, $event.currentTarget as Element) : guide.leave()"
+          @mouseleave="guide.leave()"
+          @focus="usable(type) && guide.enter(type, $event.currentTarget as Element)"
+          @blur="guide.leave()"
         >
           <span class="item-icon"><NIcon :size="14"><component :is="nodeIcon(type.type, type.category)" /></NIcon></span>
           <span class="item-title">{{ localize(type.title, locale) }}</span>
@@ -120,6 +129,15 @@ function onClick(type: NodeTypeInfo) {
       </template>
     </div>
     <p class="hint">{{ t('flows.paletteHint', { ref: refOf('n1', 'text') }) }}</p>
+    <NodeGuideCard
+      v-if="guide.hovered.value && guide.anchor.value"
+      :type="guide.hovered.value"
+      :types="types"
+      :anchor="guide.anchor.value"
+      :beside="palette?.getBoundingClientRect()"
+      @enter="guide.keep()"
+      @leave="guide.leave()"
+    />
   </aside>
 </template>
 

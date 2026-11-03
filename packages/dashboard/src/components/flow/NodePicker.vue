@@ -5,7 +5,9 @@ import { useI18n } from 'vue-i18n'
 import { categories, categoryColors, supports } from '../../flow'
 import type { NodeTypeInfo } from '../../types'
 import { localize } from '../../utils'
+import { useGuideHover } from './guide'
 import { nodeIcon } from './icons'
+import NodeGuideCard from './NodeGuideCard.vue'
 
 /**
  * A searchable node list that floats at a point on the canvas: opened from the context menu, or
@@ -27,6 +29,7 @@ const root = ref<HTMLElement>()
 const search = ref<InstanceType<typeof NInput>>()
 const active = ref(0)
 const theme = useThemeVars()
+const guide = useGuideHover()
 
 const usable = (type: NodeTypeInfo) => supports(type, props.adapter)
 
@@ -45,7 +48,7 @@ const flat = computed(() => groups.value.flatMap((group) => group.items).filter(
 
 function hint(type: NodeTypeInfo) {
   const description = localize(type.description, locale.value)
-  if (usable(type)) return description
+  if (usable(type)) return undefined
   const reason = type.unavailable ? localize(type.unavailable, locale.value) : t('flows.nodeNeedsAdapter', {
     name: (type.platforms ?? []).map(props.adapterName).join(' / '),
     current: props.adapterName(props.adapter ?? ''),
@@ -64,7 +67,12 @@ function onKeydown(event: KeyboardEvent) {
   else if (event.key === 'Enter' && flat.value[active.value]) pick(flat.value[active.value])
   else return
   event.preventDefault()
-  nextTick(() => root.value?.querySelector('.item.active')?.scrollIntoView({ block: 'nearest' }))
+  nextTick(() => {
+    const element = root.value?.querySelector('.item.active')
+    element?.scrollIntoView({ block: 'nearest' })
+    const type = flat.value[active.value]
+    if (element && type && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) guide.enter(type, element)
+  })
 }
 
 // Stay inside the window.
@@ -106,7 +114,8 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onPointerDown, t
             :aria-disabled="!usable(type)"
             :title="hint(type)"
             :style="{ '--accent': categoryColors[type.category] }"
-            @mouseenter="usable(type) && (active = flat.indexOf(type))"
+            @mouseenter="usable(type) ? (active = flat.indexOf(type), guide.enter(type, $event.currentTarget as Element)) : guide.leave()"
+            @mouseleave="guide.leave()"
             @click="pick(type)"
           >
             <span class="item-icon"><NIcon :size="13"><component :is="nodeIcon(type.type, type.category)" /></NIcon></span>
@@ -116,6 +125,15 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onPointerDown, t
         <p v-if="!groups.length" class="empty">{{ t('flows.pickerEmpty') }}</p>
       </div>
     </div>
+    <NodeGuideCard
+      v-if="guide.hovered.value && guide.anchor.value"
+      :type="guide.hovered.value"
+      :types="types"
+      :anchor="guide.anchor.value"
+      :beside="root?.getBoundingClientRect()"
+      @enter="guide.keep()"
+      @leave="guide.leave()"
+    />
   </Teleport>
 </template>
 

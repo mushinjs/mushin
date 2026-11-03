@@ -525,6 +525,23 @@ export function permissionNode(permissions: Permissions): NodeType {
       { name: 'tags', type: 'any', title: { en: 'Tags in this chat', 'zh-CN': '本会话中的标签' } },
     ],
     execOut: ['allow', 'deny'],
+    guide: {
+      example: {
+        nodes: [
+          { id: 'cmd', type: 'trigger.command', config: { name: '重启' } },
+          { id: 'perm', type: 'logic.permission', config: { allow: ['admin'], blockUsers: ['10000'] } },
+          { id: 'ok', type: 'action.reply', config: { text: '正在重启…' } },
+          { id: 'no', type: 'action.reply', config: { text: '{{perm.reason}}' } },
+        ],
+        edges: [['cmd', 'perm'], ['perm', 'ok', 'allow'], ['perm', 'no', 'deny']],
+        input: { text: '/重启', userId: '10000', role: 'admin' },
+      },
+      captions: [
+        { en: 'Someone runs the command', 'zh-CN': '有人运行了指令' },
+        { en: 'They are an admin, but on the block list, so the check goes to "deny"', 'zh-CN': '虽然是管理员，但在黑名单里，所以走 deny' },
+        { en: 'The deny branch replies with the reason', 'zh-CN': 'deny 分支回复未通过原因' },
+      ],
+    },
     testOptions(config) {
       const options: TestOption[] = []
       const allowed = config.allow as Allowed[]

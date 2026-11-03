@@ -1,6 +1,7 @@
 import { type ChannelInfo, field, seg, type Segment, segmentsToText, z } from '@mushin/core'
 import { type CommandArg, commandMatches, parseArgs, roleAtLeast, splitCommand, usageReply } from '@mushin/plugin-bots'
 import { FlowError, TriggerReply } from './engine'
+import { BUILTIN_GUIDES } from './guides'
 import type { FlowSession, LlmLike, NodeContext, NodeType, PersonaLike, VariableScope } from './types'
 
 const scopeField = z.enum(['chat', 'user', 'flow', 'run']).default('chat').meta(field(
@@ -1095,3 +1096,9 @@ export const builtinNodes: NodeType[] = [
   chatNode, classifyNode,
   replyNode, sendNode,
 ]
+
+// Tutorials live in guides.ts; a type's own notes stay with it.
+for (const type of builtinNodes) {
+  const guide = BUILTIN_GUIDES[type.type]
+  if (guide) type.guide = { ...guide, ...type.guide }
+}

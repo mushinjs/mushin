@@ -208,6 +208,19 @@ export interface TestInput {
   replies?: string[]
 }
 /** How a test run differs from the editor's test button; test cases use their own variables and model. */
+/** A node type's tutorial example after running it; see `FlowService.guide`. */
+export interface GuideRun {
+  nodes: { id: string; type: string; config: Record<string, any> }[]
+  edges: ([string, string] | [string, string, string])[]
+  input: { text: string; userName: string; private: boolean }
+  matched: boolean
+  steps: { nodeId: string; exec?: string; outputs?: Record<string, unknown>; error?: string }[]
+  replies: string[]
+  /** What the user answers when the example waits for a reply, in order. */
+  waits: string[]
+  error?: string
+}
+
 export interface TestOptions {
   vars?: Pick<Variables, 'get' | 'set'>
   llm?: LlmLike
@@ -1092,8 +1105,8 @@ export class FlowService extends Service {
    * Sends a made-up message (or event, or schedule tick) through a flow without a bot; replies and
    * platform calls are collected, not made. `replies` answer the flow's waits for a reply, in order.
    */
-  async test(id: string, input: TestInput, options: TestOptions = {}) {
-    const doc = this.get(id)
+  async test(id: string | FlowDocument, input: TestInput, options: TestOptions = {}) {
+    const doc = typeof id === 'string' ? this.get(id) : id
     if (input.nodeId && !doc.nodes.some((node) => node.id === input.nodeId)) {
       throw new MushinError('not_found', `No node with id "${input.nodeId}" in this flow`)
     }
@@ -1105,7 +1118,7 @@ export class FlowService extends Service {
     }
     const compiled = input.override
       ? compile({ ...doc, nodes: doc.nodes.map((node) => (node.id === input.override!.nodeId ? { ...node, config: input.override!.config } : node)) }, this.types)
-      : this.compiledOf(doc)
+      : typeof id === 'string' ? this.compiledOf(doc) : compile(doc, this.types)
     const sample = input.sample ? await this.sampleSession(input.sample.bot, input.sample.id, input.sample.channel) : undefined
     const text = sample ? sample.session.text : input.text ?? ''
     const data = input.event?.data ?? {}
@@ -1172,7 +1185,70 @@ export class FlowService extends Service {
       },
     })
     if (options.record !== false) this.record(result.trace)
-    return { matched: result.matched, consumed: result.consumed, trace: result.trace, issues: this.issuesOf(doc) }
+    return { matched: result.matched, consumed: result.consumed, trace: result.trace, issues: typeof id === 'string' ? this.issuesOf(doc) : [] }
+  }
+
+  private guides = new Map<string, { type: NodeType; result: Promise<GuideRun | undefined> }>()
+
+  /**
+   * A node type's tutorial example, run once as a test: the flow it shows and the steps the run
+   * took, for the editor's hover animation. Nothing when the type has no example.
+   */
+  guide(typeId: string) {
+    const type = this.types.get(typeId)
+    if (!type) throw new MushinError('not_found', `No node type "${typeId}"`)
+    const cached = this.guides.get(typeId)
+    if (cached?.type === type) return cached.result
+    const result = this.runGuide(type).catch((error) => {
+      this.home.logger('flows').warn('guide example of %s failed: %s', typeId, (error as Error).message)
+      return undefined
+    })
+    this.guides.set(typeId, { type, result })
+    return result
+  }
+
+  private async runGuide(type: NodeType): Promise<GuideRun | undefined> {
+    const example = type.guide?.example
+    if (!example) return
+    const nodes: FlowNode[] = example.nodes.map((node, index) => ({
+      id: node.id,
+      type: node.type,
+      position: { x: index * 200, y: 0 },
+      config: node.config ?? {},
+      ...(node.inputs ? { inputs: node.inputs } : {}),
+    }))
+    const edges: FlowEdge[] = example.edges.map(([source, target, exec], index) => ({
+      id: `e${index}`, source, sourceHandle: `exec:${exec ?? 'next'}`, target, targetHandle: 'exec',
+    }))
+    const now = Date.now()
+    const doc: FlowDocument = { id: `guide:${type.type}`, name: type.type, bots: [], nodes, edges, createdAt: now, updatedAt: now }
+    const { input } = example
+    const result = await this.test(doc, {
+      ...input,
+      ...(input.role ? { role: input.role } : {}),
+      ...(example.replies ? { replies: example.replies } : {}),
+    } as TestInput, { llm: mockLlm(example.llm ?? []), record: false, vars: scratchVars([]) })
+    const short = (value: unknown): unknown => {
+      if (typeof value === 'string') return value.length > 80 ? `${value.slice(0, 80)}…` : value
+      if (Array.isArray(value)) return value.length > 4 ? `[${value.length}]` : value.map(short)
+      if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).slice(0, 6).map(([key, item]) => [key, short(item)]))
+      return value
+    }
+    return {
+      nodes: nodes.map(({ id, type: nodeType, config }) => ({ id, type: nodeType, config })),
+      edges: example.edges,
+      input: { text: input.text ?? '', userName: input.userName ?? 'Tester', private: !!input.private },
+      matched: result.matched,
+      steps: result.trace.steps.map((step) => ({
+        nodeId: step.nodeId,
+        ...(step.exec ? { exec: step.exec } : {}),
+        ...(step.outputs ? { outputs: short(step.outputs) as Record<string, unknown> } : {}),
+        ...(step.error ? { error: step.error } : {}),
+      })),
+      replies: result.trace.replies,
+      waits: example.replies ?? [],
+      ...(result.trace.error ? { error: result.trace.error } : {}),
+    }
   }
 
   /**
@@ -1643,6 +1719,14 @@ export class FlowService extends Service {
         config: z.record(z.string(), z.any()).optional().describe('Editor only: the node\'s unsaved config'),
       }),
       handler: ({ id, nodeId, config, ...input }) => this.preview(id, nodeId, { ...input, ...(input.text || input.sample ? {} : { text: '你好' }) }, config),
+    })
+
+    yield actions.define({
+      name: 'flows.guide',
+      description: 'Editor only: a node type\'s tutorial example run as a test, for the node picker\'s hover animation: the example flow, the steps the run took and what the bot replied.',
+      risk: 'read',
+      input: z.object({ type: z.string() }),
+      handler: async ({ type }) => (await this.guide(type)) ?? null,
     })
 
     yield actions.define({

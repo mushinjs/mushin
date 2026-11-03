@@ -103,6 +103,10 @@ export interface NodeGuide {
     edges: ([string, string] | [string, string, string])[]
     /** The message (or test input) that runs it. */
     input: TestOption['input']
+    /** What the user answers when the example waits for a reply, in order. */
+    replies?: string[]
+    /** What the stand-in model answers, in order. */
+    llm?: string[]
   }
   /** One line per step of the animation, in order of the nodes that run; extra steps are ignored. */
   captions?: LocalizedText[]
