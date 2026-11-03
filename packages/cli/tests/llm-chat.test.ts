@@ -179,12 +179,12 @@ describe('LLM chat as a flow', () => {
 
   it('keeps edits made on the canvas when the bot restarts, and removes the flow when the plugin is turned off', async () => {
     const flow = await chatFlow()
-    const nodes = flow.nodes.map((node: any) => (node.type === 'ai.chat' ? { ...node, config: { ...node.config, systemPrompt: 'Be brief.' } } : node))
+    const nodes = flow.nodes.map((node: any) => (node.type === 'ai.chat' ? { ...node, config: { ...node.config, prompt: [{ kind: 'system', text: 'Be brief.' }, { kind: 'message', text: '' }] } } : node))
     await app.call('flows.update', { id: flow.id, nodes })
     await app.call('bots.start', { id: botId })
     await waitFor(async () => (await app.call('bots.get', { id: botId })).status === 'online')
     await sleep(200)
-    expect((await chatFlow()).nodes.find((node: any) => node.type === 'ai.chat').config.systemPrompt).toBe('Be brief.')
+    expect((await chatFlow()).nodes.find((node: any) => node.type === 'ai.chat').config.prompt[0].text).toBe('Be brief.')
     await app.call('bots.plugins.disable', { id: botId, package: PLUGIN })
     await waitFor(async () => !(await chatFlows()).some((flow) => flow.bots.includes(botId)))
   })

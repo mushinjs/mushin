@@ -27,6 +27,8 @@ export interface RunInfo {
   user?: { id: string; name?: string }
   /** `group:123` or `private:456`. */
   channel?: string
+  /** The bot's record of the message that started the run (its `MessageRecord` id). */
+  message?: string
   status: RunStatus
   /** The node working now; for finished runs, the last one that ran. */
   node?: { id: string; type: string; label?: string; long?: boolean }
@@ -63,6 +65,8 @@ export interface BotActivity {
 export interface HistoryQuery {
   bot?: string
   flow?: string
+  /** Only runs this message (a `MessageRecord` id) started. */
+  message?: string
   status?: RunStatus[]
   limit?: number
   /** Only runs started before this time, to page back. */
@@ -164,21 +168,23 @@ export class RunStore {
     const statuses = query.status?.length ? query.status : undefined
     const matches = (info: RunInfo) => (!query.bot || info.botId === query.bot)
       && (!query.flow || info.flowId === query.flow)
+      && (!query.message || info.message === query.message)
       && (!statuses || statuses.includes(info.status) || (info.status === 'waiting' && statuses.includes('running')))
     const live = query.before === undefined ? this.active().filter(matches) : []
     const wanted = statuses?.filter((status) => FINISHED.includes(status))
     if (statuses && !wanted?.length) return { runs: live.slice(0, limit), more: live.length > limit }
     let done: RunInfo[]
     if (this.database) {
-      const where: { botId?: string; flowId?: string; status?: { $in: string[] }; startedAt?: { $lt: number } } = {}
+      const where: { botId?: string; flowId?: string; message?: string; status?: { $in: string[] }; startedAt?: { $lt: number } } = {}
       if (query.bot) where.botId = query.bot
       if (query.flow) where.flowId = query.flow
+      if (query.message) where.message = query.message
       if (wanted) where.status = { $in: wanted }
       if (query.before !== undefined) where.startedAt = { $lt: query.before }
       const rows = await this.database.get('flows_run', where, {
         sort: { startedAt: 'desc' },
         limit: limit + 1,
-        fields: ['id', 'flowId', 'flowName', 'botId', 'source', 'text', 'user', 'channel', 'status', 'node', 'startedAt', 'endedAt', 'error', 'stoppedBy'],
+        fields: ['id', 'flowId', 'flowName', 'botId', 'source', 'text', 'user', 'channel', 'message', 'status', 'node', 'startedAt', 'endedAt', 'error', 'stoppedBy'],
       })
       done = rows.map(infoOf)
     } else {
@@ -218,6 +224,7 @@ export class RunStore {
       text: 'text',
       user: 'json',
       channel: 'string',
+      message: 'string',
       status: 'string',
       node: 'json',
       startedAt: 'double',
@@ -225,7 +232,7 @@ export class RunStore {
       error: 'text',
       stoppedBy: 'string',
       trace: 'json',
-    }, { primary: 'id', indexes: [['botId', 'startedAt'], ['flowId', 'startedAt'], ['startedAt']] })
+    }, { primary: 'id', indexes: [['botId', 'startedAt'], ['flowId', 'startedAt'], ['message'], ['startedAt']] })
     const database = ctx.database
     this.database = database
     const prune = () => database.remove('flows_run', { startedAt: { $lt: Date.now() - KEEP_DAYS * DAY } }).catch(this.onError)
@@ -264,6 +271,7 @@ function infoOf(row: Partial<RunRow>): RunInfo {
   }
   if (row.user) info.user = row.user
   if (row.channel) info.channel = row.channel
+  if (row.message) info.message = row.message
   if (row.node) info.node = row.node
   if (row.endedAt) info.endedAt = row.endedAt
   if (row.error) info.error = row.error

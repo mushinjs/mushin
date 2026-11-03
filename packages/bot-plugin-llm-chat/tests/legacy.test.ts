@@ -9,7 +9,7 @@ describe('LLM chat settings as a flow', () => {
     expect(nodes.map((node) => node.type)).toEqual(['trigger.message', 'logic.cooldown', 'logic.rateLimit', 'logic.dailyQuota', 'ai.chat', 'action.reply'])
     expect(edges.map((edge) => `${edge.source}:${edge.sourceHandle}`)).toEqual(['message:exec:next', 'cooldown:exec:ready', 'rate:exec:ok', 'quota:exec:ok', 'ask:exec:next'])
     expect(nodes[0]).toMatchObject({ priority: -100, config: { when: 'mention' } })
-    expect(nodes.find((node) => node.id === 'ask')?.config).toMatchObject({ history: 10, historySource: 'chat', maxTokens: 2000, maxInputChars: 1000, systemPrompt: '' })
+    expect(nodes.find((node) => node.id === 'ask')?.config).toMatchObject({ prompt: [{ kind: 'persona' }, { kind: 'history', rounds: 10, source: 'chat' }, { kind: 'message', text: '' }], maxTokens: 2000, maxInputChars: 1000 })
   })
 
   it('leaves out the limits that are off and keeps the rest of the settings', () => {

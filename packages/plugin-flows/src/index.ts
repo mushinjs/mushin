@@ -1,4 +1,4 @@
-import { type ChannelInfo, Context, MushinError, randomId, seg, Service, toJsonSchema, type UserInfo, z } from '@mushin/core'
+import { type ChannelInfo, Context, MushinError, randomId, seg, type Segment, segmentsToText, Service, toJsonSchema, type UserInfo, z } from '@mushin/core'
 import { type BotEvent, type BotRole, BUILTIN_PRIORITY, type CommandArg, type CommandEntry, commandMatches, type GroupRole, helpText, requiredRole, roleAtLeast, splitCommand } from '@mushin/plugin-bots'
 import type {} from '@mushin/plugin-providers'
 import type {} from '@mushin/plugin-storage'
@@ -135,6 +135,16 @@ function normalizeGroups(groups: GroupInput[], nodes: FlowNode[]): FlowGroup[] {
 }
 
 /** Role methods for a made-up session, as the permissions plugin and the adapter would answer. */
+/** A message's text as history and samples show it; with `selfId`, mentions of the bot are left out, as sessions do. */
+function lineText(segments: Segment[], selfId?: string) {
+  return segmentsToText(selfId ? segments.filter((segment) => !(segment.type === 'at' && String(segment.data.qq) === selfId)) : segments).trim()
+}
+
+/** A group role the platform reported for a user, if it is one. */
+function groupRoleOf(role: unknown): GroupRole | undefined {
+  return role === 'owner' || role === 'admin' || role === 'member' ? role : undefined
+}
+
 function testRoles(role: BotRole, groupRole: GroupRole | undefined) {
   return { isAdmin: roleAtLeast(role, 'admin'), role: () => role, groupRole: async () => groupRole }
 }
@@ -169,6 +179,13 @@ const PAUSE_LIMIT = 600_000
 export interface TestInput {
   /** Pause before these nodes; only for people in the editor, who answer with flows.debug. */
   breakpoints?: string[]
+  /**
+   * Run a real message of a bot instead of a made-up one: its record id from bots.messages. The
+   * sender, chat, segments and command come from it, and LLM history is the chat up to it.
+   */
+  sample?: { bot: string; id: string; channel?: string }
+  /** Test this node with this config instead of the saved one, e.g. to preview unsaved edits. */
+  override?: { nodeId: string; config: Record<string, any> }
   text?: string
   userName?: string
   /** The sender's user id; `10000` when unset. */
@@ -795,17 +812,55 @@ export class FlowService extends Service {
       selfId: bot.selfId,
       call: (action, params) => bot.call(action, params),
       send: (channel, content) => bot.send(channel, content),
-      history: async (channel, limit) => {
-        const records = await this.home.get('bots')?.messages(bot.id, { channel: channel.id, limit: Math.min(limit * 3, 500) }) ?? []
-        return records
-          .filter((record) => record.channel.type === channel.type)
-          .slice(-limit)
-          .map((record): ChatLine => ({
-            direction: record.direction,
-            user: record.user,
-            text: record.segments.map((segment) => (segment.type === 'text' ? segment.data.text : segment.type === 'at' ? `@${segment.data.name ?? segment.data.qq}` : `[${segment.type}]`)).join('').trim(),
-            ...(record.messageId ? { messageId: record.messageId } : {}),
-          }))
+      history: this.historyOf(bot.id),
+    }
+  }
+
+  /** A chat's recent messages on a bot, from its message log; with `until`, only those up to that time. */
+  private historyOf(botId: string, until?: number): NonNullable<FlowBot['history']> {
+    return async (channel, limit) => {
+      const records = await this.home.get('bots')?.messages(botId, { channel: channel.id, limit: Math.min(limit * 3, 500), ...(until ? { before: until + 1 } : {}) }) ?? []
+      return records
+        .filter((record) => record.channel.type === channel.type && (!until || record.timestamp <= until))
+        .slice(-limit)
+        .map((record): ChatLine => ({
+          direction: record.direction,
+          user: record.user,
+          text: lineText(record.segments),
+          ...(record.messageId ? { messageId: record.messageId } : {}),
+        }))
+    }
+  }
+
+  /**
+   * A real message of a bot as a test session: who sent it, where, its segments and command, and
+   * whether it mentions the bot. Test runs from it read the chat's history up to that message.
+   */
+  async sampleSession(botId: string, recordId: string, channel?: string) {
+    const bots = this.home.get('bots')
+    if (!bots) throw new MushinError('unavailable', 'The bots plugin is not running')
+    const records = await bots.messages(botId, { limit: 500, ...(channel ? { channel } : {}) })
+    const record = records.find((item) => item.id === recordId)
+    if (!record) throw new MushinError('not_found', `No message "${recordId}" in the recent messages of this bot`)
+    const runtime = bots.bot(botId)
+    const selfId = runtime?.selfId
+    const text = lineText(record.segments, selfId)
+    const command = runtime?.parseCommand(text) ?? splitCommand(text, bots.get(botId).commands?.prefixes?.filter(Boolean).length ? bots.get(botId).commands!.prefixes : undefined)
+    const permissions = this.home.get('permissions') as { roleOf(botId: string, userId: string): BotRole } | undefined
+    return {
+      record,
+      selfId,
+      role: permissions?.roleOf(botId, record.user.id) ?? 'user',
+      session: {
+        text,
+        segments: record.segments,
+        user: record.user,
+        channel: record.channel,
+        isDirect: record.channel.type === 'private',
+        mentioned: record.segments.some((segment) => segment.type === 'at' && !!selfId && String(segment.data.qq) === selfId),
+        ...(record.messageId ? { messageId: record.messageId } : {}),
+        record: { id: record.id },
+        ...(command ? { command } : {}),
       },
     }
   }
@@ -957,6 +1012,7 @@ export class FlowService extends Service {
           text: trace.text,
           ...(session.user.id ? { user: { id: session.user.id, ...(session.user.name ? { name: session.user.name } : {}) } } : {}),
           ...(session.channel.id ? { channel: channelKey(session.channel) } : {}),
+          ...(session.record?.id && !env.event && !env.scheduled ? { message: session.record.id } : {}),
         }, trace, controller)
       },
       onStep: (step) => {
@@ -1044,8 +1100,14 @@ export class FlowService extends Service {
     if (input.schedule && doc.nodes.find((node) => node.id === input.schedule)?.type !== 'trigger.schedule') {
       throw new MushinError('not_found', `No schedule trigger with id "${input.schedule}" in this flow`)
     }
-    const compiled = this.compiledOf(doc)
-    const text = input.text ?? ''
+    if (input.override && !doc.nodes.some((node) => node.id === input.override!.nodeId)) {
+      throw new MushinError('not_found', `No node with id "${input.override.nodeId}" in this flow`)
+    }
+    const compiled = input.override
+      ? compile({ ...doc, nodes: doc.nodes.map((node) => (node.id === input.override!.nodeId ? { ...node, config: input.override!.config } : node)) }, this.types)
+      : this.compiledOf(doc)
+    const sample = input.sample ? await this.sampleSession(input.sample.bot, input.sample.id, input.sample.channel) : undefined
+    const text = sample ? sample.session.text : input.text ?? ''
     const data = input.event?.data ?? {}
     const user: UserInfo = input.event
       ? { id: String(data.user_id ?? data.operator_id ?? '10000'), name: input.userName || undefined }
@@ -1059,29 +1121,48 @@ export class FlowService extends Service {
       } catch {}
     })()
     const command = text ? splitCommand(text, prefixes?.length ? prefixes : undefined) : undefined
-    const session: FlowSession = {
-      text,
-      segments: text ? [seg.text(text)] : [],
-      user,
-      channel,
-      isDirect: channel.type === 'private',
-      mentioned: !!input.mentioned,
-      ...(command ? { command } : {}),
-      ...testRoles(input.role ?? (input.admin ? 'admin' : 'user'), channel.type === 'group' ? input.groupRole : undefined),
-      send: async () => undefined,
-      reply: async () => undefined,
-    }
+    const session: FlowSession = sample
+      ? {
+          ...sample.session,
+          ...testRoles(input.role ?? sample.role, sample.session.isDirect ? undefined : input.groupRole ?? groupRoleOf(sample.session.user.role)),
+          send: async () => undefined,
+          reply: async () => undefined,
+        }
+      : {
+          text,
+          segments: text ? [seg.text(text)] : [],
+          user,
+          channel,
+          isDirect: channel.type === 'private',
+          mentioned: !!input.mentioned,
+          ...(command ? { command } : {}),
+          ...testRoles(input.role ?? (input.admin ? 'admin' : 'user'), channel.type === 'group' ? input.groupRole : undefined),
+          send: async () => undefined,
+          reply: async () => undefined,
+        }
     const replies = [...(input.replies ?? [])]
+    // A sample reads its chat's real history; sends and platform calls are still only recorded.
+    const sampleBot: FlowBot | undefined = sample && input.sample
+      ? {
+          id: input.sample.bot,
+          platform: this.home.get('bots')?.get(input.sample.bot).adapter.type ?? 'test',
+          selfId: sample.selfId,
+          call: async () => null,
+          send: async () => undefined,
+          history: this.historyOf(input.sample.bot, sample.record.timestamp),
+        }
+      : undefined
     const result = await runFlow(compiled, {
       session,
       vars: options.vars ?? this.varsFor(doc.id, 'test', session),
       llm: options.llm ?? this.home.get('llm') as LlmLike | undefined,
       logger: this.home.logger('flows'),
       test: true,
+      ...(sampleBot ? { bot: sampleBot } : {}),
       stopAt: input.nodeId,
       ...(options.record === false ? {} : { onStep: this.onStep }),
       ...(input.breakpoints?.length ? { breakpoints: new Set(input.breakpoints), onPause: (pause: PauseInfo) => this.pause(doc.id, pause) } : {}),
-      persona: this.personaFor(doc.bots[0], session),
+      persona: this.personaFor(input.sample?.bot ?? doc.bots[0], session),
       ...(input.event ? { event: { name: input.event.name, data } } : {}),
       ...(input.schedule ? { scheduled: { nodeId: input.schedule, now: new Date() } } : {}),
       waitForMessage: async (_options, origin) => {
@@ -1092,6 +1173,27 @@ export class FlowService extends Service {
     })
     if (options.record !== false) this.record(result.trace)
     return { matched: result.matched, consumed: result.consumed, trace: result.trace, issues: this.issuesOf(doc) }
+  }
+
+  /**
+   * What an ai.chat node would send, without calling the model: the flow runs as a test up to the
+   * node (earlier LLM nodes get a placeholder answer) and the node's messages are returned, each
+   * with the prompt block it came from. `config` previews unsaved edits of the node.
+   */
+  async preview(id: string, nodeId: string, input: Omit<TestInput, 'nodeId' | 'override' | 'breakpoints'>, config?: Record<string, any>) {
+    const doc = this.get(id)
+    const node = doc.nodes.find((item) => item.id === nodeId)
+    if (!node) throw new MushinError('not_found', `No node with id "${nodeId}" in this flow`)
+    if (node.type !== 'ai.chat') throw new MushinError('invalid_input', 'Only LLM nodes (ai.chat) have a prompt to preview')
+    const result = await this.test(id, { ...input, nodeId, ...(config ? { override: { nodeId, config } } : {}) }, { llm: mockLlm([]), record: false, vars: scratchVars([]) })
+    const step = result.trace.steps.find((item) => item.nodeId === nodeId)
+    return {
+      reached: !!step,
+      matched: result.matched,
+      messages: (step?.outputs?.sent ?? []) as unknown[],
+      error: step?.error ?? result.trace.error,
+      path: result.trace.steps.map((item) => item.nodeId),
+    }
   }
 
   /** Waits for flows.debug to say how a paused test run goes on; it stops after `PAUSE_LIMIT`. */
@@ -1471,13 +1573,34 @@ export class FlowService extends Service {
         groupRole: z.enum(['owner', 'admin', 'member']).optional().describe('Pretend the sender has this role in the group, for permission checks on group roles'),
         nodeId: z.string().optional().describe('Stop after this node: runs the path up to it and nothing after, to check one step'),
         breakpoints: z.array(z.string()).optional().describe('Editor only: node ids to pause before'),
+        sample: z.object({
+          bot: z.string(),
+          id: z.string().describe('The message\'s record id, from bots.messages'),
+          channel: z.string().optional().describe('The chat\'s id, to find older messages'),
+        }).optional().describe('Run a real message the bot received instead of text: its sender, chat, @mentions and command, with LLM history up to it'),
+        override: z.object({ nodeId: z.string(), config: z.record(z.string(), z.any()) }).optional().describe('Editor only: use this config for one node instead of the saved one'),
       }),
       handler: ({ id, ...input }, caller) => {
-        if (!input.event && !input.schedule && !input.text) throw new MushinError('invalid_input', 'Give text, event or schedule')
+        if (!input.event && !input.schedule && !input.text && !input.sample) throw new MushinError('invalid_input', 'Give text, event, schedule or sample')
         // Only someone in the editor can answer a breakpoint.
         if (caller.kind !== 'api') delete input.breakpoints
         return this.test(id, input)
       },
+    })
+
+    yield actions.define({
+      name: 'flows.preview',
+      description: 'Show the exact messages an LLM node (ai.chat) would send for a message, without calling the model: system rules, examples, history and the message, each with the prompt block it came from. Give text, or sample for a real message of a bot.',
+      risk: 'read',
+      input: idInput.extend({
+        nodeId: z.string(),
+        text: z.string().optional(),
+        userName: z.string().optional(),
+        private: z.boolean().optional(),
+        sample: z.object({ bot: z.string(), id: z.string(), channel: z.string().optional() }).optional(),
+        config: z.record(z.string(), z.any()).optional().describe('Editor only: the node\'s unsaved config'),
+      }),
+      handler: ({ id, nodeId, config, ...input }) => this.preview(id, nodeId, { ...input, ...(input.text || input.sample ? {} : { text: '你好' }) }, config),
     })
 
     yield actions.define({
@@ -1678,6 +1801,7 @@ export class FlowService extends Service {
         bot: z.string().optional(),
         flow: z.string().optional(),
         status: z.array(runStatus).optional().describe('Only runs in these states; running includes waiting'),
+        message: z.string().optional().describe('Only runs a message started: its record id, from bots.messages'),
         limit: z.number().int().min(1).max(200).optional(),
         before: z.number().optional(),
       }),

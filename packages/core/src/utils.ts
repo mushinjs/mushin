@@ -83,7 +83,7 @@ export interface FieldDisplay {
    * switch, for settings that change behavior; otherwise the name of an editor the dashboard
    * provides, such as `commandArgs` (a command's argument list) or `people` (users or groups).
    */
-  widget?: 'checkbox' | 'switch' | 'commandArgs' | 'people'
+  widget?: 'checkbox' | 'switch' | 'commandArgs' | 'people' | 'prompt' | 'message'
   /** Compact forms fold descriptions into a hint icon; `inline` keeps this one visible. */
   hint?: 'inline'
   /**

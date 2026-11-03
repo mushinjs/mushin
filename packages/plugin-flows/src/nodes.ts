@@ -546,8 +546,6 @@ function requireLlm(context: { llm?: LlmLike }): LlmLike {
   return context.llm
 }
 
-/** The system prompt ai.chat used to fill in; nodes saved with it now let the persona speak instead. */
-const OLD_CHAT_PROMPT = 'You are a friendly chat bot. Keep replies short.'
 const DEFAULT_CHAT_PROMPT = 'You are a friendly chat bot. Keep replies short and natural, and answer in the language the user writes in.'
 
 /** The system prompt and example exchanges for a persona, followed by the node's own rules. */
@@ -599,30 +597,105 @@ async function chatHistory(context: NodeContext<any>, rounds: number, source: st
   return (saved ?? []).slice(-rounds * 2)
 }
 
+/** One part of what ai.chat sends, in order; see `buildChatRequest`. */
+export const promptBlockSchema = z.discriminatedUnion('kind', [
+  /** The run's persona: its prompt as system rules, then its example exchanges. */
+  z.object({ kind: z.literal('persona') }),
+  /** Rules added to the system prompt. References such as {{sys.user}} are filled in. */
+  z.object({ kind: z.literal('system'), text: z.string().default('') }),
+  /** One example exchange, sent as if it had happened. */
+  z.object({ kind: z.literal('example'), user: z.string().default(''), assistant: z.string().default('') }),
+  /** Earlier rounds of the chat. */
+  z.object({ kind: z.literal('history'), rounds: z.number().int().min(0).max(50).default(10), source: z.enum(['node', 'chat']).default('node') }),
+  /** The message to answer: the prompt input, else this text, else the incoming message; with reference passages wrapped around it. */
+  z.object({ kind: z.literal('message'), text: z.string().default('') }),
+])
+
+export type PromptBlock = z.infer<typeof promptBlockSchema>
+
+/** The blocks of a plain chat: the persona, extra rules, the chat's history and the message. */
+export function chatPrompt(options: { system?: string; history?: number; source?: 'node' | 'chat'; persona?: boolean } = {}): PromptBlock[] {
+  return [
+    ...(options.persona === false ? [] : [{ kind: 'persona' as const }]),
+    ...(options.system ? [{ kind: 'system' as const, text: options.system }] : []),
+    ...(options.history ? [{ kind: 'history' as const, rounds: options.history, source: options.source ?? 'node' }] : []),
+    { kind: 'message' as const, text: '' },
+  ]
+}
+
+/** One message ai.chat sends, with the block it came from, for the editor's preview and the run logs. */
+export interface PromptLine {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+  /** Index of the block in the node's prompt, or `default` for the short default system prompt. */
+  from: number | 'default'
+  kind: PromptBlock['kind'] | 'default'
+}
+
+/**
+ * What ai.chat sends: system rules first (persona and system blocks, in order, as one message),
+ * then examples, history and the message in the order of their blocks.
+ */
+export async function buildChatRequest(context: NodeContext<any>) {
+  const { config, inputs, session } = context
+  const blocks = (config.prompt ?? chatPrompt()) as PromptBlock[]
+  const wantsPersona = blocks.some((block) => block.kind === 'persona')
+  const persona = wantsPersona ? await context.persona() : undefined
+  const system: { text: string; from: number; kind: PromptLine['kind'] }[] = []
+  const rest: PromptLine[] = []
+  const history = blocks.find((block): block is Extract<PromptBlock, { kind: 'history' }> => block.kind === 'history')
+  // In groups with history, each message says who wrote it.
+  const prefixed = !!history?.rounds && !session.isDirect
+  let asked: { role: 'user'; content: string } | undefined
+  for (const [index, block] of blocks.entries()) {
+    if (block.kind === 'persona') {
+      if (!persona) continue
+      system.push({ text: persona.prompt, from: index, kind: 'persona' })
+      for (const example of persona.examples ?? []) {
+        rest.push({ role: 'user', content: example.user, from: index, kind: 'persona' }, { role: 'assistant', content: example.assistant, from: index, kind: 'persona' })
+      }
+    } else if (block.kind === 'system') {
+      if (block.text.trim()) system.push({ text: block.text, from: index, kind: 'system' })
+    } else if (block.kind === 'example') {
+      if (block.user.trim()) rest.push({ role: 'user', content: block.user, from: index, kind: 'example' })
+      if (block.assistant.trim()) rest.push({ role: 'assistant', content: block.assistant, from: index, kind: 'example' })
+    } else if (block.kind === 'history') {
+      for (const line of await chatHistory(context, block.rounds, block.source, prefixed)) rest.push({ ...line, from: index, kind: 'history' })
+    } else if (block.kind === 'message') {
+      let text = String(inputs.prompt || block.text || session.text)
+      const limit = Number(config.maxInputChars ?? 0)
+      if (limit > 0 && text.length > limit) text = `${text.slice(0, limit)}…`
+      const fromSession = !inputs.prompt && !block.text
+      asked = { role: 'user', content: prefixed && fromSession ? `${session.user.name ?? session.user.id}: ${text}` : text }
+      // Passages go with this message only; history keeps the message as it was asked.
+      const knowledge = String(inputs.knowledge ?? '').trim()
+      rest.push({ role: 'user', content: knowledge ? withReference(knowledge, asked.content) : asked.content, from: index, kind: 'message' })
+    }
+  }
+  const lines: PromptLine[] = [
+    system.length
+      ? { role: 'system', content: system.map((part) => part.text).join('\n\n'), from: system[0].from, kind: system[0].kind }
+      : { role: 'system', content: DEFAULT_CHAT_PROMPT, from: 'default', kind: 'default' },
+    ...rest,
+  ]
+  return { lines, persona, asked, history }
+}
+
 const chatNode: NodeType = {
   kind: 'action',
   type: 'ai.chat',
   category: 'ai',
   title: { en: 'Ask the LLM', 'zh-CN': '询问大模型' },
   description: {
-    en: 'Sends the prompt (or the message) to an LLM and outputs its reply, with earlier messages of the chat when history is on. Speaks as the run\'s persona when there is one (a persona node, or the bot\'s persona rules). Reference passages (from a knowledge search) go with this message. Continues on "error" when the model fails or times out.',
-    'zh-CN': '把提示词（或消息）发给大模型并输出回复；开启历史时带上会话之前的消息。有人格时（人格节点，或机器人的人格规则）以该人格说话。接上参考资料（来自知识库检索）时随这条消息一起发送。模型出错或超时时走 error。',
+    en: 'Sends a prompt built from blocks (the persona, system rules, examples, the chat\'s history and the message) to an LLM and outputs its reply. Reference passages (from a knowledge search) go with the message. Continues on "error" when the model fails or times out.',
+    'zh-CN': '把由若干块（人格、系统规则、示例对话、会话历史、当前消息）组成的提示词发给大模型并输出回复。接上参考资料（来自知识库检索）时随消息一起发送。模型出错或超时时走 error。',
   },
   config: z.object({
-    usePersona: z.boolean().default(true).meta(field('Speak as the persona', 'Uses the persona chosen by a persona node, or by the bot\'s persona rules', {
-      'zh-CN': { title: '使用人格', description: '使用人格节点选择的人格，没有时按机器人的人格规则' },
-    }, { widget: 'switch' })),
-    systemPrompt: z.string().default('').meta(field('System prompt', 'With a persona, added after its prompt as extra rules; without one, empty uses a short default', {
-      'zh-CN': { title: '系统提示词', description: '有人格时作为补充规则接在人格提示之后；没有人格时，留空使用简短的默认提示' },
-    })),
-    history: z.number().int().min(0).max(MAX_HISTORY).default(0).meta(field('History (rounds)', 'Earlier rounds of the chat sent as context; 0 sends only this message', {
-      'zh-CN': { title: '上下文轮数', description: '作为上下文带上的之前几轮对话；0 表示只发这条消息' },
-    })),
-    historySource: z.enum(['node', 'chat']).default('node').meta(field(
-      'History from',
-      'This node: only what it was asked and answered. The chat: recent messages of the chat from the bot\'s message log, including ones it did not answer.',
-      { 'zh-CN': { title: '历史来源', description: '本节点：只记录问过它、它回答过的消息。整个会话：机器人消息记录里这个会话的最近消息，包括没有回复的。', options: { node: '本节点', chat: '整个会话' } } },
-      { options: { node: 'This node', chat: 'The chat' } },
+    prompt: z.array(promptBlockSchema).default(chatPrompt()).meta(field(
+      'Prompt',
+      'What is sent, in order. System rules (persona and system blocks) always go first, as one message.',
+      { 'zh-CN': { title: '提示词结构', description: '依次发送的内容。系统规则（人格和系统块）总是合并为一条放在最前面。' } },
+      { widget: 'prompt' },
     )),
     provider: z.string().optional().meta(field('Provider', 'Provider or model profile; empty uses the persona\'s, then the bot\'s or the global default', {
       'zh-CN': { title: '提供商', description: '提供商或配置方案；留空依次使用人格、机器人或全局默认' },
@@ -643,23 +716,21 @@ const chatNode: NodeType = {
     { name: 'tokens', type: 'number', title: { en: 'Tokens used', 'zh-CN': '用掉的 Token' } },
     { name: 'model', type: 'text', title: { en: 'Model', 'zh-CN': '模型' } },
     { name: 'error', type: 'text', title: { en: 'Error', 'zh-CN': '错误' } },
+    { name: 'sent', type: 'any', title: { en: 'Messages sent', 'zh-CN': '发送的消息' } },
   ],
   execOut: ['next', 'error'],
+  guide: {
+    notes: [
+      { en: 'System rules always go first as one message, whatever order the persona and system blocks are in.', 'zh-CN': '人格和系统块无论排在哪里，都会合并成一条系统消息放在最前面。' },
+      { en: 'History "This node" only remembers what this node was asked; "The chat" reads the bot\'s message log.', 'zh-CN': '历史选“本节点”只记得问过这个节点的内容；选“整个会话”读取机器人的消息记录。' },
+      { en: 'Wire the prompt input to answer something other than the incoming message.', 'zh-CN': '要回答的不是收到的消息时，接上“提示词”输入。' },
+    ],
+  },
   async run(context) {
-    const { config, inputs, session, provider, run, signal, logger } = context
+    const { config, provider, run, signal, logger } = context
     const llm = requireLlm(context)
-    const persona = config.usePersona === false ? undefined : await context.persona()
-    const own = config.systemPrompt === OLD_CHAT_PROMPT ? '' : String(config.systemPrompt ?? '')
-    const rounds = Number(config.history ?? 0)
-    // In groups with history, each message says who wrote it.
-    const prefixed = rounds > 0 && !session.isDirect
-    let text = String(inputs.prompt || session.text)
-    const limit = Number(config.maxInputChars ?? 0)
-    if (limit > 0 && text.length > limit) text = `${text.slice(0, limit)}…`
-    const asked: ChatMessage = { role: 'user', content: prefixed && !inputs.prompt ? `${session.user.name ?? session.user.id}: ${text}` : text }
-    // Passages go with this message only; history keeps the message as it was asked.
-    const knowledge = String(inputs.knowledge ?? '').trim()
-    const sent: ChatMessage = knowledge ? { role: 'user', content: withReference(knowledge, asked.content) } : asked
+    const { lines, persona, asked, history } = await buildChatRequest(context)
+    const sent = lines.map(({ role, content, from, kind }) => ({ role, content, from, kind }))
     try {
       const result = await llm.chat({
         provider: config.provider || persona?.provider || provider,
@@ -667,26 +738,22 @@ const chatNode: NodeType = {
         maxTokens: config.maxTokens,
         ...(persona?.temperature !== undefined ? { temperature: persona.temperature } : {}),
         signal: AbortSignal.any([signal, AbortSignal.timeout(Number(config.timeout ?? 45) * 1000)]),
-        messages: [
-          ...personaMessages(persona, own),
-          ...await chatHistory(context, rounds, config.historySource, prefixed),
-          sent,
-        ],
+        messages: lines.map(({ role, content }) => ({ role, content })),
       })
       const tokens = result.source.tokens ?? 0
       run.llm = { provider: result.source.provider, model: result.source.model, ...(persona ? { persona: persona.name } : {}) }
       for (const listener of run.onTokens ?? []) listener(tokens)
-      if (rounds > 0 && config.historySource !== 'chat') {
+      if (history?.rounds && history.source !== 'chat' && asked) {
         const key = `__history:${context.node.id}`
         const saved = [...(context.vars.get('chat', key) as ChatMessage[] | undefined ?? []), asked, ...(result.text.trim() ? [{ role: 'assistant' as const, content: result.text }] : [])]
         context.vars.set('chat', key, saved.slice(-MAX_HISTORY * 2))
       }
-      return { outputs: { reply: result.text, tokens, model: result.source.model, error: '' } }
+      return { outputs: { reply: result.text, tokens, model: result.source.model, error: '', sent } }
     } catch (error) {
       if (signal.aborted) throw error
       const message = (error as Error)?.name === 'TimeoutError' ? `The model did not answer within ${config.timeout} seconds` : String((error as Error)?.message ?? error)
       logger.warn('%s failed: %s', context.node.label, message)
-      return { exec: 'error', outputs: { reply: '', tokens: 0, model: '', error: message } }
+      return { exec: 'error', outputs: { reply: '', tokens: 0, model: '', error: message, sent } }
     }
   },
 }

@@ -171,6 +171,8 @@ export interface FlowSession {
   isDirect: boolean
   mentioned: boolean
   messageId?: string
+  /** The bot's record of the message, for real messages and samples; links runs to it. */
+  record?: { id: string }
   /** The command the message runs, split by the bot's prefixes; command triggers fall back to `/`. */
   command?: ParsedCommand
   /** The sender is an admin or master of the bot. */

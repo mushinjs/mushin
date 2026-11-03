@@ -109,7 +109,7 @@ export const demoFlows: Record<DemoFlowKey, DemoFlow> = {
         id: 'chat',
         type: 'ai.chat',
         label: '询问大模型',
-        config: { systemPrompt: '你是一个友好的聊天机器人，回答简短。' },
+        config: { prompt: [{ kind: 'persona' }, { kind: 'system', text: '你是一个友好的聊天机器人，回答简短。' }, { kind: 'message', text: '' }] },
         inputs: { prompt: '{{ask.问题}}' },
       },
       { id: 'answer', type: 'action.reply', label: '回复答案', config: { quote: true }, inputs: { text: '{{chat.reply}}' } },
@@ -130,7 +130,7 @@ export const demoFlows: Record<DemoFlowKey, DemoFlow> = {
       },
       reply('refund', '退款话术', '退款请发一下订单号，我们会在 24 小时内处理。'),
       reply('ship', '发货话术', '订单一般 48 小时内发货，可以在订单页查看物流。'),
-      { id: 'fallback', type: 'ai.chat', label: '自由回答', config: { systemPrompt: '你是网店客服，回答简短礼貌。' }, inputs: { prompt: '{{support.问题}}' } },
+      { id: 'fallback', type: 'ai.chat', label: '自由回答', config: { prompt: [{ kind: 'persona' }, { kind: 'system', text: '你是网店客服，回答简短礼貌。' }, { kind: 'message', text: '' }] }, inputs: { prompt: '{{support.问题}}' } },
       { id: 'other', type: 'action.reply', label: '回复', inputs: { text: '{{fallback.reply}}' } },
     ],
     edges: [

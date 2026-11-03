@@ -80,10 +80,12 @@ export function chatFlow(settings: LegacyConfig): { nodes: NodeSpec[]; edges: Ed
     type: 'ai.chat',
     label: '询问大模型',
     config: {
-      usePersona: true,
-      systemPrompt: settings.systemPrompt === OLD_DEFAULT_PROMPT ? '' : settings.systemPrompt,
-      history: settings.historySize,
-      historySource: 'chat',
+      prompt: [
+        { kind: 'persona' },
+        ...(settings.systemPrompt && settings.systemPrompt !== OLD_DEFAULT_PROMPT ? [{ kind: 'system', text: settings.systemPrompt }] : []),
+        ...(settings.historySize ? [{ kind: 'history', rounds: settings.historySize, source: 'chat' }] : []),
+        { kind: 'message', text: '' },
+      ],
       maxTokens: settings.maxTokens,
       maxInputChars: settings.maxInputChars,
       timeout: 45,
