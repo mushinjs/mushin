@@ -13,13 +13,22 @@ const { theme, overrides, isDark } = useTheme()
 // Lets global CSS (e.g. the logo) adapt to the active theme.
 watchEffect(() => document.documentElement.setAttribute('data-theme', isDark.value ? 'dark' : 'light'))
 const isChinese = computed(() => locale.value.startsWith('zh'))
+// Naive UI's English placeholders ("Please Input", "Please Select") read as machine text. A field's label
+// already says what goes in it, so an empty field stays empty unless the page gives its own placeholder.
+const english = {
+  ...enUS,
+  Input: { ...enUS.Input, placeholder: '' },
+  InputNumber: { ...enUS.InputNumber, placeholder: '' },
+  Select: { ...enUS.Select, placeholder: 'Select' },
+  Cascader: { ...enUS.Cascader, placeholder: 'Select' },
+}
 </script>
 
 <template>
   <NConfigProvider
     :theme="theme"
     :theme-overrides="overrides"
-    :locale="isChinese ? zhCN : enUS"
+    :locale="isChinese ? zhCN : english"
     :date-locale="isChinese ? dateZhCN : dateEnUS"
   >
     <NGlobalStyle />

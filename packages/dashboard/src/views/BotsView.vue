@@ -73,7 +73,7 @@ function connectionOf(bot: Bot) {
             <span class="mono" :title="connectionOf(bot).address">{{ connectionOf(bot).address }}</span>
           </p>
           <NSpace justify="space-between" align="center" @click.stop>
-            <span class="sub">{{ t('bots.pluginCount', { count: bot.plugins.filter((p) => p.enabled).length }) }}</span>
+            <span class="sub">{{ t('bots.pluginCount', bot.plugins.filter((p) => p.enabled).length) }}</span>
             <NSwitch :value="bot.enabled" :loading="busy === bot.id" @update:value="(value: boolean) => toggle(bot, value)">
               <template #checked>{{ t('common.on') }}</template>
               <template #unchecked>{{ t('common.off') }}</template>

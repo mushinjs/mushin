@@ -85,7 +85,7 @@ function remove() {
       </NSpace>
     </div>
 
-    <NTabs v-if="bot" :value="tab" type="line" animated @update:value="(next: string) => router.replace(`/bots/${id}/${next}`)">
+    <NTabs v-if="bot" :value="tab" type="line" @update:value="(next: string) => router.replace(`/bots/${id}/${next}`)">
       <NTabPane name="connection" :tab="t('bot.connection')" data-agent-target="bot.connection">
         <BotConnection :bot="bot" />
       </NTabPane>

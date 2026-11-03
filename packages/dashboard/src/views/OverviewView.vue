@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NCard, NEmpty, NRadioButton, NRadioGroup, NTag, useMessage } from 'naive-ui'
+import { NCard, NEmpty, NRadioButton, NRadioGroup, NSelect, NTag, useMessage } from 'naive-ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRouter } from 'vue-router'
@@ -220,9 +220,10 @@ function openSession(id: string) {
       </NCard>
 
       <NCard :title="t('overview.ranking')" class="narrow" data-agent-target="overview.ranking">
-        <NRadioGroup v-model:value="dimension" size="small" class="rank-tabs">
-          <NRadioButton v-for="item in dimensions" :key="item.value" :value="item.value">{{ item.label }}</NRadioButton>
-        </NRadioGroup>
+        <!-- Five dimensions do not fit a row of buttons in the narrow card, so they are a select in the header. -->
+        <template #header-extra>
+          <NSelect v-model:value="dimension" :options="dimensions" size="small" class="rank-select" />
+        </template>
         <div v-if="ranking.length" class="ranks">
           <div v-for="(row, index) in ranking" :key="row.key" class="rank hover-row">
             <span class="rank-no">{{ index + 1 }}</span>
@@ -365,10 +366,8 @@ function openSession(id: string) {
   padding: 48px 0;
 }
 
-.rank-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
+.rank-select {
+  width: 104px;
 }
 
 .ranks {

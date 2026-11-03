@@ -19,7 +19,7 @@ const tab = computed(() => String(route.params.tab || 'scenes'))
 <template>
   <div>
     <p class="section-lead">{{ t('agentPage.lead') }}</p>
-    <NTabs :value="tab" type="line" animated @update:value="(next: string) => router.replace(`/settings/agent/${next}`)">
+    <NTabs :value="tab" type="line" @update:value="(next: string) => router.replace(`/settings/agent/${next}`)">
       <NTabPane name="scenes" :tab="t('agentPage.tabs.scenes')" display-directive="show:lazy"><AgentScenes /></NTabPane>
       <NTabPane name="skills" :tab="t('agentPage.tabs.skills')" display-directive="show:lazy"><AgentSkills /></NTabPane>
       <NTabPane name="mcp" :tab="t('agentPage.tabs.mcp')" display-directive="show:lazy"><AgentMcp /></NTabPane>

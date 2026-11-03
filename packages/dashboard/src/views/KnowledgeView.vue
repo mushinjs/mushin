@@ -182,7 +182,7 @@ const botNames = (ids: string[]) => ids.map((bot) => data.bots.find((item) => it
       </div>
       <NSpin :show="loading && !base">
         <NAlert v-if="!loading && !base" type="warning">{{ t('knowledge.notFound') }}</NAlert>
-        <NTabs v-if="base" :value="tab" type="line" animated @update:value="(next: string) => router.replace(`/knowledge/${id}/${next}`)">
+        <NTabs v-if="base" :value="tab" type="line" @update:value="(next: string) => router.replace(`/knowledge/${id}/${next}`)">
           <NTabPane name="docs" :tab="t('knowledge.tab.docs')" data-agent-target="knowledge.docs">
             <KnowledgeDocs :base="base" />
           </NTabPane>

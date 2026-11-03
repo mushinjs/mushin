@@ -217,7 +217,7 @@ export default {
     forwardTo: 'Connects to {url}',
     reverseTo: 'NapCat connects to {path}',
     notLoggedIn: 'Not logged in yet',
-    pluginCount: '{count} plugins enabled',
+    pluginCount: 'No plugins enabled | {count} plugin enabled | {count} plugins enabled',
     restart: 'Restart',
     notFound: 'This bot does not exist.',
     deleteHint: 'Its settings are removed. Message logs on disk are kept.',

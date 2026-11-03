@@ -268,7 +268,7 @@ const columns = computed<DataTableColumns<FlowSummary>>(() => [
     render: (flow) => (flow.bots.length ? flow.bots.map(botName).join('、') : h('span', { class: 'sub' }, t('flows.runsOnNone'))),
   },
   { title: t('flows.colNodes'), key: 'nodes', width: 70, align: 'right' },
-  { title: t('flows.colIssues'), key: 'issues', width: 140, render: (flow) => h('div', { class: 'tag-row' }, tagsOf(flow)) },
+  { title: t('flows.colIssues'), key: 'issues', width: 180, render: (flow) => h('div', { class: 'tag-row' }, tagsOf(flow)) },
   { title: t('flows.colUpdated'), key: 'updatedAt', width: 130, render: (flow) => formatTime(flow.updatedAt) },
   {
     title: t('flows.colEnabled'),
@@ -305,7 +305,7 @@ function sourceTag(flow: FlowSummary) {
       bordered: false,
       type: 'success',
       class: 'source-tag',
-      title: t('flows.sourcePluginHint'),
+      title: `${t('flows.sourcePlugin', { name })}\n${t('flows.sourcePluginHint')}`,
       onClick: (event: Event) => {
         event.stopPropagation()
         router.push({ path: '/plugins', query: { highlight: source.plugin } })
@@ -683,6 +683,17 @@ function remove(flow: FlowSummary) {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  min-width: 0;
+}
+
+/* A long tag (a plugin's package name) is cut short inside its column; the title holds the whole text. */
+.table-card :deep(.tag-row .n-tag) {
+  max-width: 100%;
+}
+
+.table-card :deep(.tag-row .n-tag__content) {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 :deep(.source-tag) {

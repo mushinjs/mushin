@@ -220,7 +220,8 @@ const open = (run: FlowRunInfo) => router.push({ path: `/flows/${run.flowId}`, q
 
 .row {
   display: grid;
-  grid-template-columns: 92px minmax(90px, 1fr) minmax(120px, 2fr) minmax(90px, 1.4fr) 92px 72px 60px;
+  /* The time column fits its text: dates from earlier days are wider than today's "11:42". */
+  grid-template-columns: 92px minmax(90px, 1fr) minmax(120px, 2fr) minmax(90px, 1.4fr) max-content 64px 60px;
   align-items: center;
   gap: 12px;
   padding: 8px 10px 8px 12px;

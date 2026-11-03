@@ -367,6 +367,8 @@ const iconOf = (nodeId: string) => {
 .logs-head {
   display: flex;
   align-items: center;
+  /* In a narrow panel the test controls drop to a second line instead of covering the tabs. */
+  flex-wrap: wrap;
   gap: 6px;
   padding: 6px 10px;
   min-height: 32px;
@@ -393,13 +395,16 @@ const iconOf = (nodeId: string) => {
   display: flex;
   align-items: center;
   gap: 2px;
-  min-width: 0;
+  /* The tabs keep their width; the test input next to them is what gives way in a narrow panel. */
+  flex: none;
 }
 
 .tab {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex: none;
+  white-space: nowrap;
   padding: 3px 8px;
   border: none;
   border-radius: 6px;
@@ -431,7 +436,7 @@ const iconOf = (nodeId: string) => {
 
 .test-text {
   width: 260px;
-  min-width: 120px;
+  min-width: 140px;
   flex: 0 1 260px;
 }
 
