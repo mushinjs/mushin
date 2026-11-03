@@ -275,7 +275,7 @@ const open = (run: FlowRunInfo) => router.push({ path: `/flows/${run.flowId}`, q
 }
 
 .detail.failed {
-  color: #d03050;
+  color: var(--bad);
 }
 
 .time,

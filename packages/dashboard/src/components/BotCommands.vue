@@ -141,7 +141,7 @@ const columns = computed(() => [
 }
 
 :deep(.source-link) {
-  color: #2080f0;
+  color: var(--primary);
   text-decoration: none;
 }
 
@@ -164,6 +164,6 @@ const columns = computed(() => [
 }
 
 :deep(.command-cell code.clash) {
-  color: #d03050;
+  color: var(--bad);
 }
 </style>

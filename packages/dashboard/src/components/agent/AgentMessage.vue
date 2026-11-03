@@ -130,7 +130,7 @@ const statusType = { ok: 'success', warning: 'warning', error: 'error', info: 'i
       </div>
       <ul v-else-if="segment.kind === 'steps'" class="steps">
         <li v-for="(step, stepIndex) in segment.steps" :key="stepIndex" :class="{ done: step.done }">
-          <NIcon :color="step.done ? '#18a058' : undefined"><CheckmarkCircle v-if="step.done" /><EllipseOutline v-else /></NIcon>
+          <NIcon :color="step.done ? 'var(--ok)' : undefined"><CheckmarkCircle v-if="step.done" /><EllipseOutline v-else /></NIcon>
           <span>{{ step.text }}</span>
         </li>
       </ul>
@@ -274,10 +274,10 @@ const statusType = { ok: 'success', warning: 'warning', error: 'error', info: 'i
   gap: 8px;
 }
 
-.card.ok { border-left-color: #18a058; }
-.card.warning { border-left-color: #f0a020; }
-.card.error { border-left-color: #d03050; }
-.card.info { border-left-color: #2080f0; }
+.card.ok { border-left-color: var(--ok); }
+.card.warning { border-left-color: var(--warn); }
+.card.error { border-left-color: var(--bad); }
+.card.info { border-left-color: var(--primary); }
 
 .card-head {
   display: flex;

@@ -209,7 +209,7 @@ function onImageError(index: number) {
 }
 
 .at {
-  color: #2080f0;
+  color: var(--primary);
 }
 
 .image {

@@ -2,6 +2,7 @@
 import { markRaw, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call, on } from '../api'
+import PageHeader from '../components/PageHeader.vue'
 import LogViewer from '../components/LogViewer.vue'
 import type { LogLine } from '../types'
 
@@ -23,12 +24,7 @@ onBeforeUnmount(off)
 
 <template>
   <div class="page">
-    <div class="page-header">
-      <div>
-        <h1>{{ t('nav.logs') }}</h1>
-        <p class="page-lead">{{ t('logs.lead') }}</p>
-      </div>
-    </div>
+    <PageHeader :title="t('nav.logs')" :lead="t('logs.lead')" />
     <LogViewer :lines="lines" height="max(320px, calc(100vh - 320px))" @clear="lines = []" />
   </div>
 </template>

@@ -209,6 +209,15 @@ export default {
     noErrors: 'No errors or warnings.',
   },
   bots: {
+    search: 'Search bots',
+    filterLabel: 'Filter by status',
+    filter: { all: 'All', online: 'Online', problem: 'Connection problem', stopped: 'Stopped' },
+    state: { online: 'Online', connecting: 'Connecting', problem: 'Connection problem', offline: 'Offline', stopped: 'Stopped' },
+    connectingHint: 'Connecting…',
+    offlineHint: 'Waiting for a connection',
+    stoppedHint: 'Start it to receive messages',
+    addHint: 'Connect NapCat, or let the Agent set it up',
+    noMatch: 'No bots match.',
     napcatHttp: 'In NapCat, add an HTTP server (Mushin calls it; put its address above) and an HTTP client that posts events to the address below, with message format "array". Use the same token, and the same secret if you set one.',
     httpTo: 'Calls {url}; events arrive at {path}',
     mode: {

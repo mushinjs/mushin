@@ -280,9 +280,9 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
         <div v-else class="tool" :class="item.state">
           <button class="tool-row" type="button" @click="toggle(item.id)">
             <NSpin v-if="item.state === 'running'" :size="14" />
-            <NIcon v-else-if="item.state === 'ok'" color="#18a058"><CheckmarkCircle /></NIcon>
-            <NIcon v-else-if="item.state === 'confirm'" color="#f0a020"><HandLeftOutline /></NIcon>
-            <NIcon v-else color="#d03050"><CloseCircleOutline /></NIcon>
+            <NIcon v-else-if="item.state === 'ok'" color="var(--ok)"><CheckmarkCircle /></NIcon>
+            <NIcon v-else-if="item.state === 'confirm'" color="var(--warn)"><HandLeftOutline /></NIcon>
+            <NIcon v-else color="var(--bad)"><CloseCircleOutline /></NIcon>
             <span class="mono tool-name">{{ item.action }}</span>
             <NTag v-if="item.risk === 'dangerous'" size="tiny" type="error" :bordered="false">{{ t('agent.dangerous') }}</NTag>
             <span class="tool-state">{{ t(`agent.state.${item.state}`) }}</span>
@@ -340,7 +340,7 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
     </div>
 
     <div v-if="agent.items.length && scenes.banner && !agent.running" class="banner">
-      <NIcon color="#f0a020"><InformationCircleOutline /></NIcon>
+      <NIcon color="var(--warn)"><InformationCircleOutline /></NIcon>
       <button type="button" class="banner-text" @click="sendRecommendation(scenes.banner!)">{{ scenes.banner.text }}</button>
       <NButton size="tiny" quaternary circle :aria-label="t('agent.close')" @click="scenes.dismiss(scenes.banner!.id)">
         <template #icon><NIcon><CloseOutline /></NIcon></template>
@@ -672,7 +672,7 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
 
 .msg.user {
   align-self: flex-end;
-  background: #3b4a8c;
+  background: var(--primary);
   color: #fff;
   border-bottom-right-radius: 4px;
 }
@@ -696,7 +696,7 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
 .msg.error {
   align-self: stretch;
   max-width: none;
-  color: #d03050;
+  color: var(--bad);
   background: rgba(208, 48, 80, 0.08);
   display: flex;
   align-items: center;
@@ -714,7 +714,7 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
 }
 
 .tool.confirm {
-  border-color: #f0a020;
+  border-color: var(--warn);
 }
 
 .tool-row {

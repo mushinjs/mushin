@@ -737,12 +737,12 @@ defineExpose({ run, reload: load })
 }
 
 .case.passed .case-mark {
-  color: #18a058;
+  color: var(--ok);
   opacity: 1;
 }
 
 .case.failed .case-mark {
-  color: #d03050;
+  color: var(--bad);
   opacity: 1;
 }
 
@@ -807,7 +807,7 @@ defineExpose({ run, reload: load })
   font-size: 12px;
   padding: 6px 8px;
   border-radius: 6px;
-  color: #d03050;
+  color: var(--bad);
   background: rgba(208, 48, 80, 0.1);
   white-space: pre-wrap;
   word-break: break-word;

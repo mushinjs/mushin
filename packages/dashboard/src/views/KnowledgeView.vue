@@ -7,6 +7,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { call, on } from '../api'
+import PageHeader from '../components/PageHeader.vue'
 import EmbeddingPicker from '../components/knowledge/EmbeddingPicker.vue'
 import KnowledgeChunks from '../components/knowledge/KnowledgeChunks.vue'
 import KnowledgeDocs from '../components/knowledge/KnowledgeDocs.vue'
@@ -114,16 +115,12 @@ const botNames = (ids: string[]) => ids.map((bot) => data.bots.find((item) => it
 <template>
   <div class="page">
     <template v-if="!id">
-      <div class="page-header">
-        <div>
-          <h1>{{ t('nav.knowledge') }}</h1>
-          <p class="page-lead">{{ t('knowledge.lead') }}</p>
-        </div>
+      <PageHeader :title="t('nav.knowledge')" :lead="t('knowledge.lead')">
         <NButton v-if="available" type="primary" data-agent-target="knowledge.add" @click="openCreate">
           <template #icon><NIcon><AddOutline /></NIcon></template>
           {{ t('knowledge.add') }}
         </NButton>
-      </div>
+      </PageHeader>
 
       <NSpin :show="loading">
         <NAlert v-if="available === false" type="warning" :title="t('knowledge.unavailable')">
@@ -242,7 +239,7 @@ const botNames = (ids: string[]) => ids.map((bot) => data.bots.find((item) => it
 }
 
 .icon {
-  color: var(--n-color-target, #18a058);
+  color: var(--n-color-target, var(--ok));
   margin-top: 2px;
 }
 

@@ -55,20 +55,20 @@ const run = computed<RunStatus | undefined>(() => {
 }
 
 .group-box.selected {
-  border-color: #2080f0;
+  border-color: var(--primary);
 }
 
 .group-box.run-running {
-  border-color: #2080f0;
+  border-color: var(--primary);
   border-style: solid;
 }
 
 .group-box.run-ok {
-  border-color: #18a058;
+  border-color: var(--ok);
 }
 
 .group-box.run-error {
-  border-color: #d03050;
+  border-color: var(--bad);
 }
 
 .icon {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { CreateOutline, FlashOutline, Star, StarOutline, TrashOutline } from '@vicons/ionicons5'
+import PageHeader from '../components/PageHeader.vue'
 import IconAction from '../components/IconAction.vue'
 import { AddOutline, GitBranchOutline } from '@vicons/ionicons5'
 import {
@@ -218,16 +219,12 @@ const columns = computed<DataTableColumns<Provider>>(() => [
 
 <template>
   <div class="page">
-    <div class="page-header">
-      <div>
-        <h1>{{ t('nav.providers') }}</h1>
-        <p class="page-lead">{{ t('providers.lead') }}</p>
-      </div>
+    <PageHeader :title="t('nav.providers')" :lead="t('providers.lead')">
       <NButton type="primary" data-agent-target="providers.add" @click="openCreate">
         <template #icon><NIcon><AddOutline /></NIcon></template>
         {{ t('providers.add') }}
       </NButton>
-    </div>
+    </PageHeader>
 
     <NCard>
       <NDataTable v-if="data.providers.length" :columns="columns" :data="data.providers" :row-key="(row: Provider) => row.id" :row-props="rowProps" :row-class-name="rowClass" :scroll-x="900" />

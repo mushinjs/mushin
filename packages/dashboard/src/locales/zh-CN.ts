@@ -211,6 +211,15 @@ const zhCN: typeof en = {
     noErrors: '没有错误或警告。',
   },
   bots: {
+    search: '搜索机器人',
+    filterLabel: '按状态筛选',
+    filter: { all: '全部', online: '在线', problem: '连接异常', stopped: '已停用' },
+    state: { online: '在线', connecting: '连接中', problem: '连接异常', offline: '离线', stopped: '已停用' },
+    connectingHint: '正在连接…',
+    offlineHint: '等待连接',
+    stoppedHint: '启动后才会接收消息',
+    addHint: '连接 NapCat，或让智能体帮你配置',
+    noMatch: '没有符合条件的机器人。',
     napcatHttp: '在 NapCat 中添加一个 HTTP 服务器（Mushin 调用它，把地址填在上面），以及一个 HTTP 客户端，把事件上报到下方地址，消息格式选择 "array"。令牌保持一致；设置了上报密钥的话也要一致。',
     httpTo: '调用 {url}；事件上报到 {path}',
     mode: {

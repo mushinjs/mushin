@@ -2310,7 +2310,7 @@ watch(narrow, (value) => {
 }
 
 .run-error {
-  color: #d03050;
+  color: var(--bad);
   max-width: 320px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2435,7 +2435,7 @@ watch(narrow, (value) => {
 
 /* A selected connection stands out, so it can be deleted with Delete or from its menu. */
 .canvas :deep(.vue-flow__edge.selected path.vue-flow__edge-path) {
-  stroke: #2080f0 !important;
+  stroke: var(--primary) !important;
   stroke-width: 3 !important;
 }
 
@@ -2566,7 +2566,7 @@ watch(narrow, (value) => {
 
 .name-edit:focus {
   outline: none;
-  border-color: #2080f0;
+  border-color: var(--primary);
 }
 
 .name-edit::placeholder {
@@ -2662,7 +2662,7 @@ watch(narrow, (value) => {
 
 .io-ref {
   font-size: 11px;
-  color: #2080f0;
+  color: var(--primary);
   white-space: nowrap;
 }
 
@@ -2773,7 +2773,7 @@ watch(narrow, (value) => {
 }
 
 .order-list li.over {
-  box-shadow: 0 -2px 0 #2080f0;
+  box-shadow: 0 -2px 0 var(--primary);
 }
 
 .order-grip {
@@ -2797,12 +2797,12 @@ watch(narrow, (value) => {
 }
 
 .order-list li.current {
-  border-color: #2080f0;
+  border-color: var(--primary);
 }
 
 .order-list li.blocked {
   border-style: dashed;
-  border-color: #f0a020;
+  border-color: var(--warn);
 }
 
 .order-name {
@@ -2823,7 +2823,7 @@ watch(narrow, (value) => {
 
 .order-tag {
   font-size: 11px;
-  color: #f0a020;
+  color: var(--warn);
 }
 
 .order-tag.maybe {
@@ -2870,7 +2870,7 @@ watch(narrow, (value) => {
 }
 
 .step-error {
-  color: #d03050;
+  color: var(--bad);
   font-size: 12px;
 }
 

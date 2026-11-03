@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRouter } from 'vue-router'
 import { call, on } from '../api'
+import PageHeader from '../components/PageHeader.vue'
 import EChart, { type ChartOption } from '../components/EChart.vue'
 import { useAgentStore } from '../stores/agent'
 import type { FlowSummary, LogLine, PerfSample, StatsOverview, StatsSeries, StatsTopRow } from '../types'
@@ -182,12 +183,7 @@ function openSession(id: string) {
 
 <template>
   <div class="page">
-    <div class="page-header">
-      <div>
-        <h1>{{ t('nav.overview') }}</h1>
-        <p class="page-lead">{{ t('overview.lead') }}</p>
-      </div>
-    </div>
+    <PageHeader :title="t('nav.overview')" :lead="t('overview.lead')" />
 
     <p v-if="unavailable" class="muted">{{ t('overview.unavailable') }}</p>
 
@@ -341,7 +337,7 @@ function openSession(id: string) {
 }
 
 .danger {
-  color: #d03050;
+  color: var(--bad);
   opacity: 1;
 }
 
@@ -425,7 +421,7 @@ function openSession(id: string) {
 .rank-bar span {
   display: block;
   height: 100%;
-  background: #2080f0;
+  background: var(--primary);
 }
 
 .rank-detail {

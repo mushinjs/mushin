@@ -290,13 +290,13 @@ function open(slot: { flowId: string; nodeId: string }) {
 }
 
 .row.state-ran {
-  border-color: #18a058;
+  border-color: var(--ok);
 }
 
 .row.state-blocked,
 .row.never {
   border-style: dashed;
-  border-color: #f0a020;
+  border-color: var(--warn);
 }
 
 .row.state-no-match {
@@ -332,10 +332,10 @@ function open(slot: { flowId: string; nodeId: string }) {
 }
 
 .warn {
-  color: #f0a020;
+  color: var(--warn);
 }
 
 .error {
-  color: #d03050;
+  color: var(--bad);
 }
 </style>

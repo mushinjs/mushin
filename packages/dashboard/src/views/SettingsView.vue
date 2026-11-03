@@ -3,6 +3,7 @@ import { NTabPane, NTabs } from 'naive-ui'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+import PageHeader from '../components/PageHeader.vue'
 import SettingsAbout from '../components/settings/SettingsAbout.vue'
 import SettingsAgent from '../components/settings/SettingsAgent.vue'
 import SettingsAppearance from '../components/settings/SettingsAppearance.vue'
@@ -23,12 +24,7 @@ const narrow = computed(() => width.value < 720)
 
 <template>
   <div class="page">
-    <div class="page-header">
-      <div>
-        <h1>{{ t('nav.settings') }}</h1>
-        <p class="page-lead">{{ t('settings.lead') }}</p>
-      </div>
-    </div>
+    <PageHeader :title="t('nav.settings')" :lead="t('settings.lead')" />
     <NTabs
       :value="section"
       type="line"

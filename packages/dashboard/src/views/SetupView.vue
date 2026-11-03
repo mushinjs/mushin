@@ -5,6 +5,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { call } from '../api'
+import PageHeader from '../components/PageHeader.vue'
 import ProviderForm from '../components/ProviderForm.vue'
 import { useAgentStore } from '../stores/agent'
 import { useDataStore } from '../stores/data'
@@ -56,12 +57,7 @@ function startAgent() {
 
 <template>
   <div class="page setup">
-    <div class="page-header">
-      <div>
-        <h1>{{ t('setup.title') }}</h1>
-        <p class="page-lead">{{ t('setup.lead') }}</p>
-      </div>
-    </div>
+    <PageHeader :title="t('setup.title')" :lead="t('setup.lead')" />
 
     <NSteps :current="step" class="steps">
       <NStep :title="t('setup.step1')" />
@@ -78,7 +74,7 @@ function startAgent() {
 
     <NCard v-else>
       <NSpace vertical align="center" class="done">
-        <NIcon size="48" color="#18a058"><CheckmarkCircle /></NIcon>
+        <NIcon size="48" color="var(--ok)"><CheckmarkCircle /></NIcon>
         <h2>{{ t('setup.doneTitle') }}</h2>
         <p>{{ t('setup.doneLead') }}</p>
         <NSpace>

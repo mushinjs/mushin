@@ -8,6 +8,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { call, on } from '../api'
+import PageHeader from '../components/PageHeader.vue'
 import IconAction from '../components/IconAction.vue'
 import { imageAsDataUrl, readPersonaFile } from '../personaCards'
 import ModelSelect from '../components/ModelSelect.vue'
@@ -193,11 +194,7 @@ const initial = (name: string) => [...name.trim()][0] ?? '?'
 
 <template>
   <div class="page">
-    <div class="page-header">
-      <div>
-        <h1>{{ t('nav.personas') }}</h1>
-        <p class="page-lead">{{ t('personas.lead') }}</p>
-      </div>
+    <PageHeader :title="t('nav.personas')" :lead="t('personas.lead')">
       <NSpace v-if="available">
         <NButton @click="importInput?.click()">
           <template #icon><NIcon><CloudUploadOutline /></NIcon></template>
@@ -213,7 +210,7 @@ const initial = (name: string) => [...name.trim()][0] ?? '?'
         </NButton>
       </NSpace>
       <input ref="importInput" type="file" accept=".json,.png,application/json,image/png" multiple hidden @change="importFiles">
-    </div>
+    </PageHeader>
 
     <NSpin :show="loading">
       <NAlert v-if="available === false" type="warning" :title="t('personas.unavailable')">

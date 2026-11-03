@@ -133,7 +133,7 @@ function remove() {
 }
 
 .error {
-  color: #d03050;
+  color: var(--bad);
 }
 
 .activity-link {

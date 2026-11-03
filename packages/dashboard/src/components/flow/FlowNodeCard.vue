@@ -192,11 +192,11 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
 }
 
 .pop-error {
-  color: #d03050;
+  color: var(--bad);
 }
 
 .pop-paused {
-  color: #f0a020;
+  color: var(--warn);
 }
 
 .pop-exec {
@@ -249,7 +249,7 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
 }
 
 .flow-node.issue-error {
-  border-color: #d03050;
+  border-color: var(--bad);
 }
 
 .flow-node.issue-warning {
@@ -257,15 +257,15 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
 }
 
 .flow-node.run-ok {
-  border-color: #18a058;
+  border-color: var(--ok);
 }
 
 .flow-node.run-error {
-  border-color: #d03050;
+  border-color: var(--bad);
 }
 
 .flow-node.run-paused {
-  border-color: #f0a020;
+  border-color: var(--warn);
   box-shadow: 0 0 0 3px rgba(240, 160, 32, 0.25), 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
@@ -279,13 +279,13 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
   padding: 0;
   border: 2px solid var(--flow-node-bg, #fff);
   border-radius: 50%;
-  background: #d03050;
+  background: var(--bad);
   cursor: pointer;
   z-index: 2;
 }
 
 .flow-node.run-running {
-  border-color: #2080f0;
+  border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(32, 128, 240, 0.18), 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
@@ -305,7 +305,7 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
 /* Never runs on some bot: an earlier trigger keeps the message. */
 .flow-node.blocked {
   border-style: dashed;
-  border-color: #f0a020;
+  border-color: var(--warn);
 }
 
 .flow-node.blocked > :not(.handle) {
@@ -325,7 +325,7 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
 
 .blocked-tag {
   background: rgba(240, 160, 32, 0.22);
-  color: #f0a020;
+  color: var(--warn);
 }
 
 .priority {
@@ -406,7 +406,7 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
 
 .badge.error,
 .run-mark.error {
-  background: #d03050;
+  background: var(--bad);
 }
 
 .badge.warning {
@@ -414,11 +414,11 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
 }
 
 .run-mark.ok {
-  background: #18a058;
+  background: var(--ok);
 }
 
 .run-mark.paused {
-  background: #f0a020;
+  background: var(--warn);
 }
 
 .run-step {
@@ -457,7 +457,7 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
 
 .unknown {
   padding: 0 12px 10px;
-  color: #d03050;
+  color: var(--bad);
 }
 
 .rows {
@@ -506,7 +506,7 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
   gap: 3px;
   overflow: hidden;
   white-space: nowrap;
-  color: #2080f0;
+  color: var(--primary);
 }
 
 .var-node {

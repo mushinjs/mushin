@@ -645,7 +645,7 @@ function onClick(event: MouseEvent) {
   --log-border: rgba(0, 0, 0, 0.08);
   --log-hover: rgba(127, 127, 127, 0.08);
   --log-selected: rgba(59, 74, 140, 0.12);
-  --log-accent: #3b4a8c;
+  --log-accent: var(--primary);
   --log-dim: #8a8f98;
   --log-chip: rgba(127, 127, 127, 0.12);
   --log-info: #2f6fbf;
@@ -656,7 +656,7 @@ function onClick(event: MouseEvent) {
   --log-error: #c42b4b;
   --log-error-bg: rgba(208, 48, 80, 0.12);
   --log-error-row: rgba(208, 48, 80, 0.05);
-  --log-ref: #3b4a8c;
+  --log-ref: var(--primary);
   --log-string: #3f8f3a;
   --log-number: #a35f00;
   --log-date: #0e7d98;

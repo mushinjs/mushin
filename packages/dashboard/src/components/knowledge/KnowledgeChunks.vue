@@ -238,7 +238,7 @@ const canMerge = (index: number) => chunks.value[index + 1]?.doc === chunks.valu
 }
 
 .highlight {
-  outline: 2px solid #18a058;
+  outline: 2px solid var(--ok);
 }
 
 .head {

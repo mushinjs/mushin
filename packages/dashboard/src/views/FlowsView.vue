@@ -12,6 +12,7 @@ import { type Component, computed, h, onBeforeUnmount, onMounted, ref, watch } f
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { call, on } from '../api'
+import PageHeader from '../components/PageHeader.vue'
 import { nodeIcon } from '../components/flow/icons'
 import IconAction from '../components/IconAction.vue'
 import { flowTemplates } from '../flow'
@@ -387,22 +388,16 @@ function remove(flow: FlowSummary) {
 
 <template>
   <div class="page">
-    <div class="page-header">
-      <div>
-        <h1>{{ t('nav.flows') }}</h1>
-        <p class="page-lead">{{ t('flows.lead') }}</p>
-      </div>
-      <div class="header-actions">
-        <NRadioGroup v-if="flows.length" v-model:value="view" class="views">
-          <NRadioButton value="cards" :title="t('flows.viewCards')" :aria-label="t('flows.viewCards')"><NIcon class="view-icon"><AppsOutline /></NIcon></NRadioButton>
-          <NRadioButton value="list" :title="t('flows.viewList')" :aria-label="t('flows.viewList')"><NIcon class="view-icon"><ListOutline /></NIcon></NRadioButton>
-        </NRadioGroup>
-        <NButton type="primary" data-agent-target="flows.add" @click="openCreate">
-          <template #icon><NIcon><AddOutline /></NIcon></template>
-          {{ t('flows.add') }}
-        </NButton>
-      </div>
-    </div>
+    <PageHeader :title="t('nav.flows')" :lead="t('flows.lead')">
+      <NRadioGroup v-if="flows.length" v-model:value="view" class="views">
+        <NRadioButton value="cards" :title="t('flows.viewCards')" :aria-label="t('flows.viewCards')"><NIcon class="view-icon"><AppsOutline /></NIcon></NRadioButton>
+        <NRadioButton value="list" :title="t('flows.viewList')" :aria-label="t('flows.viewList')"><NIcon class="view-icon"><ListOutline /></NIcon></NRadioButton>
+      </NRadioGroup>
+      <NButton type="primary" data-agent-target="flows.add" @click="openCreate">
+        <template #icon><NIcon><AddOutline /></NIcon></template>
+        {{ t('flows.add') }}
+      </NButton>
+    </PageHeader>
 
     <div v-if="flows.length" class="toolbar" data-agent-target="flows.filters">
       <NInput v-model:value="search" clearable :placeholder="t('flows.searchPlaceholder')" class="search">
@@ -553,12 +548,6 @@ function remove(flow: FlowSummary) {
   margin-bottom: 16px;
 }
 
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
 .search {
   width: 240px;
 }
@@ -611,9 +600,9 @@ function remove(flow: FlowSummary) {
 }
 
 .chip.on {
-  border-color: #2080f0;
+  border-color: var(--primary);
   background: rgba(32, 128, 240, 0.12);
-  color: #2080f0;
+  color: var(--primary);
 }
 
 .filter-foot {
@@ -731,7 +720,7 @@ function remove(flow: FlowSummary) {
   align-items: center;
   justify-content: center;
   background: rgba(32, 128, 240, 0.12);
-  color: #2080f0;
+  color: var(--primary);
   flex: none;
 }
 

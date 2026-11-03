@@ -8,6 +8,7 @@ import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { call, on } from '../api'
+import PageHeader from '../components/PageHeader.vue'
 import IconAction from '../components/IconAction.vue'
 import { useAgentSceneStore } from '../stores/agentScene'
 import type { AppPlugin, DatabaseStatus, DatabaseTable } from '../types'
@@ -362,11 +363,7 @@ async function backup() {
 
 <template>
   <div class="page">
-    <div class="page-header">
-      <div>
-        <h1>{{ t('nav.database') }}</h1>
-        <p class="page-lead">{{ t('database.lead') }}</p>
-      </div>
+    <PageHeader :title="t('nav.database')" :lead="t('database.lead')">
       <NSpace v-if="available" align="center">
         <NButton @click="newFlowTable">
           <template #icon><NIcon><AddOutline /></NIcon></template>
@@ -381,7 +378,7 @@ async function backup() {
           {{ t('database.backup') }}
         </NButton>
       </NSpace>
-    </div>
+    </PageHeader>
 
     <NSpin :show="loading">
       <NAlert v-if="available === false" type="warning" :title="t('database.unavailable')">

@@ -285,7 +285,7 @@ const percent = (item: KnowledgeProgress) => (item.total ? Math.round((item.done
 }
 
 .drop.dragging {
-  border-color: #18a058;
+  border-color: var(--ok);
   background: rgba(24, 160, 88, 0.06);
 }
 
@@ -333,7 +333,7 @@ const percent = (item: KnowledgeProgress) => (item.total ? Math.round((item.done
 }
 
 .error {
-  color: #d03050;
+  color: var(--bad);
   font-size: 12px;
   overflow-wrap: anywhere;
 }

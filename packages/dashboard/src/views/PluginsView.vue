@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { RefreshOutline, SettingsOutline } from '@vicons/ionicons5'
+import PageHeader from '../components/PageHeader.vue'
 import IconAction from '../components/IconAction.vue'
 import { NButton, NCard, NInput, NList, NListItem, NModal, NSpace, NSpin, NSwitch, NTag, NThing, NTooltip, useDialog, useMessage } from 'naive-ui'
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -204,13 +205,9 @@ async function save() {
 
 <template>
   <div class="page">
-    <div class="page-header">
-      <div>
-        <h1>{{ t('nav.plugins') }}</h1>
-        <p class="page-lead">{{ t('plugins.lead') }}</p>
-      </div>
+    <PageHeader :title="t('nav.plugins')" :lead="t('plugins.lead')">
       <NButton :loading="loading" @click="rescan">{{ t('plugins.rescan') }}</NButton>
-    </div>
+    </PageHeader>
 
     <NSpin :show="loading">
       <NCard :title="t('plugins.appPlugins')" class="section">

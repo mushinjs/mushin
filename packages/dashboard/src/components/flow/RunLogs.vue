@@ -505,7 +505,7 @@ const iconOf = (nodeId: string) => {
 }
 
 .step.failed .step-name {
-  color: #d03050;
+  color: var(--bad);
 }
 
 .step-icon {
@@ -588,12 +588,12 @@ const iconOf = (nodeId: string) => {
 }
 
 .is-error {
-  color: #d03050;
+  color: var(--bad);
   opacity: 1;
 }
 
 .detail-error {
-  color: #d03050;
+  color: var(--bad);
   font-size: 12px;
   padding: 6px 8px;
   border-radius: 6px;
@@ -640,7 +640,7 @@ const iconOf = (nodeId: string) => {
 .values td.type-number,
 .values td.type-boolean {
   font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
-  color: #2080f0;
+  color: var(--primary);
 }
 
 .values td.type-object,

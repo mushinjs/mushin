@@ -42,6 +42,6 @@ function insert(ref: string) {
 .var-button {
   font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
   font-size: 12px;
-  color: #2080f0;
+  color: var(--primary);
 }
 </style>

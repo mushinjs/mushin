@@ -160,7 +160,7 @@ svg {
 
 .window {
   fill: none;
-  stroke: #2080f0;
+  stroke: var(--primary);
   stroke-width: 1.5;
 }
 </style>
