@@ -1,11 +1,6 @@
 <script setup lang="ts">
-import {
-  AddOutline, AlertCircleOutline, AppsOutline, ChatbubblesOutline, CloseCircleOutline, ExtensionPuzzleOutline, FilterOutline, GitNetworkOutline,
-  LayersOutline, ListOutline, NotificationsOutline, SearchOutline, SparklesOutline, SwapVerticalOutline, TimeOutline, TrashOutline,
-} from '@vicons/ionicons5'
-import { Toggle, useConfirm, useToast } from '@mushin/ui'
-import { type DataTableColumns, NBadge, NButton, NCard, NDataTable, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NPopover, NRadioButton, NRadioGroup, NSelect, type SelectOption, NTag } from 'naive-ui'
-import { type Component, computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Button, Card, DataTable, type DataTableColumn, Empty, Form, FormItem, Input, Modal, Popover, RadioButton, RadioGroup, Select, Tag, Toggle, useConfirm, useToast } from '@mushin/ui'
+import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { call, on } from '../api'
@@ -113,18 +108,8 @@ function adapterOf(flow: FlowSummary) {
   return used.size === 1 ? [...used][0]! : ''
 }
 
-// Node icons are class names now; this page still draws icon components until it moves to @mushin/ui.
-const classIcons = new Map<string, Component>()
-const classIcon = (name: string) => classIcons.get(name) ?? classIcons.set(name, () => h('span', { class: name })).get(name)!
-const kindIcon = (kind: string): Component => (kind === 'event' ? NotificationsOutline : classIcon(nodeIcon(`trigger.${kind}`, 'trigger')))
-const groupIcons: Record<Group, Component> = { none: AppsOutline, trigger: NotificationsOutline, adapter: ExtensionPuzzleOutline, bot: ChatbubblesOutline, recent: TimeOutline }
-const icon = (component: Component, size = 15) => h(NIcon, { size, style: { flex: 'none' } }, { default: () => h(component) })
-
-/** Select options shown with their icon. */
-// Styled inline: the dropdown is rendered outside this component, where its scoped styles do not reach.
-const renderLabel = (option: SelectOption & { icon?: Component }) => h('span', {
-  style: { display: 'inline-flex', alignItems: 'center', gap: '8px', lineHeight: 1, verticalAlign: 'middle' },
-}, [option.icon ? icon(option.icon) : null, h('span', null, String(option.label))])
+const kindIcon = (kind: string) => (kind === 'event' ? 'i-lucide-bell' : nodeIcon(`trigger.${kind}`, 'trigger'))
+const groupIcons: Record<Group, string> = { none: 'i-lucide-layout-grid', trigger: 'i-lucide-bell', adapter: 'i-lucide-puzzle', bot: 'i-lucide-messages-square', recent: 'i-lucide-clock' }
 
 const adapterIds = computed(() => {
   const ids = new Set(data.adapters.map((adapter) => adapter.id))
@@ -137,8 +122,8 @@ const sortOptions = computed(() => (['updated', 'created', 'name'] as Sort[]).ma
 /** The filter panel: one section per field, each a row of toggles with icons. */
 const filterSections = computed(() => [
   { key: 'trigger', title: t('flows.filterTrigger'), model: triggerFilter, items: triggerKinds.map((kind) => ({ value: kind, label: t(`flows.kind.${kind}`), icon: kindIcon(kind) })) },
-  { key: 'adapter', title: t('flows.filterAdapter'), model: adapterFilter, items: adapterIds.value.map((id) => ({ value: id, label: adapterLabel(id || undefined), icon: ExtensionPuzzleOutline })) },
-  { key: 'bot', title: t('flows.filterBot'), model: botFilter, items: data.bots.map((bot) => ({ value: bot.id, label: bot.name, icon: ChatbubblesOutline })) },
+  { key: 'adapter', title: t('flows.filterAdapter'), model: adapterFilter, items: adapterIds.value.map((id) => ({ value: id, label: adapterLabel(id || undefined), icon: 'i-lucide-puzzle' })) },
+  { key: 'bot', title: t('flows.filterBot'), model: botFilter, items: data.bots.map((bot) => ({ value: bot.id, label: bot.name, icon: 'i-lucide-messages-square' })) },
 ])
 
 function toggleFilter(model: { value: string[] }, value: string) {
@@ -227,7 +212,7 @@ function recency(time: number) {
 interface Bucket {
   key: string
   label: string
-  icon?: Component
+  icon?: string
   /** The bot a group is for, shown with its avatar. */
   bot?: string
   items: FlowSummary[]
@@ -241,12 +226,12 @@ const groups = computed<Bucket[]>(() => {
   const recent: Bucket[] = group.value === 'recent' || shown.value.length <= RECENT_COUNT ? [] : [{
     key: '@recent',
     label: t('flows.recentlyEdited'),
-    icon: TimeOutline,
+    icon: 'i-lucide-clock',
     items: [...shown.value].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, RECENT_COUNT),
   }]
-  if (group.value === 'none') return [...recent, { key: 'all', label: t('flows.allFlows'), icon: AppsOutline, items: shown.value }]
+  if (group.value === 'none') return [...recent, { key: 'all', label: t('flows.allFlows'), icon: 'i-lucide-layout-grid', items: shown.value }]
   const buckets = new Map<string, Bucket>()
-  const add = (key: string, label: string, flow: FlowSummary, bucketIcon?: Component, bot?: string) => {
+  const add = (key: string, label: string, flow: FlowSummary, bucketIcon?: string, bot?: string) => {
     let bucket = buckets.get(key)
     if (!bucket) buckets.set(key, bucket = { key, label, icon: bucketIcon, bot, items: [] })
     bucket.items.push(flow)
@@ -254,18 +239,18 @@ const groups = computed<Bucket[]>(() => {
   for (const flow of shown.value) {
     if (group.value === 'trigger') {
       const kinds = kindsOf(flow)
-      if (!kinds.length) add('none', t('flows.kind.none'), flow, AppsOutline)
+      if (!kinds.length) add('none', t('flows.kind.none'), flow, 'i-lucide-layout-grid')
       // A flow with several kinds of trigger shows in each of their groups.
       for (const kind of kinds) add(kind, t(`flows.kind.${kind}`), flow, kindIcon(kind))
     } else if (group.value === 'adapter') {
       const adapter = adapterOf(flow)
-      add(adapter, adapterLabel(adapter || undefined), flow, ExtensionPuzzleOutline)
+      add(adapter, adapterLabel(adapter || undefined), flow, 'i-lucide-puzzle')
     } else if (group.value === 'bot') {
-      if (!flow.bots.length) add('', t('flows.runsOnNone'), flow, ChatbubblesOutline)
+      if (!flow.bots.length) add('', t('flows.runsOnNone'), flow, 'i-lucide-messages-square')
       for (const bot of flow.bots) add(bot, botName(bot), flow, undefined, bot)
     } else {
       const key = recency(flow.updatedAt)
-      add(key, t(`flows.recent.${key}`), flow, TimeOutline)
+      add(key, t(`flows.recent.${key}`), flow, 'i-lucide-clock')
     }
   }
   const order = group.value === 'trigger' ? [...triggerKinds, 'none'] : group.value === 'recent' ? ['today', 'yesterday', 'week', 'earlier'] : undefined
@@ -285,7 +270,7 @@ function toggleGroup(key: string) {
 
 const triggerText = (flow: FlowSummary) => flow.triggers.filter((item) => !item.skip).map((item) => item.summary).filter(Boolean).join('、')
 
-const columns = computed<DataTableColumns<FlowSummary>>(() => [
+const columns = computed<DataTableColumn<FlowSummary>[]>(() => [
   {
     title: t('common.name'),
     key: 'name',
@@ -295,11 +280,12 @@ const columns = computed<DataTableColumns<FlowSummary>>(() => [
       ...(flow.description ? [h('span', { class: 'sub' }, flow.description)] : []),
     ]),
   },
-  { title: t('flows.colTriggers'), key: 'triggers', ellipsis: { tooltip: true }, render: (flow) => triggerText(flow) || '—' },
+  { title: t('flows.colTriggers'), key: 'triggers', width: 160, ellipsis: { tooltip: true }, render: (flow) => triggerText(flow) || '—' },
   { title: t('flows.adapter'), key: 'adapter', width: 130, render: (flow) => adapterLabel(adapterOf(flow) || undefined) },
   {
     title: t('flows.bots'),
     key: 'bots',
+    width: 120,
     render: (flow) => (flow.bots.length ? flow.bots.map(botName).join('、') : h('span', { class: 'sub' }, t('flows.runsOnNone'))),
   },
   { title: t('flows.colNodes'), key: 'nodes', width: 70, align: 'right' },
@@ -324,7 +310,7 @@ const columns = computed<DataTableColumns<FlowSummary>>(() => [
     key: 'actions',
     width: 50,
     // A plugin's flows are removed through the plugin.
-    render: (flow) => (ownedByPlugin(flow) ? null : h(IconAction, { icon: TrashOutline, label: t('common.delete'), type: 'error', onClick: () => remove(flow) })),
+    render: (flow) => (ownedByPlugin(flow) ? null : h(IconAction, { icon: 'i-lucide-trash-2', label: t('common.delete'), type: 'error', onClick: () => remove(flow) })),
   },
 ])
 
@@ -345,9 +331,8 @@ function sourceTag(flow: FlowSummary) {
   const source = flow.source
   if (source?.kind === 'plugin') {
     const name = pluginNames.value.get(source.plugin ?? '') ?? source.plugin
-    return h(NTag, {
+    return h(Tag, {
       size: 'small',
-      bordered: false,
       type: 'success',
       class: 'source-tag',
       title: `${t('flows.sourcePlugin', { name })}\n${t('flows.sourcePluginHint')}`,
@@ -355,9 +340,10 @@ function sourceTag(flow: FlowSummary) {
         event.stopPropagation()
         router.push({ path: '/plugins', query: { highlight: source.plugin } })
       },
-    }, { default: () => t('flows.sourcePlugin', { name }), icon: () => h(NIcon, null, { default: () => h(ExtensionPuzzleOutline) }) })
+      icon: 'i-lucide-puzzle',
+    }, { default: () => t('flows.sourcePlugin', { name }) })
   }
-  if (source?.kind === 'agent') return h(NTag, { size: 'small', bordered: false }, { default: () => t('flows.sourceAgent'), icon: () => h(NIcon, null, { default: () => h(SparklesOutline) }) })
+  if (source?.kind === 'agent') return h(Tag, { size: 'small', icon: 'i-lucide-sparkles' }, { default: () => t('flows.sourceAgent') })
   return undefined
 }
 
@@ -366,9 +352,9 @@ function tagsOf(flow: FlowSummary) {
   const tags = []
   const source = sourceTag(flow)
   if (source) tags.push(source)
-  if (flow.blocked) tags.push(h(NTag, { size: 'small', bordered: false, type: 'warning' }, () => (flow.blocked === 'all' ? t('flows.blockedTag') : t('flows.partlyBlocked'))))
-  if (flow.errors) tags.push(h(NTag, { size: 'small', bordered: false, type: 'error' }, () => t('flows.errorCount', flow.errors)))
-  else if (flow.warnings) tags.push(h(NTag, { size: 'small', bordered: false, type: 'warning' }, () => t('flows.warningCount', flow.warnings)))
+  if (flow.blocked) tags.push(h(Tag, { size: 'small', type: 'warning' }, () => (flow.blocked === 'all' ? t('flows.blockedTag') : t('flows.partlyBlocked'))))
+  if (flow.errors) tags.push(h(Tag, { size: 'small', type: 'error' }, () => t('flows.errorCount', flow.errors)))
+  else if (flow.warnings) tags.push(h(Tag, { size: 'small', type: 'warning' }, () => t('flows.warningCount', flow.warnings)))
   return tags
 }
 
@@ -439,20 +425,19 @@ function remove(flow: FlowSummary) {
 <template>
   <div class="page">
     <PageHeader :title="t('nav.flows')" :lead="t('flows.lead')">
-      <NRadioGroup v-if="flows.length" v-model:value="view" class="views">
-        <NRadioButton value="cards" :title="t('flows.viewCards')" :aria-label="t('flows.viewCards')"><NIcon class="view-icon"><AppsOutline /></NIcon></NRadioButton>
-        <NRadioButton value="list" :title="t('flows.viewList')" :aria-label="t('flows.viewList')"><NIcon class="view-icon"><ListOutline /></NIcon></NRadioButton>
-      </NRadioGroup>
-      <NButton type="primary" data-agent-target="flows.add" @click="openCreate">
-        <template #icon><NIcon><AddOutline /></NIcon></template>
+      <RadioGroup v-if="flows.length" v-model:value="view" class="views">
+        <RadioButton value="cards" :title="t('flows.viewCards')" :aria-label="t('flows.viewCards')"><span class="i-lucide-layout-grid view-icon" /></RadioButton>
+        <RadioButton value="list" :title="t('flows.viewList')" :aria-label="t('flows.viewList')"><span class="i-lucide-list view-icon" /></RadioButton>
+      </RadioGroup>
+      <Button type="primary" data-agent-target="flows.add" icon="i-lucide-plus" @click="openCreate">
         {{ t('flows.add') }}
-      </NButton>
+      </Button>
     </PageHeader>
 
     <div v-if="flows.length" class="toolbar" data-agent-target="flows.filters">
-      <NInput v-model:value="search" clearable :placeholder="t('flows.searchPlaceholder')" class="search">
-        <template #prefix><NIcon><SearchOutline /></NIcon></template>
-      </NInput>
+      <Input v-model:value="search" clearable :placeholder="t('flows.searchPlaceholder')" class="search">
+        <template #prefix><span class="i-lucide-search" /></template>
+      </Input>
       <div class="chips" role="radiogroup" :aria-label="t('flows.filterLabel')">
         <button
           v-for="item in stateChips"
@@ -469,14 +454,12 @@ function remove(flow: FlowSummary) {
           <span class="count">{{ counts[item.key] }}</span>
         </button>
       </div>
-      <NPopover trigger="click" placement="bottom-start" :show-arrow="false">
+      <Popover placement="bottom" align="start">
         <template #trigger>
-          <NBadge :value="filterCount" :show="filterCount > 0" :offset="[-4, 4]">
-            <NButton :type="filterCount ? 'primary' : 'default'" :secondary="!!filterCount">
-              <template #icon><NIcon><FilterOutline /></NIcon></template>
-              {{ t('flows.filter') }}
-            </NButton>
-          </NBadge>
+          <Button :type="filterCount ? 'primary' : 'default'" :secondary="!!filterCount" icon="i-lucide-funnel">
+            {{ t('flows.filter') }}
+            <span v-if="filterCount" class="filter-count">{{ filterCount }}</span>
+          </Button>
         </template>
         <div class="filter-panel">
           <section v-for="section in filterSections" :key="section.key">
@@ -490,31 +473,29 @@ function remove(flow: FlowSummary) {
                 :class="{ on: section.model.value.includes(item.value) }"
                 @click="toggleFilter(section.model, item.value)"
               >
-                <NIcon :size="14"><component :is="item.icon" /></NIcon>
+                <span class="text-[14px]" :class="item.icon" />
                 {{ item.label }}
               </button>
               <span v-if="!section.items.length" class="sub">{{ t('flows.filterNone') }}</span>
             </div>
           </section>
           <div v-if="filterCount" class="filter-foot">
-            <NButton size="small" quaternary @click="clearFilters">
-              <template #icon><NIcon><CloseCircleOutline /></NIcon></template>
+            <Button size="small" quaternary icon="i-lucide-circle-x" @click="clearFilters">
               {{ t('flows.clearFilters') }}
-            </NButton>
+            </Button>
           </div>
         </div>
-      </NPopover>
-      <NTag v-for="item in activeFilters" :key="item.key" closable size="small" :bordered="false" type="info" class="active-filter" @close="item.remove()">
-        <template #icon><NIcon><component :is="item.icon" /></NIcon></template>
+      </Popover>
+      <Tag v-for="item in activeFilters" :key="item.key" :icon="item.icon" closable size="small" type="info" class="active-filter" @close="item.remove()">
         {{ item.label }}
-      </NTag>
+      </Tag>
       <span class="spacer" />
-      <NSelect v-model:value="group" :options="groupOptions" :render-label="renderLabel" class="small-select" :title="t('flows.groupTitle')">
-        <template #arrow><NIcon><LayersOutline /></NIcon></template>
-      </NSelect>
-      <NSelect v-model:value="sort" :options="sortOptions" class="small-select" :title="t('flows.sortTitle')">
-        <template #arrow><NIcon><SwapVerticalOutline /></NIcon></template>
-      </NSelect>
+      <Select v-model:value="group" :options="groupOptions" class="small-select" :title="t('flows.groupTitle')">
+        <template #arrow><span class="i-lucide-layers" /></template>
+      </Select>
+      <Select v-model:value="sort" :options="sortOptions" class="small-select" :title="t('flows.sortTitle')">
+        <template #arrow><span class="i-lucide-arrow-up-down" /></template>
+      </Select>
     </div>
 
     <template v-if="shown.length">
@@ -528,7 +509,7 @@ function remove(flow: FlowSummary) {
         >
           <span class="caret" :class="{ closed: collapsed.has(bucket.key) }">▾</span>
           <span v-if="bucket.bot" class="mini-avatar" :style="{ background: avatarColor(bucket.bot) }" aria-hidden="true">{{ initial(bucket.label) }}</span>
-          <NIcon v-else-if="bucket.icon" :size="16" class="bucket-icon"><component :is="bucket.icon" /></NIcon>
+          <span v-else-if="bucket.icon" class="bucket-icon text-[16px]" :class="bucket.icon" />
           <strong>{{ bucket.label }}</strong>
           <span class="count">{{ bucket.items.length }}</span>
         </button>
@@ -545,7 +526,7 @@ function remove(flow: FlowSummary) {
               @keyup.enter.self="open(flow)"
             >
               <div class="flow-head">
-                <div class="flow-icon" aria-hidden="true"><NIcon :size="20"><GitNetworkOutline /></NIcon></div>
+                <div class="flow-icon" aria-hidden="true"><span class="i-lucide-network text-[20px]" /></div>
                 <div class="flow-title">
                   <strong class="name" :title="flow.name">{{ flow.name }}</strong>
                   <span class="meta">{{ t('flows.nodeCount', flow.nodes) }} · {{ t('flows.editedAt', { time: formatTime(flow.updatedAt) }) }}</span>
@@ -556,12 +537,12 @@ function remove(flow: FlowSummary) {
               <div class="flow-body">
                 <p v-if="flow.description" class="desc" :title="flow.description">{{ flow.description }}</p>
                 <div v-if="issueOf(flow)" class="note" :class="issueOf(flow)!.tone">
-                  <NIcon :size="15"><AlertCircleOutline /></NIcon>
+                  <span class="i-lucide-circle-alert text-[15px]" />
                   <span>{{ issueOf(flow)!.text }}</span>
                 </div>
                 <div class="triggers">
                   <span v-for="trigger in activeTriggers(flow).slice(0, TRIGGER_COUNT)" :key="trigger.id" class="trigger" :title="trigger.summary">
-                    <NIcon :size="13"><component :is="kindIcon(kindOf(trigger))" /></NIcon>
+                    <span class="text-[13px]" :class="kindIcon(kindOf(trigger))" />
                     <span>{{ trigger.summary || t(`flows.kind.${kindOf(trigger)}`) }}</span>
                   </span>
                   <span v-if="activeTriggers(flow).length > TRIGGER_COUNT" class="trigger more">{{ t('flows.moreTriggers', { count: activeTriggers(flow).length - TRIGGER_COUNT }) }}</span>
@@ -580,45 +561,45 @@ function remove(flow: FlowSummary) {
                   <span v-else class="none">{{ t('flows.runsOnNone') }}</span>
                 </div>
                 <button v-if="ownedByPlugin(flow)" type="button" class="source" :title="`${t('flows.sourcePlugin', { name: pluginName(flow) })}\n${t('flows.sourcePluginHint')}`" @click="openPlugin(flow)">
-                  <NIcon :size="14"><ExtensionPuzzleOutline /></NIcon>{{ t('flows.sourcePluginShort') }}
+                  <span class="i-lucide-puzzle text-[14px]" />{{ t('flows.sourcePluginShort') }}
                 </button>
                 <span v-else-if="flow.source?.kind === 'agent'" class="source" :title="t('flows.sourceAgent')">
-                  <NIcon :size="14"><SparklesOutline /></NIcon>{{ t('flows.sourceAgentShort') }}
+                  <span class="i-lucide-sparkles text-[14px]" />{{ t('flows.sourceAgentShort') }}
                 </span>
                 <Toggle variant="button" size="small" :value="flow.enabled" :title="flow.enabled ? t('flows.enabledHint') : t('flows.disabledHint')" @update:value="(value: boolean) => setEnabled(flow, value)" />
-                <IconAction v-if="!ownedByPlugin(flow)" :icon="TrashOutline" :label="t('common.delete')" type="error" @click="remove(flow)" />
+                <IconAction v-if="!ownedByPlugin(flow)" icon="i-lucide-trash-2" :label="t('common.delete')" type="error" @click="remove(flow)" />
               </div>
             </article>
 
             <button v-if="!filtered && index === groups.length - 1" type="button" class="add-card" @click="openCreate">
-              <span class="plus"><NIcon :size="20"><AddOutline /></NIcon></span>
+              <span class="plus"><span class="i-lucide-plus text-[20px]" /></span>
               <strong>{{ t('flows.add') }}</strong>
               <span class="hint">{{ t('flows.addHint') }}</span>
             </button>
           </div>
-          <NCard v-else size="small" class="table-card">
-            <NDataTable :columns="columns" :data="bucket.items" :row-key="(flow: FlowSummary) => flow.id" :row-props="rowProps" size="small" :bordered="false" :scroll-x="980" />
-          </NCard>
+          <Card v-else size="small" class="table-card">
+            <DataTable :columns="columns" :data="bucket.items" :row-key="(flow: FlowSummary) => flow.id" :row-props="rowProps" size="small" :bordered="false" :scroll-x="1200" />
+          </Card>
         </template>
       </section>
     </template>
 
-    <NEmpty v-else-if="loaded && flows.length" :description="t('flows.noMatch')" class="no-match">
+    <Empty v-else-if="loaded && flows.length" :description="t('flows.noMatch')" class="no-match">
       <template #extra>
-        <NButton @click="clearFilters">{{ t('flows.clearFilters') }}</NButton>
+        <Button @click="clearFilters">{{ t('flows.clearFilters') }}</Button>
       </template>
-    </NEmpty>
+    </Empty>
 
-    <EmptyState v-else-if="loaded" :icon="GitNetworkOutline" :title="t('flows.emptyTitle')" :hint="t('flows.empty')">
-      <NButton type="primary" @click="openCreate">{{ t('flows.add') }}</NButton>
+    <EmptyState v-else-if="loaded" icon="i-lucide-network" :title="t('flows.emptyTitle')" :hint="t('flows.empty')">
+      <Button type="primary" @click="openCreate">{{ t('flows.add') }}</Button>
     </EmptyState>
 
-    <NModal v-model:show="showCreate" preset="card" :title="t('flows.add')" class="create-modal" :style="{ width: 'min(560px, calc(100vw - 32px))' }">
-      <NForm label-placement="top" @submit.prevent="create">
-        <NFormItem :label="t('common.name')">
-          <NInput v-model:value="form.name" :placeholder="t('flows.namePlaceholder')" />
-        </NFormItem>
-        <NFormItem :label="t('flows.template')">
+    <Modal v-model:show="showCreate" :title="t('flows.add')" class="create-modal" :width="560">
+      <Form @submit.prevent="create">
+        <FormItem :label="t('common.name')">
+          <Input v-model:value="form.name" :placeholder="t('flows.namePlaceholder')" />
+        </FormItem>
+        <FormItem :label="t('flows.template')">
           <div class="templates">
             <button
               v-for="template in flowTemplates"
@@ -632,18 +613,18 @@ function remove(flow: FlowSummary) {
               <span class="sub">{{ t(`flows.templates.${template.id}.description`) }}</span>
             </button>
           </div>
-        </NFormItem>
-        <NFormItem :label="t('flows.bots')" :feedback="t('flows.botsHint')">
-          <NSelect v-model:value="form.bots" multiple :options="botOptions" :placeholder="t('flows.runsOnNone')" />
-        </NFormItem>
-      </NForm>
+        </FormItem>
+        <FormItem :label="t('flows.bots')" :feedback="t('flows.botsHint')">
+          <Select v-model:value="form.bots" multiple :options="botOptions" :placeholder="t('flows.runsOnNone')" />
+        </FormItem>
+      </Form>
       <template #footer>
         <div class="modal-actions">
-          <NButton @click="showCreate = false">{{ t('common.cancel') }}</NButton>
-          <NButton type="primary" :loading="creating" :disabled="!form.name.trim()" @click="create">{{ t('common.create') }}</NButton>
+          <Button @click="showCreate = false">{{ t('common.cancel') }}</Button>
+          <Button type="primary" :loading="creating" :disabled="!form.name.trim()" @click="create">{{ t('common.create') }}</Button>
         </div>
       </template>
-    </NModal>
+    </Modal>
   </div>
 </template>
 
@@ -1080,6 +1061,30 @@ button.source:hover {
 
 /* ---- list ---- */
 
+.filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 2px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-fg);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.table-card {
+  overflow: hidden;
+}
+
+.table-card :deep(.mu-card__body) {
+  padding: 0;
+}
+
 .table-card :deep(.flow-row) {
   cursor: pointer;
 }
@@ -1108,11 +1113,11 @@ button.source:hover {
 }
 
 /* A long tag (a plugin's package name) is cut short inside its column; the title holds the whole text. */
-.table-card :deep(.tag-row .n-tag) {
+.table-card :deep(.tag-row .mu-tag) {
   max-width: 100%;
 }
 
-.table-card :deep(.tag-row .n-tag__content) {
+.table-card :deep(.tag-row .mu-tag__text) {
   overflow: hidden;
   text-overflow: ellipsis;
 }
