@@ -18,6 +18,8 @@ export interface UiText {
   loading: string
   previous: string
   next: string
+  /** A page size choice; `{n}` is the number of rows. */
+  perPage: string
 }
 
 export const defaultText: UiText = {
@@ -36,6 +38,7 @@ export const defaultText: UiText = {
   loading: 'Loading',
   previous: 'Previous',
   next: 'Next',
+  perPage: '{n} / page',
 }
 
 const TEXT: InjectionKey<ComputedRef<UiText>> = Symbol('mushin-ui-text')

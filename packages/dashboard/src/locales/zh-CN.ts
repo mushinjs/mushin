@@ -17,6 +17,7 @@ const zhCN: typeof en = {
     loading: '加载中',
     previous: '上一页',
     next: '下一页',
+    perPage: '{n} 条/页',
   },
   app: {
     tagline: '描述你想要的，得到你所设想的。',

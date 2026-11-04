@@ -26,7 +26,7 @@ const english = {
 // The shared components' own words, in the dashboard's language.
 const uiText = computed(() => {
   const keys = ['on', 'off', 'enabled', 'disabled', 'clear', 'close', 'noOptions', 'add', 'remove', 'ok', 'cancel', 'loading', 'previous', 'next'] as const
-  return { ...Object.fromEntries(keys.map((key) => [key, t(`ui.${key}`)])), useValue: t('ui.useValue', { value: '{value}' }) }
+  return { ...Object.fromEntries(keys.map((key) => [key, t(`ui.${key}`)])), useValue: t('ui.useValue', { value: '{value}' }), perPage: t('ui.perPage', { n: '{n}' }) }
 })
 </script>
 

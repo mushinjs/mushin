@@ -5,8 +5,9 @@
  * - `tag`: typed text that matches no option can be chosen as it is.
  * - `multiple`: several values, shown as tags (`maxTagCount` folds the rest into "+N").
  * - Options in groups: `{ type: 'group', key, label, children }`.
- * The #option slot draws an option's label; it gets `{ option }`. The #tag slot draws a chosen
- * value's tag in a multiple select; it gets `{ value, label }`.
+ * An option's `icon` is shown in the menu, and the #arrow slot replaces the chevron. The #option
+ * slot draws an option's label; it gets `{ option }`. The #tag slot draws a chosen value's tag in
+ * a multiple select; it gets `{ value, label }`.
  */
 import {
   ComboboxAnchor, ComboboxContent, ComboboxGroup, ComboboxInput, ComboboxItem, ComboboxItemIndicator, ComboboxLabel, ComboboxPortal, ComboboxRoot,
@@ -21,6 +22,8 @@ export interface SelectOption {
   label: string
   value: Value
   disabled?: boolean
+  /** An icon class shown before the label in the menu. */
+  icon?: string
   /** Muted text after the label. */
   description?: string
   [key: string]: unknown
@@ -174,7 +177,7 @@ const showClear = computed(() => props.clearable && !props.disabled && selected.
           <span class="i-lucide-circle-x" />
         </button>
         <ComboboxTrigger class="mu-select__arrow" tabindex="-1">
-          <span class="i-lucide-chevron-down" />
+          <slot name="arrow"><span class="i-lucide-chevron-down" /></slot>
         </ComboboxTrigger>
       </ComboboxAnchor>
 
@@ -189,11 +192,13 @@ const showClear = computed(() => props.clearable && !props.disabled && selected.
               <ComboboxGroup v-if="isGroup(item)">
                 <ComboboxLabel class="mu-menu__label">{{ item.label }}</ComboboxLabel>
                 <ComboboxItem v-for="option in item.children" :key="option.value" :value="option.value" :disabled="option.disabled" class="mu-menu__item mu-select__item">
+                  <span v-if="option.icon" class="mu-menu__icon" :class="option.icon" />
                   <span class="mu-select__label"><slot name="option" :option="option">{{ option.label }}</slot><small v-if="option.description">{{ option.description }}</small></span>
                   <ComboboxItemIndicator class="mu-select__check"><span class="i-lucide-check" /></ComboboxItemIndicator>
                 </ComboboxItem>
               </ComboboxGroup>
               <ComboboxItem v-else :value="item.value" :disabled="item.disabled" class="mu-menu__item mu-select__item">
+                <span v-if="item.icon" class="mu-menu__icon" :class="item.icon" />
                 <span class="mu-select__label"><slot name="option" :option="item">{{ item.label }}</slot><small v-if="item.description">{{ item.description }}</small></span>
                 <ComboboxItemIndicator class="mu-select__check"><span class="i-lucide-check" /></ComboboxItemIndicator>
               </ComboboxItem>

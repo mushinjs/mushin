@@ -16,6 +16,7 @@ export default {
     loading: 'Loading',
     previous: 'Previous page',
     next: 'Next page',
+    perPage: '{n} / page',
   },
   app: {
     tagline: 'Describe what you want. Get what you envision.',
