@@ -1,8 +1,5 @@
 <script setup lang="ts">
-import { useThemeVars } from 'naive-ui'
 import { highlightState } from '../highlight'
-
-const vars = useThemeVars()
 </script>
 
 <template>
@@ -10,7 +7,7 @@ const vars = useThemeVars()
     <div
       v-if="highlightState.visible"
       class="agent-tip"
-      :style="{ top: `${highlightState.top}px`, left: `${highlightState.left}px`, background: vars.primaryColor, color: vars.baseColor }"
+      :style="{ top: `${highlightState.top}px`, left: `${highlightState.left}px` }"
       role="status"
     >
       {{ highlightState.message }}
@@ -28,6 +25,8 @@ const vars = useThemeVars()
   font-size: 13px;
   line-height: 1.5;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  background: var(--primary);
+  color: var(--primary-fg);
   pointer-events: none;
 }
 

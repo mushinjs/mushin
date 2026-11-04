@@ -134,6 +134,7 @@ const iconOnly = computed(() => !slots.default)
   font-size: 1.15em;
 }
 
+.mu-btn__icon > svg { width: 1em; height: 1em; }
 .mu-btn--tiny .mu-btn__icon { font-size: 13px; }
 .mu-btn__label { overflow: hidden; text-overflow: ellipsis; }
 

@@ -3,7 +3,7 @@
  * Stays at the bottom of the window while there are unsaved changes, so saving never needs a
  * scroll: what is unsaved, a way to undo it, and the save button.
  */
-import { NButton } from 'naive-ui'
+import { Button } from '@mushin/ui'
 
 defineProps<{ show: boolean; saving?: boolean; text: string; discardText: string; saveText: string }>()
 defineEmits<{ discard: []; save: [] }>()
@@ -13,8 +13,8 @@ defineEmits<{ discard: []; save: [] }>()
   <Transition name="savebar">
     <div v-if="show || saving" class="savebar" role="region" :aria-label="text">
       <span class="savebar-text"><span class="savebar-dot" />{{ text }}</span>
-      <NButton quaternary class="savebar-undo" :disabled="saving" @click="$emit('discard')">{{ discardText }}</NButton>
-      <NButton type="primary" :loading="saving" @click="$emit('save')">{{ saveText }}</NButton>
+      <Button quaternary class="savebar-undo" :disabled="saving" @click="$emit('discard')">{{ discardText }}</Button>
+      <Button type="primary" :loading="saving" @click="$emit('save')">{{ saveText }}</Button>
     </div>
   </Transition>
 </template>

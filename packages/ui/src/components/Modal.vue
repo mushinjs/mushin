@@ -1,7 +1,13 @@
 <script setup lang="ts">
-/** A dialog over the page: title, body (default slot), and buttons in #footer. */
-import { DialogClose, DialogContent, DialogDescription, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui'
+/**
+ * A dialog over the page: title, body (default slot), and buttons in #footer. `bare` drops the
+ * frame, for dialogs that draw their own (such as a search box); name those with `label`.
+ * Classes, styles and other attributes go to the dialog.
+ */
+import { DialogClose, DialogContent, DialogDescription, DialogOverlay, DialogPortal, DialogRoot, DialogTitle, VisuallyHidden } from 'reka-ui'
 import { useText } from '../config'
+
+defineOptions({ inheritAttrs: false })
 
 withDefaults(defineProps<{
   show?: boolean
@@ -11,6 +17,9 @@ withDefaults(defineProps<{
   closable?: boolean
   maskClosable?: boolean
   description?: string
+  bare?: boolean
+  /** Names a dialog without a title for screen readers. */
+  label?: string
 }>(), { show: false, width: 520, closable: true, maskClosable: true })
 
 const emit = defineEmits<{ 'update:show': [value: boolean]; afterLeave: [] }>()
@@ -22,22 +31,27 @@ const text = useText()
     <DialogPortal>
       <DialogOverlay class="mu-modal-mask" />
       <DialogContent
+        v-bind="description && !bare ? $attrs : { 'aria-describedby': undefined, ...$attrs }"
         class="mu-modal"
-        :style="{ width: typeof width === 'number' ? `${width}px` : width }"
-        v-bind="description ? {} : { 'aria-describedby': undefined }"
+        :class="{ 'mu-modal--bare': bare }"
+        :style="bare ? undefined : { width: typeof width === 'number' ? `${width}px` : width }"
         @pointer-down-outside="(event) => !maskClosable && event.preventDefault()"
         @interact-outside="(event) => !maskClosable && event.preventDefault()"
       >
-        <header v-if="title || $slots.header || closable" class="mu-modal__header">
+        <template v-if="bare">
+          <VisuallyHidden as-child><DialogTitle>{{ label ?? title }}</DialogTitle></VisuallyHidden>
+          <slot />
+        </template>
+        <header v-else-if="title || $slots.header || closable" class="mu-modal__header">
           <DialogTitle class="mu-modal__title"><slot name="header">{{ title }}</slot></DialogTitle>
           <slot name="header-extra" />
           <DialogClose v-if="closable" class="mu-modal__close" :aria-label="text.close">
             <span class="i-lucide-x" />
           </DialogClose>
         </header>
-        <DialogDescription v-if="description" class="mu-modal__desc">{{ description }}</DialogDescription>
-        <div class="mu-modal__body"><slot /></div>
-        <footer v-if="$slots.footer" class="mu-modal__footer"><slot name="footer" /></footer>
+        <DialogDescription v-if="description && !bare" class="mu-modal__desc">{{ description }}</DialogDescription>
+        <div v-if="!bare" class="mu-modal__body"><slot /></div>
+        <footer v-if="$slots.footer && !bare" class="mu-modal__footer"><slot name="footer" /></footer>
       </DialogContent>
     </DialogPortal>
   </DialogRoot>
@@ -72,6 +86,7 @@ const text = useText()
 }
 
 .mu-modal:focus { outline: none; }
+.mu-modal--bare { max-height: none; border: 0; border-radius: 0; background: none; box-shadow: none; }
 
 .mu-modal__header {
   display: flex;

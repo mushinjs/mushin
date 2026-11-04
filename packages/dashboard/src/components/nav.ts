@@ -1,10 +1,9 @@
-import type { Component } from 'vue'
-
 /** A page in the sidebar; its key is the route it opens. */
 export interface NavItem {
   key: string
   label: string
-  icon: Component
+  /** An icon class, such as `i-lucide-bot`. */
+  icon: string
 }
 
 /** A group of pages under a title; the first group has none. */

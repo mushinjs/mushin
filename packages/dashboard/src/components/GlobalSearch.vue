@@ -3,12 +3,8 @@
  * Ctrl+K (⌘K on a Mac): one box to jump anywhere — a page, a bot, a flow, a persona, a plugin or a
  * provider — or to do a common thing such as starting a new flow.
  */
-import {
-  AddOutline, ArrowForwardOutline, ChatbubblesOutline, ExtensionPuzzleOutline, GitNetworkOutline, KeyOutline, MoonOutline,
-  PersonCircleOutline, SearchOutline, SparklesOutline, SunnyOutline,
-} from '@vicons/ionicons5'
-import { NIcon, NModal } from 'naive-ui'
-import { type Component, computed, nextTick, ref, watch } from 'vue'
+import { Modal } from '@mushin/ui'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { call } from '../api'
@@ -34,7 +30,8 @@ interface Result {
   group: string
   label: string
   sub?: string
-  icon?: Component
+  /** An icon class, such as `i-lucide-plus`. */
+  icon?: string
   /** A coloured initial instead of an icon, as the bot's avatar elsewhere. */
   avatar?: { id: string; name: string; src?: string }
   /** Extra words it can be found by. */
@@ -88,15 +85,15 @@ const all = computed<Result[]>(() => {
     ...props.pages.flatMap((group) => group.items.map((item): Result => ({
       key: `page:${item.key}`, group: g.page, label: item.label, sub: group.label, icon: item.icon, words: item.key, run: go(item.key),
     }))),
-    { key: 'action:flow', group: g.action, label: t('flows.add'), icon: AddOutline, words: 'new flow', run: go({ path: '/flows', query: { new: '1' } }) },
-    { key: 'action:bot', group: g.action, label: t('bots.add'), icon: AddOutline, words: 'new bot napcat', run: go({ path: '/bots', query: { new: '1' } }) },
-    { key: 'action:persona', group: g.action, label: t('personas.add'), icon: AddOutline, words: 'new persona', run: go({ path: '/personas', query: { persona: 'new' } }) },
-    { key: 'action:agent', group: g.action, label: t('search.askAgent'), icon: SparklesOutline, words: 'agent ai', run: () => (agent.open = true) },
+    { key: 'action:flow', group: g.action, label: t('flows.add'), icon: 'i-lucide-plus', words: 'new flow', run: go({ path: '/flows', query: { new: '1' } }) },
+    { key: 'action:bot', group: g.action, label: t('bots.add'), icon: 'i-lucide-plus', words: 'new bot napcat', run: go({ path: '/bots', query: { new: '1' } }) },
+    { key: 'action:persona', group: g.action, label: t('personas.add'), icon: 'i-lucide-plus', words: 'new persona', run: go({ path: '/personas', query: { persona: 'new' } }) },
+    { key: 'action:agent', group: g.action, label: t('search.askAgent'), icon: 'i-lucide-sparkles', words: 'agent ai', run: () => (agent.open = true) },
     {
       key: 'action:theme',
       group: g.action,
       label: isDark.value ? t('layout.lightTheme') : t('layout.darkTheme'),
-      icon: isDark.value ? SunnyOutline : MoonOutline,
+      icon: isDark.value ? 'i-lucide-sun' : 'i-lucide-moon',
       words: 'theme dark light',
       run: () => (themeMode.value = isDark.value ? 'light' : 'dark'),
     },
@@ -105,20 +102,20 @@ const all = computed<Result[]>(() => {
       avatar: { id: bot.id, name: bot.name, src: bot.selfAvatar }, words: bot.id, run: go(`/bots/${bot.id}`),
     })),
     ...flows.value.map((flow): Result => ({
-      key: `flow:${flow.id}`, group: g.flow, label: flow.name, sub: flow.description, icon: GitNetworkOutline,
+      key: `flow:${flow.id}`, group: g.flow, label: flow.name, sub: flow.description, icon: 'i-lucide-network',
       words: flow.triggers.map((item) => item.summary).join(' '), run: go(`/flows/${flow.id}`),
     })),
     ...personas.value.map((persona): Result => ({
-      key: `persona:${persona.id}`, group: g.persona, label: persona.name, sub: persona.description, icon: PersonCircleOutline,
+      key: `persona:${persona.id}`, group: g.persona, label: persona.name, sub: persona.description, icon: 'i-lucide-circle-user',
       avatar: persona.avatar ? { id: persona.id, name: persona.name, src: persona.avatar } : undefined,
       words: persona.tags.join(' '), run: go({ path: '/personas', query: { persona: persona.id } }),
     })),
     ...plugins.value.map((plugin): Result => ({
       key: `plugin:${plugin.package}`, group: g.plugin, label: localize(plugin.manifest?.displayName, locale.value) || plugin.package,
-      sub: plugin.package, icon: ExtensionPuzzleOutline, run: go({ path: '/plugins', query: { highlight: plugin.package } }),
+      sub: plugin.package, icon: 'i-lucide-puzzle', run: go({ path: '/plugins', query: { highlight: plugin.package } }),
     })),
     ...data.providers.map((provider): Result => ({
-      key: `provider:${provider.id}`, group: g.provider, label: provider.name, sub: provider.models.slice(0, 3).join('、'), icon: KeyOutline,
+      key: `provider:${provider.id}`, group: g.provider, label: provider.name, sub: provider.models.slice(0, 3).join('、'), icon: 'i-lucide-key-round',
       words: `${provider.type} ${provider.models.join(' ')}`, run: go({ path: '/providers', query: { highlight: provider.id } }),
     })),
   ]
@@ -183,10 +180,10 @@ const isMac = /Mac|iPhone|iPad/.test(navigator.platform)
 </script>
 
 <template>
-  <NModal v-model:show="show" :auto-focus="false" transform-origin="center" class="search-modal">
-    <div class="search" role="dialog" :aria-label="t('search.title')" @keydown="onKeydown">
+  <Modal v-model:show="show" bare :label="t('search.title')" class="search-modal">
+    <div class="search" @keydown="onKeydown">
       <div class="search-input">
-        <NIcon :size="18" class="search-icon"><SearchOutline /></NIcon>
+        <span class="i-lucide-search search-icon" />
         <input
           ref="input"
           v-model="query"
@@ -219,12 +216,12 @@ const isMac = /Mac|iPhone|iPad/.test(navigator.platform)
           >
             <img v-if="result.avatar?.src" :src="result.avatar.src" alt="" class="result-avatar">
             <span v-else-if="result.avatar" class="result-avatar" :style="{ background: avatarColor(result.avatar.id) }" aria-hidden="true">{{ initial(result.avatar.name) }}</span>
-            <span v-else class="result-icon"><NIcon :size="16"><component :is="result.icon ?? ChatbubblesOutline" /></NIcon></span>
+            <span v-else class="result-icon"><span :class="result.icon ?? 'i-lucide-messages-square'" /></span>
             <span class="result-text">
               <span class="result-label">{{ result.label }}</span>
               <span v-if="result.sub" class="result-sub">{{ result.sub }}</span>
             </span>
-            <NIcon v-if="indexOf(result) === active" :size="14" class="result-go"><ArrowForwardOutline /></NIcon>
+            <span v-if="indexOf(result) === active" class="i-lucide-arrow-right result-go" />
           </button>
         </section>
         <p v-if="!flat.length" class="nothing">{{ t('search.nothing', { query: query.trim() }) }}</p>
@@ -236,7 +233,7 @@ const isMac = /Mac|iPhone|iPad/.test(navigator.platform)
         <span><kbd>{{ isMac ? '⌘' : 'Ctrl' }}</kbd><kbd>K</kbd> {{ t('search.toggle') }}</span>
       </footer>
     </div>
-  </NModal>
+  </Modal>
 </template>
 
 <style scoped>
@@ -265,6 +262,7 @@ const isMac = /Mac|iPhone|iPad/.test(navigator.platform)
 
 .search-icon {
   color: var(--fg3);
+  font-size: 18px;
 }
 
 .search-input input {
@@ -351,6 +349,7 @@ kbd + kbd {
 .result-icon {
   background: var(--s2);
   color: var(--fg2);
+  font-size: 15px;
 }
 
 .active .result-icon {
@@ -395,6 +394,7 @@ kbd + kbd {
 .result-go {
   flex: none;
   color: var(--primary);
+  font-size: 14px;
 }
 
 .nothing {

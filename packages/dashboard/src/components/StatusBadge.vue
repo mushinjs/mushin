@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NTag, NTooltip } from 'naive-ui'
+import { Tag, Tooltip } from '@mushin/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -29,11 +29,11 @@ const label = computed(() => (te(`status.${props.status}`) ? t(`status.${props.s
 </script>
 
 <template>
-  <NTooltip v-if="error" :style="{ maxWidth: '320px' }">
+  <Tooltip v-if="error" :max-width="320">
     <template #trigger>
-      <NTag :type="type" size="small" round :bordered="false">{{ label }}</NTag>
+      <Tag :type="type" size="small" round>{{ label }}</Tag>
     </template>
     {{ error }}
-  </NTooltip>
-  <NTag v-else :type="type" size="small" round :bordered="false">{{ label }}</NTag>
+  </Tooltip>
+  <Tag v-else :type="type" size="small" round>{{ label }}</Tag>
 </template>

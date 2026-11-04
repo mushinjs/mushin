@@ -4,9 +4,8 @@
  * nothing jumps. Labels and group titles fade out before the width closes, and fade back in after
  * it opens. GSAP drives the timeline so the two halves stay in step and can be reversed midway.
  */
-import { ChevronBackOutline } from '@vicons/ionicons5'
+import { Tooltip } from '@mushin/ui'
 import { gsap } from 'gsap'
-import { NIcon, NTooltip } from 'naive-ui'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -91,27 +90,27 @@ watch(() => props.groups, () => requestAnimationFrame(() => apply(collapsed.valu
           <span data-fade>{{ group.label }}</span>
           <i class="divider" data-divider aria-hidden="true" />
         </div>
-        <NTooltip v-for="item in group.items" :key="item.key" placement="right" :disabled="!collapsed" :show-arrow="false">
+        <Tooltip v-for="item in group.items" :key="item.key" placement="right" :disabled="!collapsed" :show-arrow="false">
           <template #trigger>
             <RouterLink :to="item.key" class="item" :class="{ on: active === item.key }" :aria-current="active === item.key ? 'page' : undefined" :aria-label="collapsed ? item.label : undefined">
-              <NIcon :size="18" class="item-icon"><component :is="item.icon" /></NIcon>
+              <span class="item-icon" :class="item.icon" />
               <span class="item-label" data-fade>{{ item.label }}</span>
             </RouterLink>
           </template>
           {{ item.label }}
-        </NTooltip>
+        </Tooltip>
       </div>
     </nav>
 
     <div class="foot">
-      <NTooltip placement="right" :disabled="!collapsed" :show-arrow="false">
+      <Tooltip placement="right" :disabled="!collapsed" :show-arrow="false">
         <template #trigger>
           <button type="button" class="toggle" :aria-label="collapsed ? t('layout.expand') : t('layout.collapse')" :aria-expanded="!collapsed" @click="collapsed = !collapsed">
-            <NIcon :size="16" data-chevron><ChevronBackOutline /></NIcon>
+            <span class="i-lucide-chevron-left toggle-icon" data-chevron />
           </button>
         </template>
         {{ t('layout.expand') }}
-      </NTooltip>
+      </Tooltip>
     </div>
   </aside>
 </template>
@@ -227,6 +226,11 @@ watch(() => props.groups, () => requestAnimationFrame(() => apply(collapsed.valu
 
 .item-icon {
   flex: none;
+  font-size: 18px;
+}
+
+.toggle-icon {
+  font-size: 16px;
 }
 
 .foot {

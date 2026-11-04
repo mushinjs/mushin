@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { NButton, NIcon, NTooltip } from 'naive-ui'
+import { Button, Tooltip } from '@mushin/ui'
 import type { Component } from 'vue'
 
-/** A row action shown as an icon, with its name as tooltip and accessible label. */
+/**
+ * A row action shown as an icon, with its name as tooltip and accessible label. `icon` is an icon
+ * class (`i-lucide-trash-2`); a component still works for pages not yet moved over.
+ */
 defineProps<{
-  icon: Component
+  icon: string | Component
   label: string
   type?: 'default' | 'primary' | 'error' | 'warning'
   disabled?: boolean
@@ -14,9 +17,9 @@ const emit = defineEmits<{ click: [event: MouseEvent] }>()
 </script>
 
 <template>
-  <NTooltip :delay="300">
+  <Tooltip :delay="300">
     <template #trigger>
-      <NButton
+      <Button
         quaternary
         circle
         size="small"
@@ -26,10 +29,17 @@ const emit = defineEmits<{ click: [event: MouseEvent] }>()
         :loading="loading"
         :aria-label="label"
         @click.stop="(event: MouseEvent) => emit('click', event)"
+        :icon="typeof icon === 'string' ? icon : undefined"
       >
-        <template #icon><NIcon><component :is="icon" /></NIcon></template>
-      </NButton>
+        <template v-if="typeof icon !== 'string'" #icon><component :is="icon" /></template>
+      </Button>
     </template>
     {{ label }}
-  </NTooltip>
+  </Tooltip>
 </template>
+
+<style scoped>
+.icon-action :deep(.mu-btn__icon) {
+  font-size: 16px;
+}
+</style>

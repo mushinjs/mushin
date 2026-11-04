@@ -3,15 +3,15 @@
  * What a page shows before it has anything: an icon for the kind of thing, one line on what it is
  * for, and the ways to make the first one.
  */
-import { NIcon } from 'naive-ui'
 import type { Component } from 'vue'
 
-defineProps<{ icon: Component; title: string; hint?: string }>()
+/** `icon` is an icon class (`i-lucide-bot`); a component still works for pages not yet moved over. */
+defineProps<{ icon: string | Component; title: string; hint?: string }>()
 </script>
 
 <template>
   <div class="empty-state">
-    <span class="empty-icon"><NIcon :size="24"><component :is="icon" /></NIcon></span>
+    <span class="empty-icon"><span v-if="typeof icon === 'string'" :class="icon" /><component :is="icon" v-else class="empty-svg" /></span>
     <strong class="empty-title">{{ title }}</strong>
     <p v-if="hint" class="empty-hint">{{ hint }}</p>
     <div v-if="$slots.default" class="empty-actions"><slot /></div>
@@ -39,6 +39,12 @@ defineProps<{ icon: Component; title: string; hint?: string }>()
   border-radius: 50%;
   background: var(--primary-soft);
   color: var(--primary);
+  font-size: 24px;
+}
+
+.empty-svg {
+  width: 1em;
+  height: 1em;
 }
 
 .empty-title {

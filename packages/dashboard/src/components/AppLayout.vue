@@ -1,12 +1,6 @@
 <script setup lang="ts">
-import {
-  ChatbubblesOutline, ServerOutline, DocumentTextOutline, GridOutline, ExtensionPuzzleOutline, GitNetworkOutline, KeyOutline,
-  LanguageOutline, LibraryOutline, LogOutOutline, MoonOutline, PersonCircleOutline, PersonOutline, RocketOutline, SearchOutline, SettingsOutline, SparklesOutline, SunnyOutline,
-} from '@vicons/ionicons5'
-import {
-  type DropdownOption, NButton, NDrawer, NDropdown, NIcon, NLayout, NLayoutHeader,
-} from 'naive-ui'
-import { type Component, computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Button, Drawer, Dropdown, type DropdownOption } from '@mushin/ui'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { connection, logout } from '../api'
@@ -163,36 +157,34 @@ watch(() => data.loadedProviders, (loaded) => {
   if (!data.providers.length && route.path !== '/setup') router.replace('/setup')
 }, { immediate: true })
 
-const icon = (component: Component) => () => h(NIcon, null, { default: () => h(component) })
-
 // The menu is grouped by what each page is for: building bots, the resources they use, and the system.
 const allGroups = computed<NavGroup[]>(() => [
-  { key: 'home', items: [{ key: '/overview', label: t('nav.overview'), icon: GridOutline }] },
+  { key: 'home', items: [{ key: '/overview', label: t('nav.overview'), icon: 'i-lucide-layout-grid' }] },
   {
     key: 'build',
     label: t('nav.groupBuild'),
     items: [
-      { key: '/bots', label: t('nav.bots'), icon: ChatbubblesOutline },
-      { key: '/flows', label: t('nav.flows'), icon: GitNetworkOutline },
-      { key: '/personas', label: t('nav.personas'), icon: PersonCircleOutline },
-      { key: '/knowledge', label: t('nav.knowledge'), icon: LibraryOutline },
+      { key: '/bots', label: t('nav.bots'), icon: 'i-lucide-messages-square' },
+      { key: '/flows', label: t('nav.flows'), icon: 'i-lucide-network' },
+      { key: '/personas', label: t('nav.personas'), icon: 'i-lucide-circle-user' },
+      { key: '/knowledge', label: t('nav.knowledge'), icon: 'i-lucide-library' },
     ],
   },
   {
     key: 'resources',
     label: t('nav.groupResources'),
     items: [
-      { key: '/providers', label: t('nav.providers'), icon: KeyOutline },
-      { key: '/plugins', label: t('nav.plugins'), icon: ExtensionPuzzleOutline },
+      { key: '/providers', label: t('nav.providers'), icon: 'i-lucide-key-round' },
+      { key: '/plugins', label: t('nav.plugins'), icon: 'i-lucide-puzzle' },
     ],
   },
   {
     key: 'system',
     label: t('nav.groupSystem'),
     items: [
-      { key: '/logs', label: t('nav.logs'), icon: DocumentTextOutline },
-      { key: '/database', label: t('nav.database'), icon: ServerOutline },
-      { key: '/settings', label: t('nav.settings'), icon: SettingsOutline },
+      { key: '/logs', label: t('nav.logs'), icon: 'i-lucide-file-text' },
+      { key: '/database', label: t('nav.database'), icon: 'i-lucide-database' },
+      { key: '/settings', label: t('nav.settings'), icon: 'i-lucide-settings' },
     ],
   },
 ])
@@ -203,7 +195,7 @@ const navGroups = computed<NavGroup[]>(() => {
   const groups = allGroups.value
     .map((group) => ({ ...group, items: group.items.filter(visible) }))
     .filter((group) => group.items.length)
-  if (!data.ready) groups[0] = { ...groups[0], items: [{ key: '/setup', label: t('nav.setup'), icon: RocketOutline }, ...groups[0].items] }
+  if (!data.ready) groups[0] = { ...groups[0], items: [{ key: '/setup', label: t('nav.setup'), icon: 'i-lucide-rocket' }, ...groups[0].items] }
   return groups
 })
 
@@ -228,10 +220,10 @@ const activeKey = computed(() => '/' + (route.path.split('/')[1] ?? ''))
 
 // Language, theme and signing out live in one menu behind the account button.
 const accountMenu = computed<DropdownOption[]>(() => [
-  { key: 'locale', label: t('layout.language'), icon: icon(LanguageOutline) },
-  { key: 'theme', label: isDark.value ? t('layout.lightTheme') : t('layout.darkTheme'), icon: icon(isDark.value ? SunnyOutline : MoonOutline) },
+  { key: 'locale', label: t('layout.language'), icon: 'i-lucide-languages' },
+  { key: 'theme', label: isDark.value ? t('layout.lightTheme') : t('layout.darkTheme'), icon: isDark.value ? 'i-lucide-sun' : 'i-lucide-moon' },
   { key: 'divider', type: 'divider' },
-  { key: 'signOut', label: t('layout.signOut'), icon: icon(LogOutOutline) },
+  { key: 'signOut', label: t('layout.signOut'), icon: 'i-lucide-log-out' },
 ])
 
 function onAccount(key: string) {
@@ -245,11 +237,11 @@ function onAccount(key: string) {
 </script>
 
 <template>
-  <NLayout has-sider position="absolute">
+  <div class="layout">
     <SideNav v-model:collapsed="collapsed" :groups="navGroups" :active="activeKey" />
 
-    <NLayout content-style="display: flex; flex-direction: column; height: 100%;">
-      <NLayoutHeader bordered class="topbar">
+    <div class="main">
+      <header class="topbar">
         <nav class="crumbs" :aria-label="t('layout.breadcrumb')">
           <template v-for="(crumb, index) in crumbs" :key="index">
             <span v-if="index" class="sep" aria-hidden="true">/</span>
@@ -259,20 +251,26 @@ function onAccount(key: string) {
         </nav>
         <span v-if="!connection.connected" class="offline">{{ t('layout.reconnecting') }}</span>
         <button type="button" class="search-button" :aria-label="t('search.title')" data-agent-target="search.open" @click="searching = true">
-          <NIcon :size="16"><SearchOutline /></NIcon>
+          <span class="i-lucide-search search-icon" />
           <span class="search-label">{{ t('search.button') }}</span>
           <span class="search-keys"><kbd>{{ isMac ? '⌘' : 'Ctrl' }}</kbd><kbd>K</kbd></span>
         </button>
-        <NButton :type="agent.open ? 'primary' : 'default'" :secondary="agent.open" data-agent-target="agent.toggle" @click="agent.open = !agent.open">
-          <template #icon><NIcon><SparklesOutline /></NIcon></template>
+        <Button
+          :type="agent.open ? 'primary' : 'default'"
+          :secondary="agent.open"
+          icon="i-lucide-sparkles"
+          data-agent-target="agent.toggle"
+          :pressed="agent.open"
+          @click="agent.open = !agent.open"
+        >
           {{ t('nav.agent') }}
-        </NButton>
-        <NDropdown trigger="click" placement="bottom-end" :options="accountMenu" @select="onAccount">
+        </Button>
+        <Dropdown placement="bottom" align="end" :options="accountMenu" @select="onAccount">
           <button type="button" class="account" :aria-label="t('layout.account')" :title="t('layout.account')">
-            <NIcon :size="18"><PersonOutline /></NIcon>
+            <span class="i-lucide-user account-icon" />
           </button>
-        </NDropdown>
-      </NLayoutHeader>
+        </Dropdown>
+      </header>
 
       <div class="body">
         <main class="content">
@@ -307,17 +305,33 @@ function onAccount(key: string) {
       </aside>
       <!-- While dragging, a sheet over the page keeps the pointer from selecting text or entering frames. -->
       <div v-if="dragging" class="drag-sheet" :class="dragging" />
-    </NLayout>
+    </div>
 
     <GlobalSearch v-model:show="searching" :pages="navGroups" />
 
-    <NDrawer v-if="narrow" v-model:show="agent.open" :width="Math.min(420, width)" placement="right">
+    <Drawer v-if="narrow" v-model:show="agent.open" :width="Math.min(420, width)" :label="t('nav.agent')">
       <AgentDock closable @close="agent.open = false" />
-    </NDrawer>
-  </NLayout>
+    </Drawer>
+  </div>
 </template>
 
 <style scoped>
+.layout {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
 .topbar {
   height: 56px;
   flex: none;
@@ -325,6 +339,16 @@ function onAccount(key: string) {
   align-items: center;
   padding: 0 16px 0 24px;
   gap: 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--s1);
+}
+
+.search-icon {
+  font-size: 16px;
+}
+
+.account-icon {
+  font-size: 18px;
 }
 
 .crumbs {
