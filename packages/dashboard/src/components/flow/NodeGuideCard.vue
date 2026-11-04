@@ -9,13 +9,13 @@
  */
 import { CheckmarkOutline } from '@vicons/ionicons5'
 import { NIcon, useThemeVars } from 'naive-ui'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { categoryColors, configSummary, portsOf, schemaDefaults, wholeRef } from '../../flow'
 import type { NodeTypeInfo, PortDef } from '../../types'
+import { useTheme } from '../../theme'
 import { localize } from '../../utils'
 import { type GuidePass, type GuideRun, guideRun } from './guide'
-import GuideScene, { type SceneStage } from './GuideScene.vue'
 import { nodeIcon } from './icons'
 
 const props = defineProps<{
@@ -30,6 +30,7 @@ const props = defineProps<{
 const emit = defineEmits<{ enter: []; leave: [] }>()
 const { t, locale } = useI18n()
 const theme = useThemeVars()
+const { isDark } = useTheme()
 
 const reduced = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
@@ -155,63 +156,103 @@ const wires = computed(() => (run.value?.edges ?? []).map(([from, to, exec = 'ne
   return { key: `${from}>${to}:${exec}`, from, to, exec, d: `M ${a.x} ${a.y} C ${a.x + bend} ${a.y}, ${b.x - bend} ${b.y}, ${b.x} ${b.y}` }
 }))
 
-// ---- playback: run a node, show what it made, send a light down the wire, run the next ----
+// ---- playback: each message runs on the mini canvas while the chat below fills in ----
 
-const RUN_MS = 700
-const SHOW_MS = 650
-const TRAVEL_MS = 520
-const START_MS = 900
-const HOLD_MS = 2800
+const RUN_MS = 600
+const SHOW_MS = 450
+const TRAVEL_MS = 420
+const START_MS = 700
+const BETWEEN_MS = 1100
+const HOLD_MS = 2600
 
 const running = ref<string>()
 const done = ref(new Set<string>())
 const lit = ref(new Set<string>())
 const travelling = ref<string>()
-/** How many chat lines are showing, and which caption. */
+/** Which message is playing, how many chat lines show, and which caption. */
+const beat = ref(0)
 const said = ref(0)
 const step = ref(-1)
 const finished = ref(false)
-/** Which message of the example is playing, and for a scene how far it got. */
-const beat = ref(0)
-const stage = ref<SceneStage>('in')
 
-/** Logic nodes act out what makes them themselves; the others replay the run on the mini canvas. */
-const SCENES = new Set(['logic.if', 'logic.compare', 'logic.random', 'logic.cooldown', 'logic.rateLimit', 'logic.dailyQuota', 'logic.delay', 'logic.waitReply', 'logic.permission', 'ai.classify', 'data.increment'])
 const focus = computed(() => run.value?.nodes.find((node) => node.type === props.type.type))
-const scene = computed(() => !!run.value && !!focus.value && SCENES.has(props.type.type))
 const focusConfig = computed(() => ({ ...schemaDefaults(props.type.configSchema), ...focus.value?.config }))
 const passes = computed<GuidePass[]>(() => run.value?.passes ?? (run.value ? [run.value] : []))
 const current = computed(() => passes.value[beat.value] ?? passes.value[0])
+/** With several messages a caption goes with each message, else with each step. */
+const perMessage = computed(() => passes.value.length > 1)
 
 let generation = 0
 const sleep = (ms: number, mine: number) => new Promise<boolean>((resolve) => setTimeout(() => resolve(mine === generation), ms))
 
-function reset() {
+function resetCanvas() {
   running.value = undefined
   done.value = new Set()
   lit.value = new Set()
   travelling.value = undefined
-  said.value = 0
-  step.value = -1
-  finished.value = false
 }
 
-/** The chat of the message playing, each line with the step it appears after (-1: the message itself). */
-const chat = computed(() => {
+const valueText = (value: unknown) => (value === undefined || value === null ? '' : typeof value === 'string' ? value : JSON.stringify(value))
+const clip = (value: unknown, max = 16) => {
+  const text = valueText(value)
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text
+}
+
+/** What the explained node did with this message, in words, for the line between the bubbles. */
+function noteOf(item: GuidePass, index: number): string | undefined {
+  const entry = item.steps.find((each) => each.nodeId === focus.value?.id)
+  if (!entry) return
+  if (entry.error) return entry.error
+  const config = focusConfig.value
+  const out = entry.outputs ?? {}
+  const exec = entry.exec ?? 'next'
+  const earlier = (passes.value[index - 1]?.steps.find((each) => each.nodeId === focus.value?.id)?.outputs ?? {}) as Record<string, unknown>
+  switch (props.type.type) {
+    case 'logic.if': return t('flows.note.if', { value: valueText(entry.inputs?.condition), exec })
+    case 'logic.compare': return t('flows.note.compare', { a: clip(entry.inputs?.a, 12), op: t(`flows.note.op.${config.op}`), b: clip(entry.inputs?.b ?? config.value, 10), exec })
+    case 'logic.random': return t('flows.note.random', { exec, percent: exec === 'yes' ? config.percent : 100 - Number(config.percent) })
+    case 'logic.cooldown': return exec === 'ready' ? t('flows.note.cooldownReady', { n: config.seconds }) : t('flows.note.cooldownCooling', { n: config.seconds })
+    case 'logic.rateLimit': return exec === 'ok'
+      ? t('flows.note.rateOk', { used: Number(config.limit) - Number(out.remaining ?? 0), limit: config.limit, n: config.seconds })
+      : t('flows.note.rateLimited', { limit: config.limit, retry: out.retryAfter })
+    case 'logic.dailyQuota': return exec === 'ok' ? t('flows.note.quotaOk', { used: out.used, limit: config.times }) : t('flows.note.quotaOut', { limit: config.times })
+    case 'logic.delay': return t('flows.note.delay', { n: config.seconds })
+    case 'logic.waitReply': return exec === 'reply' ? t('flows.note.waitReply', { text: clip(out.text) }) : t('flows.note.waitTimeout', { n: config.seconds })
+    case 'logic.permission': return exec === 'allow' ? t('flows.note.allowed', { role: t(`flows.note.role.${valueText(out.role) || 'user'}`) }) : t('flows.note.denied', { reason: valueText(out.reason) })
+    case 'ai.classify': return t('flows.note.classify', { label: valueText(out.label) || exec })
+    case 'data.increment': return t('flows.note.increment', { name: config.name, from: valueText(earlier.value ?? Number(out.value ?? 0) - Number(config.by ?? 1)), to: valueText(out.value) })
+    case 'data.setVar': return t('flows.note.setVar', { name: config.name, value: clip(entry.inputs?.value ?? config.value) })
+    case 'data.getVar': return t('flows.note.getVar', { name: config.name, value: clip(out.value) })
+  }
+  if (exec !== 'next') return `→ ${exec}`
+}
+
+interface ChatLine { who: 'user' | 'bot' | 'note'; text: string; pass: number; after: number }
+
+/** Every message of the example and what came back, each line with the step it appears after. */
+const chat = computed<ChatLine[]>(() => {
   const value = run.value
-  const item = current.value
-  if (!value || !item) return []
-  const lines: { who: 'user' | 'bot'; text: string; after: number }[] = [{ who: 'user', text: item.input.text, after: -1 }]
-  const replies = [...item.replies]
-  const waits = beat.value === 0 ? [...value.waits] : []
-  item.steps.forEach((entry, index) => {
-    const type = value.nodes.find((node) => node.id === entry.nodeId)?.type
-    if ((type === 'action.reply' || type === 'action.send') && !entry.error && replies.length) lines.push({ who: 'bot', text: replies.shift()!, after: index })
-    if (type === 'logic.waitReply' && entry.exec === 'reply' && waits.length) lines.push({ who: 'user', text: waits.shift()!, after: index })
+  if (!value) return []
+  const lines: ChatLine[] = []
+  passes.value.forEach((item, pass) => {
+    lines.push({ who: 'user', text: item.input.text, pass, after: -1 })
+    const replies = [...item.replies]
+    const waits = pass === 0 ? [...value.waits] : []
+    item.steps.forEach((entry, index) => {
+      const type = value.nodes.find((node) => node.id === entry.nodeId)?.type
+      if (entry.nodeId === focus.value?.id && type !== 'trigger.message' && type?.startsWith('trigger.') === false) {
+        const note = noteOf(item, pass)
+        if (note) lines.push({ who: 'note', text: note, pass, after: index })
+      }
+      if (type === 'logic.waitReply' && entry.exec === 'reply' && waits.length) lines.push({ who: 'user', text: waits.shift()!, pass, after: index })
+      if ((type === 'action.reply' || type === 'action.send') && !entry.error && replies.length) lines.push({ who: 'bot', text: replies.shift()!, pass, after: index })
+    })
+    // A message that ends without a reply still says so, so silence reads as part of the example.
+    if (!item.replies.length) lines.push({ who: 'note', text: t('flows.note.silent'), pass, after: item.steps.length - 1 })
   })
   return lines
 })
-const saidUpTo = (index: number) => chat.value.filter((line) => line.after <= index).length
+const saidUpTo = (pass: number, index: number) => chat.value.filter((line) => line.pass < pass || (line.pass === pass && line.after <= index)).length
 
 /** The wire the run took out of step `index`, to the next step. */
 function wireAfter(index: number) {
@@ -222,95 +263,63 @@ function wireAfter(index: number) {
   return wires.value.find((wire) => wire.from === from.nodeId && wire.to === to.nodeId && wire.exec === (from.exec ?? 'next'))
 }
 
+const chatBox = ref<HTMLElement>()
+watch(said, () => nextTick(() => chatBox.value?.scrollTo({ top: chatBox.value.scrollHeight, behavior: reduced ? 'auto' : 'smooth' })))
+
 async function play(mine: number) {
   while (mine === generation) {
-    beat.value = 0
-    reset()
-    const steps = current.value?.steps ?? []
-    said.value = saidUpTo(-1)
-    if (!await sleep(START_MS, mine)) return
-    for (let index = 0; index < steps.length; index++) {
-      step.value = index
-      running.value = steps[index].nodeId
-      if (!await sleep(RUN_MS, mine)) return
-      running.value = undefined
-      done.value = new Set([...done.value, steps[index].nodeId])
-      said.value = saidUpTo(index)
-      if (!await sleep(SHOW_MS, mine)) return
-      const wire = wireAfter(index)
-      if (wire) {
-        travelling.value = wire.key
-        if (!await sleep(TRAVEL_MS, mine)) return
-        travelling.value = undefined
-        lit.value = new Set([...lit.value, wire.key])
+    said.value = 0
+    finished.value = false
+    for (let pass = 0; pass < passes.value.length; pass++) {
+      beat.value = pass
+      // The first message shows each step; the ones after it play quicker, the point is how they end.
+      const pace = pass === 0 ? 1 : 0.55
+      resetCanvas()
+      step.value = perMessage.value ? pass : -1
+      said.value = saidUpTo(pass, -1)
+      if (!await sleep(START_MS * pace, mine)) return
+      const steps = current.value?.steps ?? []
+      for (let index = 0; index < steps.length; index++) {
+        if (!perMessage.value) step.value = index
+        running.value = steps[index].nodeId
+        if (!await sleep(RUN_MS * pace, mine)) return
+        running.value = undefined
+        done.value = new Set([...done.value, steps[index].nodeId])
+        said.value = saidUpTo(pass, index)
+        if (!await sleep(SHOW_MS * pace, mine)) return
+        const wire = wireAfter(index)
+        if (wire) {
+          travelling.value = wire.key
+          if (!await sleep(TRAVEL_MS * pace, mine)) return
+          travelling.value = undefined
+          lit.value = new Set([...lit.value, wire.key])
+        }
       }
+      said.value = saidUpTo(pass, Infinity)
+      if (pass < passes.value.length - 1 && !await sleep(BETWEEN_MS, mine)) return
     }
     finished.value = true
     if (!await sleep(HOLD_MS, mine)) return
   }
 }
 
-/** Marks the message playing as run up to its focus node (`decide`) or all the way (`out`). */
-function markPass(upTo: 'before' | 'focus' | 'all') {
-  const steps = current.value?.steps ?? []
-  const at = steps.findIndex((item) => item.nodeId === focus.value?.id)
-  const last = upTo === 'all' ? steps.length - 1 : at - 1
-  done.value = new Set(steps.slice(0, last + 1).map((item) => item.nodeId))
-  lit.value = new Set(steps.slice(0, Math.max(0, upTo === 'all' ? steps.length - 1 : at)).map((_, index) => wireAfter(index)?.key).filter((key): key is string => !!key))
-  running.value = upTo === 'focus' ? focus.value?.id : undefined
-  said.value = upTo === 'all' ? chat.value.length : saidUpTo(-1)
-}
-
-const SCENE_IN_MS = 800
-const SCENE_DECIDE_MS = 1300
-const SCENE_OUT_MS = 1900
-
-async function playScenes(mine: number) {
-  while (mine === generation) {
-    for (let index = 0; index < passes.value.length; index++) {
-      reset()
-      beat.value = index
-      step.value = index
-      stage.value = 'in'
-      markPass('before')
-      if (!await sleep(SCENE_IN_MS, mine)) return
-      stage.value = 'decide'
-      markPass('focus')
-      if (!await sleep(SCENE_DECIDE_MS, mine)) return
-      stage.value = 'out'
-      markPass('all')
-      if (!await sleep(SCENE_OUT_MS, mine)) return
-    }
-    finished.value = true
-    if (!await sleep(HOLD_MS / 2, mine)) return
-  }
-}
-
 function showAll() {
-  reset()
-  if (scene.value) {
-    beat.value = passes.value.length - 1
-    stage.value = 'out'
-    step.value = beat.value
-    markPass('all')
-    finished.value = true
-    return
-  }
-  beat.value = 0
+  beat.value = passes.value.length - 1
+  resetCanvas()
   const steps = current.value?.steps ?? []
   done.value = new Set(steps.map((item) => item.nodeId))
   lit.value = new Set(steps.map((_, index) => wireAfter(index)?.key).filter((key): key is string => !!key))
   said.value = chat.value.length
-  step.value = steps.length - 1
+  step.value = perMessage.value ? beat.value : steps.length - 1
   finished.value = true
 }
 
 watch(run, (value) => {
   generation++
   beat.value = 0
-  if (!value) return reset()
+  said.value = 0
+  if (!value) return resetCanvas()
   if (reduced) showAll()
-  else if (scene.value) void playScenes(generation)
   else void play(generation)
 }, { immediate: true })
 onBeforeUnmount(() => generation++)
@@ -336,8 +345,8 @@ const takenBranch = (node: MiniNode) => (done.value.has(node.id) ? stepOf(node.i
 const travelPath = computed(() => wires.value.find((wire) => wire.key === travelling.value)?.d)
 
 const captions = computed(() => (props.type.guide?.captions ?? []).map((text) => localize(text, locale.value)))
-const caption = computed(() => (scene.value ? captions.value[beat.value] ?? '' : step.value < 0 ? t('flows.guideIncoming') : captions.value[step.value] ?? ''))
-const total = computed(() => (scene.value ? passes.value.length : current.value?.steps.length ?? 0))
+const caption = computed(() => (step.value < 0 ? t('flows.guideIncoming') : captions.value[step.value] ?? ''))
+const total = computed(() => (perMessage.value ? passes.value.length : current.value?.steps.length ?? 0))
 
 // ---- the card without an example: ports and branches ----
 
@@ -374,6 +383,11 @@ const style = computed(() => {
     background: theme.value.popoverColor,
     color: theme.value.textColor2,
     '--accent': categoryColors[props.type.category],
+    // Teleported out of the editor, so its node colours are set here, for light and dark.
+    '--accent-fg': `color-mix(in srgb, ${categoryColors[props.type.category]} ${isDark.value ? '62%' : '100%'}, ${theme.value.textColor1})`,
+    '--accent-strength': isDark.value ? '62%' : '100%',
+    '--flow-node-bg': isDark.value ? '#26262c' : '#fff',
+    '--flow-node-fg': theme.value.textColor1,
   }
 })
 </script>
@@ -388,13 +402,12 @@ const style = computed(() => {
       <p v-if="type.description" class="description">{{ localize(type.description, locale) }}</p>
 
       <template v-if="run && nodes.length">
-        <GuideScene v-if="scene && focus" :type="type.type" :config="focusConfig" :passes="passes" :focus-id="focus.id" :beat="beat" :stage="stage" />
-        <div class="canvas" :class="{ compact: scene }" :style="{ height: `${size.height * size.scale * (scene ? 0.7 : 1) + 16}px` }">
-          <div class="stage" :style="{ width: `${size.width}px`, height: `${size.height}px`, transform: `scale(${size.scale * (scene ? 0.7 : 1)})` }">
+        <div class="canvas" :style="{ height: `${size.height * size.scale + 16}px` }">
+          <div class="stage" :style="{ width: `${size.width}px`, height: `${size.height}px`, transform: `scale(${size.scale})` }">
             <svg class="wires" :width="size.width" :height="size.height" aria-hidden="true">
               <path v-for="wire in wires" :key="wire.key" :d="wire.d" class="wire" :class="{ lit: lit.has(wire.key) }" />
             </svg>
-            <span v-if="travelPath" :key="travelling" class="spark" :style="{ offsetPath: `path('${travelPath}')`, animationDuration: `${TRAVEL_MS}ms` }" />
+            <span v-if="travelPath" :key="travelling" class="spark" :style="{ offsetPath: `path('${travelPath}')`, animationDuration: `${TRAVEL_MS * (beat === 0 ? 1 : 0.55)}ms` }" />
             <div
               v-for="node in nodes"
               :key="node.id"
@@ -431,12 +444,17 @@ const style = computed(() => {
           </div>
         </div>
 
-        <div class="chat" :class="{ row: scene }">
+        <div ref="chatBox" class="chat">
           <TransitionGroup name="bubble">
-            <div v-for="(line, index) in chat.slice(0, said)" :key="`${beat}-${index}`" class="bubble" :class="line.who">
-              <span v-if="line.who === 'user'" class="who">{{ run.input.userName }}</span>
-              <span v-else class="who">{{ t('flows.guideBot') }}</span>
-              <span class="said">{{ line.text }}</span>
+            <div v-for="(line, index) in chat.slice(0, said)" :key="index" :class="line.who === 'note' ? 'note' : ['bubble', line.who]">
+              <template v-if="line.who === 'note'">
+                <NIcon :size="11"><component :is="nodeIcon(type.type, type.category)" /></NIcon>
+                <span>{{ line.text }}</span>
+              </template>
+              <template v-else>
+                <span class="who">{{ line.who === 'user' ? passes[line.pass]?.input.userName : t('flows.guideBot') }}</span>
+                <span class="said">{{ line.text }}</span>
+              </template>
             </div>
           </TransitionGroup>
         </div>
@@ -499,7 +517,7 @@ const style = computed(() => {
   display: inline-flex;
   padding: 4px;
   border-radius: 7px;
-  color: var(--accent);
+  color: var(--accent-fg);
   background: color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
@@ -619,7 +637,7 @@ const style = computed(() => {
   width: 17px;
   height: 17px;
   border-radius: 5px;
-  color: var(--node-accent);
+  color: color-mix(in srgb, var(--node-accent) var(--accent-strength, 100%), var(--flow-node-fg));
   background: color-mix(in srgb, var(--node-accent) 15%, transparent);
 }
 
@@ -797,19 +815,32 @@ const style = computed(() => {
   overflow-y: auto;
 }
 
-/* Beside a scene the chat is one line: what came in, what went out. */
-.chat.row {
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: flex-end;
-}
-
 .chat {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   margin-top: 10px;
-  min-height: 30px;
+  height: 168px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  scrollbar-width: none;
+  border-radius: 10px;
+  background: rgba(127, 127, 127, 0.06);
+}
+
+/* What the explained node did, between the bubbles, like a chat app's system line. */
+.note {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 92%;
+  padding: 1px 9px;
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--accent-fg);
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
 }
 
 .bubble {
