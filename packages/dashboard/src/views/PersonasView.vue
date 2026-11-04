@@ -1,9 +1,5 @@
 <script setup lang="ts">
-import {
-  AddOutline, ArrowBackOutline, CloudDownloadOutline, CloudUploadOutline, CopyOutline, DownloadOutline, PersonCircleOutline, SearchOutline, TrashOutline,
-} from '@vicons/ionicons5'
-import { useConfirm, useToast } from '@mushin/ui'
-import { NAlert, NAvatar, NButton, NDynamicTags, NEmpty, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NInputNumber, NSelect, NSpace, NSpin, NTag } from 'naive-ui'
+import { Alert, Avatar, Button, Empty, Form, FormItem, Input, NumberInput, Select, Spin, Tag, TagsInput, useConfirm, useToast } from '@mushin/ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, RouterLink, useRoute, useRouter } from 'vue-router'
@@ -282,39 +278,36 @@ const initial = (name: string) => [...name.trim()][0] ?? '?'
 <template>
   <div ref="root" class="page" :class="{ narrow }">
     <PageHeader :title="t('nav.personas')" :lead="t('personas.lead')">
-      <NSpace v-if="available">
-        <NButton @click="importInput?.click()">
-          <template #icon><NIcon><CloudUploadOutline /></NIcon></template>
+      <div v-if="available" class="header-actions">
+        <Button icon="i-lucide-cloud-upload" @click="importInput?.click()">
           {{ t('personas.import') }}
-        </NButton>
-        <NButton :disabled="!personas.length" @click="exportPersonas()">
-          <template #icon><NIcon><CloudDownloadOutline /></NIcon></template>
+        </Button>
+        <Button :disabled="!personas.length" icon="i-lucide-cloud-download" @click="exportPersonas()">
           {{ t('personas.exportAll') }}
-        </NButton>
-        <NButton type="primary" data-agent-target="personas.add" @click="openCreate">
-          <template #icon><NIcon><AddOutline /></NIcon></template>
+        </Button>
+        <Button type="primary" data-agent-target="personas.add" icon="i-lucide-plus" @click="openCreate">
           {{ t('personas.add') }}
-        </NButton>
-      </NSpace>
+        </Button>
+      </div>
       <input ref="importInput" type="file" accept=".json,.png,application/json,image/png" multiple hidden @change="importFiles">
     </PageHeader>
 
-    <NSpin :show="loading">
-      <NAlert v-if="available === false" type="warning" :title="t('personas.unavailable')">
+    <Spin :show="loading">
+      <Alert v-if="available === false" type="warning" :title="t('personas.unavailable')">
         {{ t('personas.unavailableHint') }}
         <RouterLink to="/plugins?highlight=@mushin/plugin-personas">{{ t('permissions.openPlugins') }}</RouterLink>
-      </NAlert>
-      <EmptyState v-else-if="!personas.length && !creating && !loading" :icon="PersonCircleOutline" :title="t('personas.emptyTitle')" :hint="t('personas.emptyHint')">
-        <NButton type="primary" @click="openCreate">{{ t('personas.add') }}</NButton>
-        <NButton @click="importInput?.click()">{{ t('personas.import') }}</NButton>
+      </Alert>
+      <EmptyState v-else-if="!personas.length && !creating && !loading" icon="i-lucide-circle-user" :title="t('personas.emptyTitle')" :hint="t('personas.emptyHint')">
+        <Button type="primary" @click="openCreate">{{ t('personas.add') }}</Button>
+        <Button @click="importInput?.click()">{{ t('personas.import') }}</Button>
       </EmptyState>
 
       <div v-else-if="available" class="split">
         <!-- The list -->
         <aside v-if="!narrow || !selectedId" class="list" :aria-label="t('nav.personas')">
-          <NInput v-if="personas.length > 4" v-model:value="query" clearable size="small" :placeholder="t('personas.search')" class="list-search">
-            <template #prefix><NIcon><SearchOutline /></NIcon></template>
-          </NInput>
+          <Input v-if="personas.length > 4" v-model:value="query" clearable size="small" :placeholder="t('personas.search')" class="list-search">
+            <template #prefix><span class="i-lucide-search" /></template>
+          </Input>
           <div class="items" role="listbox" :aria-label="t('nav.personas')">
             <button
               v-for="persona in shown"
@@ -326,7 +319,7 @@ const initial = (name: string) => [...name.trim()][0] ?? '?'
               :aria-selected="persona.id === selectedId"
               @click="select(persona.id)"
             >
-              <NAvatar round :size="36" :src="persona.avatar || undefined" class="item-avatar" :style="persona.avatar ? undefined : { background: avatarColor(persona.id) }">{{ initial(persona.name) }}</NAvatar>
+              <Avatar :size="36" :src="persona.avatar || undefined" class="item-avatar" :color="avatarColor(persona.id)">{{ initial(persona.name) }}</Avatar>
               <span class="item-text">
                 <strong>
                   {{ persona.id === selectedId && dirty ? draft.name || persona.name : persona.name }}
@@ -339,7 +332,7 @@ const initial = (name: string) => [...name.trim()][0] ?? '?'
               </span>
             </button>
             <button v-if="creating" type="button" class="item active" aria-selected="true">
-              <NAvatar round :size="36" :src="draft.avatar || undefined" class="item-avatar" :style="draft.avatar ? undefined : { background: avatarColor(NEW) }">{{ initial(draft.name || '?') }}</NAvatar>
+              <Avatar :size="36" :src="draft.avatar || undefined" class="item-avatar" :color="avatarColor(NEW)">{{ initial(draft.name || '?') }}</Avatar>
               <span class="item-text">
                 <strong>{{ draft.name || t('personas.untitled') }}</strong>
                 <span class="item-sub">{{ t('personas.notSaved') }}</span>
@@ -352,42 +345,40 @@ const initial = (name: string) => [...name.trim()][0] ?? '?'
         <!-- The editor -->
         <section v-if="selectedId && (selected || creating)" class="detail">
           <header class="detail-head">
-            <NButton v-if="narrow" quaternary circle :aria-label="t('common.back')" @click="select(undefined)">
-              <template #icon><NIcon><ArrowBackOutline /></NIcon></template>
-            </NButton>
+            <Button v-if="narrow" quaternary circle :aria-label="t('common.back')" icon="i-lucide-arrow-left" @click="select(undefined)" />
             <div class="avatar-edit">
-              <NAvatar round :size="56" :src="draft.avatar || undefined" :style="draft.avatar ? undefined : { background: avatarColor(selectedId ?? '') }">{{ initial(draft.name || '?') }}</NAvatar>
+              <Avatar :size="56" :src="draft.avatar || undefined" :color="avatarColor(selectedId ?? '')">{{ initial(draft.name || '?') }}</Avatar>
               <button type="button" class="avatar-change" @click="avatarInput?.click()">{{ draft.avatar ? t('personas.changeAvatar') : t('personas.uploadAvatar') }}</button>
               <button v-if="draft.avatar" type="button" class="avatar-change" @click="draft.avatar = ''">{{ t('common.remove') }}</button>
               <input ref="avatarInput" type="file" accept="image/*" hidden @change="pickAvatar">
             </div>
             <div class="identity">
-              <NInput v-model:value="draft.name" :maxlength="60" :placeholder="t('common.name')" class="name-input" :aria-label="t('common.name')" />
+              <Input v-model:value="draft.name" :maxlength="60" :placeholder="t('common.name')" class="name-input" :aria-label="t('common.name')" />
               <span class="used">
                 {{ creating ? t('personas.notSaved') : usedBy[selectedId]?.length ? t('personas.usedBy', { bots: usedBy[selectedId].join('、') }) : t('personas.unused') }}
               </span>
             </div>
-            <NSpace v-if="selected" :size="2" :wrap="false" class="detail-actions">
-              <IconAction :icon="CopyOutline" :label="t('personas.duplicate')" @click="duplicate(selected)" />
-              <IconAction :icon="DownloadOutline" :label="t('personas.export')" @click="exportPersonas([selected.id], selected.name)" />
-              <IconAction :icon="TrashOutline" :label="t('common.delete')" type="error" @click="remove(selected)" />
-            </NSpace>
+            <div v-if="selected" class="detail-actions">
+              <IconAction icon="i-lucide-copy" :label="t('personas.duplicate')" @click="duplicate(selected)" />
+              <IconAction icon="i-lucide-download" :label="t('personas.export')" @click="exportPersonas([selected.id], selected.name)" />
+              <IconAction icon="i-lucide-trash-2" :label="t('common.delete')" type="error" @click="remove(selected)" />
+            </div>
           </header>
 
-          <NForm label-placement="top" class="form" @submit.prevent="save">
+          <Form as="form" class="form" @submit="save">
             <section class="block">
-              <NFormItem :label="t('personas.description')" :feedback="t('personas.descriptionHint')">
-                <NInput v-model:value="draft.description" :maxlength="500" />
-              </NFormItem>
-              <NFormItem :label="t('personas.prompt')" required>
+              <FormItem :label="t('personas.description')" :feedback="t('personas.descriptionHint')">
+                <Input v-model:value="draft.description" :maxlength="500" />
+              </FormItem>
+              <FormItem :label="t('personas.prompt')" required>
                 <div class="stack">
-                  <NInput v-model:value="draft.prompt" type="textarea" :autosize="{ minRows: 8, maxRows: 24 }" :placeholder="t('personas.promptPlaceholder')" />
+                  <Input v-model:value="draft.prompt" type="textarea" :autosize="{ minRows: 8, maxRows: 24 }" :placeholder="t('personas.promptPlaceholder')" />
                   <div class="variables">
                     <span class="muted">{{ t('personas.variables') }}</span>
-                    <NTag v-for="variable in VARIABLES" :key="variable" size="small" class="mono clickable" :bordered="false" @click="insertVariable(variable)">{{ variable }}</NTag>
+                    <Tag v-for="variable in VARIABLES" :key="variable" size="small" class="mono clickable" @click="insertVariable(variable)">{{ variable }}</Tag>
                   </div>
                 </div>
-              </NFormItem>
+              </FormItem>
             </section>
 
             <section class="block">
@@ -395,47 +386,40 @@ const initial = (name: string) => [...name.trim()][0] ?? '?'
               <p class="block-hint">{{ t('personas.examplesHint') }}</p>
               <div class="stack">
                 <div v-for="(example, index) in draft.examples" :key="index" class="example">
-                  <NInput v-model:value="example.user" :placeholder="t('personas.exampleUser')" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" />
-                  <NInput v-model:value="example.assistant" :placeholder="t('personas.exampleAssistant')" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" />
-                  <IconAction :icon="TrashOutline" :label="t('common.remove')" type="error" @click="draft.examples.splice(index, 1)" />
+                  <Input v-model:value="example.user" :placeholder="t('personas.exampleUser')" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" />
+                  <Input v-model:value="example.assistant" :placeholder="t('personas.exampleAssistant')" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" />
+                  <IconAction icon="i-lucide-trash-2" :label="t('common.remove')" type="error" @click="draft.examples.splice(index, 1)" />
                 </div>
-                <NButton size="small" dashed class="add-example" @click="draft.examples.push({ user: '', assistant: '' })">
-                  <template #icon><NIcon><AddOutline /></NIcon></template>
+                <Button size="small" dashed class="add-example" icon="i-lucide-plus" @click="draft.examples.push({ user: '', assistant: '' })">
                   {{ t('personas.addExample') }}
-                </NButton>
+                </Button>
               </div>
             </section>
 
             <section class="block">
-              <NFormItem :label="t('personas.avoid')" :feedback="t('personas.avoidHint')">
-                <NInput v-model:value="draft.avoid" type="textarea" :autosize="{ minRows: 2, maxRows: 6 }" />
-              </NFormItem>
+              <FormItem :label="t('personas.avoid')" :feedback="t('personas.avoidHint')">
+                <Input v-model:value="draft.avoid" type="textarea" :autosize="{ minRows: 2, maxRows: 6 }" />
+              </FormItem>
             </section>
 
             <section class="block">
               <h3 class="block-title">{{ t('personas.advanced') }}</h3>
-              <NGrid cols="1 600:3" responsive="self" :x-gap="12">
-                <NGridItem>
-                  <NFormItem :label="t('personas.provider')">
-                    <NSelect v-model:value="draft.provider" :options="providerOptions" clearable :placeholder="t('personas.botDefault')" />
-                  </NFormItem>
-                </NGridItem>
-                <NGridItem>
-                  <NFormItem :label="t('personas.model')">
-                    <ModelSelect :model-value="draft.model || null" :provider="draft.provider" :placeholder="t('personas.botDefault')" @update:model-value="(value) => (draft.model = value ?? '')" />
-                  </NFormItem>
-                </NGridItem>
-                <NGridItem>
-                  <NFormItem :label="t('personas.temperature')">
-                    <NInputNumber v-model:value="draft.temperature" :min="0" :max="2" :step="0.1" clearable :placeholder="t('personas.botDefault')" style="width: 100%" />
-                  </NFormItem>
-                </NGridItem>
-              </NGrid>
-              <NFormItem :label="t('personas.tags')" :show-feedback="false">
-                <NDynamicTags v-model:value="draft.tags" />
-              </NFormItem>
+              <div class="advanced-grid">
+                <FormItem :label="t('personas.provider')">
+                  <Select v-model:value="draft.provider" :options="providerOptions" clearable :placeholder="t('personas.botDefault')" />
+                </FormItem>
+                <FormItem :label="t('personas.model')">
+                  <ModelSelect :model-value="draft.model || null" :provider="draft.provider" :placeholder="t('personas.botDefault')" @update:model-value="(value) => (draft.model = value ?? '')" />
+                </FormItem>
+                <FormItem :label="t('personas.temperature')">
+                  <NumberInput v-model:value="draft.temperature" :min="0" :max="2" :step="0.1" clearable :placeholder="t('personas.botDefault')" style="width: 100%" />
+                </FormItem>
+              </div>
+              <FormItem :label="t('personas.tags')">
+                <TagsInput v-model:value="draft.tags" />
+              </FormItem>
             </section>
-          </NForm>
+          </Form>
 
           <SaveBar
             :show="dirty"
@@ -449,10 +433,10 @@ const initial = (name: string) => [...name.trim()][0] ?? '?'
         </section>
 
         <div v-else-if="!narrow" class="detail detail-empty">
-          <NEmpty :description="t('personas.pick')" />
+          <Empty :description="t('personas.pick')" />
         </div>
       </div>
-    </NSpin>
+    </Spin>
   </div>
 </template>
 
@@ -648,6 +632,24 @@ const initial = (name: string) => [...name.trim()][0] ?? '?'
   padding-top: 4px;
 }
 
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.detail-actions {
+  display: flex;
+  gap: 2px;
+}
+
+/* Three across when there is room, otherwise as many as fit. */
+.advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px 12px;
+}
+
 .name-input :deep(input) {
   font-size: 17px;
   font-weight: 600;
@@ -659,6 +661,7 @@ const initial = (name: string) => [...name.trim()][0] ?? '?'
 }
 
 .form {
+  gap: 0;
   border: 1px solid var(--line);
   border-top: 0;
   border-radius: 0 0 var(--radius) var(--radius);
@@ -666,7 +669,10 @@ const initial = (name: string) => [...name.trim()][0] ?? '?'
 }
 
 .block {
-  padding: 16px 18px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 18px 18px;
 }
 
 .block + .block {
@@ -677,7 +683,7 @@ const initial = (name: string) => [...name.trim()][0] ?? '?'
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 14px;
   font-weight: 600;
 }

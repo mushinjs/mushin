@@ -7,6 +7,7 @@
  * `type`, `size`, `secondary`…), so moving a page over is mostly a change of imports.
  */
 export { default as Alert } from './components/Alert.vue'
+export { default as Avatar } from './components/Avatar.vue'
 export { default as Button } from './components/Button.vue'
 export { default as Card } from './components/Card.vue'
 export { default as Checkbox } from './components/Checkbox.vue'
