@@ -1719,6 +1719,7 @@ export class FlowService extends Service {
       name: 'flows.sampleMatch',
       description: 'Editor only: which triggers of a flow a real message of a bot starts, with their outputs and the message\'s sys values; nothing runs.',
       risk: 'read',
+      agent: false,
       input: idInput.extend({
         sample: z.object({ bot: z.string(), id: z.string(), channel: z.string().optional() }),
         nodes: z.array(z.object({ id: z.string(), type: z.string(), config: z.record(z.string(), z.any()).optional(), skip: z.boolean().optional(), priority: z.number().optional() })).optional(),
@@ -1745,6 +1746,7 @@ export class FlowService extends Service {
       name: 'flows.guide',
       description: 'Editor only: a node type\'s tutorial example run as a test, for the node picker\'s hover animation: the example flow, the steps the run took and what the bot replied.',
       risk: 'read',
+      agent: false,
       input: z.object({ type: z.string() }),
       handler: async ({ type }) => (await this.guide(type)) ?? null,
     })
@@ -1753,6 +1755,7 @@ export class FlowService extends Service {
       name: 'flows.testOptions',
       description: 'Editor only: test runs that a flow\'s nodes call for, such as a user on a permission check\'s allow list, for the test panel\'s quick choices.',
       risk: 'read',
+      agent: false,
       input: z.object({ nodes: z.array(z.object({ id: z.string(), type: z.string(), config: z.record(z.string(), z.any()).optional() })) }),
       handler: ({ nodes }) => this.testOptions(nodes),
     })
@@ -1761,6 +1764,7 @@ export class FlowService extends Service {
       name: 'flows.debug',
       description: 'Editor only: tell a test run paused at a breakpoint to continue to the next breakpoint, pause again at the next node (step), or stop.',
       risk: 'write',
+      agent: false,
       input: z.object({ runId: z.string(), action: z.enum(['continue', 'step', 'stop']) }),
       handler: ({ runId, action }) => this.debug(runId, action),
     })

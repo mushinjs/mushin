@@ -159,7 +159,7 @@ export class Agent extends Service {
   async tools(): Promise<ToolDefinition[]> {
     const settings = await this.settings()
     return this.home.actions.list()
-      .filter((action) => !action.name.startsWith('agent.') && this.policyOf(settings, action) !== 'off')
+      .filter((action) => action.agent && !action.name.startsWith('agent.') && this.policyOf(settings, action) !== 'off')
       .map((action) => ({
         name: toToolName(action.name),
         description: describeTool(action),
@@ -193,7 +193,7 @@ export class Agent extends Service {
   async policies() {
     const settings = await this.settings()
     return this.home.actions.list()
-      .filter((action) => !action.name.startsWith('agent.'))
+      .filter((action) => action.agent && !action.name.startsWith('agent.'))
       .map((action) => ({
         name: action.name,
         description: action.description,
@@ -554,7 +554,7 @@ export class Agent extends Service {
       this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: false, error: 'Arguments are not valid JSON' })
       return reply('The arguments were not valid JSON. Send a JSON object that matches the tool schema.', true)
     }
-    if (!info) {
+    if (!info || !info.agent) {
       this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: false, error: `Unknown tool ${call.name}` })
       return reply(`The tool ${call.name} is not available right now.`, true)
     }

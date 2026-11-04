@@ -38,6 +38,11 @@ export interface ActionDefinition<S extends z.ZodType = z.ZodType, R = unknown> 
   risk: Risk
   /** Client actions run in the dashboard; the server relays them to the caller's tab. */
   client?: boolean
+  /**
+   * False keeps the action away from the Agent: dashboard plumbing (editor previews, debugger
+   * controls) that only makes sense next to a screen and would only distract the model.
+   */
+  agent?: false
   handler?: (input: z.output<S>, caller: ActionCaller) => R | Promise<R>
 }
 
@@ -46,6 +51,8 @@ export interface ActionInfo {
   description: string
   risk: Risk
   client: boolean
+  /** False when the Agent never sees the action; see `ActionDefinition.agent`. */
+  agent: boolean
   plugin: string
   inputSchema: JsonSchema
 }
@@ -139,6 +146,7 @@ export class Actions extends Service {
       description: action.description,
       risk: action.risk,
       client: !!action.client,
+      agent: action.agent !== false,
       plugin: action.plugin,
       inputSchema: action.schema,
     }
