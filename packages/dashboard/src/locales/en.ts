@@ -10,6 +10,7 @@ export default {
     noOptions: 'No options',
     useValue: 'Use “{value}”',
     add: 'Add',
+    remove: 'Remove',
     ok: 'OK',
     cancel: 'Cancel',
     loading: 'Loading',

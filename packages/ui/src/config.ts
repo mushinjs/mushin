@@ -12,6 +12,7 @@ export interface UiText {
   /** For a typed value that is not among the options; `{value}` is the text. */
   useValue: string
   add: string
+  remove: string
   ok: string
   cancel: string
   loading: string
@@ -29,6 +30,7 @@ export const defaultText: UiText = {
   noOptions: 'No options',
   useValue: 'Use “{value}”',
   add: 'Add',
+  remove: 'Remove',
   ok: 'OK',
   cancel: 'Cancel',
   loading: 'Loading',

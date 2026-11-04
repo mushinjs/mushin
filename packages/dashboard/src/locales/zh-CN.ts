@@ -11,6 +11,7 @@ const zhCN: typeof en = {
     noOptions: '没有可选项',
     useValue: '使用“{value}”',
     add: '添加',
+    remove: '移除',
     ok: '确定',
     cancel: '取消',
     loading: '加载中',
