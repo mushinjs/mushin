@@ -10,7 +10,8 @@ export type ChatItem =
   | { kind: 'user'; text: string; skills?: string[]; quote?: string }
   | { kind: 'assistant'; text: string }
   | { kind: 'tool'; id: string; action: string; input: unknown; risk?: Risk; state: ToolState; result?: unknown; error?: string }
-  | { kind: 'error'; text: string }
+  /** `code` is `max_steps` when the reply ran out of tool rounds; the dock offers to continue. */
+  | { kind: 'error'; text: string; code?: 'max_steps' }
   /** Shown by the dashboard itself, e.g. for /status; never sent to the model. */
   | { kind: 'note'; text: string }
 
@@ -218,7 +219,7 @@ export const useAgentStore = defineStore('agent', () => {
         break
       case 'error':
         flush()
-        items.value.push({ kind: 'error', text: event.error })
+        items.value.push({ kind: 'error', text: event.error, ...(event.code === 'max_steps' ? { code: 'max_steps' as const } : {}) })
         running.value = false
         dropAsks()
         refreshSessions().catch(() => {})

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  AddOutline, AlertCircleOutline, BrowsersOutline, ChatbubbleEllipsesOutline, CheckmarkCircle, CloseCircleOutline, CloseOutline, ExtensionPuzzleOutline, HandLeftOutline,
+  AddOutline, AlertCircleOutline, BrowsersOutline, ChatbubbleEllipsesOutline, CheckmarkCircle, ChevronDownOutline, CloseCircleOutline, CloseOutline, ExtensionPuzzleOutline,
   HelpCircleOutline, InformationCircleOutline, SendOutline, SparklesOutline, StopCircleOutline, TrashOutline,
 } from '@vicons/ionicons5'
 import { NButton, NIcon, NInput, NModal, NPopover, NPopselect, NSelect, NSpin, NTag, NTooltip } from 'naive-ui'
@@ -8,13 +8,14 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { call } from '../api'
-import { useAgentStore } from '../stores/agent'
+import { type ChatItem, useAgentStore } from '../stores/agent'
 import { type Recommendation, useAgentSceneStore } from '../stores/agentScene'
 import { providerOptions as toProviderOptions } from '../models'
 import { useDataStore } from '../stores/data'
 import type { AgentSkill } from '../types'
 import { pretty } from '../utils'
 import AgentMessage from './agent/AgentMessage.vue'
+import AgentToolCall from './agent/AgentToolCall.vue'
 import CommandPalette, { type PaletteItem } from './agent/CommandPalette.vue'
 import HistoryDrawer from './agent/HistoryDrawer.vue'
 import PanelIcon from './flow/editor/PanelIcon.vue'
@@ -182,6 +183,45 @@ function onKeydown(event: KeyboardEvent) {
   }
 }
 
+type ToolItem = Extract<ChatItem, { kind: 'tool' }>
+type Row =
+  | { kind: 'item'; item: ChatItem }
+  | { kind: 'group'; key: string; action: string; items: ToolItem[]; failed: number; running: boolean; reason: string }
+
+/** Runs of this many calls of one tool in a row fold into one line, so retries do not flood the chat. */
+const GROUP_FROM = 3
+
+const rows = computed<Row[]>(() => {
+  const out: Row[] = []
+  const items = agent.items
+  for (let index = 0; index < items.length;) {
+    const item = items[index]
+    let end = index + 1
+    if (item.kind === 'tool') {
+      while (end < items.length && items[end].kind === 'tool' && (items[end] as ToolItem).action === item.action) end++
+    }
+    const run = items.slice(index, end) as ToolItem[]
+    if (run.length >= GROUP_FROM && !run.some((call) => call.state === 'confirm')) {
+      const failures = run.filter((call) => call.state === 'error' || call.state === 'declined')
+      const reason = failures.at(-1)?.error?.replace(/^Error:\s*/, '').split('\n')[0] ?? ''
+      out.push({ kind: 'group', key: `group:${item.kind === 'tool' ? item.id : index}`, action: item.kind === 'tool' ? item.action : '', items: run, failed: failures.length, running: run.some((call) => call.state === 'running'), reason })
+    } else {
+      for (const single of items.slice(index, end)) out.push({ kind: 'item', item: single })
+    }
+    index = end
+  }
+  return out
+})
+
+function groupSummary(row: Extract<Row, { kind: 'group' }>) {
+  const ok = row.items.filter((call) => call.state === 'ok').length
+  return [
+    ok ? t('agent.groupOk', { n: ok }) : '',
+    row.failed ? t('agent.groupFailed', { n: row.failed }) : '',
+    row.running ? t('agent.state.running') : '',
+  ].filter(Boolean).join(' · ')
+}
+
 function toggle(id: string) {
   const next = new Set(expanded.value)
   if (next.has(id)) next.delete(id)
@@ -276,48 +316,60 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
         <p class="dock-tip">{{ t('agentPalette.tip') }}</p>
       </div>
 
-      <template v-for="(item, index) in agent.items" :key="index">
-        <div v-if="item.kind === 'user'" class="msg user">
-          <div v-if="item.skills?.length" class="msg-skills">
-            <span v-for="name in item.skills" :key="name" class="msg-skill"><NIcon><ExtensionPuzzleOutline /></NIcon>{{ name }}</span>
-          </div>
-          <div v-if="item.quote" class="msg-quote"><NIcon><ChatbubbleEllipsesOutline /></NIcon>{{ item.quote }}</div>
-          {{ item.text }}
-        </div>
-        <div v-else-if="item.kind === 'assistant'" class="msg assistant"><AgentMessage :text="item.text" /></div>
-        <div v-else-if="item.kind === 'note'" class="msg note">
-          <NIcon><InformationCircleOutline /></NIcon><span>{{ item.text }}</span>
-        </div>
-        <div v-else-if="item.kind === 'error'" class="msg error">
-          <NIcon><AlertCircleOutline /></NIcon> {{ item.text }}
-        </div>
-        <div v-else class="tool" :class="item.state">
-          <button class="tool-row" type="button" @click="toggle(item.id)">
-            <NSpin v-if="item.state === 'running'" :size="14" />
-            <NIcon v-else-if="item.state === 'ok'" color="var(--ok)"><CheckmarkCircle /></NIcon>
-            <NIcon v-else-if="item.state === 'confirm'" color="var(--warn)"><HandLeftOutline /></NIcon>
-            <NIcon v-else color="var(--bad)"><CloseCircleOutline /></NIcon>
-            <span class="mono tool-name">{{ item.action }}</span>
-            <NTag v-if="item.risk === 'dangerous'" size="tiny" type="error" :bordered="false">{{ t('agent.dangerous') }}</NTag>
-            <span class="tool-state">{{ t(`agent.state.${item.state}`) }}</span>
+      <template v-for="(row, index) in rows" :key="index">
+        <div v-if="row.kind === 'group'" class="tool-group" :class="{ open: expanded.has(row.key) }">
+          <button class="group-row" type="button" @click="toggle(row.key)">
+            <NSpin v-if="row.running" :size="14" />
+            <NIcon v-else-if="!row.failed" color="var(--ok)"><CheckmarkCircle /></NIcon>
+            <NIcon v-else-if="row.failed === row.items.length" color="var(--bad)"><CloseCircleOutline /></NIcon>
+            <NIcon v-else color="var(--warn)"><AlertCircleOutline /></NIcon>
+            <span class="mono group-name">{{ row.action }}</span>
+            <span class="group-count">×{{ row.items.length }}</span>
+            <span class="group-state">{{ groupSummary(row) }}</span>
+            <NIcon class="group-chevron"><ChevronDownOutline /></NIcon>
           </button>
-          <div v-if="item.state === 'confirm'" class="confirm">
-            <p>{{ t('agent.confirmText', { action: item.action }) }}</p>
-            <pre class="json mono">{{ pretty(item.input) }}</pre>
-            <div class="confirm-actions">
-              <NButton size="small" type="error" @click="agent.confirm(item.id, true)">{{ t('agent.approve') }}</NButton>
-              <NButton size="small" @click="agent.confirm(item.id, false)">{{ t('agent.deny') }}</NButton>
-            </div>
-          </div>
-          <div v-else-if="expanded.has(item.id)" class="tool-detail">
-            <div class="label">{{ t('agent.input') }}</div>
-            <pre class="json mono">{{ pretty(item.input) }}</pre>
-            <template v-if="item.result !== undefined || item.error">
-              <div class="label">{{ t('agent.output') }}</div>
-              <pre class="json mono">{{ item.error ?? pretty(item.result) }}</pre>
-            </template>
+          <div v-if="row.failed && !expanded.has(row.key)" class="group-reason" :title="row.reason">{{ row.reason }}</div>
+          <div v-if="expanded.has(row.key)" class="group-items">
+            <AgentToolCall
+              v-for="item in row.items"
+              :key="item.id"
+              :item="item"
+              :expanded="expanded.has(item.id)"
+              @toggle="toggle(item.id)"
+              @confirm="(approved) => agent.confirm(item.id, approved)"
+            />
           </div>
         </div>
+        <template v-else>
+          <template v-for="item in [row.item]" :key="index">
+            <div v-if="item.kind === 'user'" class="msg user">
+              <div v-if="item.skills?.length" class="msg-skills">
+                <span v-for="name in item.skills" :key="name" class="msg-skill"><NIcon><ExtensionPuzzleOutline /></NIcon>{{ name }}</span>
+              </div>
+              <div v-if="item.quote" class="msg-quote"><NIcon><ChatbubbleEllipsesOutline /></NIcon>{{ item.quote }}</div>
+              {{ item.text }}
+            </div>
+            <div v-else-if="item.kind === 'assistant'" class="msg assistant"><AgentMessage :text="item.text" /></div>
+            <div v-else-if="item.kind === 'note'" class="msg note">
+              <NIcon><InformationCircleOutline /></NIcon><span>{{ item.text }}</span>
+            </div>
+            <div v-else-if="item.kind === 'error' && item.code === 'max_steps'" class="msg limit">
+              <NIcon><InformationCircleOutline /></NIcon>
+              <span>{{ t('agent.maxSteps') }}</span>
+              <NButton v-if="index === rows.length - 1 && !agent.running" size="small" secondary @click="send(t('agent.continuePrompt'))">{{ t('agent.continue') }}</NButton>
+            </div>
+            <div v-else-if="item.kind === 'error'" class="msg error">
+              <NIcon><AlertCircleOutline /></NIcon> {{ item.text }}
+            </div>
+            <AgentToolCall
+              v-else
+              :item="item"
+              :expanded="expanded.has(item.id)"
+              @toggle="toggle(item.id)"
+              @confirm="(approved) => agent.confirm(item.id, approved)"
+            />
+          </template>
+        </template>
       </template>
 
       <div v-for="ask in agent.asks" :key="ask.id" class="ask">
@@ -744,17 +796,26 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
   50% { opacity: 0; }
 }
 
-.tool {
+.msg.limit {
+  align-self: stretch;
+  max-width: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(127, 127, 127, 0.1);
+}
+
+.msg.limit span {
+  flex: 1;
+}
+
+.tool-group {
   border: 1px solid rgba(127, 127, 127, 0.2);
   border-radius: 8px;
   font-size: 13px;
 }
 
-.tool.confirm {
-  border-color: var(--warn);
-}
-
-.tool-row {
+.group-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -768,38 +829,47 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
   text-align: left;
 }
 
-.tool-name {
-  flex: 1;
+.group-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.tool-state {
+.group-count {
+  flex: 1;
   opacity: 0.6;
   font-size: 12px;
 }
 
-.tool-detail,
-.confirm {
-  padding: 0 10px 10px;
+.group-state {
+  opacity: 0.6;
+  font-size: 12px;
+}
+
+.group-chevron {
+  opacity: 0.5;
+  transition: transform 0.15s;
+}
+
+.tool-group.open .group-chevron {
+  transform: rotate(180deg);
+}
+
+.group-reason {
+  margin: -2px 10px 7px 32px;
+  font-size: 12px;
+  color: var(--bad);
+  opacity: 0.85;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.group-items {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-.confirm p {
-  margin: 0;
-}
-
-.confirm-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.label {
-  font-size: 12px;
-  opacity: 0.6;
+  padding: 0 8px 8px;
 }
 
 .thinking {

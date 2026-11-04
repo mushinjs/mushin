@@ -1026,6 +1026,11 @@ const zhCN: typeof en = {
       error: '失败',
       declined: '已拒绝',
     },
+    groupOk: '{n} 次完成',
+    groupFailed: '{n} 次失败',
+    maxSteps: '这次回复已用完工具调用的轮数，智能体停在了这里。',
+    continue: '继续',
+    continuePrompt: '继续',
   },
   permissions: {
     title: '主人和管理员',

@@ -1024,6 +1024,11 @@ export default {
       error: 'Failed',
       declined: 'Declined',
     },
+    groupOk: '{n} done',
+    groupFailed: '{n} failed',
+    maxSteps: 'This reply used all its tool rounds, so the Agent stopped here.',
+    continue: 'Continue',
+    continuePrompt: 'Continue',
   },
   permissions: {
     title: 'Masters and admins',
