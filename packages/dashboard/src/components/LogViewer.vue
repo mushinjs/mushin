@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { ArrowDownOutline, CopyOutline, SearchOutline, TrashOutline } from '@vicons/ionicons5'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useToast } from '@mushin/ui'
-import { NButton, NIcon, NInput, NRadioButton, NRadioGroup, NTag } from 'naive-ui'
+import { Button, Input, RadioButton, RadioGroup } from '@mushin/ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -322,33 +321,35 @@ function onClick(event: MouseEvent) {
 <template>
   <div class="log-view">
     <div class="bar">
-      <NInput v-model:value="query" size="small" clearable :placeholder="t('logs.filter')" class="search">
-        <template #prefix><NIcon :component="SearchOutline" /></template>
-      </NInput>
-      <NRadioGroup v-model:value="level" size="small">
-        <NRadioButton value="all">{{ t('logs.all') }}</NRadioButton>
-        <NRadioButton v-if="hasDebug" value="info">{{ t('logs.noDebug') }}</NRadioButton>
-        <NRadioButton value="warn">{{ t('logs.warnings') }}</NRadioButton>
-        <NRadioButton value="error">{{ t('logs.errors') }}</NRadioButton>
-      </NRadioGroup>
+      <Input v-model:value="query" size="small" clearable :placeholder="t('logs.filter')" class="search">
+        <template #prefix><span class="i-lucide-search" /></template>
+      </Input>
+      <RadioGroup v-model:value="level" size="small">
+        <RadioButton value="all">{{ t('logs.all') }}</RadioButton>
+        <RadioButton v-if="hasDebug" value="info">{{ t('logs.noDebug') }}</RadioButton>
+        <RadioButton value="warn">{{ t('logs.warnings') }}</RadioButton>
+        <RadioButton value="error">{{ t('logs.errors') }}</RadioButton>
+      </RadioGroup>
       <div class="spacer" />
-      <IconAction :icon="CopyOutline" :label="t('logs.copySelected')" :disabled="!selectedLines.length" @click="copySelected" />
-      <IconAction :icon="TrashOutline" :label="t('logs.clear')" @click="emit('clear')" />
+      <IconAction icon="i-lucide-copy" :label="t('logs.copySelected')" :disabled="!selectedLines.length" @click="copySelected" />
+      <IconAction icon="i-lucide-trash-2" :label="t('logs.clear')" @click="emit('clear')" />
     </div>
     <div v-if="presentTags.length > 1" class="tags" role="group" :aria-label="t('logs.tagsLabel')">
       <span class="tags-label">{{ t('logs.tagsLabel') }}</span>
-      <NTag
+      <Button
         v-for="tag in presentTags"
         :key="tag"
-        size="small"
+        size="tiny"
         round
-        checkable
-        :checked="tags.includes(tag)"
-        @update:checked="toggleTag(tag)"
+        :type="tags.includes(tag) ? 'primary' : 'default'"
+        :secondary="tags.includes(tag)"
+        :quaternary="!tags.includes(tag)"
+        :pressed="tags.includes(tag)"
+        @click="toggleTag(tag)"
       >
         <span class="tag-dot" :class="`src-${tag}`" />{{ t(`logs.tags.${tag}`) }}
-      </NTag>
-      <NButton v-if="tags.length" size="tiny" quaternary @click="tags = []">{{ t('logs.all') }}</NButton>
+      </Button>
+      <Button v-if="tags.length" size="tiny" quaternary @click="tags = []">{{ t('logs.all') }}</Button>
     </div>
     <div class="body">
       <div
@@ -383,10 +384,9 @@ function onClick(event: MouseEvent) {
         <div v-else class="empty">{{ emptyText ?? t('logs.empty') }}</div>
       </div>
       <Transition name="fade">
-        <NButton v-if="!follow && visible.length" class="latest" size="small" round secondary type="primary" @click="resume">
-          <template #icon><NIcon :component="ArrowDownOutline" /></template>
+        <Button v-if="!follow && visible.length" class="latest" size="small" round secondary type="primary" icon="i-lucide-arrow-down" @click="resume">
           {{ t('logs.latest') }}
-        </NButton>
+        </Button>
       </Transition>
     </div>
     <div class="status">
@@ -394,8 +394,8 @@ function onClick(event: MouseEvent) {
       <template v-if="selectedLines.length">
         <span class="sep">·</span>
         <span>{{ t('logs.selected', { count: selectedLines.length }) }}</span>
-        <NButton text size="tiny" type="primary" @click="copySelected">{{ t('logs.copy') }}</NButton>
-        <NButton text size="tiny" @click="selected = new Set()">{{ t('logs.deselect') }}</NButton>
+        <Button text size="tiny" type="primary" @click="copySelected">{{ t('logs.copy') }}</Button>
+        <Button text size="tiny" @click="selected = new Set()">{{ t('logs.deselect') }}</Button>
       </template>
       <span class="spacer" />
       <span class="hint">{{ t('logs.selectHint') }}</span>

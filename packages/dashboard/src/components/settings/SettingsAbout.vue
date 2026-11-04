@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NCard } from 'naive-ui'
+import { Card } from '@mushin/ui'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
@@ -28,7 +28,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <NCard :title="t('settings.about.instance')" size="small">
+    <Card :title="t('settings.about.instance')" size="small">
       <dl class="facts">
         <dt>Mushin.js</dt><dd>{{ overview?.versions.mushin ?? '—' }}</dd>
         <dt>Cordis</dt><dd>{{ overview?.versions.cordis ?? '—' }}</dd>
@@ -37,13 +37,14 @@ onMounted(() => {
         <dt>{{ t('settings.about.address') }}</dt><dd class="mono">{{ info?.baseUrl ?? '—' }}</dd>
         <dt>{{ t('settings.about.license') }}</dt><dd>MIT</dd>
       </dl>
-    </NCard>
+    </Card>
 
     <p class="credits">
       {{ t('settings.about.builtOn') }}
       <a href="https://github.com/cordiverse/cordis" target="_blank" rel="noopener">Cordis</a>
       · <a href="https://napneko.github.io/" target="_blank" rel="noopener">NapCat</a>
-      · <a href="https://www.naiveui.com/" target="_blank" rel="noopener">Naive UI</a>
+      · <a href="https://reka-ui.com/" target="_blank" rel="noopener">Reka UI</a>
+      · <a href="https://unocss.dev/" target="_blank" rel="noopener">UnoCSS</a>
     </p>
   </div>
 </template>

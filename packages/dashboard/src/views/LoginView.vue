@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NAlert, NButton, NCard, NForm, NFormItem, NInput } from 'naive-ui'
+import { Alert, Button, Card, Form, FormItem, Input } from '@mushin/ui'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -12,9 +12,11 @@ const token = ref('')
 const error = ref('')
 const loading = ref(false)
 const logoFailed = ref(false)
+const field = ref<InstanceType<typeof Input>>()
 
 // The terminal prints a sign-in link with the token in the URL fragment, which never reaches the server.
 onMounted(() => {
+  field.value?.focus()
   const match = /^#token=(.+)$/.exec(location.hash)
   if (!match) return
   token.value = decodeURIComponent(match[1])
@@ -42,34 +44,35 @@ async function submit() {
 
 <template>
   <div class="login">
-    <NCard class="login-card" :bordered="true">
+    <Card class="login-card">
       <div class="login-brand">
         <img v-if="!logoFailed" src="/logo.png" alt="" @error="logoFailed = true">
         <h1>Mushin.js <span>無心</span></h1>
         <p>{{ t('app.tagline') }}</p>
       </div>
-      <NAlert v-if="route.query.expired" type="warning" :show-icon="false" class="expired">{{ t('login.expired') }}</NAlert>
-      <NForm @submit.prevent="submit">
-        <NFormItem :label="t('login.token')" :feedback="error || t('login.tokenHint')" :validation-status="error ? 'error' : undefined">
-          <NInput
+      <Alert v-if="route.query.expired" type="warning" :show-icon="false" class="expired">{{ t('login.expired') }}</Alert>
+      <Form as="form" @submit="submit">
+        <FormItem :label="t('login.token')" :feedback="error || t('login.tokenHint')" :validation-status="error ? 'error' : undefined">
+          <Input
+            ref="field"
             v-model:value="token"
             type="password"
             show-password-on="click"
             :placeholder="t('login.token')"
             :input-props="{ autocomplete: 'current-password' }"
-            autofocus
-            @keyup.enter="submit"
+            :status="error ? 'error' : undefined"
           />
-        </NFormItem>
-        <NButton type="primary" block :loading="loading" attr-type="submit">{{ t('login.submit') }}</NButton>
-      </NForm>
-    </NCard>
+        </FormItem>
+        <Button type="primary" block :loading="loading" attr-type="submit">{{ t('login.submit') }}</Button>
+      </Form>
+    </Card>
   </div>
 </template>
 
 <style scoped>
 .login {
   min-height: 100vh;
+  background: var(--bg);
   display: flex;
   align-items: center;
   justify-content: center;

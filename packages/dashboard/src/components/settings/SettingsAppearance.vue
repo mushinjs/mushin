@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NForm, NFormItem, NRadioButton, NRadioGroup } from 'naive-ui'
+import { Form, FormItem, RadioButton, RadioGroup } from '@mushin/ui'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '../../i18n'
 import { themeMode } from '../../theme'
@@ -8,21 +8,21 @@ const { t, locale } = useI18n()
 </script>
 
 <template>
-  <NForm label-placement="top" class="form">
-    <NFormItem :label="t('settings.appearance.theme')" :feedback="t('settings.appearance.themeHelp')">
-      <NRadioGroup v-model:value="themeMode">
-        <NRadioButton value="auto">{{ t('settings.appearance.auto') }}</NRadioButton>
-        <NRadioButton value="light">{{ t('settings.appearance.light') }}</NRadioButton>
-        <NRadioButton value="dark">{{ t('settings.appearance.dark') }}</NRadioButton>
-      </NRadioGroup>
-    </NFormItem>
-    <NFormItem :label="t('settings.appearance.language')" :feedback="t('settings.appearance.languageHelp')">
-      <NRadioGroup :value="locale" @update:value="setLocale">
-        <NRadioButton value="zh-CN">简体中文</NRadioButton>
-        <NRadioButton value="en">English</NRadioButton>
-      </NRadioGroup>
-    </NFormItem>
-  </NForm>
+  <Form class="form">
+    <FormItem :label="t('settings.appearance.theme')" :feedback="t('settings.appearance.themeHelp')">
+      <RadioGroup v-model:value="themeMode">
+        <RadioButton value="auto">{{ t('settings.appearance.auto') }}</RadioButton>
+        <RadioButton value="light">{{ t('settings.appearance.light') }}</RadioButton>
+        <RadioButton value="dark">{{ t('settings.appearance.dark') }}</RadioButton>
+      </RadioGroup>
+    </FormItem>
+    <FormItem :label="t('settings.appearance.language')" :feedback="t('settings.appearance.languageHelp')">
+      <RadioGroup :value="locale" @update:value="setLocale">
+        <RadioButton value="zh-CN">简体中文</RadioButton>
+        <RadioButton value="en">English</RadioButton>
+      </RadioGroup>
+    </FormItem>
+  </Form>
 </template>
 
 <style scoped>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NTabPane, NTabs } from 'naive-ui'
+import { TabPane, Tabs } from '@mushin/ui'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -25,37 +25,24 @@ const narrow = computed(() => width.value < 720)
 <template>
   <div class="page">
     <PageHeader :title="t('nav.settings')" :lead="t('settings.lead')" />
-    <NTabs
+    <Tabs
       :value="section"
-      type="line"
       :placement="narrow ? 'top' : 'left'"
-      :pane-style="narrow ? undefined : 'padding: 0 0 0 24px; min-width: 0;'"
-      class="sections"
       @update:value="(next: string) => router.replace(`/settings/${next}`)"
     >
-      <NTabPane name="appearance" :tab="t('settings.sections.appearance')" display-directive="show:lazy" data-agent-target="settings.appearance">
+      <TabPane name="appearance" :tab="t('settings.sections.appearance')" data-agent-target="settings.appearance">
         <SettingsAppearance />
-      </NTabPane>
-      <NTabPane name="features" :tab="t('settings.sections.features')" display-directive="show:lazy" data-agent-target="settings.features">
+      </TabPane>
+      <TabPane name="features" :tab="t('settings.sections.features')" data-agent-target="settings.features">
         <SettingsFeatures />
-      </NTabPane>
-      <NTabPane name="agent" :tab="t('settings.sections.agent')" display-directive="show:lazy" data-agent-target="settings.agent">
+      </TabPane>
+      <TabPane name="agent" :tab="t('settings.sections.agent')" data-agent-target="settings.agent">
         <SettingsAgent />
-      </NTabPane>
-      <NTabPane name="about" :tab="t('settings.sections.about')" display-directive="show:lazy" data-agent-target="settings.about">
+      </TabPane>
+      <TabPane name="about" :tab="t('settings.sections.about')" data-agent-target="settings.about">
         <SettingsAbout />
-      </NTabPane>
-    </NTabs>
+      </TabPane>
+    </Tabs>
   </div>
 </template>
 
-<style scoped>
-.sections :deep(.n-tabs-nav--left) {
-  min-width: 120px;
-}
-
-/* Naive UI's left-placement padding also reaches tabs nested in a section (the Agent's); give them back their own. */
-.sections :deep(.n-tabs--top .n-tab-pane) {
-  padding: var(--n-pane-padding-top) var(--n-pane-padding-right) var(--n-pane-padding-bottom) var(--n-pane-padding-left);
-}
-</style>

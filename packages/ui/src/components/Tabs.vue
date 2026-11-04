@@ -2,6 +2,7 @@
 /**
  * Tabs over TabPane children: `<Tabs v-model:value="tab"><TabPane name="a" tab="A">…</TabPane></Tabs>`.
  * `type="line"` underlines the current tab; `type="segment"` draws them as a segmented control.
+ * `placement="left"` stacks line tabs in a column beside the panes, as for a settings page.
  */
 import { TabsIndicator, TabsList, TabsRoot, TabsTrigger } from 'reka-ui'
 import { computed, provide, ref } from 'vue'
@@ -15,7 +16,8 @@ const props = withDefaults(defineProps<{
   size?: Size
   /** Spreads line tabs across the full width. */
   justify?: 'start' | 'stretch'
-}>(), { type: 'line', size: 'medium', justify: 'start' })
+  placement?: 'top' | 'left'
+}>(), { type: 'line', size: 'medium', justify: 'start', placement: 'top' })
 
 const emit = defineEmits<{ 'update:value': [value: string] }>()
 const panes = ref<PaneInfo[]>([])
@@ -36,7 +38,13 @@ function select(value: string | number) {
 </script>
 
 <template>
-  <TabsRoot class="mu-tabs" :class="[`mu-tabs--${type}`, `mu-tabs--${size}`]" :model-value="current" @update:model-value="select">
+  <TabsRoot
+    class="mu-tabs"
+    :class="[`mu-tabs--${type}`, `mu-tabs--${size}`, `mu-tabs--${placement}`]"
+    :orientation="placement === 'left' ? 'vertical' : 'horizontal'"
+    :model-value="current"
+    @update:model-value="select"
+  >
     <div class="mu-tabs__bar">
       <TabsList class="mu-tabs__list" :class="{ 'mu-tabs__list--stretch': justify === 'stretch' }">
         <TabsIndicator v-if="type === 'line'" class="mu-tabs__indicator" />
@@ -95,6 +103,25 @@ function select(value: string | number) {
   background: var(--primary);
   transform: translateX(var(--reka-tabs-indicator-position));
   transition: width 0.2s, transform 0.2s;
+}
+
+/* line, on the left */
+.mu-tabs--left { display: flex; align-items: flex-start; }
+.mu-tabs--left > .mu-tabs__bar { flex: none; min-width: 120px; }
+.mu-tabs--left > .mu-tab-pane { flex: 1; min-width: 0; padding: 0 0 0 24px; }
+/* Child selectors throughout, so tabs nested in a pane keep their own layout. */
+.mu-tabs--line.mu-tabs--left > .mu-tabs__bar > .mu-tabs__list { flex-direction: column; gap: 2px; border-bottom: 0; border-right: 1px solid var(--line); }
+.mu-tabs--line.mu-tabs--left > .mu-tabs__bar > .mu-tabs__list > .mu-tabs__tab { justify-content: flex-start; height: 36px; padding: 0 16px 0 4px; }
+
+.mu-tabs--left > .mu-tabs__bar > .mu-tabs__list > .mu-tabs__indicator {
+  top: 0;
+  right: -1px;
+  bottom: auto;
+  left: auto;
+  width: 2px;
+  height: var(--reka-tabs-indicator-size);
+  transform: translateY(var(--reka-tabs-indicator-position));
+  transition: height 0.2s, transform 0.2s;
 }
 
 /* segment */

@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { Toggle } from '@mushin/ui'
-import { NCheckbox, NCheckboxGroup, NForm, NFormItem, NSpace } from 'naive-ui'
+import { Checkbox, Form, FormItem, Toggle } from '@mushin/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { OPTIONAL_PAGES, prefs } from '../../prefs'
@@ -11,32 +10,47 @@ const shownPages = computed({
   get: () => OPTIONAL_PAGES.filter((page) => !prefs.hiddenPages.includes(page)),
   set: (shown: string[]) => (prefs.hiddenPages = OPTIONAL_PAGES.filter((page) => !shown.includes(page))),
 })
+
+function showPage(page: string, shown: boolean) {
+  shownPages.value = shown ? [...shownPages.value, page] : shownPages.value.filter((item) => item !== page)
+}
 </script>
 
 <template>
-  <NForm label-placement="top" class="form">
-    <NFormItem :label="t('settings.features.agentOpen')" :feedback="t('settings.features.agentOpenHelp')">
+  <Form class="form">
+    <FormItem :label="t('settings.features.agentOpen')" :feedback="t('settings.features.agentOpenHelp')">
       <Toggle v-model:value="prefs.agentOpenOnStart" />
-    </NFormItem>
-    <NFormItem :label="t('settings.features.pages')" :feedback="t('settings.features.pagesHelp')">
-      <NCheckboxGroup v-model:value="shownPages">
-        <NSpace>
-          <NCheckbox v-for="page in OPTIONAL_PAGES" :key="page" :value="page" :label="t(`nav.${page}`)" />
-        </NSpace>
-      </NCheckboxGroup>
-    </NFormItem>
-    <NFormItem :label="t('settings.features.plugins')" :show-feedback="false">
+    </FormItem>
+    <FormItem :label="t('settings.features.pages')" :feedback="t('settings.features.pagesHelp')">
+      <div class="pages">
+        <Checkbox
+          v-for="page in OPTIONAL_PAGES"
+          :key="page"
+          :checked="shownPages.includes(page)"
+          @update:checked="(shown) => showPage(page, shown)"
+        >
+          {{ t(`nav.${page}`) }}
+        </Checkbox>
+      </div>
+    </FormItem>
+    <FormItem :label="t('settings.features.plugins')">
       <span class="muted">
         {{ t('settings.features.pluginsHelp') }}
         <RouterLink to="/plugins">{{ t('settings.features.openPlugins') }}</RouterLink>
       </span>
-    </NFormItem>
-  </NForm>
+    </FormItem>
+  </Form>
 </template>
 
 <style scoped>
 .form {
   max-width: 640px;
+}
+
+.pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
 }
 
 .muted {
