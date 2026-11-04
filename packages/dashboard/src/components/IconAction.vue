@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { Button, Tooltip } from '@mushin/ui'
-import type { Component } from 'vue'
 
 /**
  * A row action shown as an icon, with its name as tooltip and accessible label. `icon` is an icon
- * class (`i-lucide-trash-2`); a component still works for pages not yet moved over.
+ * class, such as `i-lucide-trash-2`.
  */
 defineProps<{
-  icon: string | Component
+  icon: string
   label: string
   type?: 'default' | 'primary' | 'error' | 'warning'
   disabled?: boolean
@@ -29,10 +28,8 @@ const emit = defineEmits<{ click: [event: MouseEvent] }>()
         :loading="loading"
         :aria-label="label"
         @click.stop="(event: MouseEvent) => emit('click', event)"
-        :icon="typeof icon === 'string' ? icon : undefined"
-      >
-        <template v-if="typeof icon !== 'string'" #icon><component :is="icon" /></template>
-      </Button>
+        :icon="icon"
+      />
     </template>
     {{ label }}
   </Tooltip>
