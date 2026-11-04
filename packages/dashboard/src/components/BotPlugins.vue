@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { GitNetworkOutline, SettingsOutline } from '@vicons/ionicons5'
 import IconAction from './IconAction.vue'
-import { Toggle, useToast } from '@mushin/ui'
-import { NButton, NCard, NEmpty, NIcon, NList, NListItem, NModal, NSpace, NSpin, NTag, NThing } from 'naive-ui'
+import { Button, Card, Empty, Modal, Spin, Tag, Toggle, useToast } from '@mushin/ui'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -88,66 +86,104 @@ async function save() {
 </script>
 
 <template>
-  <NCard>
-    <NSpin :show="loading">
-      <NList v-if="plugins.length" hoverable>
-        <NListItem v-for="plugin in plugins" :key="plugin.package">
-          <NThing>
-            <template #header>
-              <NSpace align="center" :size="8">
-                <span>{{ localize(plugin.manifest.displayName, locale) || plugin.package }}</span>
-                <StatusBadge v-if="plugin.enabled" :status="plugin.status" :error="plugin.error" />
-                <NTag v-for="platform in plugin.manifest.platforms ?? []" :key="platform" size="tiny" :bordered="false">{{ platform }}</NTag>
-              </NSpace>
-            </template>
-            <template #description>
-              <span class="mono sub">{{ plugin.package }}@{{ plugin.version }}</span>
-            </template>
-            {{ localize(plugin.manifest.description, locale) }}
+  <Card>
+    <Spin :show="loading">
+      <ul v-if="plugins.length" class="list">
+        <li v-for="plugin in plugins" :key="plugin.package" class="item">
+          <div class="main">
+            <div class="head">
+              <span class="name">{{ localize(plugin.manifest.displayName, locale) || plugin.package }}</span>
+              <StatusBadge v-if="plugin.enabled" :status="plugin.status" :error="plugin.error" />
+              <Tag v-for="platform in plugin.manifest.platforms ?? []" :key="platform" size="tiny">{{ platform }}</Tag>
+            </div>
+            <div class="mono sub">{{ plugin.package }}@{{ plugin.version }}</div>
+            <div class="desc">{{ localize(plugin.manifest.description, locale) }}</div>
             <DependencyTags v-if="plugin.dependencies?.requires.some((dep) => dep.problem && dep.problem !== 'not-app')" :deps="{ requires: plugin.dependencies.requires, optional: [] }" :catalog="catalog" />
             <div v-if="flowsBy[plugin.package]?.length" class="flows">
               <span class="sub">{{ t('botPlugins.madeFlows') }}</span>
               <RouterLink v-for="flow in flowsBy[plugin.package]" :key="flow.id" :to="`/flows/${flow.id}`">
-                <NTag size="small" :bordered="false" type="info" class="clickable">
-                  <template #icon><NIcon><GitNetworkOutline /></NIcon></template>
-                  {{ flow.name }}
-                </NTag>
+                <Tag size="small" type="info" icon="i-lucide-network" class="clickable">{{ flow.name }}</Tag>
               </RouterLink>
               <span v-if="plugin.package === '@mushin/bot-plugin-llm-chat'" class="sub">{{ t('botPlugins.llmChatHint') }}</span>
             </div>
-          </NThing>
-          <template #suffix>
-            <NSpace :wrap="false" align="center">
-              <IconAction v-if="hasSettings(plugin)" :icon="SettingsOutline" :label="t('common.configure')" @click="configure(plugin)" />
-              <Toggle variant="button" :value="plugin.enabled" :loading="busy === plugin.package" @update:value="(value: boolean) => toggle(plugin, value)" />
-            </NSpace>
-          </template>
-        </NListItem>
-      </NList>
-      <NEmpty v-else-if="!loading" :description="t('plugins.noBotPlugins')" />
-    </NSpin>
+          </div>
+          <div class="actions">
+            <IconAction v-if="hasSettings(plugin)" icon="i-lucide-settings" :label="t('common.configure')" @click="configure(plugin)" />
+            <Toggle variant="button" :value="plugin.enabled" :loading="busy === plugin.package" @update:value="(value: boolean) => toggle(plugin, value)" />
+          </div>
+        </li>
+      </ul>
+      <Empty v-else-if="!loading" :description="t('plugins.noBotPlugins')" />
+    </Spin>
 
-    <NModal
+    <Modal
       :show="!!editing"
-      preset="card"
       :title="editing ? localize(editing.manifest.displayName, locale) || editing.package : ''"
-      style="width: min(560px, calc(100vw - 32px))"
+      :width="560"
       @update:show="(value: boolean) => !value && (editing = undefined)"
     >
       <SchemaForm v-if="editing?.configSchema" v-model="draft" :schema="editing.configSchema" />
       <template #footer>
-        <NSpace justify="end">
-          <NButton @click="editing = undefined">{{ t('common.cancel') }}</NButton>
-          <NButton type="primary" :loading="saving" @click="save">{{ t('common.save') }}</NButton>
-        </NSpace>
+        <Button @click="editing = undefined">{{ t('common.cancel') }}</Button>
+        <Button type="primary" :loading="saving" @click="save">{{ t('common.save') }}</Button>
       </template>
-    </NModal>
-  </NCard>
+    </Modal>
+  </Card>
 </template>
 
 <style scoped>
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 4px;
+}
+
+.item + .item {
+  border-top: 1px solid var(--line);
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.desc {
+  margin-top: 2px;
+  font-size: 13.5px;
+  color: var(--fg2);
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
 .sub {
-  opacity: 0.55;
+  font-size: 12px;
+  color: var(--fg3);
 }
 
 .flows {

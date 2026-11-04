@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NAlert } from 'naive-ui'
+import { Alert } from '@mushin/ui'
 import { markRaw, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call, on } from '../api'
@@ -32,7 +32,7 @@ onBeforeUnmount(off)
 </script>
 
 <template>
-  <NAlert v-if="error" type="warning" :show-icon="false" class="error">{{ error }}</NAlert>
+  <Alert v-if="error" type="warning" :show-icon="false" class="error">{{ error }}</Alert>
   <LogViewer :lines="lines" :empty-text="t('botLogs.empty')" @clear="lines = []" />
 </template>
 

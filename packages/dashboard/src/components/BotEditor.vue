@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { useToast } from '@mushin/ui'
-import { NAlert, NButton, NCheckbox, NCheckboxGroup, NForm, NFormItem, NInput, NModal, NSelect, NSpace } from 'naive-ui'
+import { Alert, Button, Checkbox, Form, FormItem, Input, Modal, Select, useToast } from '@mushin/ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../api'
@@ -21,6 +20,7 @@ const adapterType = ref('onebot')
 const config = ref<Record<string, any>>({})
 const plugins = ref<string[]>(['@mushin/bot-plugin-llm-chat'])
 const catalog = ref<CatalogEntry[]>([])
+const togglePlugin = (name: string, on: boolean) => (plugins.value = on ? [...plugins.value, name] : plugins.value.filter((item) => item !== name))
 const saving = ref(false)
 
 watch(show, async (visible) => {
@@ -57,47 +57,56 @@ async function create() {
 </script>
 
 <template>
-  <NModal v-model:show="show" preset="card" :title="t('bots.add')" style="width: min(600px, calc(100vw - 32px))">
-    <NForm label-placement="top">
-      <NFormItem :label="t('common.name')" required>
-        <NInput v-model:value="name" :placeholder="t('bots.namePlaceholder')" />
-      </NFormItem>
-      <NFormItem :label="t('bots.adapter')" required>
-        <NSelect v-model:value="adapterType" :options="adapterOptions" />
-      </NFormItem>
-    </NForm>
+  <Modal v-model:show="show" :title="t('bots.add')" :width="600">
+    <div class="editor">
+      <Form>
+        <FormItem :label="t('common.name')" required>
+          <Input v-model:value="name" :placeholder="t('bots.namePlaceholder')" />
+        </FormItem>
+        <FormItem :label="t('bots.adapter')" required>
+          <Select v-model:value="adapterType" :options="adapterOptions" />
+        </FormItem>
+      </Form>
 
-    <NAlert v-if="adapterType === 'onebot'" type="info" :show-icon="false" class="hint">
-      {{ mode === 'reverse' ? t('bots.napcatReverse') : mode === 'http' ? t('bots.napcatHttp') : t('bots.napcatForward') }}
-    </NAlert>
+      <Alert v-if="adapterType === 'onebot'" type="info" :show-icon="false" class="hint">
+        {{ mode === 'reverse' ? t('bots.napcatReverse') : mode === 'http' ? t('bots.napcatHttp') : t('bots.napcatForward') }}
+      </Alert>
 
-    <SchemaForm v-if="adapter" v-model="config" :schema="adapter.configSchema" :secrets="adapter.secrets" :hidden="hidden" />
+      <SchemaForm v-if="adapter" v-model="config" :schema="adapter.configSchema" :secrets="adapter.secrets" :hidden="hidden" />
 
-    <NForm v-if="catalog.length" label-placement="top">
-      <NFormItem :label="t('bots.initialPlugins')">
-        <NCheckboxGroup v-model:value="plugins">
-          <NSpace vertical>
-            <NCheckbox v-for="entry in catalog" :key="entry.package" :value="entry.package">
+      <Form v-if="catalog.length">
+        <FormItem :label="t('bots.initialPlugins')">
+          <div class="plugins">
+            <Checkbox v-for="entry in catalog" :key="entry.package" :checked="plugins.includes(entry.package)" @update:checked="(on) => togglePlugin(entry.package, on)">
               <strong>{{ localize(entry.manifest.displayName, locale) || entry.package }}</strong>
               <span class="desc"> — {{ localize(entry.manifest.description, locale) }}</span>
-            </NCheckbox>
-          </NSpace>
-        </NCheckboxGroup>
-      </NFormItem>
-    </NForm>
+            </Checkbox>
+          </div>
+        </FormItem>
+      </Form>
+    </div>
 
     <template #footer>
-      <NSpace justify="end">
-        <NButton @click="show = false">{{ t('common.cancel') }}</NButton>
-        <NButton type="primary" :loading="saving" :disabled="!name.trim()" @click="create">{{ t('common.create') }}</NButton>
-      </NSpace>
+      <Button @click="show = false">{{ t('common.cancel') }}</Button>
+      <Button type="primary" :loading="saving" :disabled="!name.trim()" @click="create">{{ t('common.create') }}</Button>
     </template>
-  </NModal>
+  </Modal>
 </template>
 
 <style scoped>
+.plugins {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
 .hint {
-  margin-bottom: 16px;
   white-space: pre-line;
 }
 

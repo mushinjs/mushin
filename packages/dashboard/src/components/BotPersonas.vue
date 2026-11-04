@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { AddOutline, ArrowDownOutline, ArrowUpOutline, TrashOutline } from '@vicons/ionicons5'
-import { Toggle, useToast } from '@mushin/ui'
-import { NAlert, NButton, NCard, NDynamicTags, NEmpty, NForm, NFormItem, NIcon, NInput, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NTag, NTimePicker } from 'naive-ui'
+import { Alert, Button, Card, Empty, Form, FormItem, Input, RadioButton, RadioGroup, Select, Spin, Tag, TagsInput, TimeInput, Toggle, useToast } from '@mushin/ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -123,97 +121,96 @@ async function tryIt() {
 </script>
 
 <template>
-  <NSpin :show="loading">
-    <NAlert v-if="available === false" type="warning" :title="t('personas.unavailable')">
+  <Spin :show="loading">
+    <Alert v-if="available === false" type="warning" :title="t('personas.unavailable')">
       {{ t('personas.unavailableHint') }}
       <RouterLink to="/plugins?highlight=@mushin/plugin-personas">{{ t('permissions.openPlugins') }}</RouterLink>
-    </NAlert>
-    <NCard v-else-if="!personas.length && !loading">
-      <NEmpty :description="t('botPersonas.noPersonas')">
+    </Alert>
+    <Card v-else-if="!personas.length && !loading">
+      <Empty :description="t('botPersonas.noPersonas')">
         <template #extra>
-          <RouterLink to="/personas"><NButton type="primary">{{ t('botPersonas.openPersonas') }}</NButton></RouterLink>
+          <RouterLink to="/personas"><Button type="primary">{{ t('botPersonas.openPersonas') }}</Button></RouterLink>
         </template>
-      </NEmpty>
-    </NCard>
-    <NSpace v-else vertical :size="16">
-      <NCard :title="t('botPersonas.title')">
+      </Empty>
+    </Card>
+    <div v-else class="flex flex-col gap-[16px]">
+      <Card :title="t('botPersonas.title')">
         <p class="muted lead">{{ t('botPersonas.lead') }}</p>
-        <NForm label-placement="top">
-          <NFormItem :label="t('botPersonas.default')" :feedback="t('botPersonas.defaultHint')">
-            <NSelect v-model:value="settings.default" :options="personaOptions" clearable :placeholder="t('botPersonas.none')" />
-          </NFormItem>
-          <NFormItem :label="t('botPersonas.rules')" :feedback="t('botPersonas.rulesHint')">
+        <Form>
+          <FormItem :label="t('botPersonas.default')" :feedback="t('botPersonas.defaultHint')">
+            <Select v-model:value="settings.default" :options="personaOptions" clearable :placeholder="t('botPersonas.none')" />
+          </FormItem>
+          <FormItem :label="t('botPersonas.rules')" :feedback="t('botPersonas.rulesHint')">
             <div class="rules">
               <div v-for="(rule, index) in settings.rules" :key="rule.id ?? index" class="rule">
-                <NSelect v-model:value="rule.when" :options="whenOptions" class="when" />
-                <NDynamicTags v-if="rule.when === 'group' || rule.when === 'user'" v-model:value="rule.ids" class="target" />
-                <NSpace v-else-if="rule.when === 'time'" :size="6" align="center" class="target" :wrap="false">
-                  <NTimePicker v-model:formatted-value="rule.from" value-format="HH:mm" format="HH:mm" size="small" clearable />
+                <Select v-model:value="rule.when" :options="whenOptions" class="when" />
+                <TagsInput v-if="rule.when === 'group' || rule.when === 'user'" v-model:value="rule.ids" class="target" />
+                <div v-else-if="rule.when === 'time'" class="flex gap-[6px] items-center target">
+                  <TimeInput v-model:value="rule.from" size="small" clearable />
                   <span>–</span>
-                  <NTimePicker v-model:formatted-value="rule.to" value-format="HH:mm" format="HH:mm" size="small" clearable />
-                </NSpace>
+                  <TimeInput v-model:value="rule.to" size="small" clearable />
+                </div>
                 <span v-else class="target muted">{{ t('botPersonas.allPrivate') }}</span>
                 <span class="arrow">→</span>
-                <NSelect v-model:value="rule.persona" :options="personaOptions" class="persona" />
-                <NSpace :size="2" :wrap="false">
-                  <IconAction :icon="ArrowUpOutline" :label="t('botPersonas.earlier')" :disabled="index === 0" @click="move(index, -1)" />
-                  <IconAction :icon="ArrowDownOutline" :label="t('botPersonas.later')" :disabled="index === settings.rules.length - 1" @click="move(index, 1)" />
-                  <IconAction :icon="TrashOutline" :label="t('common.remove')" type="error" @click="settings.rules.splice(index, 1)" />
-                </NSpace>
+                <Select v-model:value="rule.persona" :options="personaOptions" class="persona" />
+                <div class="flex gap-[2px] items-center">
+                  <IconAction icon="i-lucide-arrow-up" :label="t('botPersonas.earlier')" :disabled="index === 0" @click="move(index, -1)" />
+                  <IconAction icon="i-lucide-arrow-down" :label="t('botPersonas.later')" :disabled="index === settings.rules.length - 1" @click="move(index, 1)" />
+                  <IconAction icon="i-lucide-trash-2" :label="t('common.remove')" type="error" @click="settings.rules.splice(index, 1)" />
+                </div>
               </div>
-              <NButton size="small" dashed @click="addRule">
-                <template #icon><NIcon><AddOutline /></NIcon></template>
+              <Button size="small" dashed icon="i-lucide-plus" @click="addRule">
                 {{ t('botPersonas.addRule') }}
-              </NButton>
+              </Button>
             </div>
-          </NFormItem>
-          <NFormItem :label="t('botPersonas.switchable')" :feedback="t('botPersonas.switchableHint')">
-            <NSelect v-model:value="settings.personas" :options="personaOptions" multiple clearable />
-          </NFormItem>
-          <NFormItem :label="t('botPersonas.command')" :feedback="t('botPersonas.commandHint')">
-            <NSpace align="center">
+          </FormItem>
+          <FormItem :label="t('botPersonas.switchable')" :feedback="t('botPersonas.switchableHint')">
+            <Select v-model:value="settings.personas" :options="personaOptions" multiple clearable />
+          </FormItem>
+          <FormItem :label="t('botPersonas.command')" :feedback="t('botPersonas.commandHint')">
+            <div class="flex flex-wrap gap-x-3 gap-y-2 items-center">
               <Toggle v-model:value="settings.command.enabled" />
-              <NRadioGroup v-model:value="settings.command.role" size="small" :disabled="!settings.command.enabled">
-                <NRadioButton value="user">{{ t('botPersonas.roleUser') }}</NRadioButton>
-                <NRadioButton value="admin">{{ t('botPersonas.roleAdmin') }}</NRadioButton>
-                <NRadioButton value="master">{{ t('botPersonas.roleMaster') }}</NRadioButton>
-              </NRadioGroup>
-            </NSpace>
-          </NFormItem>
-        </NForm>
-        <NSpace justify="end">
-          <NButton type="primary" :loading="saving" @click="save">{{ t('common.save') }}</NButton>
-        </NSpace>
-      </NCard>
+              <RadioGroup v-model:value="settings.command.role" size="small" :disabled="!settings.command.enabled">
+                <RadioButton value="user">{{ t('botPersonas.roleUser') }}</RadioButton>
+                <RadioButton value="admin">{{ t('botPersonas.roleAdmin') }}</RadioButton>
+                <RadioButton value="master">{{ t('botPersonas.roleMaster') }}</RadioButton>
+              </RadioGroup>
+            </div>
+          </FormItem>
+        </Form>
+        <div class="flex flex-wrap gap-x-3 gap-y-2 items-center justify-end">
+          <Button type="primary" :loading="saving" @click="save">{{ t('common.save') }}</Button>
+        </div>
+      </Card>
 
-      <NCard v-if="settings.chats.length" :title="t('botPersonas.switchedChats')">
+      <Card v-if="settings.chats.length" :title="t('botPersonas.switchedChats')">
         <div v-for="item in settings.chats" :key="item.chat" class="chat">
           <span>{{ chatLabel(item.chat) }}</span>
-          <NTag size="small" :bordered="false" type="info">{{ item.persona.name }}</NTag>
-          <NButton size="tiny" quaternary @click="resetChat(item.chat)">{{ t('botPersonas.resetChat') }}</NButton>
+          <Tag size="small" type="info">{{ item.persona.name }}</Tag>
+          <Button size="tiny" quaternary @click="resetChat(item.chat)">{{ t('botPersonas.resetChat') }}</Button>
         </div>
-      </NCard>
+      </Card>
 
-      <NCard :title="t('botPersonas.tryTitle')">
-        <NSpace align="end">
-          <NFormItem :label="t('botPersonas.tryGroup')" :show-feedback="false">
-            <NInput v-model:value="probe.group" :placeholder="t('botPersonas.tryPrivate')" clearable style="width: 160px" />
-          </NFormItem>
-          <NFormItem :label="t('botPersonas.tryUser')" :show-feedback="false">
-            <NInput v-model:value="probe.user" style="width: 130px" />
-          </NFormItem>
-          <NFormItem :label="t('botPersonas.tryUserName')" :show-feedback="false">
-            <NInput v-model:value="probe.userName" style="width: 130px" />
-          </NFormItem>
-          <NFormItem :label="t('botPersonas.tryTime')" :show-feedback="false">
-            <NTimePicker v-model:formatted-value="probe.time" value-format="HH:mm" format="HH:mm" clearable :placeholder="t('botPersonas.now')" />
-          </NFormItem>
-          <NButton :loading="probing" @click="tryIt">{{ t('botPersonas.tryButton') }}</NButton>
-        </NSpace>
+      <Card :title="t('botPersonas.tryTitle')">
+        <div class="flex flex-wrap gap-x-3 gap-y-2 items-end">
+          <FormItem :label="t('botPersonas.tryGroup')">
+            <Input v-model:value="probe.group" :placeholder="t('botPersonas.tryPrivate')" clearable style="width: 160px" />
+          </FormItem>
+          <FormItem :label="t('botPersonas.tryUser')">
+            <Input v-model:value="probe.user" style="width: 130px" />
+          </FormItem>
+          <FormItem :label="t('botPersonas.tryUserName')">
+            <Input v-model:value="probe.userName" style="width: 130px" />
+          </FormItem>
+          <FormItem :label="t('botPersonas.tryTime')">
+            <TimeInput v-model:value="probe.time" clearable :placeholder="t('botPersonas.now')" />
+          </FormItem>
+          <Button :loading="probing" @click="tryIt">{{ t('botPersonas.tryButton') }}</Button>
+        </div>
         <div v-if="result" class="result">
           <template v-if="result.persona">
             <p>
-              <NTag type="info" :bordered="false">{{ result.persona.name }}</NTag>
+              <Tag type="info">{{ result.persona.name }}</Tag>
               <span class="muted">
                 {{ result.reason === 'rule' ? t('botPersonas.byRule', { when: t(`botPersonas.when.${result.rule?.when}`) }) : t(`botPersonas.reason.${result.reason}`) }}
               </span>
@@ -222,9 +219,9 @@ async function tryIt() {
           </template>
           <p v-else class="muted">{{ t('botPersonas.noMatch') }}</p>
         </div>
-      </NCard>
-    </NSpace>
-  </NSpin>
+      </Card>
+    </div>
+  </Spin>
 </template>
 
 <style scoped>

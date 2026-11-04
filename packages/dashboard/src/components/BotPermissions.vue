@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { useToast } from '@mushin/ui'
-import { NAlert, NButton, NCard, NDynamicTags, NForm, NFormItem, NSpace, NSpin } from 'naive-ui'
+import { Alert, Button, Card, Form, FormItem, Spin, TagsInput, useToast } from '@mushin/ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -69,51 +68,49 @@ async function save() {
 </script>
 
 <template>
-  <NSpin :show="loading">
-    <NAlert v-if="available === false" type="warning" :title="t('permissions.unavailable')">
+  <Spin :show="loading">
+    <Alert v-if="available === false" type="warning" :title="t('permissions.unavailable')">
       {{ t('permissions.unavailableHint') }}
       <RouterLink to="/plugins?highlight=@mushin/plugin-permissions">{{ t('permissions.openPlugins') }}</RouterLink>
-    </NAlert>
-    <NSpace v-else vertical :size="16">
-      <NCard :title="t('permissions.title')">
-        <p class="muted lead">{{ t('permissions.lead') }}</p>
-        <NForm label-placement="top">
-          <NFormItem :label="t('permissions.masters')" :feedback="t('permissions.mastersHint')">
-            <NDynamicTags v-model:value="masters" />
-          </NFormItem>
-          <NFormItem :label="t('permissions.admins')" :feedback="t('permissions.adminsHint')">
-            <NDynamicTags v-model:value="admins" />
-          </NFormItem>
-        </NForm>
-        <NAlert v-if="overlap.length" type="info" :show-icon="false" class="note">{{ t('permissions.overlap', { ids: overlap.join('、') }) }}</NAlert>
-        <NSpace justify="end">
-          <NButton type="primary" :loading="saving" @click="save">{{ t('common.save') }}</NButton>
-        </NSpace>
-      </NCard>
+    </Alert>
+    <div v-else class="flex flex-col gap-[16px]">
+      <Card :title="t('permissions.title')">
+        <div class="flex flex-col gap-[18px]">
+          <p class="muted lead">{{ t('permissions.lead') }}</p>
+          <Form>
+            <FormItem :label="t('permissions.masters')" :feedback="t('permissions.mastersHint')">
+              <TagsInput v-model:value="masters" />
+            </FormItem>
+            <FormItem :label="t('permissions.admins')" :feedback="t('permissions.adminsHint')">
+              <TagsInput v-model:value="admins" />
+            </FormItem>
+          </Form>
+          <Alert v-if="overlap.length" type="info" :show-icon="false" class="note">{{ t('permissions.overlap', { ids: overlap.join('、') }) }}</Alert>
+          <div class="flex flex-wrap gap-x-3 gap-y-2 items-center justify-end">
+            <Button type="primary" :loading="saving" @click="save">{{ t('common.save') }}</Button>
+          </div>
+        </div>
+      </Card>
       <BotChatPermissions v-if="chats" v-model:chat-commands="chatCommands" :bot="bot" />
-      <NAlert v-else type="info" :title="t('chatPermissions.title')">
+      <Alert v-else type="info" :title="t('chatPermissions.title')">
         {{ t('chatPermissions.needsDatabase') }}
         <RouterLink to="/plugins?highlight=@mushin/plugin-database">{{ t('permissions.openPlugins') }}</RouterLink>
-      </NAlert>
-      <NCard :title="t('permissions.usageTitle')">
+      </Alert>
+      <Card :title="t('permissions.usageTitle')">
         <ul class="usage">
           <li>{{ t('permissions.usageCommands') }}</li>
           <li>{{ t('permissions.usageNode') }}</li>
           <li>{{ groupRoles ? t('permissions.groupRolesYes') : t('permissions.groupRolesNo') }}</li>
           <li>{{ t('permissions.usageAgent') }}</li>
         </ul>
-      </NCard>
-    </NSpace>
-  </NSpin>
+      </Card>
+    </div>
+  </Spin>
 </template>
 
 <style scoped>
 .lead {
-  margin: 0 0 12px;
-}
-
-.note {
-  margin-bottom: 12px;
+  margin: 0;
 }
 
 .usage {

@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { OpenOutline, StopCircleOutline } from '@vicons/ionicons5'
-import { useConfirm, useToast } from '@mushin/ui'
-import { NButton, NEmpty, NIcon, NSelect, NSpin, NTooltip } from 'naive-ui'
+import { Button, Empty, Select, Spin, Tooltip, useConfirm, useToast } from '@mushin/ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -127,12 +125,12 @@ const open = (run: FlowRunInfo) => router.push({ path: `/flows/${run.flowId}`, q
   <div class="runs">
     <p class="muted lead">{{ t('runs.lead') }}</p>
     <div class="toolbar">
-      <NSelect :value="flow ?? ''" size="small" class="filter" :options="flowOptions" @update:value="(value: string) => (flow = value || null)" />
-      <NSelect :value="status ?? ''" size="small" class="filter" :options="statusOptions" @update:value="(value: string) => (status = (value || null) as FlowRunStatus | null)" />
+      <Select :value="flow ?? ''" size="small" class="filter" :options="flowOptions" @update:value="(value: string) => (flow = value || null)" />
+      <Select :value="status ?? ''" size="small" class="filter" :options="statusOptions" @update:value="(value: string) => (status = (value || null) as FlowRunStatus | null)" />
     </div>
 
-    <NSpin :show="loading && !runs.length">
-      <NEmpty v-if="!runs.length && !loading" :description="t('runs.empty')" class="empty" />
+    <Spin :show="loading && !runs.length">
+      <Empty v-if="!runs.length && !loading" :description="t('runs.empty')" class="empty" />
       <ul v-else class="list">
         <li
           v-for="run in runs"
@@ -154,29 +152,25 @@ const open = (run: FlowRunInfo) => router.push({ path: `/flows/${run.flowId}`, q
           <span class="time muted">{{ formatTime(run.startedAt) }}</span>
           <span class="took muted">{{ duration(elapsed(run)) }}</span>
           <span class="actions" @click.stop>
-            <NTooltip v-if="isLive(run)">
+            <Tooltip v-if="isLive(run)">
               <template #trigger>
-                <NButton size="tiny" quaternary circle type="error" :aria-label="t('runs.stop')" @click="stop(run)">
-                  <template #icon><NIcon><StopCircleOutline /></NIcon></template>
-                </NButton>
+                <Button size="tiny" quaternary circle type="error" :aria-label="t('runs.stop')" icon="i-lucide-circle-stop" @click="stop(run)" />
               </template>
               {{ t('runs.stop') }}
-            </NTooltip>
-            <NTooltip>
+            </Tooltip>
+            <Tooltip>
               <template #trigger>
-                <NButton size="tiny" quaternary circle :aria-label="t('runs.open')" @click="open(run)">
-                  <template #icon><NIcon><OpenOutline /></NIcon></template>
-                </NButton>
+                <Button size="tiny" quaternary circle :aria-label="t('runs.open')" icon="i-lucide-external-link" @click="open(run)" />
               </template>
               {{ t('runs.open') }}
-            </NTooltip>
+            </Tooltip>
           </span>
         </li>
       </ul>
       <div v-if="more" class="more">
-        <NButton size="small" :loading="loading" @click="load(true)">{{ t('runs.loadMore') }}</NButton>
+        <Button size="small" :loading="loading" @click="load(true)">{{ t('runs.loadMore') }}</Button>
       </div>
-    </NSpin>
+    </Spin>
   </div>
 </template>
 

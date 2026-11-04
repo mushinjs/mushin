@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { AddOutline, AlertCircleOutline, ArrowBackOutline, ChatbubblesOutline, ArrowForwardOutline, PlayOutline, SearchOutline, StopOutline, TimeOutline } from '@vicons/ionicons5'
-import { useToast } from '@mushin/ui'
-import { NButton, NEmpty, NIcon, NInput } from 'naive-ui'
+import { Button, Empty, Input, useToast } from '@mushin/ui'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -108,16 +106,15 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
 <template>
   <div class="page">
     <PageHeader :title="t('nav.bots')" :lead="t('bots.lead')">
-      <NButton type="primary" data-agent-target="bots.add" @click="showCreate = true">
-        <template #icon><NIcon><AddOutline /></NIcon></template>
+      <Button type="primary" data-agent-target="bots.add" icon="i-lucide-plus" @click="showCreate = true">
         {{ t('bots.add') }}
-      </NButton>
+      </Button>
     </PageHeader>
 
     <div v-if="data.bots.length > 1" class="toolbar">
-      <NInput v-model:value="query" clearable :placeholder="t('bots.search')" class="search">
-        <template #prefix><NIcon><SearchOutline /></NIcon></template>
-      </NInput>
+      <Input v-model:value="query" clearable :placeholder="t('bots.search')" class="search">
+        <template #prefix><span class="i-lucide-search" /></template>
+      </Input>
       <div class="chips" role="radiogroup" :aria-label="t('bots.filterLabel')">
         <button
           v-for="item in filters"
@@ -169,50 +166,45 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
 
         <div class="bot-body">
           <div class="conn" :title="connectionOf(bot).address">
-            <NIcon class="conn-icon" :size="15">
-              <ArrowBackOutline v-if="connectionOf(bot).mode === 'ws-reverse'" />
-              <ArrowForwardOutline v-else />
-            </NIcon>
+            <span class="conn-icon text-[15px]" :class="connectionOf(bot).mode === 'ws-reverse' ? 'i-lucide-arrow-left' : 'i-lucide-arrow-right'" />
             <span class="mode">{{ connectionOf(bot).tag }}</span>
             <span class="mono address">{{ connectionOf(bot).address }}</span>
           </div>
           <div v-if="stateOf(bot) === 'problem'" class="note bad" :title="bot.error">
-            <NIcon :size="15"><AlertCircleOutline /></NIcon>
+            <span class="i-lucide-circle-alert note-icon text-[15px]" />
             <span class="clamp">{{ bot.error || t('bots.state.problem') }}</span>
           </div>
           <RouterLink v-else-if="stateOf(bot) === 'online'" :to="`/bots/${bot.id}/runs`" class="note activity" @click.stop>
             <BotActivity :bot-id="bot.id" />
           </RouterLink>
           <div v-else class="note">
-            <NIcon :size="15"><TimeOutline /></NIcon>
+            <span class="i-lucide-clock text-[15px]" />
             <span>{{ stateOf(bot) === 'connecting' ? t('bots.connectingHint') : stateOf(bot) === 'stopped' ? t('bots.stoppedHint') : t('bots.offlineHint') }}</span>
           </div>
         </div>
 
         <div class="bot-foot" @click.stop>
           <span>{{ t('bots.pluginCount', enabledPlugins(bot)) }}</span>
-          <NButton v-if="bot.enabled" size="small" quaternary :loading="busy === bot.id" @click="toggle(bot, false)">
-            <template #icon><NIcon><StopOutline /></NIcon></template>
+          <Button v-if="bot.enabled" size="small" quaternary :loading="busy === bot.id" icon="i-lucide-square" @click="toggle(bot, false)">
             {{ t('common.stop') }}
-          </NButton>
-          <NButton v-else size="small" secondary type="primary" :loading="busy === bot.id" @click="toggle(bot, true)">
-            <template #icon><NIcon><PlayOutline /></NIcon></template>
+          </Button>
+          <Button v-else size="small" secondary type="primary" :loading="busy === bot.id" icon="i-lucide-play" @click="toggle(bot, true)">
             {{ t('common.start') }}
-          </NButton>
+          </Button>
         </div>
       </article>
 
       <button v-if="filter === 'all' && !query" type="button" class="add-card" @click="showCreate = true">
-        <span class="plus"><NIcon :size="20"><AddOutline /></NIcon></span>
+        <span class="plus"><span class="i-lucide-plus text-[20px]" /></span>
         <strong>{{ t('bots.add') }}</strong>
         <span class="hint">{{ t('bots.addHint') }}</span>
       </button>
     </div>
 
-    <NEmpty v-if="data.bots.length && !shown.length" :description="t('bots.noMatch')" class="no-match" />
+    <Empty v-if="data.bots.length && !shown.length" :description="t('bots.noMatch')" class="no-match" />
 
-    <EmptyState v-else-if="!data.bots.length && data.loadedBots" :icon="ChatbubblesOutline" :title="t('bots.emptyTitle')" :hint="t('bots.emptyHint')">
-      <NButton type="primary" @click="showCreate = true">{{ t('bots.add') }}</NButton>
+    <EmptyState v-else-if="!data.bots.length && data.loadedBots" icon="i-lucide-messages-square" :title="t('bots.emptyTitle')" :hint="t('bots.emptyHint')">
+      <Button type="primary" @click="showCreate = true">{{ t('bots.add') }}</Button>
     </EmptyState>
 
     <BotEditor v-model:show="showCreate" @created="(bot) => router.push(`/bots/${bot.id}`)" />
@@ -454,7 +446,7 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
   color: var(--bad);
 }
 
-.note.bad .n-icon {
+.note.bad .note-icon {
   margin-top: 2px;
 }
 

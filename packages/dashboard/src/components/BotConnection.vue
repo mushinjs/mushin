@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { useToast } from '@mushin/ui'
-import { NAlert, NCard, NForm, NFormItem, NInput, NSelect } from 'naive-ui'
+import { Alert, Card, Form, FormItem, Input, Select, useToast } from '@mushin/ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../api'
@@ -69,41 +68,41 @@ async function save() {
 </script>
 
 <template>
-  <NCard>
-    <NForm label-placement="top">
-      <NFormItem :label="t('common.name')">
-        <NInput v-model:value="name" />
-      </NFormItem>
-    </NForm>
+  <Card>
+    <div class="flex flex-col gap-[18px]">
+      <Form>
+        <FormItem :label="t('common.name')">
+          <Input v-model:value="name" />
+        </FormItem>
+      </Form>
 
-    <NAlert v-if="bot.adapter.type === 'onebot'" type="info" :show-icon="false" class="hint">
-      <template v-if="mode === 'reverse'">
-        {{ t('bots.napcatReverse') }}
-        <div class="url mono">{{ reverseUrl }}</div>
-      </template>
-      <template v-else-if="mode === 'http'">
-        {{ t('bots.napcatHttp') }}
-        <div class="url mono">{{ reverseUrl.replace(/^ws/, 'http') }}</div>
-      </template>
-      <template v-else>{{ t('bots.napcatForward') }}</template>
-    </NAlert>
+      <Alert v-if="bot.adapter.type === 'onebot'" type="info" :show-icon="false" class="hint">
+        <template v-if="mode === 'reverse'">
+          {{ t('bots.napcatReverse') }}
+          <div class="url mono">{{ reverseUrl }}</div>
+        </template>
+        <template v-else-if="mode === 'http'">
+          {{ t('bots.napcatHttp') }}
+          <div class="url mono">{{ reverseUrl.replace(/^ws/, 'http') }}</div>
+        </template>
+        <template v-else>{{ t('bots.napcatForward') }}</template>
+      </Alert>
 
-    <SchemaForm v-if="adapter" v-model="config" :schema="adapter.configSchema" :secrets="adapter.secrets" :hidden="hidden" />
+      <SchemaForm v-if="adapter" v-model="config" :schema="adapter.configSchema" :secrets="adapter.secrets" :hidden="hidden" />
 
-    <NForm label-placement="top">
-      <NFormItem :label="t('bot.defaultProvider')" :feedback="t('bot.defaultProviderHint')">
-        <NSelect v-model:value="provider" :options="providerOptions" clearable :placeholder="t('bot.useGlobalDefault')" />
-      </NFormItem>
-    </NForm>
-
-  </NCard>
+      <Form>
+        <FormItem :label="t('bot.defaultProvider')" :feedback="t('bot.defaultProviderHint')">
+          <Select v-model:value="provider" :options="providerOptions" clearable :placeholder="t('bot.useGlobalDefault')" />
+        </FormItem>
+      </Form>
+    </div>
+  </Card>
 
   <SaveBar :show="dirty" :saving="saving" :text="t('bot.unsaved')" :discard-text="t('bot.discard')" :save-text="t('bot.saveAndRestart')" @discard="reset" @save="save" />
 </template>
 
 <style scoped>
 .hint {
-  margin-bottom: 16px;
   white-space: pre-line;
 }
 
