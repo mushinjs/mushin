@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { useToast } from '@mushin/ui'
-import { NButton, NCard, NTabPane, NTabs } from 'naive-ui'
+import { Button, Card, TabPane, Tabs, useToast } from '@mushin/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAgentStore } from '../../stores/agent'
@@ -77,25 +76,25 @@ async function tryAsk() {
 <template>
   <div class="styles">
     <p class="hint">{{ t('agentPage.styles.lead') }}</p>
-    <NCard v-for="example in examples" :key="example.id" size="small" :title="t(`agentPage.styles.kind.${example.id}`)">
+    <Card v-for="example in examples" :key="example.id" size="small" :title="t(`agentPage.styles.kind.${example.id}`)">
       <template #header-extra>
-        <NButton size="small" secondary @click="tryInDock(example.source)">{{ t('agentPage.styles.try') }}</NButton>
+        <Button size="small" secondary @click="tryInDock(example.source)">{{ t('agentPage.styles.try') }}</Button>
       </template>
-      <NTabs type="segment" size="small" default-value="preview">
-        <NTabPane name="preview" :tab="t('agentPage.styles.preview')">
+      <Tabs type="segment" size="small" default-value="preview">
+        <TabPane name="preview" :tab="t('agentPage.styles.preview')">
           <div class="preview"><AgentMessage :text="example.source" /></div>
-        </NTabPane>
-        <NTabPane name="source" :tab="t('agentPage.styles.source')">
+        </TabPane>
+        <TabPane name="source" :tab="t('agentPage.styles.source')">
           <pre class="mono source">{{ example.source }}</pre>
-        </NTabPane>
-      </NTabs>
-    </NCard>
-    <NCard size="small" :title="t('agentPage.styles.kind.ask')">
+        </TabPane>
+      </Tabs>
+    </Card>
+    <Card size="small" :title="t('agentPage.styles.kind.ask')">
       <template #header-extra>
-        <NButton size="small" secondary @click="tryAsk">{{ t('agentPage.styles.try') }}</NButton>
+        <Button size="small" secondary @click="tryAsk">{{ t('agentPage.styles.try') }}</Button>
       </template>
       <p class="hint small">{{ t('agentPage.styles.askLead') }}</p>
-    </NCard>
+    </Card>
   </div>
 </template>
 

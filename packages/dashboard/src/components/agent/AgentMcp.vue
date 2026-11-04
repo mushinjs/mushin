@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { AddOutline, CreateOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5'
-import { Toggle, useConfirm, useToast } from '@mushin/ui'
-import { NAlert, NButton, NCard, NDynamicInput, NDynamicTags, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NTag } from 'naive-ui'
+import { Alert, Button, Card, Empty, Form, FormItem, Input, KeyValueInput, Modal, RadioButton, RadioGroup, Select, Spin, Tag, TagsInput, Toggle, useConfirm, useToast } from '@mushin/ui'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -151,27 +149,26 @@ const statusType = { connected: 'success', connecting: 'info', error: 'error', s
 
 <template>
   <div class="mcp">
-    <NAlert v-if="available === false" type="warning" :title="t('agentPage.mcp.unavailable')">
+    <Alert v-if="available === false" type="warning" :title="t('agentPage.mcp.unavailable')">
       {{ t('agentPage.mcp.unavailableHint') }}
       <RouterLink to="/plugins?highlight=@mushin/plugin-mcp">{{ t('permissions.openPlugins') }}</RouterLink>
-    </NAlert>
+    </Alert>
     <template v-else>
       <div class="toolbar">
         <p class="hint">{{ t('agentPage.mcp.lead') }}</p>
-        <NButton type="primary" @click="openNew">
-          <template #icon><NIcon><AddOutline /></NIcon></template>
+        <Button type="primary" icon="i-lucide-plus" @click="openNew">
           {{ t('agentPage.mcp.add') }}
-        </NButton>
+        </Button>
       </div>
-      <NSpin :show="loading && !servers.length">
-        <NEmpty v-if="!servers.length && !loading" :description="t('agentPage.mcp.empty')" />
+      <Spin :show="loading && !servers.length">
+        <Empty v-if="!servers.length && !loading" :description="t('agentPage.mcp.empty')" />
         <div class="list">
-          <NCard v-for="server in servers" :key="server.id" size="small">
+          <Card v-for="server in servers" :key="server.id" size="small">
             <div class="server-head">
               <div class="server-name">
                 <span>{{ server.name }}</span>
-                <NTag size="tiny" :bordered="false">{{ server.transport === 'stdio' ? 'stdio' : 'HTTP' }}</NTag>
-                <NTag size="tiny" :type="statusType[server.status]" :bordered="false">{{ t(`agentPage.mcp.status.${server.status}`) }}</NTag>
+                <Tag size="tiny">{{ server.transport === 'stdio' ? 'stdio' : 'HTTP' }}</Tag>
+                <Tag size="tiny" :type="statusType[server.status]">{{ t(`agentPage.mcp.status.${server.status}`) }}</Tag>
                 <span v-if="server.serverInfo?.name" class="hint small">{{ server.serverInfo.name }} {{ server.serverInfo.version }}</span>
               </div>
               <div class="server-actions">
@@ -182,16 +179,16 @@ const statusType = { connected: 'success', connecting: 'info', error: 'error', s
                   :loading="busy === server.id"
                   @update:value="(enabled: boolean) => run(server.id, () => call('mcp.servers.update', { id: server.id, enabled }))"
                 />
-                <IconAction :icon="RefreshOutline" :label="t('agentPage.mcp.restart')" :disabled="!server.enabled" :loading="busy === server.id" @click="run(server.id, () => call('mcp.servers.restart', { id: server.id }))" />
-                <IconAction :icon="CreateOutline" :label="t('common.edit')" @click="openEdit(server)" />
-                <IconAction :icon="TrashOutline" type="error" :label="t('common.delete')" @click="remove(server)" />
+                <IconAction icon="i-lucide-refresh-cw" :label="t('agentPage.mcp.restart')" :disabled="!server.enabled" :loading="busy === server.id" @click="run(server.id, () => call('mcp.servers.restart', { id: server.id }))" />
+                <IconAction icon="i-lucide-pencil" :label="t('common.edit')" @click="openEdit(server)" />
+                <IconAction icon="i-lucide-trash-2" type="error" :label="t('common.delete')" @click="remove(server)" />
               </div>
             </div>
             <div class="mono hint small endpoint">{{ server.transport === 'stdio' ? [server.command, ...server.args ?? []].join(' ') : server.url }}</div>
-            <NAlert v-if="server.error" type="error" :show-icon="false" class="error">
+            <Alert v-if="server.error" type="error" :show-icon="false" class="error">
               {{ server.error }}
               <pre v-if="server.stderr.length" class="mono stderr">{{ server.stderr.slice(-6).join('\n') }}</pre>
-            </NAlert>
+            </Alert>
             <div v-if="server.tools.length" class="tools">
               <div v-for="tool in server.tools" :key="tool.name" class="tool" :class="{ off: !tool.enabled }">
                 <Toggle variant="button" size="small" :value="tool.enabled" @update:value="(enabled: boolean) => run(server.id, () => call('mcp.tools.update', { id: server.id, tool: tool.name, enabled }))" />
@@ -199,7 +196,7 @@ const statusType = { connected: 'success', connecting: 'info', error: 'error', s
                   <div class="tool-name"><span class="mono">{{ tool.name }}</span><span class="hint small mono">{{ tool.action }}</span></div>
                   <div v-if="tool.description" class="hint small tool-desc">{{ tool.description }}</div>
                 </div>
-                <NSelect
+                <Select
                   size="small"
                   class="tool-risk"
                   :value="tool.risk"
@@ -208,53 +205,53 @@ const statusType = { connected: 'success', connecting: 'info', error: 'error', s
                 />
               </div>
             </div>
-          </NCard>
+          </Card>
         </div>
-      </NSpin>
+      </Spin>
     </template>
 
-    <NModal :show="!!form" preset="card" :title="form?.id ? t('agentPage.mcp.edit') : t('agentPage.mcp.add')" :style="{ width: '600px', maxWidth: '95vw' }" @update:show="(show: boolean) => !show && (form = undefined)">
-      <NForm v-if="form" label-placement="top">
-        <NFormItem :label="t('common.name')" required>
-          <NInput v-model:value="form.name" placeholder="filesystem" />
-        </NFormItem>
-        <NFormItem :label="t('agentPage.mcp.transport')">
-          <NRadioGroup v-model:value="form.transport">
-            <NRadioButton value="stdio">{{ t('agentPage.mcp.stdio') }}</NRadioButton>
-            <NRadioButton value="http">{{ t('agentPage.mcp.http') }}</NRadioButton>
-          </NRadioGroup>
-        </NFormItem>
+    <Modal :show="!!form" :title="form?.id ? t('agentPage.mcp.edit') : t('agentPage.mcp.add')" :style="{ width: '600px', maxWidth: '95vw' }" @update:show="(show: boolean) => !show && (form = undefined)">
+      <Form v-if="form">
+        <FormItem :label="t('common.name')" required>
+          <Input v-model:value="form.name" placeholder="filesystem" />
+        </FormItem>
+        <FormItem :label="t('agentPage.mcp.transport')">
+          <RadioGroup v-model:value="form.transport">
+            <RadioButton value="stdio">{{ t('agentPage.mcp.stdio') }}</RadioButton>
+            <RadioButton value="http">{{ t('agentPage.mcp.http') }}</RadioButton>
+          </RadioGroup>
+        </FormItem>
         <template v-if="form.transport === 'stdio'">
-          <NFormItem :label="t('agentPage.mcp.command')" required>
-            <NInput v-model:value="form.command" class="mono" placeholder="npx" />
-          </NFormItem>
-          <NFormItem :label="t('agentPage.mcp.args')" :feedback="t('agentPage.mcp.argsHelp')">
-            <NDynamicTags v-model:value="form.args" />
-          </NFormItem>
-          <NFormItem :label="t('agentPage.mcp.env')" :feedback="t('agentPage.mcp.secretHelp')">
-            <NDynamicInput v-model:value="form.env" preset="pair" key-placeholder="API_KEY" :value-placeholder="t('agentPage.mcp.value')" />
-          </NFormItem>
-          <NFormItem :label="t('agentPage.mcp.cwd')">
-            <NInput v-model:value="form.cwd" class="mono" />
-          </NFormItem>
+          <FormItem :label="t('agentPage.mcp.command')" required>
+            <Input v-model:value="form.command" class="mono" placeholder="npx" />
+          </FormItem>
+          <FormItem :label="t('agentPage.mcp.args')" :feedback="t('agentPage.mcp.argsHelp')">
+            <TagsInput v-model:value="form.args" />
+          </FormItem>
+          <FormItem :label="t('agentPage.mcp.env')" :feedback="t('agentPage.mcp.secretHelp')">
+            <KeyValueInput v-model:value="form.env" key-placeholder="API_KEY" :value-placeholder="t('agentPage.mcp.value')" />
+          </FormItem>
+          <FormItem :label="t('agentPage.mcp.cwd')">
+            <Input v-model:value="form.cwd" class="mono" />
+          </FormItem>
         </template>
         <template v-else>
-          <NFormItem :label="t('agentPage.mcp.url')" required>
-            <NInput v-model:value="form.url" class="mono" placeholder="https://example.com/mcp" />
-          </NFormItem>
-          <NFormItem :label="t('agentPage.mcp.headers')" :feedback="t('agentPage.mcp.secretHelp')">
-            <NDynamicInput v-model:value="form.headers" preset="pair" key-placeholder="Authorization" :value-placeholder="t('agentPage.mcp.value')" />
-          </NFormItem>
+          <FormItem :label="t('agentPage.mcp.url')" required>
+            <Input v-model:value="form.url" class="mono" placeholder="https://example.com/mcp" />
+          </FormItem>
+          <FormItem :label="t('agentPage.mcp.headers')" :feedback="t('agentPage.mcp.secretHelp')">
+            <KeyValueInput v-model:value="form.headers" key-placeholder="Authorization" :value-placeholder="t('agentPage.mcp.value')" />
+          </FormItem>
         </template>
         <p class="hint small">{{ t('agentPage.mcp.newTools') }}</p>
-      </NForm>
+      </Form>
       <template #action>
-        <NSpace justify="end">
-          <NButton @click="form = undefined">{{ t('common.cancel') }}</NButton>
-          <NButton type="primary" :loading="saving" @click="save">{{ t('agentPage.mcp.saveConnect') }}</NButton>
-        </NSpace>
+        <div class="flex flex-wrap gap-x-3 gap-y-2 items-center justify-end">
+          <Button @click="form = undefined">{{ t('common.cancel') }}</Button>
+          <Button type="primary" :loading="saving" @click="save">{{ t('agentPage.mcp.saveConnect') }}</Button>
+        </div>
       </template>
-    </NModal>
+    </Modal>
   </div>
 </template>
 

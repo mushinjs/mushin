@@ -1,9 +1,5 @@
 <script setup lang="ts">
-import {
-  AddOutline, AlertCircleOutline, BrowsersOutline, ChatbubbleEllipsesOutline, CheckmarkCircle, ChevronDownOutline, CloseCircleOutline, CloseOutline, ExtensionPuzzleOutline,
-  HelpCircleOutline, InformationCircleOutline, SendOutline, SparklesOutline, StopCircleOutline, TrashOutline,
-} from '@vicons/ionicons5'
-import { NButton, NIcon, NInput, NModal, NPopover, NPopselect, NSelect, NSpin, NTag, NTooltip } from 'naive-ui'
+import { Button, Dropdown, type DropdownOption, Input, Modal, Popover, Select, Spin, Tag, Tooltip } from '@mushin/ui'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -42,9 +38,9 @@ const paletteClosed = ref(false)
 const showHistory = ref(false)
 
 const ALL = '__all__'
-const sessionOptions = computed(() => [
-  ...agent.sessions.slice(0, 8).map((session) => ({ label: session.title || t('agent.untitled'), value: session.id })),
-  ...(agent.sessions.length ? [{ label: t('agentHistory.all'), value: ALL }] : []),
+const sessionOptions = computed<DropdownOption[]>(() => [
+  ...agent.sessions.slice(0, 8).map((session) => ({ label: session.title || t('agent.untitled'), key: session.id, icon: session.id === agent.current ? 'i-lucide-check' : 'i-lucide-message-square' })),
+  ...(agent.sessions.length ? [{ type: 'divider' as const }, { label: t('agentHistory.all'), key: ALL, icon: 'i-lucide-history' }] : []),
 ])
 
 function pickSession(id: string) {
@@ -241,9 +237,9 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
   <div class="dock-inner">
     <header class="dock-head">
       <div class="dock-title">
-        <NIcon size="18"><SparklesOutline /></NIcon>
+        <span class="i-lucide-sparkles text-[18px]" />
         <span>{{ t('nav.agent') }}</span>
-        <NPopover trigger="click" placement="bottom-start" :style="{ maxWidth: '300px' }">
+        <Popover placement="bottom" align="start" :style="{ maxWidth: '300px' }">
           <template #trigger>
             <button type="button" class="scene-tag" :title="t('agentScene.whatHere')" data-agent-target="agent.scene">
               {{ scenes.scene.label }}
@@ -253,65 +249,53 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
             <div class="scene-pop-title">{{ t('agentScene.whatHere') }}</div>
             <p>{{ scenes.scene.hint }}</p>
           </div>
-        </NPopover>
+        </Popover>
       </div>
       <div class="dock-actions">
-        <NPopselect
-          v-if="agent.sessions.length"
-          :value="agent.current"
-          :options="sessionOptions"
-          trigger="click"
-          @update:value="pickSession"
-        >
-          <NButton size="small" quaternary>{{ t('agent.history') }}</NButton>
-        </NPopselect>
-        <NTooltip v-if="agent.current">
+        <Dropdown v-if="agent.sessions.length" :options="sessionOptions" align="end" @select="pickSession">
+          <Button size="small" quaternary>{{ t('agent.history') }}</Button>
+        </Dropdown>
+        <Tooltip v-if="agent.current">
           <template #trigger>
-            <NButton size="small" quaternary circle :aria-label="t('agent.deleteChat')" @click="agent.remove(agent.current!)">
-              <template #icon><NIcon><TrashOutline /></NIcon></template>
-            </NButton>
+            <Button size="small" quaternary circle :aria-label="t('agent.deleteChat')" icon="i-lucide-trash-2" @click="agent.remove(agent.current!)" />
           </template>
           {{ t('agent.deleteChat') }}
-        </NTooltip>
-        <NTooltip>
+        </Tooltip>
+        <Tooltip>
           <template #trigger>
-            <NButton size="small" quaternary circle :aria-label="t('agent.newChat')" @click="agent.newChat()">
-              <template #icon><NIcon><AddOutline /></NIcon></template>
-            </NButton>
+            <Button size="small" quaternary circle :aria-label="t('agent.newChat')" icon="i-lucide-plus" @click="agent.newChat()" />
           </template>
           {{ t('agent.newChat') }}
-        </NTooltip>
-        <NTooltip v-if="mode">
+        </Tooltip>
+        <Tooltip v-if="mode">
           <template #trigger>
-            <NButton size="small" quaternary circle :aria-label="mode === 'docked' ? t('agent.float') : t('agent.dock')" data-agent-target="agent.mode" @click="emit('toggleMode')">
+            <Button size="small" quaternary circle :aria-label="mode === 'docked' ? t('agent.float') : t('agent.dock')" data-agent-target="agent.mode" @click="emit('toggleMode')">
               <template #icon>
-                <NIcon v-if="mode === 'docked'"><BrowsersOutline /></NIcon>
+                <span v-if="mode === 'docked'" class="i-lucide-app-window" />
                 <PanelIcon v-else side="right" :open="true" />
               </template>
-            </NButton>
+            </Button>
           </template>
           {{ mode === 'docked' ? t('agent.float') : t('agent.dock') }}
-        </NTooltip>
-        <NButton v-if="closable" size="small" quaternary circle :aria-label="t('agent.close')" @click="emit('close')">
-          <template #icon><NIcon><CloseOutline /></NIcon></template>
-        </NButton>
+        </Tooltip>
+        <Button v-if="closable" size="small" quaternary circle :aria-label="t('agent.close')" icon="i-lucide-x" @click="emit('close')" />
       </div>
     </header>
 
     <div ref="list" class="dock-list">
       <div v-if="data.loadedProviders && !data.providers.length" class="dock-empty">
         <p>{{ t('agent.needProvider') }}</p>
-        <NButton type="primary" @click="router.push('/setup')">{{ t('agent.goSetup') }}</NButton>
+        <Button type="primary" @click="router.push('/setup')">{{ t('agent.goSetup') }}</Button>
       </div>
 
       <div v-else-if="!agent.items.length && !agent.running" class="dock-empty">
         <p class="dock-hello">{{ scenes.welcome ?? t('agent.hello') }}</p>
         <button v-for="item in scenes.recommendations" :key="item.id" class="suggestion" :class="{ urgent: item.urgent }" type="button" @click="sendRecommendation(item)">
           <span>{{ item.text }}</span>
-          <NTag v-if="item.skill" size="tiny" :bordered="false" class="suggestion-skill">
-            <template #icon><NIcon><ExtensionPuzzleOutline /></NIcon></template>
+          <Tag v-if="item.skill" size="tiny" class="suggestion-skill">
+            <template #icon><span class="i-lucide-puzzle" /></template>
             {{ agent.skills.find((skill) => skill.id === item.skill)?.name ?? item.skill }}
-          </NTag>
+          </Tag>
         </button>
         <p class="dock-tip">{{ t('agentPalette.tip') }}</p>
       </div>
@@ -319,14 +303,14 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
       <template v-for="(row, index) in rows" :key="index">
         <div v-if="row.kind === 'group'" class="tool-group" :class="{ open: expanded.has(row.key) }">
           <button class="group-row" type="button" @click="toggle(row.key)">
-            <NSpin v-if="row.running" :size="14" />
-            <NIcon v-else-if="!row.failed" color="var(--ok)"><CheckmarkCircle /></NIcon>
-            <NIcon v-else-if="row.failed === row.items.length" color="var(--bad)"><CloseCircleOutline /></NIcon>
-            <NIcon v-else color="var(--warn)"><AlertCircleOutline /></NIcon>
+            <Spin v-if="row.running" :size="14" />
+            <span v-else-if="!row.failed" class="i-lucide-circle-check" color="var(--ok)" />
+            <span v-else-if="row.failed === row.items.length" class="i-lucide-circle-x" color="var(--bad)" />
+            <span v-else class="i-lucide-circle-alert" color="var(--warn)" />
             <span class="mono group-name">{{ row.action }}</span>
             <span class="group-count">×{{ row.items.length }}</span>
             <span class="group-state">{{ groupSummary(row) }}</span>
-            <NIcon class="group-chevron"><ChevronDownOutline /></NIcon>
+            <span class="i-lucide-chevron-down group-chevron" />
           </button>
           <div v-if="row.failed && !expanded.has(row.key)" class="group-reason" :title="row.reason">{{ row.reason }}</div>
           <div v-if="expanded.has(row.key)" class="group-items">
@@ -344,22 +328,22 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
           <template v-for="item in [row.item]" :key="index">
             <div v-if="item.kind === 'user'" class="msg user">
               <div v-if="item.skills?.length" class="msg-skills">
-                <span v-for="name in item.skills" :key="name" class="msg-skill"><NIcon><ExtensionPuzzleOutline /></NIcon>{{ name }}</span>
+                <span v-for="name in item.skills" :key="name" class="msg-skill"><span class="i-lucide-puzzle" />{{ name }}</span>
               </div>
-              <div v-if="item.quote" class="msg-quote"><NIcon><ChatbubbleEllipsesOutline /></NIcon>{{ item.quote }}</div>
+              <div v-if="item.quote" class="msg-quote"><span class="i-lucide-message-circle-more" />{{ item.quote }}</div>
               {{ item.text }}
             </div>
             <div v-else-if="item.kind === 'assistant'" class="msg assistant"><AgentMessage :text="item.text" /></div>
             <div v-else-if="item.kind === 'note'" class="msg note">
-              <NIcon><InformationCircleOutline /></NIcon><span>{{ item.text }}</span>
+              <span class="i-lucide-info" /><span>{{ item.text }}</span>
             </div>
             <div v-else-if="item.kind === 'error' && item.code === 'max_steps'" class="msg limit">
-              <NIcon><InformationCircleOutline /></NIcon>
+              <span class="i-lucide-info" />
               <span>{{ t('agent.maxSteps') }}</span>
-              <NButton v-if="index === rows.length - 1 && !agent.running" size="small" secondary @click="send(t('agent.continuePrompt'))">{{ t('agent.continue') }}</NButton>
+              <Button v-if="index === rows.length - 1 && !agent.running" size="small" secondary @click="send(t('agent.continuePrompt'))">{{ t('agent.continue') }}</Button>
             </div>
             <div v-else-if="item.kind === 'error'" class="msg error">
-              <NIcon><AlertCircleOutline /></NIcon> {{ item.text }}
+              <span class="i-lucide-circle-alert" /> {{ item.text }}
             </div>
             <AgentToolCall
               v-else
@@ -373,7 +357,7 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
       </template>
 
       <div v-for="ask in agent.asks" :key="ask.id" class="ask">
-        <div class="ask-question"><NIcon><HelpCircleOutline /></NIcon>{{ ask.question }}</div>
+        <div class="ask-question"><span class="i-lucide-circle-help" />{{ ask.question }}</div>
         <button
           v-for="(option, optionIndex) in ask.options"
           :key="optionIndex"
@@ -384,11 +368,11 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
         >
           <span class="ask-label">
             {{ option.label }}
-            <NTag v-if="ask.recommended === optionIndex" size="tiny" type="success" :bordered="false">{{ t('agentPalette.recommended') }}</NTag>
+            <Tag v-if="ask.recommended === optionIndex" size="tiny" type="success">{{ t('agentPalette.recommended') }}</Tag>
           </span>
           <span v-if="option.description" class="ask-desc">{{ option.description }}</span>
         </button>
-        <NInput
+        <Input
           v-if="ask.allowOther"
           size="small"
           :placeholder="t('agentMessage.other')"
@@ -397,20 +381,18 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
       </div>
 
       <div v-if="agent.streaming" class="msg assistant streaming"><AgentMessage :text="agent.streaming" streaming /></div>
-      <div v-else-if="agent.running" class="thinking"><NSpin :size="14" /> {{ t('agent.thinking') }}</div>
+      <div v-else-if="agent.running" class="thinking"><Spin :size="14" /> {{ t('agent.thinking') }}</div>
     </div>
 
     <div v-if="agent.toolsStale && agent.items.length" class="stale">
       <span>{{ t('agentMessage.toolsStale') }}</span>
-      <NButton size="tiny" secondary @click="agent.newChat()">{{ t('agent.newChat') }}</NButton>
+      <Button size="tiny" secondary @click="agent.newChat()">{{ t('agent.newChat') }}</Button>
     </div>
 
     <div v-if="agent.items.length && scenes.banner && !agent.running" class="banner">
-      <NIcon color="var(--warn)"><InformationCircleOutline /></NIcon>
+      <span class="i-lucide-info" color="var(--warn)" />
       <button type="button" class="banner-text" @click="sendRecommendation(scenes.banner!)">{{ scenes.banner.text }}</button>
-      <NButton size="tiny" quaternary circle :aria-label="t('agent.close')" @click="scenes.dismiss(scenes.banner!.id)">
-        <template #icon><NIcon><CloseOutline /></NIcon></template>
-      </NButton>
+      <Button size="tiny" quaternary circle :aria-label="t('agent.close')" icon="i-lucide-x" @click="scenes.dismiss(scenes.banner!.id)" />
     </div>
 
     <footer class="dock-input" data-agent-target="agent.input">
@@ -425,16 +407,16 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
       />
       <div class="input-box">
         <div v-if="picked.length || agent.quote" class="chips">
-          <NTag v-if="agent.quote" size="small" type="info" closable :bordered="false" class="quote-chip" :title="agent.quote.label" @close="agent.quote = undefined">
-            <template #icon><NIcon><ChatbubbleEllipsesOutline /></NIcon></template>
+          <Tag v-if="agent.quote" size="small" type="info" closable class="quote-chip" :title="agent.quote.label" @close="agent.quote = undefined">
+            <template #icon><span class="i-lucide-message-circle-more" /></template>
             {{ t('agent.quoted', { label: agent.quote.label }) }}
-          </NTag>
-          <NTag v-for="skill in picked" :key="skill.id" size="small" type="success" closable :bordered="false" @close="picked = picked.filter((item) => item.id !== skill.id)">
-            <template #icon><NIcon><ExtensionPuzzleOutline /></NIcon></template>
+          </Tag>
+          <Tag v-for="skill in picked" :key="skill.id" size="small" type="success" closable @close="picked = picked.filter((item) => item.id !== skill.id)">
+            <template #icon><span class="i-lucide-puzzle" /></template>
             {{ skill.name }}
-          </NTag>
+          </Tag>
         </div>
-        <NInput
+        <Input
           v-model:value="input"
           type="textarea"
           :autosize="{ minRows: 1, maxRows: 6 }"
@@ -443,22 +425,18 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
           @keydown="onKeydown"
         />
       </div>
-      <NButton v-if="agent.running" type="warning" secondary :aria-label="t('agent.stop')" @click="agent.cancel()">
-        <template #icon><NIcon><StopCircleOutline /></NIcon></template>
-      </NButton>
-      <NButton v-else type="primary" :disabled="!input.trim() && !picked.length && !agent.quote" :aria-label="t('agent.send')" @click="send()">
-        <template #icon><NIcon><SendOutline /></NIcon></template>
-      </NButton>
+      <Button v-if="agent.running" type="warning" secondary :aria-label="t('agent.stop')" icon="i-lucide-circle-stop" @click="agent.cancel()" />
+      <Button v-else type="primary" :disabled="!input.trim() && !picked.length && !agent.quote" :aria-label="t('agent.send')" icon="i-lucide-send" @click="send()" />
     </footer>
 
     <HistoryDrawer v-model:show="showHistory" />
-    <NModal v-model:show="showModel" preset="card" :title="t('agentPalette.modelTitle')" :style="{ width: '400px' }">
+    <Modal v-model:show="showModel" :title="t('agentPalette.modelTitle')" :style="{ width: '400px' }">
       <div class="model-form">
-        <NSelect v-model:value="modelForm.provider" clearable :options="providerOptions" :placeholder="t('agentPalette.defaultProvider')" />
+        <Select v-model:value="modelForm.provider" clearable :options="providerOptions" :placeholder="t('agentPalette.defaultProvider')" />
         <ModelSelect :model-value="modelForm.model" :provider="modelForm.provider" :placeholder="t('agentPalette.defaultModel')" @update:model-value="(value) => (modelForm.model = value ?? undefined)" />
-        <NButton type="primary" @click="saveModel">{{ t('common.save') }}</NButton>
+        <Button type="primary" @click="saveModel">{{ t('common.save') }}</Button>
       </div>
-    </NModal>
+    </Modal>
   </div>
 </template>
 
@@ -530,7 +508,7 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
 }
 
 .suggestion:hover {
-  border-color: #7c8bd9;
+  border-color: var(--primary);
 }
 
 .suggestion {
@@ -572,7 +550,7 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
 }
 
 .scene-tag:hover {
-  border-color: #7c8bd9;
+  border-color: var(--primary);
   opacity: 1;
 }
 
@@ -608,19 +586,19 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
   align-self: stretch;
   max-width: none;
   font-size: 13px;
-  background: rgba(124, 139, 217, 0.1);
+  background: var(--primary-soft);
   display: flex;
   gap: 6px;
   align-items: flex-start;
 }
 
-.msg.note .n-icon {
+.msg.note > [class^="i-"] {
   margin-top: 4px;
   flex: none;
 }
 
 .ask {
-  border: 1px solid rgba(124, 139, 217, 0.5);
+  border: 1px solid var(--primary);
   border-radius: 10px;
   padding: 10px;
   display: flex;
@@ -652,7 +630,7 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
 
 .ask-option:hover,
 .ask-option.recommended {
-  border-color: #7c8bd9;
+  border-color: var(--primary);
 }
 
 .ask-label {

@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { AddOutline, CloudDownloadOutline, CloudUploadOutline, CreateOutline, TrashOutline } from '@vicons/ionicons5'
-import { Toggle, useConfirm, useToast } from '@mushin/ui'
-import { NButton, NCard, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NSelect, NSpace, NTag } from 'naive-ui'
+import { Button, Card, Empty, Form, FormItem, Input, Modal, Select, Tag, Toggle, useConfirm, useToast } from '@mushin/ui'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
@@ -124,76 +122,74 @@ async function importFiles(event: Event) {
   <div class="skills">
     <div class="toolbar">
       <p class="hint">{{ t('agentPage.skills.lead') }}</p>
-      <NSpace>
-        <NButton @click="fileInput?.click()">
-          <template #icon><NIcon><CloudUploadOutline /></NIcon></template>
+      <div class="flex flex-wrap gap-x-3 gap-y-2 items-center">
+        <Button icon="i-lucide-cloud-upload" @click="fileInput?.click()">
           {{ t('agentPage.skills.import') }}
-        </NButton>
-        <NButton type="primary" @click="openNew">
-          <template #icon><NIcon><AddOutline /></NIcon></template>
+        </Button>
+        <Button type="primary" icon="i-lucide-plus" @click="openNew">
           {{ t('agentPage.skills.add') }}
-        </NButton>
-      </NSpace>
+        </Button>
+      </div>
       <input ref="fileInput" type="file" accept=".md,text/markdown" multiple hidden @change="importFiles">
     </div>
 
-    <NEmpty v-if="!agent.skills.length" />
+    <Empty v-if="!agent.skills.length" />
     <div class="grid">
-      <NCard v-for="skill in sorted" :key="skill.id" size="small" class="skill" :class="{ off: !skill.enabled }">
+      <Card v-for="skill in sorted" :key="skill.id" size="small" class="skill" :class="{ off: !skill.enabled }">
         <div class="skill-head">
           <div class="skill-name">
             <span>{{ skill.name }}</span>
-            <NTag size="tiny" :type="skill.source === 'user' ? 'success' : skill.source === 'plugin' ? 'info' : 'default'" :bordered="false">{{ sourceLabel(skill) }}</NTag>
-            <NTag v-if="skill.source === 'user' && BUILTIN_IDS.has(skill.id)" size="tiny" type="warning" :bordered="false">{{ t('agentPage.skills.customized') }}</NTag>
+            <Tag size="tiny" :type="skill.source === 'user' ? 'success' : skill.source === 'plugin' ? 'info' : 'default'">{{ sourceLabel(skill) }}</Tag>
+            <Tag v-if="skill.source === 'user' && BUILTIN_IDS.has(skill.id)" size="tiny" type="warning">{{ t('agentPage.skills.customized') }}</Tag>
           </div>
           <Toggle variant="button" size="small" :value="skill.enabled" @update:value="(on: boolean) => setEnabled(skill, on)" />
         </div>
         <p class="skill-desc">{{ skill.description }}</p>
         <div v-if="skill.scenes?.length" class="skill-tags">
-          <NTag v-for="scene in skill.scenes" :key="scene" size="tiny" :bordered="false">{{ t(`agentScene.name.${scene}`) }}</NTag>
+          <Tag v-for="scene in skill.scenes" :key="scene" size="tiny">{{ t(`agentScene.name.${scene}`) }}</Tag>
         </div>
         <template #action>
           <div class="skill-actions">
             <span class="mono hint small">${{ skill.id }}</span>
             <span>
-              <IconAction :icon="CreateOutline" :label="t('common.edit')" @click="openEdit(skill)" />
-              <IconAction :icon="CloudDownloadOutline" :label="t('agentPage.skills.export')" @click="exportSkill(skill)" />
-              <IconAction :icon="TrashOutline" v-if="skill.source === 'user'" :label="BUILTIN_IDS.has(skill.id) ? t('agentPage.skills.restore') : t('common.delete')" @click="remove(skill)" />
+              <IconAction icon="i-lucide-pencil" :label="t('common.edit')" @click="openEdit(skill)" />
+              <IconAction icon="i-lucide-cloud-download" :label="t('agentPage.skills.export')" @click="exportSkill(skill)" />
+              <IconAction icon="i-lucide-trash-2" v-if="skill.source === 'user'" :label="BUILTIN_IDS.has(skill.id) ? t('agentPage.skills.restore') : t('common.delete')" @click="remove(skill)" />
             </span>
           </div>
         </template>
-      </NCard>
+      </Card>
     </div>
 
-    <NModal :show="!!editing" preset="card" :title="editing?.isNew ? t('agentPage.skills.add') : t('agentPage.skills.edit')" :style="{ width: '640px', maxWidth: '95vw' }" @update:show="(show: boolean) => !show && (editing = undefined)">
-      <NForm v-if="editing" label-placement="top">
+    <Modal :show="!!editing" :title="editing?.isNew ? t('agentPage.skills.add') : t('agentPage.skills.edit')" :style="{ width: '640px', maxWidth: '95vw' }" @update:show="(show: boolean) => !show && (editing = undefined)">
+      <Form v-if="editing">
         <p v-if="!editing.isNew && editing.source !== 'user'" class="hint small">{{ t('agentPage.skills.copyNote') }}</p>
-        <NFormItem :label="t('common.name')" required>
-          <NInput v-model:value="editing.name" maxlength="80" />
-        </NFormItem>
-        <NFormItem :label="t('agentPage.skills.description')">
-          <NInput v-model:value="editing.description" maxlength="300" />
-        </NFormItem>
-        <NFormItem :label="t('agentPage.skills.whenToUse')">
-          <NInput v-model:value="editing.whenToUse" maxlength="500" />
-        </NFormItem>
-        <NFormItem :label="t('agentPage.skills.instructions')" required :feedback="t('agentPage.skills.instructionsHelp')">
-          <NInput v-model:value="editing.instructions" type="textarea" class="mono" :autosize="{ minRows: 6, maxRows: 16 }" />
-        </NFormItem>
-        <NFormItem :label="t('agentPage.skills.tools')">
-          <NSelect v-model:value="editing.tools" multiple filterable tag :options="toolOptions" />
-        </NFormItem>
-        <NFormItem :label="t('agentPage.skills.scenes')">
-          <NSelect v-model:value="editing.scenes" multiple :options="sceneOptions" />
-        </NFormItem>
-      </NForm>
+        <FormItem :label="t('common.name')" required>
+          <Input v-model:value="editing.name" :maxlength="80" />
+        </FormItem>
+        <FormItem :label="t('agentPage.skills.description')">
+          <Input v-model:value="editing.description" :maxlength="300" />
+        </FormItem>
+        <FormItem :label="t('agentPage.skills.whenToUse')">
+          <Input v-model:value="editing.whenToUse" :maxlength="500" />
+        </FormItem>
+        <FormItem :label="t('agentPage.skills.instructions')" required :feedback="t('agentPage.skills.instructionsHelp')">
+          <Input v-model:value="editing.instructions" type="textarea" class="mono" :autosize="{ minRows: 6, maxRows: 16 }" />
+        </FormItem>
+        <FormItem :label="t('agentPage.skills.tools')">
+          <Select v-model:value="editing.tools" multiple filterable tag :options="toolOptions" />
+        </FormItem>
+        <FormItem :label="t('agentPage.skills.scenes')">
+          <Select v-model:value="editing.scenes" multiple :options="sceneOptions" />
+        </FormItem>
+      </Form>
       <template #action>
-        <NSpace justify="end">
-          <NButton @click="editing = undefined">{{ t('common.cancel') }}</NButton>
-          <NButton type="primary" :loading="saving" @click="save">{{ t('common.save') }}</NButton>
-        </NSpace>
+        <div class="flex flex-wrap gap-x-3 gap-y-2 items-center justify-end">
+          <Button @click="editing = undefined">{{ t('common.cancel') }}</Button>
+          <Button type="primary" :loading="saving" @click="save">{{ t('common.save') }}</Button>
+        </div>
       </template>
-    </NModal>
+    </Modal>
   </div>
 </template>
 

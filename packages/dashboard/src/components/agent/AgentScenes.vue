@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { AddOutline, TrashOutline } from '@vicons/ionicons5'
-import { Toggle, useToast } from '@mushin/ui'
-import { NButton, NCard, NForm, NFormItem, NIcon, NInput, NSelect, NSpace, NTag } from 'naive-ui'
+import { Button, Card, Form, FormItem, Input, Select, Tag, Toggle, useToast } from '@mushin/ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
@@ -76,56 +74,53 @@ async function save(reset = false) {
         @click="selected = scene"
       >
         <span>{{ t(`agentScene.name.${scene}`) }}</span>
-        <NTag v-if="changed(scene)" size="tiny" type="info" :bordered="false">{{ t('agentPage.scenes.custom') }}</NTag>
+        <Tag v-if="changed(scene)" size="tiny" type="info">{{ t('agentPage.scenes.custom') }}</Tag>
       </button>
     </nav>
 
-    <NCard :title="t(`agentScene.name.${selected}`)" class="scene-editor">
-      <NForm label-placement="top">
-        <NFormItem :label="t('agentPage.scenes.hint')" :feedback="t('agentPage.scenes.hintHelp')">
-          <NInput v-model:value="draft.hint" type="textarea" :autosize="{ minRows: 2, maxRows: 5 }" :placeholder="t(`agentScene.hint.${selected}`)" />
-        </NFormItem>
-        <NFormItem :label="t('agentPage.scenes.welcome')">
-          <NInput v-model:value="draft.welcome" :placeholder="t('agent.hello')" />
-        </NFormItem>
-        <NFormItem :label="t('agentPage.scenes.builtin')" :feedback="t('agentPage.scenes.builtinHelp')">
+    <Card :title="t(`agentScene.name.${selected}`)" class="scene-editor">
+      <Form>
+        <FormItem :label="t('agentPage.scenes.hint')" :feedback="t('agentPage.scenes.hintHelp')">
+          <Input v-model:value="draft.hint" type="textarea" :autosize="{ minRows: 2, maxRows: 5 }" :placeholder="t(`agentScene.hint.${selected}`)" />
+        </FormItem>
+        <FormItem :label="t('agentPage.scenes.welcome')">
+          <Input v-model:value="draft.welcome" :placeholder="t('agent.hello')" />
+        </FormItem>
+        <FormItem :label="t('agentPage.scenes.builtin')" :feedback="t('agentPage.scenes.builtinHelp')">
           <div class="builtin-list">
             <label v-for="id in builtins" :key="id" class="builtin">
               <Toggle size="small" :value="!draft.hidden?.includes(id)" @update:value="(on: boolean) => toggleBuiltin(id, on)" />
               <span>{{ t(`agentScene.rec.${id}`, { name: '…', count: 'N', names: '…' }) }}</span>
             </label>
           </div>
-        </NFormItem>
-        <NFormItem :label="t('agentPage.scenes.own')">
+        </FormItem>
+        <FormItem :label="t('agentPage.scenes.own')">
           <div class="own-list">
             <div v-for="(item, index) in draft.recommendations ?? []" :key="index" class="own">
-              <NInput v-model:value="item.text" :placeholder="t('agentPage.scenes.ownText')" />
-              <NInput v-model:value="item.prompt" :placeholder="t('agentPage.scenes.ownPrompt')" />
-              <NSelect v-model:value="item.skill" clearable :options="skillOptions" :placeholder="t('agentPage.scenes.ownSkill')" />
-              <NButton quaternary circle :aria-label="t('common.remove')" @click="draft.recommendations!.splice(index, 1)">
-                <template #icon><NIcon><TrashOutline /></NIcon></template>
-              </NButton>
+              <Input v-model:value="item.text" :placeholder="t('agentPage.scenes.ownText')" />
+              <Input v-model:value="item.prompt" :placeholder="t('agentPage.scenes.ownPrompt')" />
+              <Select v-model:value="item.skill" clearable :options="skillOptions" :placeholder="t('agentPage.scenes.ownSkill')" />
+              <Button quaternary circle :aria-label="t('common.remove')" icon="i-lucide-trash-2" @click="draft.recommendations!.splice(index, 1)" />
             </div>
-            <NButton dashed size="small" @click="addRecommendation">
-              <template #icon><NIcon><AddOutline /></NIcon></template>
+            <Button dashed size="small" icon="i-lucide-plus" @click="addRecommendation">
               {{ t('agentPage.scenes.addOwn') }}
-            </NButton>
+            </Button>
           </div>
-        </NFormItem>
-        <NFormItem :label="t('agentPage.scenes.skills')" :feedback="t('agentPage.scenes.skillsHelp')">
-          <NSelect v-model:value="draft.skills" multiple clearable :options="skillOptions" />
-        </NFormItem>
-        <NFormItem :label="t('agentPage.scenes.autoShow')" :feedback="t('agentPage.scenes.autoShowHelp')">
+        </FormItem>
+        <FormItem :label="t('agentPage.scenes.skills')" :feedback="t('agentPage.scenes.skillsHelp')">
+          <Select v-model:value="draft.skills" multiple clearable :options="skillOptions" />
+        </FormItem>
+        <FormItem :label="t('agentPage.scenes.autoShow')" :feedback="t('agentPage.scenes.autoShowHelp')">
           <Toggle :value="draft.autoShow !== false" @update:value="(on: boolean) => (draft.autoShow = on ? undefined : false)" />
-        </NFormItem>
-      </NForm>
+        </FormItem>
+      </Form>
       <template #action>
-        <NSpace justify="end">
-          <NButton :disabled="!changed(selected)" :loading="saving" @click="save(true)">{{ t('agentPage.scenes.restore') }}</NButton>
-          <NButton type="primary" :loading="saving" @click="save()">{{ t('common.save') }}</NButton>
-        </NSpace>
+        <div class="flex flex-wrap gap-x-3 gap-y-2 items-center justify-end">
+          <Button :disabled="!changed(selected)" :loading="saving" @click="save(true)">{{ t('agentPage.scenes.restore') }}</Button>
+          <Button type="primary" :loading="saving" @click="save()">{{ t('common.save') }}</Button>
+        </div>
       </template>
-    </NCard>
+    </Card>
   </div>
 </template>
 
@@ -159,7 +154,7 @@ async function save(reset = false) {
 }
 
 .scene-item.active {
-  background: rgba(124, 139, 217, 0.16);
+  background: var(--primary-soft);
   font-weight: 500;
 }
 

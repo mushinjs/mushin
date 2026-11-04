@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { SearchOutline } from '@vicons/ionicons5'
-import { NDrawer, NDrawerContent, NEmpty, NIcon, NInput, NSelect, NSpin, NTag } from 'naive-ui'
+import { Drawer, Empty, Input, Select, Spin, Tag } from '@mushin/ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
@@ -74,16 +73,16 @@ function rowTags(session: AgentSessionSummary) {
 </script>
 
 <template>
-  <NDrawer v-model:show="show" :width="440" placement="right">
-    <NDrawerContent :title="t('agentHistory.title')" closable :native-scrollbar="false">
+  <Drawer v-model:show="show" :width="440" placement="right" :title="t('agentHistory.title')" closable>
+    <div class="content">
       <div class="filters">
-        <NInput v-model:value="query" clearable :placeholder="t('agentHistory.search')">
-          <template #prefix><NIcon><SearchOutline /></NIcon></template>
-        </NInput>
-        <NSelect v-model:value="tags" multiple filterable clearable :options="tagOptions" :placeholder="t('agentHistory.tags')" max-tag-count="responsive" />
+        <Input v-model:value="query" clearable :placeholder="t('agentHistory.search')">
+          <template #prefix><span class="i-lucide-search" /></template>
+        </Input>
+        <Select v-model:value="tags" multiple filterable clearable :options="tagOptions" :placeholder="t('agentHistory.tags')" max-tag-count="responsive" />
       </div>
-      <NSpin :show="loading" size="small">
-        <NEmpty v-if="!results.length && !loading" :description="t('agentHistory.empty')" class="empty" />
+      <Spin :show="loading" size="small">
+        <Empty v-if="!results.length && !loading" :description="t('agentHistory.empty')" class="empty" />
         <button
           v-for="session in results"
           :key="session.id"
@@ -98,17 +97,21 @@ function rowTags(session: AgentSessionSummary) {
           </div>
           <div v-if="session.snippet" class="snippet">{{ session.snippet }}</div>
           <div class="item-tags">
-            <NTag v-if="session.running" size="tiny" type="info" :bordered="false">{{ t('agentHistory.status.running') }}</NTag>
-            <NTag v-if="session.scene" size="tiny" :bordered="false">{{ session.scene.label ?? tagLabel(`scene:${session.scene.key}`) }}</NTag>
-            <NTag v-for="tag in rowTags(session)" :key="tag" size="tiny" type="success" :bordered="false">{{ tagLabel(tag) }}</NTag>
+            <Tag v-if="session.running" size="tiny" type="info">{{ t('agentHistory.status.running') }}</Tag>
+            <Tag v-if="session.scene" size="tiny">{{ session.scene.label ?? tagLabel(`scene:${session.scene.key}`) }}</Tag>
+            <Tag v-for="tag in rowTags(session)" :key="tag" size="tiny" type="success">{{ tagLabel(tag) }}</Tag>
           </div>
         </button>
-      </NSpin>
-    </NDrawerContent>
-  </NDrawer>
+      </Spin>
+    </div>
+  </Drawer>
 </template>
 
 <style scoped>
+.content {
+  padding: 16px 20px 20px;
+}
+
 .filters {
   display: flex;
   flex-direction: column;
@@ -127,7 +130,7 @@ function rowTags(session: AgentSessionSummary) {
   width: 100%;
   padding: 10px 12px;
   margin-bottom: 6px;
-  border: 1px solid rgba(127, 127, 127, 0.2);
+  border: 1px solid var(--line);
   border-radius: 8px;
   background: transparent;
   color: inherit;
@@ -138,7 +141,7 @@ function rowTags(session: AgentSessionSummary) {
 
 .item:hover,
 .item.current {
-  border-color: #7c8bd9;
+  border-color: var(--primary);
 }
 
 .item-head {
@@ -158,13 +161,13 @@ function rowTags(session: AgentSessionSummary) {
 
 .time {
   font-size: 12px;
-  opacity: 0.55;
+  color: var(--fg3);
   flex: none;
 }
 
 .snippet {
   font-size: 12px;
-  opacity: 0.7;
+  color: var(--fg2);
   line-height: 1.5;
 }
 

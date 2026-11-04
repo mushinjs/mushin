@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ChatbubbleEllipsesOutline, ExtensionPuzzleOutline, FlashOutline, TerminalOutline } from '@vicons/ionicons5'
-import { NIcon, NTag, useThemeVars } from 'naive-ui'
+import { Tag } from '@mushin/ui'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAgentStore } from '../../stores/agent'
@@ -23,7 +22,6 @@ const props = defineProps<{
 const emit = defineEmits<{ pick: [item: PaletteItem] }>()
 
 const { t, locale } = useI18n()
-const theme = useThemeVars()
 const agent = useAgentStore()
 const scenes = useAgentSceneStore()
 const active = ref(0)
@@ -90,7 +88,7 @@ defineExpose({ move, choose, count: () => flat.value.length })
 </script>
 
 <template>
-  <div ref="listEl" class="palette" role="listbox" :style="{ background: theme.popoverColor, color: theme.textColor2 }">
+  <div ref="listEl" class="palette" role="listbox">
     <div v-if="!flat.length" class="empty">{{ mode === '$' ? t('agentPalette.noSkills') : t('agentPalette.none') }}</div>
     <template v-for="group in groups" :key="group.title">
       <div class="group">{{ group.title }}</div>
@@ -105,15 +103,10 @@ defineExpose({ move, choose, count: () => flat.value.length })
         @mouseenter="active = flat.indexOf(item)"
         @mousedown.prevent="emit('pick', item)"
       >
-        <NIcon class="icon" size="16">
-          <TerminalOutline v-if="item.kind === 'builtin'" />
-          <ChatbubbleEllipsesOutline v-else-if="item.kind === 'bot'" />
-          <FlashOutline v-else-if="item.recommended" />
-          <ExtensionPuzzleOutline v-else />
-        </NIcon>
+        <span class="icon text-[16px]" :class="item.kind === 'builtin' ? 'i-lucide-terminal' : item.kind === 'bot' ? 'i-lucide-message-circle-more' : item.recommended ? 'i-lucide-zap' : 'i-lucide-puzzle'" />
         <span class="name">{{ item.kind === 'skill' ? item.name : `/${item.name}` }}</span>
         <span class="desc">{{ item.description }}</span>
-        <NTag v-if="item.kind === 'skill' && item.recommended" size="tiny" type="success" :bordered="false">{{ t('agentPalette.recommended') }}</NTag>
+        <Tag v-if="item.kind === 'skill' && item.recommended" size="tiny" type="success">{{ t('agentPalette.recommended') }}</Tag>
         <span class="source">{{ sourceLabel(item) }}</span>
       </button>
     </template>
@@ -126,8 +119,11 @@ defineExpose({ move, choose, count: () => flat.value.length })
   overflow-y: auto;
   padding: 6px;
   border: 1px solid rgba(127, 127, 127, 0.25);
+  border: 1px solid var(--line);
   border-radius: 10px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  background: var(--raised);
+  color: var(--fg2);
+  box-shadow: var(--shadow-pop);
 }
 
 .group {
@@ -153,7 +149,7 @@ defineExpose({ move, choose, count: () => flat.value.length })
 }
 
 .row.active {
-  background: rgba(124, 139, 217, 0.16);
+  background: var(--primary-soft);
 }
 
 .icon {

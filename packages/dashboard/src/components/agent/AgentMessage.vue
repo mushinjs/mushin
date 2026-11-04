@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { CheckmarkCircle, CopyOutline, EllipseOutline } from '@vicons/ionicons5'
-import { NButton, NIcon, NTag } from 'naive-ui'
+import { Button, Tag } from '@mushin/ui'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -93,10 +92,9 @@ const statusType = { ok: 'success', warning: 'warning', error: 'error', info: 'i
       <div v-else-if="segment.kind === 'code'" class="code-block">
         <div class="code-head">
           <span>{{ segment.lang || t('agentMessage.code') }}</span>
-          <NButton size="tiny" quaternary @click="copy(segment.code, index)">
-            <template #icon><NIcon><CheckmarkCircle v-if="copied === index" /><CopyOutline v-else /></NIcon></template>
+          <Button size="tiny" quaternary :icon="copied === index ? 'i-lucide-circle-check' : 'i-lucide-copy'" @click="copy(segment.code, index)">
             {{ copied === index ? t('agentMessage.copied') : t('agentMessage.copy') }}
-          </NButton>
+          </Button>
         </div>
         <pre class="hljs mono"><code v-html="segment.html" /></pre>
       </div>
@@ -114,9 +112,9 @@ const statusType = { ok: 'success', warning: 'warning', error: 'error', info: 'i
             <div class="card-title">{{ segment.card.title }}</div>
             <div v-if="segment.card.subtitle" class="card-subtitle">{{ segment.card.subtitle }}</div>
           </div>
-          <NTag v-if="segment.card.status" size="small" :type="statusType[segment.card.status]" :bordered="false">
+          <Tag v-if="segment.card.status" size="small" :type="statusType[segment.card.status]">
             {{ t(`agentMessage.status.${segment.card.status}`) }}
-          </NTag>
+          </Tag>
         </div>
         <dl v-if="segment.card.fields?.length" class="card-fields">
           <template v-for="field in segment.card.fields" :key="field.label">
@@ -125,12 +123,12 @@ const statusType = { ok: 'success', warning: 'warning', error: 'error', info: 'i
           </template>
         </dl>
         <div v-if="segment.card.actions?.length" class="card-actions">
-          <NButton v-for="action in segment.card.actions" :key="action.path" size="small" secondary @click="router.push(action.path)">{{ action.label }}</NButton>
+          <Button v-for="action in segment.card.actions" :key="action.path" size="small" secondary @click="router.push(action.path)">{{ action.label }}</Button>
         </div>
       </div>
       <ul v-else-if="segment.kind === 'steps'" class="steps">
         <li v-for="(step, stepIndex) in segment.steps" :key="stepIndex" :class="{ done: step.done }">
-          <NIcon :color="step.done ? 'var(--ok)' : undefined"><CheckmarkCircle v-if="step.done" /><EllipseOutline v-else /></NIcon>
+          <span class="step-icon" :class="step.done ? 'i-lucide-circle-check' : 'i-lucide-circle'" />
           <span>{{ step.text }}</span>
         </li>
       </ul>
@@ -219,7 +217,7 @@ const statusType = { ok: 'success', warning: 'warning', error: 'error', info: 'i
 }
 
 .md :deep(a) {
-  color: #5a6fd6;
+  color: var(--primary);
 }
 
 .code-block {
@@ -334,12 +332,18 @@ const statusType = { ok: 'success', warning: 'warning', error: 'error', info: 'i
   align-items: flex-start;
 }
 
-.steps li .n-icon {
+.steps li .step-icon {
   margin-top: 3px;
   flex: none;
+  font-size: 14px;
+  color: var(--fg3);
 }
 
-.steps li.done span {
+.steps li.done .step-icon {
+  color: var(--ok);
+}
+
+.steps li.done span:not(.step-icon) {
   opacity: 0.65;
 }
 

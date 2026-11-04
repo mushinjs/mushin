@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { useToast } from '@mushin/ui'
-import { NAlert, NButton, NCard, NForm, NFormItem, NInputNumber, NProgress, NSelect, NSpace } from 'naive-ui'
+import { Alert, Button, Card, Form, FormItem, NumberInput, Progress, Select, useToast } from '@mushin/ui'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
@@ -58,45 +57,45 @@ async function save() {
 
 <template>
   <div class="model">
-    <NCard :title="t('agentPage.model.title')">
-      <NForm label-placement="top">
+    <Card :title="t('agentPage.model.title')">
+      <Form>
         <div class="row">
-          <NFormItem :label="t('agentPage.model.provider')">
-            <NSelect v-model:value="config.provider" clearable :options="providerOptions" :placeholder="t('agentPalette.defaultProvider')" />
-          </NFormItem>
-          <NFormItem :label="t('agentPage.model.model')">
+          <FormItem :label="t('agentPage.model.provider')">
+            <Select v-model:value="config.provider" clearable :options="providerOptions" :placeholder="t('agentPalette.defaultProvider')" />
+          </FormItem>
+          <FormItem :label="t('agentPage.model.model')">
             <ModelSelect :model-value="config.model" :provider="config.provider" :placeholder="t('agentPalette.defaultModel')" @update:model-value="(value) => (config.model = value ?? undefined)" />
-          </NFormItem>
+          </FormItem>
         </div>
         <div class="row">
-          <NFormItem :label="t('agentPage.model.maxSteps')" :feedback="t('agentPage.model.maxStepsHelp')">
-            <NInputNumber v-model:value="config.maxSteps" :min="1" :max="50" />
-          </NFormItem>
-          <NFormItem :label="t('agentPage.model.confirmTimeout')" :feedback="t('agentPage.model.confirmTimeoutHelp')">
-            <NInputNumber v-model:value="config.confirmTimeout" :min="10" />
-          </NFormItem>
+          <FormItem :label="t('agentPage.model.maxSteps')" :feedback="t('agentPage.model.maxStepsHelp')">
+            <NumberInput v-model:value="config.maxSteps" :min="1" :max="50" />
+          </FormItem>
+          <FormItem :label="t('agentPage.model.confirmTimeout')" :feedback="t('agentPage.model.confirmTimeoutHelp')">
+            <NumberInput v-model:value="config.confirmTimeout" :min="10" />
+          </FormItem>
         </div>
-        <NFormItem :label="t('agentPage.model.dailyTokens')" :feedback="t('agentPage.model.dailyTokensHelp')">
-          <NInputNumber v-model:value="config.dailyTokens" :min="0" :step="10000" />
-        </NFormItem>
-      </NForm>
+        <FormItem :label="t('agentPage.model.dailyTokens')" :feedback="t('agentPage.model.dailyTokensHelp')">
+          <NumberInput v-model:value="config.dailyTokens" :min="0" :step="10000" />
+        </FormItem>
+      </Form>
       <template #action>
-        <NSpace justify="space-between" align="center">
+        <div class="flex flex-wrap gap-x-3 gap-y-2 items-center justify-between">
           <span class="hint small">{{ t('agentPage.model.restartNote') }}</span>
-          <NButton type="primary" :loading="saving" :disabled="!entryId" @click="save">{{ t('common.save') }}</NButton>
-        </NSpace>
+          <Button type="primary" :loading="saving" :disabled="!entryId" @click="save">{{ t('common.save') }}</Button>
+        </div>
       </template>
-    </NCard>
+    </Card>
 
-    <NCard v-if="usage" :title="t('agentPage.model.usageTitle')">
+    <Card v-if="usage" :title="t('agentPage.model.usageTitle')">
       <p class="usage">{{ t('agentPage.model.usage', { input: usage.input.toLocaleString(), output: usage.output.toLocaleString() }) }}</p>
       <template v-if="usage.budget">
-        <NProgress type="line" :percentage="percent" :status="percent >= 100 ? 'error' : percent >= 80 ? 'warning' : 'success'" />
+        <Progress :percentage="percent" :status="percent >= 100 ? 'error' : percent >= 80 ? 'warning' : 'success'">{{ Math.round(percent) }}%</Progress>
         <p class="hint small">{{ t('agentPage.model.budget', { used: used.toLocaleString(), budget: usage.budget.toLocaleString() }) }}</p>
-        <NAlert v-if="percent >= 100" type="error" :show-icon="false">{{ t('agentPage.model.exhausted') }}</NAlert>
+        <Alert v-if="percent >= 100" type="error" :show-icon="false">{{ t('agentPage.model.exhausted') }}</Alert>
       </template>
       <p v-else class="hint small">{{ t('agentPage.model.noBudget') }}</p>
-    </NCard>
+    </Card>
   </div>
 </template>
 
