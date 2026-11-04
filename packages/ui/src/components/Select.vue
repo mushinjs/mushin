@@ -65,9 +65,11 @@ const typed = ref(false)
 const isGroup = (item: SelectOption | SelectGroup): item is SelectGroup => (item as SelectGroup).type === 'group'
 const flat = computed(() => props.options.flatMap((item) => (isGroup(item) ? item.children : [item])))
 const byValue = computed(() => new Map(flat.value.map((option) => [option.value, option])))
-const labelOf = (value: Value | null | undefined) => (value === null || value === undefined || value === '' ? '' : byValue.value.get(value)?.label ?? String(value))
+// '' counts as "nothing chosen" unless an option uses it, such as an "All" choice.
+const isEmpty = (value: unknown) => value === null || value === undefined || (value === '' && !byValue.value.has(''))
+const labelOf = (value: Value | null | undefined) => (isEmpty(value) ? '' : byValue.value.get(value as Value)?.label ?? String(value))
 
-const selected = computed<Value[]>(() => (props.multiple ? (Array.isArray(props.value) ? props.value : []) : props.value === null || props.value === undefined || props.value === '' ? [] : [props.value as Value]))
+const selected = computed<Value[]>(() => (props.multiple ? (Array.isArray(props.value) ? props.value : []) : isEmpty(props.value) ? [] : [props.value as Value]))
 const tagLimit = computed(() => (props.maxTagCount === 'responsive' ? 2 : props.maxTagCount))
 const shownTags = computed(() => (tagLimit.value === undefined ? selected.value : selected.value.slice(0, tagLimit.value)))
 
