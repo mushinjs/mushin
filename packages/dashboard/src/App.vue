@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { dateEnUS, dateZhCN, enUS, NConfigProvider, NDialogProvider, NGlobalStyle, NMessageProvider, zhCN } from 'naive-ui'
 import { computed, watchEffect } from 'vue'
+import { UiProvider } from '@mushin/ui'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import AppLayout from './components/AppLayout.vue'
@@ -8,7 +9,7 @@ import HighlightLayer from './components/HighlightLayer.vue'
 import { useTheme } from './theme'
 
 const route = useRoute()
-const { locale } = useI18n()
+const { locale, t } = useI18n()
 const { theme, overrides, isDark } = useTheme()
 // Lets global CSS (e.g. the logo) adapt to the active theme.
 watchEffect(() => document.documentElement.setAttribute('data-theme', isDark.value ? 'dark' : 'light'))
@@ -22,6 +23,11 @@ const english = {
   Select: { ...enUS.Select, placeholder: 'Select' },
   Cascader: { ...enUS.Cascader, placeholder: 'Select' },
 }
+// The shared components' own words, in the dashboard's language.
+const uiText = computed(() => {
+  const keys = ['on', 'off', 'enabled', 'disabled', 'clear', 'close', 'noOptions', 'add', 'ok', 'cancel', 'loading'] as const
+  return { ...Object.fromEntries(keys.map((key) => [key, t(`ui.${key}`)])), useValue: t('ui.useValue', { value: '{value}' }) }
+})
 </script>
 
 <template>
@@ -34,9 +40,11 @@ const english = {
     <NGlobalStyle />
     <NMessageProvider>
       <NDialogProvider>
-        <RouterView v-if="route.meta.public" />
-        <AppLayout v-else />
-        <HighlightLayer />
+        <UiProvider :text="uiText">
+          <RouterView v-if="route.meta.public" />
+          <AppLayout v-else />
+          <HighlightLayer />
+        </UiProvider>
       </NDialogProvider>
     </NMessageProvider>
   </NConfigProvider>

@@ -1,4 +1,19 @@
 export default {
+  // Words the shared components (@mushin/ui) show themselves.
+  ui: {
+    on: 'On',
+    off: 'Off',
+    enabled: 'Enabled',
+    disabled: 'Disabled',
+    clear: 'Clear',
+    close: 'Close',
+    noOptions: 'No options',
+    useValue: 'Use “{value}”',
+    add: 'Add',
+    ok: 'OK',
+    cancel: 'Cancel',
+    loading: 'Loading',
+  },
   app: {
     tagline: 'Describe what you want. Get what you envision.',
   },

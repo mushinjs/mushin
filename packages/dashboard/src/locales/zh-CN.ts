@@ -1,6 +1,20 @@
 import type en from './en'
 
 const zhCN: typeof en = {
+  ui: {
+    on: '开',
+    off: '关',
+    enabled: '已启用',
+    disabled: '已停用',
+    clear: '清空',
+    close: '关闭',
+    noOptions: '没有可选项',
+    useValue: '使用“{value}”',
+    add: '添加',
+    ok: '确定',
+    cancel: '取消',
+    loading: '加载中',
+  },
   app: {
     tagline: '描述你想要的，得到你所设想的。',
   },
