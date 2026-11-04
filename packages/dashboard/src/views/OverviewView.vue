@@ -1,10 +1,6 @@
 <script setup lang="ts">
-import {
-  AlertCircleOutline, ChatbubblesOutline, ChevronDownOutline, ChevronForwardOutline, FlashOutline, GitNetworkOutline, KeyOutline, SparklesOutline,
-} from '@vicons/ionicons5'
-import { useToast } from '@mushin/ui'
-import { NButton, NEmpty, NIcon, NRadioButton, NRadioGroup, NSelect } from 'naive-ui'
-import { type Component, computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Button, Empty, RadioButton, RadioGroup, Select, useToast } from '@mushin/ui'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { call, on } from '../api'
@@ -120,22 +116,22 @@ function duration(seconds: number) {
 // Only what someone should act on: a bot that cannot connect, a flow with errors, a provider
 // that fails its test. Everything healthy stays out of this list.
 
-interface Attention { key: string, level: 'bad' | 'warn', icon: Component, title: string, detail?: string, to: string }
+interface Attention { key: string, level: 'bad' | 'warn', icon: string, title: string, detail?: string, to: string }
 
 const attention = computed<Attention[]>(() => {
   const items: Attention[] = []
   for (const bot of data.bots) {
     if (!bot.enabled) continue
-    if (bot.status === 'error') items.push({ key: `bot-${bot.id}`, level: 'bad', icon: ChatbubblesOutline, title: t('overview.botProblem', { name: bot.name }), detail: bot.error, to: `/bots/${bot.id}/connection` })
-    else if (bot.status !== 'online') items.push({ key: `bot-${bot.id}`, level: 'warn', icon: ChatbubblesOutline, title: t('overview.botWaiting', { name: bot.name }), detail: t('overview.botWaitingHint'), to: `/bots/${bot.id}/connection` })
+    if (bot.status === 'error') items.push({ key: `bot-${bot.id}`, level: 'bad', icon: 'i-lucide-messages-square', title: t('overview.botProblem', { name: bot.name }), detail: bot.error, to: `/bots/${bot.id}/connection` })
+    else if (bot.status !== 'online') items.push({ key: `bot-${bot.id}`, level: 'warn', icon: 'i-lucide-messages-square', title: t('overview.botWaiting', { name: bot.name }), detail: t('overview.botWaitingHint'), to: `/bots/${bot.id}/connection` })
   }
   for (const flow of allFlows.value) {
-    if (flow.enabled && flow.errors) items.push({ key: `flow-${flow.id}`, level: 'bad', icon: GitNetworkOutline, title: t('overview.flowProblem', { name: flow.name }), detail: t('overview.flowErrors', { n: flow.errors }), to: `/flows/${flow.id}` })
+    if (flow.enabled && flow.errors) items.push({ key: `flow-${flow.id}`, level: 'bad', icon: 'i-lucide-network', title: t('overview.flowProblem', { name: flow.name }), detail: t('overview.flowErrors', { n: flow.errors }), to: `/flows/${flow.id}` })
   }
   for (const provider of data.providers) {
-    if (provider.lastTest && !provider.lastTest.ok) items.push({ key: `provider-${provider.id}`, level: 'bad', icon: KeyOutline, title: t('overview.providerProblem', { name: provider.name }), detail: provider.lastTest.error, to: `/providers?highlight=${provider.id}` })
+    if (provider.lastTest && !provider.lastTest.ok) items.push({ key: `provider-${provider.id}`, level: 'bad', icon: 'i-lucide-key-round', title: t('overview.providerProblem', { name: provider.name }), detail: provider.lastTest.error, to: `/providers?highlight=${provider.id}` })
   }
-  if (data.loadedProviders && !data.providers.length) items.push({ key: 'no-provider', level: 'warn', icon: KeyOutline, title: t('overview.noProvider'), detail: t('overview.noProviderHint'), to: '/providers' })
+  if (data.loadedProviders && !data.providers.length) items.push({ key: 'no-provider', level: 'warn', icon: 'i-lucide-key-round', title: t('overview.noProvider'), detail: t('overview.noProviderHint'), to: '/providers' })
   return items.sort((a, b) => (a.level === b.level ? 0 : a.level === 'bad' ? -1 : 1))
 })
 
@@ -156,7 +152,7 @@ const cards = computed(() => {
   return [
     {
       key: 'bots',
-      icon: ChatbubblesOutline,
+      icon: 'i-lucide-messages-square',
       label: t('overview.botsOnline'),
       value: number(value.bots.online),
       total: value.bots.total,
@@ -167,7 +163,7 @@ const cards = computed(() => {
     },
     {
       key: 'messages',
-      icon: SparklesOutline,
+      icon: 'i-lucide-sparkles',
       label: t('overview.messagesToday'),
       value: number(value.today.received + value.today.sent),
       hint: t('overview.receivedSentN', { r: number(value.today.received), s: number(value.today.sent) }),
@@ -175,7 +171,7 @@ const cards = computed(() => {
     },
     {
       key: 'tokens',
-      icon: FlashOutline,
+      icon: 'i-lucide-zap',
       label: t('overview.tokensToday'),
       value: number(value.today.llmTokens),
       hint: t('overview.llmCalls', { n: value.today.llmCalls }),
@@ -183,7 +179,7 @@ const cards = computed(() => {
     },
     {
       key: 'flows',
-      icon: GitNetworkOutline,
+      icon: 'i-lucide-network',
       label: t('overview.flowRunsToday'),
       value: number(value.today.flowRuns),
       hint: value.today.flowErrors ? t('overview.failedRuns', { n: value.today.flowErrors }) : t('overview.flowsEnabled', { n: value.flows.enabled, total: value.flows.total }),
@@ -308,18 +304,18 @@ function openSession(id: string) {
 
     <section v-if="attention.length" class="attention" data-agent-target="overview.attention">
       <header class="attention-head">
-        <NIcon :size="16" class="attention-icon"><AlertCircleOutline /></NIcon>
+        <span class="i-lucide-circle-alert attention-icon text-[16px]" />
         {{ t('overview.attention') }}
         <span class="attention-count">{{ attention.length }}</span>
       </header>
       <RouterLink v-for="item in attention" :key="item.key" :to="item.to" class="attention-row">
         <span class="stripe" :class="item.level" />
-        <NIcon :size="16" class="attention-kind"><component :is="item.icon" /></NIcon>
+        <span class="attention-kind text-[16px]" :class="item.icon" />
         <span class="attention-text">
           <span class="attention-title">{{ item.title }}</span>
           <span v-if="item.detail" class="attention-detail" :title="item.detail">{{ item.detail }}</span>
         </span>
-        <span class="attention-go">{{ t('overview.handle') }}<NIcon :size="14"><ChevronForwardOutline /></NIcon></span>
+        <span class="attention-go">{{ t('overview.handle') }}<span class="i-lucide-chevron-right text-[14px]" /></span>
       </RouterLink>
     </section>
 
@@ -333,7 +329,7 @@ function openSession(id: string) {
         :class="{ link: !!card.to }"
         :data-agent-target="`overview.${card.key}`"
       >
-        <span class="kpi-label"><NIcon :size="15"><component :is="card.icon" /></NIcon>{{ card.label }}</span>
+        <span class="kpi-label"><span class="text-[15px]" :class="card.icon" />{{ card.label }}</span>
         <span class="kpi-value">{{ card.value }}<small v-if="card.total !== undefined">/ {{ card.total }}</small></span>
         <span class="kpi-hint" :class="{ danger: card.danger }">{{ card.hint }}</span>
         <svg v-if="card.spark" class="spark" viewBox="0 0 200 30" preserveAspectRatio="none" aria-hidden="true">
@@ -348,19 +344,19 @@ function openSession(id: string) {
       <section class="panel" data-agent-target="overview.activity">
         <header class="panel-head">
           <h2>{{ t('overview.activity') }}</h2>
-          <NRadioGroup v-model:value="range" size="small">
-            <NRadioButton value="24h">{{ t('overview.last24h') }}</NRadioButton>
-            <NRadioButton value="7d">{{ t('overview.last7d') }}</NRadioButton>
-          </NRadioGroup>
+          <RadioGroup v-model:value="range" size="small">
+            <RadioButton value="24h">{{ t('overview.last24h') }}</RadioButton>
+            <RadioButton value="7d">{{ t('overview.last7d') }}</RadioButton>
+          </RadioGroup>
         </header>
         <EChart v-if="hasActivity" :option="activityOption" :height="240" />
-        <NEmpty v-else :description="t('overview.noMessages')" class="empty" />
+        <Empty v-else :description="t('overview.noMessages')" class="empty" />
       </section>
 
       <section class="panel" data-agent-target="overview.ranking">
         <header class="panel-head">
           <h2>{{ t('overview.ranking') }}</h2>
-          <NSelect v-model:value="dimension" :options="dimensions" size="small" class="rank-select" />
+          <Select v-model:value="dimension" :options="dimensions" size="small" class="rank-select" />
         </header>
         <ol v-if="ranking.length" class="ranks">
           <li v-for="(row, index) in ranking" :key="row.key" class="rank">
@@ -371,7 +367,7 @@ function openSession(id: string) {
             <span v-if="rankDetail(row)" class="rank-detail">{{ rankDetail(row) }}</span>
           </li>
         </ol>
-        <NEmpty v-else :description="t('overview.noData')" class="empty" />
+        <Empty v-else :description="t('overview.noData')" class="empty" />
       </section>
     </div>
 
@@ -406,7 +402,7 @@ function openSession(id: string) {
       <button type="button" class="runtime-head" :aria-expanded="showRuntime" @click="showRuntime = !showRuntime">
         <h2>{{ t('overview.runtime') }}</h2>
         <span class="runtime-summary">{{ runtimeSummary }}</span>
-        <NIcon :size="16" class="chevron" :class="{ open: showRuntime }"><ChevronDownOutline /></NIcon>
+        <span class="i-lucide-chevron-down chevron text-[16px]" :class="{ open: showRuntime }" />
       </button>
       <div v-if="showRuntime" class="runtime-body">
         <dl class="facts">
@@ -439,7 +435,7 @@ function openSession(id: string) {
           </div>
         </details>
         <RouterLink to="/plugins">
-          <NButton size="small" quaternary>{{ t('nav.plugins') }}<template #icon><NIcon><ChevronForwardOutline /></NIcon></template></NButton>
+          <Button size="small" quaternary>{{ t('nav.plugins') }}<template #icon><span class="i-lucide-chevron-right" /></template></Button>
         </RouterLink>
       </div>
     </section>
