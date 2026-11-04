@@ -114,7 +114,8 @@ function key(channel: { type: string; id: string }) {
 }
 
 async function loadChannels() {
-  channels.value = await call<ChannelSummary[]>('bots.channels', { id: props.botId })
+  // Only what the bot received or sent since Mushin started; older history is not shown here.
+  channels.value = await call<ChannelSummary[]>('bots.channels', { id: props.botId, sinceStart: true })
   if (!selected.value && channels.value[0]) selected.value = key(channels.value[0])
 }
 
@@ -123,7 +124,7 @@ async function loadMessages() {
     records.value = []
     return
   }
-  const all = await call<MessageRecord[]>('bots.messages', { id: props.botId, channel: current.value.id, limit: 200 })
+  const all = await call<MessageRecord[]>('bots.messages', { id: props.botId, channel: current.value.id, limit: 200, sinceStart: true })
   records.value = all.filter((record) => key(record.channel) === selected.value)
   scrollToEnd()
 }

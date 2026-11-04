@@ -728,6 +728,9 @@ export class BotManager extends Service {
 
   // ---- messages ----
 
+  /** Messages recorded since Mushin started, for the live conversation. */
+  private recent = new WeakSet<MessageRecord>()
+
   private record(partial: Omit<MessageRecord, 'id' | 'type' | 'platforms'>): MessageRecord {
     const record: MessageRecord = {
       ...partial,
@@ -743,6 +746,7 @@ export class BotManager extends Service {
     this.home.storage.append(`messages/${record.botId}/${day}`, record).catch((error) => {
       this.logger.warn('failed to write message log: %s', error)
     })
+    this.recent.add(record)
     this.archive?.add(record)
     this.home.emit('bots/message', record)
     return record
@@ -752,9 +756,13 @@ export class BotManager extends Service {
    * Recent messages of a bot, oldest first. With the database plugin, a channel's history and
    * older pages (`before`) come from the database; otherwise from today's log and memory.
    */
-  async messages(id: string, options: { limit?: number; channel?: string; before?: number } = {}) {
+  async messages(id: string, options: { limit?: number; channel?: string; before?: number; sinceStart?: boolean } = {}) {
     this.get(id)
     const limit = options.limit ?? 100
+    if (options.sinceStart) {
+      const list = (this.buffers.get(id) ?? []).filter((record) => this.recent.has(record) && (!options.channel || record.channel.id === options.channel))
+      return list.slice(-limit)
+    }
     const archive = this.archive?.ready ? this.archive : undefined
     if (archive && (options.channel || options.before)) return archive.query(id, { ...options, limit })
     let buffer = this.buffers.get(id)
@@ -774,9 +782,9 @@ export class BotManager extends Service {
   }
 
   /** Channels seen recently, newest first, for the live view's channel list. */
-  async channels(id: string) {
+  async channels(id: string, options: { sinceStart?: boolean } = {}) {
     const seen = new Map<string, ChannelInfo & { lastAt: number; lastText: string }>()
-    for (const record of await this.messages(id, { limit: BUFFER_SIZE })) {
+    for (const record of await this.messages(id, { limit: BUFFER_SIZE, sinceStart: options.sinceStart })) {
       const key = `${record.channel.type}:${record.channel.id}`
       const text = record.segments.map((s) => (s.type === 'text' ? s.data.text : `[${s.type}]`)).join('')
       seen.set(key, { ...record.channel, name: record.channel.name ?? seen.get(key)?.name, lastAt: record.timestamp, lastText: text.slice(0, 80) })
@@ -983,6 +991,7 @@ export class BotManager extends Service {
         limit: z.number().int().min(1).max(BUFFER_SIZE).optional(),
         channel: z.string().optional().describe('Group or user id to filter by'),
         before: z.number().optional().describe('Only messages sent before this time (ms since 1970), to page back through older messages; with the database plugin the history goes back to the first message'),
+        sinceStart: z.boolean().optional().describe('Only messages received or sent since Mushin started'),
       }),
       handler: ({ id, ...options }) => this.messages(id, options),
     })
@@ -1019,8 +1028,8 @@ export class BotManager extends Service {
       name: 'bots.channels',
       description: 'Channels (groups and private chats) a bot has seen recently.',
       risk: 'read',
-      input: idInput,
-      handler: ({ id }) => this.channels(id),
+      input: idInput.extend({ sinceStart: z.boolean().optional().describe('Only channels with messages since Mushin started') }),
+      handler: ({ id, sinceStart }) => this.channels(id, { sinceStart }),
     })
 
     yield actions.define({
