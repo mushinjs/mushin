@@ -102,7 +102,7 @@ const all = computed<Result[]>(() => {
     },
     ...data.bots.map((bot): Result => ({
       key: `bot:${bot.id}`, group: g.bot, label: bot.name, sub: bot.selfId ? `${bot.selfName ?? ''} ${bot.selfId}`.trim() : undefined,
-      avatar: { id: bot.id, name: bot.name }, words: bot.id, run: go(`/bots/${bot.id}`),
+      avatar: { id: bot.id, name: bot.name, src: bot.selfAvatar }, words: bot.id, run: go(`/bots/${bot.id}`),
     })),
     ...flows.value.map((flow): Result => ({
       key: `flow:${flow.id}`, group: g.flow, label: flow.name, sub: flow.description, icon: GitNetworkOutline,

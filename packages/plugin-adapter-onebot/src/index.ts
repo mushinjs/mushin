@@ -5,7 +5,7 @@ import type { GroupRole } from '@mushin/plugin-bots'
 import type {} from '@cordisjs/plugin-server'
 import type {} from '@mushin/plugin-flows'
 import { onebotNodes } from './nodes'
-import { ONEBOT_SEGMENTS, OneBotConnection, type OneBotResponse } from './protocol'
+import { ONEBOT_SEGMENTS, OneBotConnection, type OneBotResponse, qqAvatar } from './protocol'
 
 export * from './events'
 export * from './nodes'
@@ -213,7 +213,7 @@ const Reverse = {
         ctx.bot.setStatus('connecting')
       })
       const selfId = req.headers.get('x-self-id')
-      if (selfId) ctx.bot.setSelf(selfId)
+      if (selfId) ctx.bot.setSelf(selfId, undefined, qqAvatar(selfId))
       connection.login().catch((error) => {
         logger.warn('get_login_info failed: %s', error)
         ctx.bot.setStatus('error', `Connected, but get_login_info failed: ${error.message}`)

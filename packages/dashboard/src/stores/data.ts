@@ -40,6 +40,7 @@ export const useDataStore = defineStore('data', () => {
     bot.error = info.error
     bot.selfId = info.selfId
     bot.selfName = info.selfName
+    bot.selfAvatar = info.selfAvatar
   }
 
   let bound = false

@@ -140,6 +140,8 @@ export class Bot extends Service {
   error?: string
   selfId?: string
   selfName?: string
+  /** The account's picture, as a URL the dashboard can load; adapters set it when the platform has one. */
+  selfAvatar?: string
   record: BotRecord
   private hooks: BotHooks
   private transport?: Transport
@@ -175,9 +177,10 @@ export class Bot extends Service {
     this.hooks.status(this)
   }
 
-  setSelf(id: string, name?: string) {
+  setSelf(id: string, name?: string, avatar?: string) {
     this.selfId = id
     this.selfName = name
+    this.selfAvatar = avatar
     this.hooks.status(this)
   }
 

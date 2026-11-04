@@ -160,7 +160,7 @@ export class OneBotConnection {
 
   private async fetchLogin() {
     const info = await this.call('get_login_info')
-    this.ctx.bot.setSelf(String(info.user_id), info.nickname)
+    this.ctx.bot.setSelf(String(info.user_id), info.nickname, qqAvatar(info.user_id))
     this.logger.info('logged in as %s (%s)', info.nickname ?? 'unknown', info.user_id)
     this.ctx.bot.setStatus('online')
   }
@@ -280,4 +280,9 @@ export class OneBotConnection {
       timestamp: typeof payload.time === 'number' ? payload.time * 1000 : Date.now(),
     }).catch((error) => this.logger.warn('failed to handle message: %s', error))
   }
+}
+
+/** A QQ account's picture. QQ serves every account's avatar at this address, no login needed. */
+export function qqAvatar(userId: string | number) {
+  return `https://q1.qlogo.cn/g?b=qq&nk=${userId}&s=140`
 }

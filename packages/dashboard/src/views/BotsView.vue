@@ -25,6 +25,9 @@ if (route.query.new) {
   router.replace({ query: { ...route.query, new: undefined } })
 }
 const busy = ref<string>()
+// Avatars that failed to load (offline, blocked), so those cards fall back to the initial.
+const brokenAvatars = ref(new Set<string>())
+const avatarOf = (bot: Bot) => (bot.selfAvatar && !brokenAvatars.value.has(bot.selfAvatar) ? bot.selfAvatar : undefined)
 
 onMounted(() => data.refreshBots().catch((error) => message.error(error.message)))
 
@@ -145,7 +148,15 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
       >
         <div class="bot-head">
           <div class="avatar" :style="{ background: avatarColor(bot.id) }" aria-hidden="true">
-            {{ initial(bot.name) }}
+            <img
+              v-if="avatarOf(bot)"
+              :src="avatarOf(bot)"
+              alt=""
+              class="avatar-img"
+              referrerpolicy="no-referrer"
+              @error="brokenAvatars.add(bot.selfAvatar!)"
+            >
+            <template v-else>{{ initial(bot.name) }}</template>
             <span class="dot" :class="stateClass[stateOf(bot)]" />
           </div>
           <div class="bot-title">
@@ -321,6 +332,14 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
   color: #fff;
   font-size: 15px;
   font-weight: 650;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--s2);
 }
 
 .stopped .avatar {

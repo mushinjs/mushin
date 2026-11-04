@@ -175,6 +175,7 @@ export interface Bot {
   error?: string
   selfId?: string
   selfName?: string
+  selfAvatar?: string
 }
 
 export interface CommandSettings {
@@ -215,6 +216,7 @@ export interface BotStatusInfo {
   error?: string
   selfId?: string
   selfName?: string
+  selfAvatar?: string
 }
 
 export interface AdapterType {

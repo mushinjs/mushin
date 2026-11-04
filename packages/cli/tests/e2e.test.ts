@@ -108,6 +108,7 @@ describe('bots over OneBot', () => {
       return current.status === 'online' && current
     })
     expect(status.selfId).toBe(napcat.selfId)
+    expect(status.selfAvatar).toBe(`https://q1.qlogo.cn/g?b=qq&nk=${napcat.selfId}&s=140`)
   })
 
   it('runs a bot plugin and records provenance on the reply', async () => {

@@ -70,6 +70,7 @@ export interface BotStatusInfo {
   error?: string
   selfId?: string
   selfName?: string
+  selfAvatar?: string
 }
 
 interface Runtime {
@@ -237,7 +238,7 @@ export class BotManager extends Service {
 
   status(id: string): BotStatusInfo {
     const bot = this.bot(id)
-    if (bot) return { id, status: bot.status, error: bot.error, selfId: bot.selfId, selfName: bot.selfName }
+    if (bot) return { id, status: bot.status, error: bot.error, selfId: bot.selfId, selfName: bot.selfName, selfAvatar: bot.selfAvatar }
     const error = this.startErrors.get(id)
     return { id, status: error ? 'error' : 'offline', error }
   }
