@@ -7,7 +7,7 @@ import {
   usageReply,
 } from './commands'
 import {
-  type BotEvent, type BotRecord, type BotRole, type BotStatus, type GroupRole, type GroupRoleResolver, type IncomingMessage, roleAtLeast,
+  type BotEvent, type BotRecord, type BotRole, type BotStatus, type GroupRole, type GroupRoleResolver, type IncomingMessage, type MediaResolver, roleAtLeast,
   type SourcedContent, type Transport,
 } from './types'
 
@@ -150,6 +150,7 @@ export class Bot extends Service {
   private ownCommands = new Set<{ def: CommandDef; plugin: string }>()
   private commandProviders = new Set<() => CommandEntry[]>()
   private roleResolver?: GroupRoleResolver
+  private mediaResolver?: MediaResolver
 
   constructor(ctx: Context, config: { record: BotRecord; hooks: BotHooks }) {
     super(ctx, 'bot')
@@ -204,6 +205,28 @@ export class Bot extends Service {
         if (this.roleResolver === resolver) this.roleResolver = undefined
       }
     }, 'bot.useRoleResolver()')
+  }
+
+  /** Called by adapters that can fetch a message's media and forwarded chat histories. */
+  useMediaResolver(resolver: MediaResolver) {
+    return this.ctx.effect(() => {
+      this.mediaResolver = resolver
+      return () => {
+        if (this.mediaResolver === resolver) this.mediaResolver = undefined
+      }
+    }, 'bot.useMediaResolver()')
+  }
+
+  /** An address for an image, video, voice or file segment; see `MediaResolver.media`. */
+  async media(segment: Segment, options: { channel?: ChannelInfo; inline?: boolean } = {}) {
+    if (!this.mediaResolver?.media) throw new Error(`the ${this.platform} adapter cannot fetch media`)
+    return this.mediaResolver.media(segment, { channel: options.channel, inline: options.inline ?? false })
+  }
+
+  /** The messages of a forwarded chat history. */
+  async forward(id: string) {
+    if (!this.mediaResolver?.forward) throw new Error(`the ${this.platform} adapter cannot read forwarded messages`)
+    return this.mediaResolver.forward(id)
   }
 
   /** The user's role on this bot, from the permissions plugin; nothing when it is not running. */

@@ -88,6 +88,31 @@ export interface PermissionProvider {
 /** Asks the platform for a sender's group role; registered per bot by adapters that can tell. */
 export type GroupRoleResolver = (target: { channel: ChannelInfo; user: UserInfo }) => Promise<GroupRole | undefined>
 
+/** A file a message points at, as an address the dashboard can open. */
+export interface ResolvedMedia {
+  /** An http(s) address, or a `data:` URL when the bytes were fetched for showing in place. */
+  url: string
+  name?: string
+  size?: number
+}
+
+/** One message of a forwarded chat history. */
+export interface ForwardedMessage {
+  user: UserInfo
+  timestamp: number
+  segments: Segment[]
+}
+
+/**
+ * Fetches what a message only points at: images, videos and files (whose addresses in the message
+ * can expire) and the messages of a forwarded chat history. Registered per bot by adapters.
+ */
+export interface MediaResolver {
+  /** `inline`: return the bytes as a data URL, for showing an image in place. */
+  media?(segment: Segment, options: { channel?: ChannelInfo; inline: boolean }): Promise<ResolvedMedia | undefined>
+  forward?(id: string): Promise<ForwardedMessage[]>
+}
+
 /** Content plus an explicit source, e.g. an LLM result (`{ text, source }`). */
 export interface SourcedContent {
   text?: string

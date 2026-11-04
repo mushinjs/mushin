@@ -3,8 +3,9 @@ import { NPopover, NTag } from 'naive-ui'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import type { MessageRecord, Segment } from '../types'
+import type { MessageRecord } from '../types'
 import { formatTime } from '../utils'
+import MessageContent from './message/MessageContent.vue'
 
 const props = defineProps<{ record: MessageRecord }>()
 const { t, te } = useI18n()
@@ -48,33 +49,14 @@ const knowledge = computed(() => (source.value.kind === 'flow' ? source.value.kn
 
 const typeLabel = computed(() => (te(`messageType.${props.record.type}`) ? t(`messageType.${props.record.type}`) : props.record.type))
 
-function segmentText(segment: Segment) {
-  switch (segment.type) {
-    case 'text':
-      return segment.data.text
-    case 'at':
-      return `@${segment.data.name ?? segment.data.qq} `
-    case 'face':
-      return `[${t('segment.face')}]`
-    case 'reply':
-      return ''
-    default:
-      return `[${te(`segment.${segment.type}`) ? t(`segment.${segment.type}`) : segment.type}]`
-  }
-}
-
-/** Images and sticker images (`mface`) that can be shown, by their address. */
-function imageUrl(segment: Segment) {
-  if (segment.type !== 'image' && segment.type !== 'mface') return undefined
-  const url = segment.data.url ?? segment.data.file
-  return typeof url === 'string' && /^(https?:|data:image\/)/.test(url) ? url : undefined
-}
-
-// Images that failed to load: QQ's links expire after a while, and then only a note is shown.
-const broken = ref(new Set<number>())
-function onImageError(index: number) {
-  broken.value = new Set([...broken.value, index])
-}
+/** A message that is only an image, video, card or forward shows without the bubble around it, as in QQ. */
+const BLOCKS = new Set(['image', 'mface', 'video', 'forward', 'node', 'json', 'file'])
+const bare = computed(() => {
+  const shown = props.record.segments.filter((segment) => segment.type !== 'reply')
+  if (!shown.length) return false
+  if (shown.every((segment) => segment.type === 'node')) return true
+  return shown.length === 1 && BLOCKS.has(shown[0].type)
+})
 </script>
 
 <template>
@@ -87,7 +69,7 @@ function onImageError(index: number) {
       <template #trigger>
         <div
           class="bubble"
-          :class="[`source-${source.kind}`]"
+          :class="[`source-${source.kind}`, { bare }]"
           tabindex="0"
           :data-message-id="record.id"
           @mouseenter="open = true"
@@ -95,27 +77,7 @@ function onImageError(index: number) {
           @focus="open = true"
           @blur="open = false"
         >
-          <template v-for="(segment, index) in record.segments" :key="index">
-            <!--
-              QQ's image servers answer requests that carry another site's address as the referrer with an
-              anti-hotlinking placeholder, so images are fetched without one. Not lazy: a lazy image has no
-              size until it loads, and in the conversation's scroll area it was never asked to load.
-            -->
-            <template v-if="imageUrl(segment)">
-              <img
-                v-if="!broken.has(index)"
-                :src="imageUrl(segment)"
-                class="image"
-                alt=""
-                decoding="async"
-                referrerpolicy="no-referrer"
-                @error="onImageError(index)"
-              >
-              <a v-else :href="imageUrl(segment)" target="_blank" rel="noreferrer noopener" class="image-missing">{{ t('segment.imageExpired') }}</a>
-            </template>
-            <span v-else-if="segment.type === 'at'" class="at">{{ segmentText(segment) }}</span>
-            <span v-else>{{ segmentText(segment) }}</span>
-          </template>
+          <MessageContent :segments="record.segments" :bot-id="record.botId" :channel="record.channel" />
         </div>
       </template>
       <dl class="info">
@@ -200,32 +162,18 @@ function onImageError(index: number) {
   border-color: rgba(124, 139, 217, 0.6);
 }
 
+.bubble.bare,
+.out .bubble.bare {
+  padding: 0;
+  background: transparent;
+}
+
 .out .bubble.source-llm {
   background: rgba(32, 128, 240, 0.14);
 }
 
 .out .bubble.source-plugin {
   background: rgba(24, 160, 88, 0.14);
-}
-
-.at {
-  color: var(--primary);
-}
-
-.image {
-  display: block;
-  max-width: 220px;
-  max-height: 220px;
-  border-radius: 6px;
-  margin: 4px 0;
-}
-
-.image-missing {
-  display: inline-block;
-  margin: 4px 0;
-  font-size: 12px;
-  opacity: 0.75;
-  color: inherit;
 }
 
 .info {

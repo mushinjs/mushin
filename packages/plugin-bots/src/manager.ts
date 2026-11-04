@@ -823,6 +823,22 @@ export class BotManager extends Service {
     return bot.deliver(channel, text, { source: { kind: 'manual' } })
   }
 
+  /** A fresh address of a message's image, video or file, from the platform. */
+  async media(id: string, segment: Segment, options: { channel?: ChannelInfo; inline?: boolean }) {
+    const bot = this.bot(id)
+    if (!bot) throw new MushinError('unavailable', 'The bot is not running')
+    const media = await bot.media(segment, options)
+    if (!media) throw new MushinError('not_found', 'The platform no longer has this file')
+    return media
+  }
+
+  /** The messages of a forwarded chat history, from the platform. */
+  async forwarded(id: string, forward: string) {
+    const bot = this.bot(id)
+    if (!bot) throw new MushinError('unavailable', 'The bot is not running')
+    return { messages: await bot.forward(forward) }
+  }
+
   // ---- actions ----
 
   private *defineActions() {
@@ -969,6 +985,26 @@ export class BotManager extends Service {
         before: z.number().optional().describe('Only messages sent before this time (ms since 1970), to page back through older messages; with the database plugin the history goes back to the first message'),
       }),
       handler: ({ id, ...options }) => this.messages(id, options),
+    })
+
+    yield actions.define({
+      name: 'bots.media',
+      description: 'Fetch an image, video, voice or file from a message again, since the address in the message can expire. Returns { url, name?, size? }; with inline, an image comes back as a data URL.',
+      risk: 'read',
+      input: idInput.extend({
+        segment: z.object({ type: z.string(), data: z.record(z.string(), z.any()) }).describe('The segment from the message record'),
+        channel: z.object({ type: z.enum(['group', 'private']), id: z.string() }).optional().describe('Where the message was sent; group files need it'),
+        inline: z.boolean().optional().describe('Return the bytes as a data URL, for showing an image'),
+      }),
+      handler: ({ id, segment, channel, inline }) => this.media(id, segment, { channel, inline }),
+    })
+
+    yield actions.define({
+      name: 'bots.forward',
+      description: 'The messages of a forwarded chat history (a forward segment\'s id), oldest first, each with its sender, time and segments.',
+      risk: 'read',
+      input: idInput.extend({ forward: z.string().min(1).describe('The id in the forward segment') }),
+      handler: ({ id, forward }) => this.forwarded(id, forward),
     })
 
     yield actions.define({

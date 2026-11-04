@@ -4,10 +4,12 @@ import { type Context, field, z } from '@mushin/core'
 import type { GroupRole } from '@mushin/plugin-bots'
 import type {} from '@cordisjs/plugin-server'
 import type {} from '@mushin/plugin-flows'
+import { onebotMedia } from './media'
 import { onebotNodes } from './nodes'
 import { ONEBOT_SEGMENTS, OneBotConnection, type OneBotResponse, qqAvatar } from './protocol'
 
 export * from './events'
+export * from './media'
 export * from './nodes'
 export * from './protocol'
 
@@ -337,6 +339,7 @@ const Connection = {
   apply(ctx: Context, config: AdapterConfig) {
     ctx.plugin(config.mode === 'reverse' ? Reverse : config.mode === 'http' ? Http : Forward, config)
     ctx.bot.useRoleResolver(groupRoleResolver(ctx))
+    ctx.bot.useMediaResolver(onebotMedia(ctx))
   },
 }
 
