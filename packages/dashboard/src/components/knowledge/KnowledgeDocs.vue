@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { CloudUploadOutline, DocumentTextOutline, GlobeOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5'
-import { useConfirm, useToast } from '@mushin/ui'
-import { NButton, NCard, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NProgress, NSpace, NTag } from 'naive-ui'
+import { Button, Card, Empty, Form, FormItem, Input, Modal, Progress, Tag, useConfirm, useToast } from '@mushin/ui'
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -180,34 +178,32 @@ const percent = (item: KnowledgeProgress) => (item.total ? Math.round((item.done
       @dragleave="dragging = false"
       @drop.prevent="drop"
     >
-      <NIcon size="32" class="muted"><CloudUploadOutline /></NIcon>
+      <span class="i-lucide-cloud-upload muted text-[32px]" />
       <div>{{ t('knowledge.docs.drop') }}</div>
       <div class="muted small">{{ t('knowledge.docs.formats') }}</div>
-      <NSpace justify="center">
-        <NButton type="primary" :loading="uploading" @click="fileInput?.click()">{{ t('knowledge.docs.pickFiles') }}</NButton>
-        <NButton @click="showText = true">
-          <template #icon><NIcon><DocumentTextOutline /></NIcon></template>
+      <div class="flex flex-wrap gap-x-3 gap-y-2 items-center justify-center">
+        <Button type="primary" :loading="uploading" @click="fileInput?.click()">{{ t('knowledge.docs.pickFiles') }}</Button>
+        <Button icon="i-lucide-file-text" @click="showText = true">
           {{ t('knowledge.docs.pasteText') }}
-        </NButton>
-        <NButton @click="showUrl = true">
-          <template #icon><NIcon><GlobeOutline /></NIcon></template>
+        </Button>
+        <Button icon="i-lucide-globe" @click="showUrl = true">
           {{ t('knowledge.docs.addUrl') }}
-        </NButton>
-      </NSpace>
+        </Button>
+      </div>
       <input ref="fileInput" type="file" accept=".md,.markdown,.txt,.html,.htm,.pdf,.docx" multiple hidden @change="pick">
     </div>
 
-    <NCard v-if="!docs.length" size="small">
-      <NEmpty :description="t('knowledge.docs.empty')" />
-    </NCard>
+    <Card v-if="!docs.length" size="small">
+      <Empty :description="t('knowledge.docs.empty')" />
+    </Card>
     <div v-else class="list">
-      <NCard v-for="doc in docs" :key="doc.id" size="small">
+      <Card v-for="doc in docs" :key="doc.id" size="small">
         <div class="row">
           <div class="info">
             <strong class="name">{{ doc.title }}</strong>
             <div class="meta muted">
-              <NTag size="small" :bordered="false" :type="STATUS_TYPE[doc.status]">{{ t(`knowledge.docs.status.${doc.status}`) }}</NTag>
-              <NTag size="small" :bordered="false">{{ t(`knowledge.docs.kind.${doc.kind}`) }}</NTag>
+              <Tag size="small" :type="STATUS_TYPE[doc.status]">{{ t(`knowledge.docs.status.${doc.status}`) }}</Tag>
+              <Tag size="small">{{ t(`knowledge.docs.kind.${doc.kind}`) }}</Tag>
               <template v-if="doc.kind !== 'notes' && doc.kind !== 'learned'">
                 <span v-if="doc.format" class="mono">{{ doc.format }}</span>
                 <span>{{ t('knowledge.docs.chars', { count: doc.chars.toLocaleString() }) }}</span>
@@ -217,53 +213,42 @@ const percent = (item: KnowledgeProgress) => (item.total ? Math.round((item.done
               <a v-if="doc.kind === 'url'" :href="doc.source" target="_blank" rel="noopener" class="mono source">{{ doc.source }}</a>
             </div>
             <div v-if="doc.status === 'error'" class="error">{{ doc.error }}</div>
-            <NProgress
-              v-if="progress[doc.id]"
-              type="line"
-              :percentage="percent(progress[doc.id])"
-              :indicator-placement="'inside'"
-              processing
-              class="bar"
-            >
+            <Progress v-if="progress[doc.id]" :percentage="percent(progress[doc.id])" processing class="bar">
               {{ t(`knowledge.docs.status.${progress[doc.id].stage}`) }} {{ progress[doc.id].done }}/{{ progress[doc.id].total }}
-            </NProgress>
+            </Progress>
           </div>
-          <NSpace :size="2" :wrap="false">
-            <IconAction v-if="doc.kind === 'file' || doc.kind === 'url' || doc.kind === 'text'" :icon="RefreshOutline" :label="t('knowledge.docs.reparse')" @click="reparse(doc)" />
-            <IconAction :icon="TrashOutline" :label="t('common.delete')" type="error" @click="remove(doc)" />
-          </NSpace>
+          <div class="flex gap-[2px] items-center">
+            <IconAction v-if="doc.kind === 'file' || doc.kind === 'url' || doc.kind === 'text'" icon="i-lucide-refresh-cw" :label="t('knowledge.docs.reparse')" @click="reparse(doc)" />
+            <IconAction icon="i-lucide-trash-2" :label="t('common.delete')" type="error" @click="remove(doc)" />
+          </div>
         </div>
-      </NCard>
+      </Card>
     </div>
 
-    <NModal v-model:show="showText" preset="card" :title="t('knowledge.docs.pasteText')" style="width: min(760px, 96vw)">
-      <NForm label-placement="top">
-        <NFormItem :label="t('knowledge.docs.title')">
-          <NInput v-model:value="textDraft.name" :maxlength="120" />
-        </NFormItem>
-        <NFormItem :label="t('knowledge.docs.text')" :feedback="t('knowledge.docs.textHint')">
-          <NInput v-model:value="textDraft.text" type="textarea" :autosize="{ minRows: 10, maxRows: 24 }" />
-        </NFormItem>
-      </NForm>
+    <Modal v-model:show="showText" :title="t('knowledge.docs.pasteText')" style="width: min(760px, 96vw)">
+      <Form>
+        <FormItem :label="t('knowledge.docs.title')">
+          <Input v-model:value="textDraft.name" :maxlength="120" />
+        </FormItem>
+        <FormItem :label="t('knowledge.docs.text')" :feedback="t('knowledge.docs.textHint')">
+          <Input v-model:value="textDraft.text" type="textarea" :autosize="{ minRows: 10, maxRows: 24 }" />
+        </FormItem>
+      </Form>
       <template #footer>
-        <NSpace justify="end">
-          <NButton @click="showText = false">{{ t('common.cancel') }}</NButton>
-          <NButton type="primary" :loading="adding" :disabled="!textDraft.text.trim()" @click="addText">{{ t('common.add') }}</NButton>
-        </NSpace>
+        <Button @click="showText = false">{{ t('common.cancel') }}</Button>
+        <Button type="primary" :loading="adding" :disabled="!textDraft.text.trim()" @click="addText">{{ t('common.add') }}</Button>
       </template>
-    </NModal>
+    </Modal>
 
-    <NModal v-model:show="showUrl" preset="card" :title="t('knowledge.docs.addUrl')" style="width: min(560px, 96vw)">
-      <NFormItem :label="t('knowledge.docs.url')" :feedback="t('knowledge.docs.urlHint')">
-        <NInput v-model:value="urlDraft" placeholder="https://" @keyup.enter="addUrl" />
-      </NFormItem>
+    <Modal v-model:show="showUrl" :title="t('knowledge.docs.addUrl')" style="width: min(560px, 96vw)">
+      <FormItem :label="t('knowledge.docs.url')" :feedback="t('knowledge.docs.urlHint')">
+        <Input v-model:value="urlDraft" placeholder="https://" @keyup.enter="addUrl" />
+      </FormItem>
       <template #footer>
-        <NSpace justify="end">
-          <NButton @click="showUrl = false">{{ t('common.cancel') }}</NButton>
-          <NButton type="primary" :loading="adding" @click="addUrl">{{ t('common.add') }}</NButton>
-        </NSpace>
+        <Button @click="showUrl = false">{{ t('common.cancel') }}</Button>
+        <Button type="primary" :loading="adding" @click="addUrl">{{ t('common.add') }}</Button>
       </template>
-    </NModal>
+    </Modal>
   </div>
 </template>
 

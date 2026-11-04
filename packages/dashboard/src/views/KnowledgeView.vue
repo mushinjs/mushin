@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { AddOutline, ArrowBackOutline, LibraryOutline } from '@vicons/ionicons5'
-import { useToast } from '@mushin/ui'
-import { NAlert, NButton, NCard, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NModal, NSpace, NSpin, NTabPane, NTabs, NTag } from 'naive-ui'
+import { Alert, Button, Card, Form, FormItem, Input, Modal, Spin, TabPane, Tabs, Tag, useToast } from '@mushin/ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -116,54 +114,51 @@ const botNames = (ids: string[]) => ids.map((bot) => data.bots.find((item) => it
   <div class="page">
     <template v-if="!id">
       <PageHeader :title="t('nav.knowledge')" :lead="t('knowledge.lead')">
-        <NButton v-if="available" type="primary" data-agent-target="knowledge.add" @click="openCreate">
-          <template #icon><NIcon><AddOutline /></NIcon></template>
+        <Button v-if="available" type="primary" data-agent-target="knowledge.add" icon="i-lucide-plus" @click="openCreate">
           {{ t('knowledge.add') }}
-        </NButton>
+        </Button>
       </PageHeader>
 
-      <NSpin :show="loading">
-        <NAlert v-if="available === false" type="warning" :title="t('knowledge.unavailable')">
+      <Spin :show="loading">
+        <Alert v-if="available === false" type="warning" :title="t('knowledge.unavailable')">
           {{ t('knowledge.unavailableHint') }}
           <RouterLink to="/plugins?highlight=@mushin/plugin-knowledge">{{ t('permissions.openPlugins') }}</RouterLink>
-        </NAlert>
-        <EmptyState v-else-if="!bases.length && !loading" :icon="LibraryOutline" :title="t('knowledge.empty')" :hint="t('knowledge.emptyHint')">
-          <NButton type="primary" @click="openCreate">{{ t('knowledge.add') }}</NButton>
+        </Alert>
+        <EmptyState v-else-if="!bases.length && !loading" icon="i-lucide-library" :title="t('knowledge.empty')" :hint="t('knowledge.emptyHint')">
+          <Button type="primary" @click="openCreate">{{ t('knowledge.add') }}</Button>
         </EmptyState>
-        <NGrid v-else cols="1 700:2 1100:3" responsive="self" :x-gap="16" :y-gap="16">
-          <NGridItem v-for="item in bases" :key="item.id">
+        <div v-else class="grid gap-x-[16px] gap-y-[16px] grid-cols-[repeat(auto-fill,minmax(320px,1fr))]">
+          <div v-for="item in bases" :key="item.id">
             <RouterLink :to="`/knowledge/${item.id}/docs`" class="card-link">
-              <NCard size="small" class="base" hoverable>
+              <Card size="small" class="base" hoverable>
                 <div class="head">
-                  <NIcon size="28" class="icon"><LibraryOutline /></NIcon>
+                  <span class="i-lucide-library icon text-[28px]" />
                   <div class="title">
                     <strong>{{ item.name }}</strong>
                     <span class="muted desc">{{ item.description || t('knowledge.noDescription') }}</span>
                   </div>
                 </div>
                 <div class="meta">
-                  <NTag size="small" :bordered="false">{{ t('knowledge.docCount', { count: item.docs }) }}</NTag>
-                  <NTag size="small" :bordered="false">{{ t('knowledge.chunkCount', { count: item.chunks }) }}</NTag>
-                  <NTag size="small" :bordered="false" :type="item.model ? 'info' : 'default'" class="mono">{{ item.model || t('knowledge.keywordsOnly') }}</NTag>
-                  <NTag v-if="item.busy" size="small" :bordered="false" type="warning">{{ t('knowledge.busy') }}</NTag>
-                  <NTag v-if="item.candidates" size="small" :bordered="false" type="success">{{ t('knowledge.candidateCount', { count: item.candidates }) }}</NTag>
+                  <Tag size="small">{{ t('knowledge.docCount', { count: item.docs }) }}</Tag>
+                  <Tag size="small">{{ t('knowledge.chunkCount', { count: item.chunks }) }}</Tag>
+                  <Tag size="small" :type="item.model ? 'info' : 'default'" class="mono">{{ item.model || t('knowledge.keywordsOnly') }}</Tag>
+                  <Tag v-if="item.busy" size="small" type="warning">{{ t('knowledge.busy') }}</Tag>
+                  <Tag v-if="item.candidates" size="small" type="success">{{ t('knowledge.candidateCount', { count: item.candidates }) }}</Tag>
                 </div>
                 <div class="muted used">
                   {{ item.bots.length ? t('knowledge.linkedBots', { bots: botNames(item.bots) }) : t('knowledge.noBots') }}
                 </div>
-              </NCard>
+              </Card>
             </RouterLink>
-          </NGridItem>
-        </NGrid>
-      </NSpin>
+          </div>
+        </div>
+      </Spin>
     </template>
 
     <template v-else>
       <div class="page-header">
         <div class="detail-title">
-          <NButton quaternary circle :aria-label="t('common.back')" @click="router.push('/knowledge')">
-            <template #icon><NIcon><ArrowBackOutline /></NIcon></template>
-          </NButton>
+          <Button quaternary circle :aria-label="t('common.back')" icon="i-lucide-arrow-left" @click="router.push('/knowledge')" />
           <div>
             <h1>{{ base?.name ?? id }}</h1>
             <p v-if="base" class="page-lead">
@@ -173,48 +168,46 @@ const botNames = (ids: string[]) => ids.map((bot) => data.bots.find((item) => it
           </div>
         </div>
       </div>
-      <NSpin :show="loading && !base">
-        <NAlert v-if="!loading && !base" type="warning">{{ t('knowledge.notFound') }}</NAlert>
-        <NTabs v-if="base" :value="tab" type="line" @update:value="(next: string) => router.replace(`/knowledge/${id}/${next}`)">
-          <NTabPane name="docs" :tab="t('knowledge.tab.docs')" data-agent-target="knowledge.docs">
+      <Spin :show="loading && !base">
+        <Alert v-if="!loading && !base" type="warning">{{ t('knowledge.notFound') }}</Alert>
+        <Tabs v-if="base" :value="tab" type="line" @update:value="(next: string) => router.replace(`/knowledge/${id}/${next}`)">
+          <TabPane name="docs" :tab="t('knowledge.tab.docs')" data-agent-target="knowledge.docs">
             <KnowledgeDocs :base="base" />
-          </NTabPane>
-          <NTabPane name="chunks" :tab="t('knowledge.tab.chunks')" data-agent-target="knowledge.chunks">
+          </TabPane>
+          <TabPane name="chunks" :tab="t('knowledge.tab.chunks')" data-agent-target="knowledge.chunks">
             <KnowledgeChunks :base="base" />
-          </NTabPane>
-          <NTabPane name="search" :tab="t('knowledge.tab.search')" data-agent-target="knowledge.search">
+          </TabPane>
+          <TabPane name="search" :tab="t('knowledge.tab.search')" data-agent-target="knowledge.search">
             <KnowledgeSearch :base="base" />
-          </NTabPane>
-          <NTabPane name="graph" :tab="t('knowledge.tab.graph')" data-agent-target="knowledge.graph">
+          </TabPane>
+          <TabPane name="graph" :tab="t('knowledge.tab.graph')" data-agent-target="knowledge.graph">
             <KnowledgeGraph v-if="tab === 'graph'" :base="base" />
-          </NTabPane>
-          <NTabPane name="learn" :tab="base.candidates ? `${t('knowledge.tab.learn')} (${base.candidates})` : t('knowledge.tab.learn')" data-agent-target="knowledge.learn">
+          </TabPane>
+          <TabPane name="learn" :tab="base.candidates ? `${t('knowledge.tab.learn')} (${base.candidates})` : t('knowledge.tab.learn')" data-agent-target="knowledge.learn">
             <KnowledgeLearn :base="base" />
-          </NTabPane>
-          <NTabPane name="settings" :tab="t('knowledge.tab.settings')" data-agent-target="knowledge.settings">
+          </TabPane>
+          <TabPane name="settings" :tab="t('knowledge.tab.settings')" data-agent-target="knowledge.settings">
             <KnowledgeSettings :base="base" @deleted="router.push('/knowledge')" />
-          </NTabPane>
-        </NTabs>
-      </NSpin>
+          </TabPane>
+        </Tabs>
+      </Spin>
     </template>
 
-    <NModal v-model:show="showCreate" preset="card" :title="t('knowledge.add')" style="width: min(560px, 96vw)">
-      <NForm label-placement="top">
-        <NFormItem :label="t('common.name')" required>
-          <NInput v-model:value="draft.name" :maxlength="60" :placeholder="t('knowledge.namePlaceholder')" />
-        </NFormItem>
-        <NFormItem :label="t('knowledge.description')">
-          <NInput v-model:value="draft.description" :maxlength="500" type="textarea" :autosize="{ minRows: 2, maxRows: 4 }" />
-        </NFormItem>
+    <Modal v-model:show="showCreate" :title="t('knowledge.add')" style="width: min(560px, 96vw)">
+      <Form>
+        <FormItem :label="t('common.name')" required>
+          <Input v-model:value="draft.name" :maxlength="60" :placeholder="t('knowledge.namePlaceholder')" />
+        </FormItem>
+        <FormItem :label="t('knowledge.description')">
+          <Input v-model:value="draft.description" :maxlength="500" type="textarea" :autosize="{ minRows: 2, maxRows: 4 }" />
+        </FormItem>
         <EmbeddingPicker v-model:provider="draft.provider" v-model:model="draft.model" />
-      </NForm>
+      </Form>
       <template #footer>
-        <NSpace justify="end">
-          <NButton @click="showCreate = false">{{ t('common.cancel') }}</NButton>
-          <NButton type="primary" :loading="creating" @click="create">{{ t('common.create') }}</NButton>
-        </NSpace>
+        <Button @click="showCreate = false">{{ t('common.cancel') }}</Button>
+        <Button type="primary" :loading="creating" @click="create">{{ t('common.create') }}</Button>
       </template>
-    </NModal>
+    </Modal>
   </div>
 </template>
 

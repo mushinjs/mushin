@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NAutoComplete, NFormItem, NGrid, NGridItem, NSelect } from 'naive-ui'
+import { FormItem, Select } from '@mushin/ui'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
@@ -30,16 +30,12 @@ const modelOptions = computed(() => {
 </script>
 
 <template>
-  <NGrid cols="1 500:2" responsive="self" :x-gap="12">
-    <NGridItem>
-      <NFormItem :label="t('knowledge.embeddingProvider')" :feedback="provider ? '' : t('knowledge.noEmbeddingHint')">
-        <NSelect v-model:value="provider" :options="providerOptions" />
-      </NFormItem>
-    </NGridItem>
-    <NGridItem>
-      <NFormItem :label="t('knowledge.embeddingModel')" :feedback="provider ? t('knowledge.embeddingModelHint') : ''">
-        <NAutoComplete v-model:value="model" :options="modelOptions" :disabled="!provider" placeholder="text-embedding-3-small" clearable />
-      </NFormItem>
-    </NGridItem>
-  </NGrid>
+  <div class="grid gap-x-[12px] gap-y-[18px] grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
+    <FormItem :label="t('knowledge.embeddingProvider')" :feedback="provider ? '' : t('knowledge.noEmbeddingHint')">
+      <Select v-model:value="provider" :options="providerOptions" />
+    </FormItem>
+    <FormItem :label="t('knowledge.embeddingModel')" :feedback="provider ? t('knowledge.embeddingModelHint') : ''">
+      <Select v-model:value="model" :options="modelOptions" :disabled="!provider" placeholder="text-embedding-3-small" filterable tag clearable />
+    </FormItem>
+  </div>
 </template>

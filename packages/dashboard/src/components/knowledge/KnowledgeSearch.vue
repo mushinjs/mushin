@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { SearchOutline } from '@vicons/ionicons5'
-import { useToast } from '@mushin/ui'
-import { NAlert, NButton, NCard, NEmpty, NFormItem, NIcon, NInput, NInputNumber, NSpace, NTag } from 'naive-ui'
+import { Alert, Button, Card, Empty, FormItem, Input, NumberInput, Tag, useToast } from '@mushin/ui'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -80,59 +78,58 @@ const botNames = (ids: string[]) => ids.map((bot) => data.bots.find((item) => it
 
 <template>
   <div class="search">
-    <NCard size="small" :title="t('knowledge.search.title')">
+    <Card size="small" :title="t('knowledge.search.title')">
       <div class="form">
-        <NInput v-model:value="query" :placeholder="t('knowledge.search.placeholder')" clearable class="query" @keyup.enter="search" />
-        <NButton type="primary" :loading="searching" :disabled="!query.trim()" @click="search">
-          <template #icon><NIcon><SearchOutline /></NIcon></template>
+        <Input v-model:value="query" :placeholder="t('knowledge.search.placeholder')" clearable class="query" @keyup.enter="search" />
+        <Button type="primary" :loading="searching" :disabled="!query.trim()" icon="i-lucide-search" @click="search">
           {{ t('knowledge.search.run') }}
-        </NButton>
+        </Button>
       </div>
-      <NSpace class="options" :size="16">
-        <NFormItem :label="t('knowledge.settings.topK')" label-placement="left" :show-feedback="false">
-          <NInputNumber v-model:value="topK" :min="1" :max="20" size="small" style="width: 90px" />
-        </NFormItem>
-        <NFormItem :label="t('knowledge.settings.minScore')" label-placement="left" :show-feedback="false">
-          <NInputNumber v-model:value="minScore" :min="0" :max="1" :step="0.05" size="small" style="width: 100px" />
-        </NFormItem>
-      </NSpace>
+      <div class="flex flex-wrap gap-[16px] items-center options">
+        <FormItem :label="t('knowledge.settings.topK')" label-placement="left">
+          <NumberInput v-model:value="topK" :min="1" :max="20" size="small" style="width: 90px" />
+        </FormItem>
+        <FormItem :label="t('knowledge.settings.minScore')" label-placement="left">
+          <NumberInput v-model:value="minScore" :min="0" :max="1" :step="0.05" size="small" style="width: 100px" />
+        </FormItem>
+      </div>
       <p class="muted small">{{ t('knowledge.search.scoreHint') }}</p>
-    </NCard>
+    </Card>
 
-    <NAlert v-for="warning in warnings" :key="warning" type="warning">{{ warning }}</NAlert>
+    <Alert v-for="warning in warnings" :key="warning" type="warning">{{ warning }}</Alert>
     <template v-if="hits">
       <div class="muted small">{{ semantic ? t('knowledge.search.bothWays') : t('knowledge.search.keywordsOnly') }}</div>
-      <NCard v-if="!hits.length" size="small">
-        <NEmpty :description="t('knowledge.search.none')" />
-      </NCard>
-      <NCard v-for="(hit, index) in hits" :key="hit.id" size="small">
+      <Card v-if="!hits.length" size="small">
+        <Empty :description="t('knowledge.search.none')" />
+      </Card>
+      <Card v-for="(hit, index) in hits" :key="hit.id" size="small">
         <div class="hit-head">
           <strong>[{{ index + 1 }}] {{ hit.title || hit.docTitle }}</strong>
           <RouterLink class="small" :to="`/knowledge/${base.id}/chunks?doc=${hit.doc}&chunk=${hit.id}`">{{ hit.docTitle }}</RouterLink>
         </div>
         <div class="scores">
-          <NTag size="small" type="success" :bordered="false">{{ t('knowledge.search.score') }} {{ pct(hit.score) }}</NTag>
-          <NTag size="small" :bordered="false">{{ t('knowledge.search.similarity') }} {{ pct(hit.similarity) }}</NTag>
-          <NTag size="small" :bordered="false">{{ t('knowledge.search.coverage') }} {{ pct(hit.coverage) }}</NTag>
-          <NTag size="small" :bordered="false">{{ t('knowledge.search.ranks', { keyword: hit.ranks.keyword ?? '–', vector: hit.ranks.vector ?? '–' }) }}</NTag>
+          <Tag size="small" type="success">{{ t('knowledge.search.score') }} {{ pct(hit.score) }}</Tag>
+          <Tag size="small">{{ t('knowledge.search.similarity') }} {{ pct(hit.similarity) }}</Tag>
+          <Tag size="small">{{ t('knowledge.search.coverage') }} {{ pct(hit.coverage) }}</Tag>
+          <Tag size="small">{{ t('knowledge.search.ranks', { keyword: hit.ranks.keyword ?? '–', vector: hit.ranks.vector ?? '–' }) }}</Tag>
         </div>
         <div class="text">{{ hit.text }}</div>
-      </NCard>
+      </Card>
     </template>
 
-    <NCard size="small" :title="t('knowledge.search.flowsTitle')">
+    <Card size="small" :title="t('knowledge.search.flowsTitle')">
       <p class="muted small">{{ t('knowledge.search.flowsHint') }}</p>
-      <NEmpty v-if="!flows.length" :description="t('knowledge.search.noFlows')" />
+      <Empty v-if="!flows.length" :description="t('knowledge.search.noFlows')" />
       <div v-for="flow in flows" :key="flow.id" class="flow">
         <div class="flow-info">
           <RouterLink :to="`/flows/${flow.id}`">{{ flow.name }}</RouterLink>
-          <NTag v-if="flow.llmChat" size="tiny" :bordered="false" type="info">{{ t('knowledge.search.llmChat') }}</NTag>
+          <Tag v-if="flow.llmChat" size="tiny" type="info">{{ t('knowledge.search.llmChat') }}</Tag>
           <span v-if="flow.bots.length" class="muted small">{{ botNames(flow.bots) }}</span>
         </div>
-        <NTag v-if="flow.uses" size="small" type="success" :bordered="false">{{ t('knowledge.search.inUse') }}</NTag>
-        <NButton v-else size="small" :loading="adding === flow.id" @click="useInFlow(flow)">{{ t('knowledge.search.use') }}</NButton>
+        <Tag v-if="flow.uses" size="small" type="success">{{ t('knowledge.search.inUse') }}</Tag>
+        <Button v-else size="small" :loading="adding === flow.id" @click="useInFlow(flow)">{{ t('knowledge.search.use') }}</Button>
       </div>
-    </NCard>
+    </Card>
   </div>
 </template>
 

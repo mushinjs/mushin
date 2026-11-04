@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { Toggle, useConfirm, useToast } from '@mushin/ui'
-import { NButton, NCard, NForm, NFormItem, NGrid, NGridItem, NInput, NInputNumber, NSelect, NSpace } from 'naive-ui'
+import { Button, Card, Form, FormItem, Input, NumberInput, Select, Toggle, useConfirm, useToast } from '@mushin/ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
@@ -90,70 +89,54 @@ function remove() {
 
 <template>
   <div class="settings">
-    <NCard size="small">
-      <NForm label-placement="top">
-        <NGrid cols="1 700:2" responsive="self" :x-gap="16">
-          <NGridItem>
-            <NFormItem :label="t('common.name')" required>
-              <NInput v-model:value="draft.name" :maxlength="60" />
-            </NFormItem>
-          </NGridItem>
-          <NGridItem>
-            <NFormItem :label="t('knowledge.description')" :feedback="t('knowledge.descriptionHint')">
-              <NInput v-model:value="draft.description" :maxlength="500" />
-            </NFormItem>
-          </NGridItem>
-        </NGrid>
+    <Card size="small">
+      <Form>
+        <div class="grid gap-x-[16px] gap-y-[18px] grid-cols-[repeat(auto-fit,minmax(300px,1fr))]">
+          <FormItem :label="t('common.name')" required>
+            <Input v-model:value="draft.name" :maxlength="60" />
+          </FormItem>
+          <FormItem :label="t('knowledge.description')" :feedback="t('knowledge.descriptionHint')">
+            <Input v-model:value="draft.description" :maxlength="500" />
+          </FormItem>
+        </div>
         <EmbeddingPicker v-model:provider="draft.provider" v-model:model="draft.model" />
-        <NGrid cols="2 700:4" responsive="self" :x-gap="16">
-          <NGridItem>
-            <NFormItem :label="t('knowledge.settings.chunkSize')" :feedback="t('knowledge.settings.chunkSizeHint')">
-              <NInputNumber v-model:value="draft.chunkSize" :min="100" :max="4000" :step="50" style="width: 100%" />
-            </NFormItem>
-          </NGridItem>
-          <NGridItem>
-            <NFormItem :label="t('knowledge.settings.chunkOverlap')" :feedback="t('knowledge.settings.chunkOverlapHint')">
-              <NInputNumber v-model:value="draft.chunkOverlap" :min="0" :max="1000" :step="10" style="width: 100%" />
-            </NFormItem>
-          </NGridItem>
-          <NGridItem>
-            <NFormItem :label="t('knowledge.settings.topK')" :feedback="t('knowledge.settings.topKHint')">
-              <NInputNumber v-model:value="draft.topK" :min="1" :max="20" style="width: 100%" />
-            </NFormItem>
-          </NGridItem>
-          <NGridItem>
-            <NFormItem :label="t('knowledge.settings.minScore')" :feedback="t('knowledge.settings.minScoreHint')">
-              <NInputNumber v-model:value="draft.minScore" :min="0" :max="1" :step="0.05" style="width: 100%" />
-            </NFormItem>
-          </NGridItem>
-        </NGrid>
-        <NFormItem :label="t('knowledge.settings.bots')" :feedback="t('knowledge.settings.botsHint')">
-          <NSelect v-model:value="draft.bots" :options="botOptions" multiple clearable />
-        </NFormItem>
-        <NGrid cols="1 700:2" responsive="self" :x-gap="16">
-          <NGridItem>
-            <NFormItem :label="t('knowledge.settings.commands')" :feedback="t('knowledge.settings.commandsHint')">
-              <Toggle v-model:value="draft.commands.enabled" />
-            </NFormItem>
-          </NGridItem>
-          <NGridItem>
-            <NFormItem :label="t('knowledge.settings.commandRole')">
-              <NSelect v-model:value="draft.commands.role" :options="roleOptions" :disabled="!draft.commands.enabled" />
-            </NFormItem>
-          </NGridItem>
-        </NGrid>
-      </NForm>
-      <NSpace justify="end">
-        <NButton type="primary" :loading="saving" @click="save">{{ t('common.save') }}</NButton>
-      </NSpace>
-    </NCard>
+        <div class="grid gap-x-[16px] gap-y-[18px] grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+          <FormItem :label="t('knowledge.settings.chunkSize')" :feedback="t('knowledge.settings.chunkSizeHint')">
+            <NumberInput v-model:value="draft.chunkSize" :min="100" :max="4000" :step="50" style="width: 100%" />
+          </FormItem>
+          <FormItem :label="t('knowledge.settings.chunkOverlap')" :feedback="t('knowledge.settings.chunkOverlapHint')">
+            <NumberInput v-model:value="draft.chunkOverlap" :min="0" :max="1000" :step="10" style="width: 100%" />
+          </FormItem>
+          <FormItem :label="t('knowledge.settings.topK')" :feedback="t('knowledge.settings.topKHint')">
+            <NumberInput v-model:value="draft.topK" :min="1" :max="20" style="width: 100%" />
+          </FormItem>
+          <FormItem :label="t('knowledge.settings.minScore')" :feedback="t('knowledge.settings.minScoreHint')">
+            <NumberInput v-model:value="draft.minScore" :min="0" :max="1" :step="0.05" style="width: 100%" />
+          </FormItem>
+        </div>
+        <FormItem :label="t('knowledge.settings.bots')" :feedback="t('knowledge.settings.botsHint')">
+          <Select v-model:value="draft.bots" :options="botOptions" multiple clearable />
+        </FormItem>
+        <div class="grid gap-x-[16px] gap-y-[18px] grid-cols-[repeat(auto-fit,minmax(300px,1fr))]">
+          <FormItem :label="t('knowledge.settings.commands')" :feedback="t('knowledge.settings.commandsHint')">
+            <Toggle v-model:value="draft.commands.enabled" />
+          </FormItem>
+          <FormItem :label="t('knowledge.settings.commandRole')">
+            <Select v-model:value="draft.commands.role" :options="roleOptions" :disabled="!draft.commands.enabled" />
+          </FormItem>
+        </div>
+      </Form>
+      <div class="flex flex-wrap gap-x-3 gap-y-2 items-center justify-end">
+        <Button type="primary" :loading="saving" @click="save">{{ t('common.save') }}</Button>
+      </div>
+    </Card>
 
-    <NCard size="small" :title="t('knowledge.settings.maintenance')">
-      <NSpace>
-        <NButton :disabled="!base.model || !base.chunks" @click="reindex">{{ t('knowledge.settings.reindex') }}</NButton>
-        <NButton type="error" ghost @click="remove">{{ t('knowledge.settings.delete') }}</NButton>
-      </NSpace>
-    </NCard>
+    <Card size="small" :title="t('knowledge.settings.maintenance')">
+      <div class="flex flex-wrap gap-x-3 gap-y-2 items-center">
+        <Button :disabled="!base.model || !base.chunks" @click="reindex">{{ t('knowledge.settings.reindex') }}</Button>
+        <Button type="error" ghost @click="remove">{{ t('knowledge.settings.delete') }}</Button>
+      </div>
+    </Card>
   </div>
 </template>
 

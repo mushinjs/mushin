@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { AddOutline, CreateOutline, GitMergeOutline, TrashOutline } from '@vicons/ionicons5'
-import { useConfirm, useToast } from '@mushin/ui'
-import { NButton, NCard, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NPagination, NSelect, NSpace, NSpin, NTag } from 'naive-ui'
+import { Button, Card, Empty, Form, FormItem, Input, Modal, Pagination, Select, Spin, Tag, useConfirm, useToast } from '@mushin/ui'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -151,57 +149,54 @@ const canMerge = (index: number) => chunks.value[index + 1]?.doc === chunks.valu
 <template>
   <div class="chunks">
     <div class="toolbar">
-      <NSelect :value="doc" :options="docOptions" class="doc-select" @update:value="setDoc" />
-      <NInput v-model:value="query" clearable :placeholder="t('knowledge.chunks.filter')" class="filter" />
-      <NButton type="primary" @click="openAdd">
-        <template #icon><NIcon><AddOutline /></NIcon></template>
+      <Select :value="doc" :options="docOptions" class="doc-select" @update:value="setDoc" />
+      <Input v-model:value="query" clearable :placeholder="t('knowledge.chunks.filter')" class="filter" />
+      <Button type="primary" icon="i-lucide-plus" @click="openAdd">
         {{ t('knowledge.chunks.add') }}
-      </NButton>
+      </Button>
     </div>
     <div class="muted small">{{ t('knowledge.chunks.total', { count: total }) }}</div>
 
-    <NSpin :show="loading">
-      <NCard v-if="!chunks.length && !loading" size="small">
-        <NEmpty :description="t('knowledge.chunks.empty')" />
-      </NCard>
+    <Spin :show="loading">
+      <Card v-if="!chunks.length && !loading" size="small">
+        <Empty :description="t('knowledge.chunks.empty')" />
+      </Card>
       <div class="list">
-        <NCard v-for="(chunk, index) in chunks" :id="`chunk-${chunk.id}`" :key="chunk.id" size="small" :class="{ highlight: chunk.id === highlight }">
+        <Card v-for="(chunk, index) in chunks" :id="`chunk-${chunk.id}`" :key="chunk.id" size="small" :class="{ highlight: chunk.id === highlight }">
           <div class="head">
             <div class="title">
               <strong>{{ chunk.title || docTitle(chunk.doc) }}</strong>
               <span class="muted small">{{ docTitle(chunk.doc) }} · #{{ chunk.seq + 1 }}</span>
-              <NTag v-if="chunk.edited" size="tiny" :bordered="false" type="info">{{ t('knowledge.chunks.edited') }}</NTag>
-              <NTag v-if="base.model && !chunk.embedded" size="tiny" :bordered="false" type="warning">{{ t('knowledge.chunks.notEmbedded') }}</NTag>
+              <Tag v-if="chunk.edited" size="tiny" type="info">{{ t('knowledge.chunks.edited') }}</Tag>
+              <Tag v-if="base.model && !chunk.embedded" size="tiny" type="warning">{{ t('knowledge.chunks.notEmbedded') }}</Tag>
               <span v-if="originOf(chunk)" class="muted small">{{ originOf(chunk) }}</span>
             </div>
-            <NSpace :size="2" :wrap="false">
-              <IconAction :icon="CreateOutline" :label="t('common.edit')" @click="openEdit(chunk)" />
-              <IconAction :icon="GitMergeOutline" :label="t('knowledge.chunks.merge')" :disabled="!canMerge(index)" @click="merge(chunk)" />
-              <IconAction :icon="TrashOutline" :label="t('common.delete')" type="error" @click="remove(chunk)" />
-            </NSpace>
+            <div class="flex gap-[2px] items-center">
+              <IconAction icon="i-lucide-pencil" :label="t('common.edit')" @click="openEdit(chunk)" />
+              <IconAction icon="i-lucide-git-merge" :label="t('knowledge.chunks.merge')" :disabled="!canMerge(index)" @click="merge(chunk)" />
+              <IconAction icon="i-lucide-trash-2" :label="t('common.delete')" type="error" @click="remove(chunk)" />
+            </div>
           </div>
           <div class="text">{{ chunk.text }}</div>
-        </NCard>
+        </Card>
       </div>
-    </NSpin>
-    <NPagination v-if="!highlight && total > PAGE" v-model:page="page" :page-size="PAGE" :item-count="total" />
+    </Spin>
+    <Pagination v-if="!highlight && total > PAGE" v-model:page="page" :page-size="PAGE" :item-count="total" />
 
-    <NModal v-model:show="showEditor" preset="card" :title="editing ? t('knowledge.chunks.edit') : t('knowledge.chunks.add')" style="width: min(760px, 96vw)">
-      <NForm label-placement="top">
-        <NFormItem :label="t('knowledge.chunks.title')" :feedback="t('knowledge.chunks.titleHint')">
-          <NInput v-model:value="draft.title" :maxlength="200" />
-        </NFormItem>
-        <NFormItem :label="t('knowledge.chunks.text')" :feedback="editing ? t('knowledge.chunks.editHint') : t('knowledge.chunks.addHint')">
-          <NInput v-model:value="draft.text" type="textarea" :autosize="{ minRows: 6, maxRows: 20 }" />
-        </NFormItem>
-      </NForm>
+    <Modal v-model:show="showEditor" :title="editing ? t('knowledge.chunks.edit') : t('knowledge.chunks.add')" style="width: min(760px, 96vw)">
+      <Form>
+        <FormItem :label="t('knowledge.chunks.title')" :feedback="t('knowledge.chunks.titleHint')">
+          <Input v-model:value="draft.title" :maxlength="200" />
+        </FormItem>
+        <FormItem :label="t('knowledge.chunks.text')" :feedback="editing ? t('knowledge.chunks.editHint') : t('knowledge.chunks.addHint')">
+          <Input v-model:value="draft.text" type="textarea" :autosize="{ minRows: 6, maxRows: 20 }" />
+        </FormItem>
+      </Form>
       <template #footer>
-        <NSpace justify="end">
-          <NButton @click="showEditor = false">{{ t('common.cancel') }}</NButton>
-          <NButton type="primary" :loading="saving" :disabled="!draft.text.trim()" @click="save">{{ t('common.save') }}</NButton>
-        </NSpace>
+        <Button @click="showEditor = false">{{ t('common.cancel') }}</Button>
+        <Button type="primary" :loading="saving" :disabled="!draft.text.trim()" @click="save">{{ t('common.save') }}</Button>
       </template>
-    </NModal>
+    </Modal>
   </div>
 </template>
 

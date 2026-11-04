@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { useToast } from '@mushin/ui'
-import { NAlert, NButton, NCard, NEmpty, NFormItem, NInputNumber, NSlider, NSpace, NSpin } from 'naive-ui'
+import { Alert, Button, Card, Empty, FormItem, NumberInput, Slider, Spin, useToast } from '@mushin/ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -50,30 +49,30 @@ function open(id: string) {
 <template>
   <div class="graph-tab">
     <p class="muted small">{{ t('knowledge.graph.lead') }}</p>
-    <NCard size="small">
-      <NSpace align="center" :size="20" :wrap="true">
-        <NFormItem :label="t('knowledge.graph.minSimilarity')" label-placement="left" :show-feedback="false">
-          <NSlider v-model:value="minSimilarity" :min="0.05" :max="0.95" :step="0.05" style="width: 180px" :format-tooltip="(value: number) => `${Math.round(value * 100)}%`" />
-        </NFormItem>
-        <NFormItem :label="t('knowledge.graph.neighbors')" label-placement="left" :show-feedback="false">
-          <NInputNumber v-model:value="neighbors" :min="1" :max="10" size="small" style="width: 90px" />
-        </NFormItem>
-        <NButton size="small" :loading="loading" @click="refresh">{{ t('knowledge.graph.redraw') }}</NButton>
-      </NSpace>
-    </NCard>
-    <NAlert v-if="graph && !graph.byVector" type="info" :show-icon="false">{{ t('knowledge.graph.byWords') }}</NAlert>
-    <NSpin :show="loading">
-      <NCard v-if="graph && !graph.nodes.length" size="small">
-        <NEmpty :description="t('knowledge.chunks.empty')" />
-      </NCard>
-      <NCard v-else-if="graph" size="small">
+    <Card size="small">
+      <div :wrap="true" class="flex flex-wrap gap-[20px] items-center">
+        <FormItem :label="t('knowledge.graph.minSimilarity')" label-placement="left">
+          <Slider v-model:value="minSimilarity" :min="0.05" :max="0.95" :step="0.05" style="width: 180px" :format-tooltip="(value: number) => `${Math.round(value * 100)}%`" />
+        </FormItem>
+        <FormItem :label="t('knowledge.graph.neighbors')" label-placement="left">
+          <NumberInput v-model:value="neighbors" :min="1" :max="10" size="small" style="width: 90px" />
+        </FormItem>
+        <Button size="small" :loading="loading" @click="refresh">{{ t('knowledge.graph.redraw') }}</Button>
+      </div>
+    </Card>
+    <Alert v-if="graph && !graph.byVector" type="info" :show-icon="false">{{ t('knowledge.graph.byWords') }}</Alert>
+    <Spin :show="loading">
+      <Card v-if="graph && !graph.nodes.length" size="small">
+        <Empty :description="t('knowledge.chunks.empty')" />
+      </Card>
+      <Card v-else-if="graph" size="small">
         <SimilarityGraph :nodes="nodes" :edges="edges" @select="open" />
         <div class="muted small">
           {{ t('knowledge.graph.summary', { nodes: nodes.length, edges: edges.length, lonely }) }}
           <template v-if="graph.total > graph.nodes.length">{{ t('knowledge.graph.limited', { total: graph.total }) }}</template>
         </div>
-      </NCard>
-    </NSpin>
+      </Card>
+    </Spin>
   </div>
 </template>
 
