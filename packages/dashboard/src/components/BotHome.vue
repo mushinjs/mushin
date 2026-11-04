@@ -70,7 +70,7 @@ const connection = computed(() => {
         <span class="value">{{ plugins }}<small>/ {{ bot.plugins.length }}</small></span>
         <span class="hint">{{ t('botHome.pluginsHint') }}</span>
       </RouterLink>
-      <RouterLink :to="`/bots/${bot.id}/overview`" class="stat">
+      <RouterLink to="/flows" class="stat">
         <span class="label">{{ t('botHome.flows') }}</span>
         <span class="value">{{ flows.length }}</span>
         <span class="hint">{{ t('botHome.flowsHint', { n: flows.filter((flow) => flow.enabled).length }) }}</span>
@@ -117,7 +117,7 @@ const connection = computed(() => {
       <section class="panel wide">
         <header class="panel-head">
           <h2>{{ t('botHome.flowsOnBot') }}</h2>
-          <RouterLink :to="`/bots/${bot.id}/overview`" class="more">{{ t('bot.flowOverview') }}<NIcon :size="14"><ChevronForwardOutline /></NIcon></RouterLink>
+          <RouterLink to="/flows" class="more">{{ t('nav.flows') }}<NIcon :size="14"><ChevronForwardOutline /></NIcon></RouterLink>
         </header>
         <ul v-if="flows.length" class="flows">
           <li v-for="flow in flows" :key="flow.id">

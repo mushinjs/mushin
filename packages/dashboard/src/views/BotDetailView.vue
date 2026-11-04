@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  AlertCircleOutline, ArrowBackOutline, ChatbubbleEllipsesOutline, CodeSlashOutline, DocumentTextOutline, ExtensionPuzzleOutline, GitNetworkOutline,
+  AlertCircleOutline, ArrowBackOutline, ChatbubbleEllipsesOutline, CodeSlashOutline, DocumentTextOutline, ExtensionPuzzleOutline,
   GridOutline, LinkOutline, ListOutline, PersonCircleOutline, ShieldCheckmarkOutline, TrashOutline,
 } from '@vicons/ionicons5'
 import { NButton, NIcon, useDialog, useMessage } from 'naive-ui'
@@ -10,7 +10,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { call } from '../api'
 import BotCommands from '../components/BotCommands.vue'
 import BotConnection from '../components/BotConnection.vue'
-import BotFlowOverview from '../components/BotFlowOverview.vue'
 import BotHome from '../components/BotHome.vue'
 import BotLogs from '../components/BotLogs.vue'
 import BotPermissions from '../components/BotPermissions.vue'
@@ -54,7 +53,6 @@ const sections = computed<{ key: string, label: string, items: Section[] }[]>(()
     label: t('bot.groupBehavior'),
     items: [
       { key: 'plugins', label: t('bot.plugins'), icon: ExtensionPuzzleOutline, target: 'bot.plugins', count: bot.value?.plugins.filter((plugin) => plugin.enabled).length },
-      { key: 'overview', label: t('bot.flowOverview'), icon: GitNetworkOutline, target: 'bot.overview' },
       { key: 'commands', label: t('bot.commands'), icon: CodeSlashOutline, target: 'bot.commands' },
       { key: 'personas', label: t('bot.personas'), icon: PersonCircleOutline, target: 'bot.personas' },
     ],
@@ -158,7 +156,6 @@ function remove() {
           <BotRuns v-else-if="tab === 'runs'" :bot-id="bot.id" />
           <BotLogs v-else-if="tab === 'logs'" :bot-id="bot.id" />
           <BotPlugins v-else-if="tab === 'plugins'" :bot-id="bot.id" />
-          <BotFlowOverview v-else-if="tab === 'overview'" :bot="bot" />
           <BotCommands v-else-if="tab === 'commands'" :bot="bot" />
           <BotPersonas v-else-if="tab === 'personas'" :bot="bot" />
           <BotConnection v-else-if="tab === 'connection'" :bot="bot" />
