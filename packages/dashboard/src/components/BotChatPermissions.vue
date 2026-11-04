@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { AddOutline, CreateOutline, TrashOutline } from '@vicons/ionicons5'
-import { Toggle } from '@mushin/ui'
-import {
-  type DataTableColumns, NAlert, NButton, NCard, NDataTable, NDynamicTags, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup, NSelect, NSpace,
-  NTag, useDialog, useMessage,
-} from 'naive-ui'
+import { Toggle, useConfirm, useToast } from '@mushin/ui'
+import { type DataTableColumns, NAlert, NButton, NCard, NDataTable, NDynamicTags, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup, NSelect, NSpace, NTag } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../api'
@@ -33,8 +30,8 @@ interface ChatRule {
 const props = defineProps<{ bot: Bot; chatCommands: boolean }>()
 const emit = defineEmits<{ 'update:chatCommands': [value: boolean] }>()
 const { t } = useI18n()
-const message = useMessage()
-const dialog = useDialog()
+const message = useToast()
+const dialog = useConfirm()
 
 const channels = ref<{ value: string; label: string }[]>([])
 const channel = ref<string>()

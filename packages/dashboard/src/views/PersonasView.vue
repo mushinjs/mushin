@@ -2,10 +2,8 @@
 import {
   AddOutline, ArrowBackOutline, CloudDownloadOutline, CloudUploadOutline, CopyOutline, DownloadOutline, PersonCircleOutline, SearchOutline, TrashOutline,
 } from '@vicons/ionicons5'
-import {
-  NAlert, NAvatar, NButton, NDynamicTags, NEmpty, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NInputNumber,
-  NSelect, NSpace, NSpin, NTag, useDialog, useMessage,
-} from 'naive-ui'
+import { useConfirm, useToast } from '@mushin/ui'
+import { NAlert, NAvatar, NButton, NDynamicTags, NEmpty, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NInputNumber, NSelect, NSpace, NSpin, NTag } from 'naive-ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, RouterLink, useRoute, useRouter } from 'vue-router'
@@ -26,8 +24,8 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const data = useDataStore()
-const message = useMessage()
-const dialog = useDialog()
+const message = useToast()
+const dialog = useConfirm()
 
 const personas = ref<Persona[]>([])
 /** Persona id → names of the bots that use it. */

@@ -2,10 +2,8 @@
 import {
   AddOutline, CheckmarkCircle, CloseCircle, EllipseOutline, EyeOutline, FlaskOutline, PlayOutline, SaveOutline, SparklesOutline, TrashOutline,
 } from '@vicons/ionicons5'
-import { Toggle } from '@mushin/ui'
-import {
-  NButton, NCheckbox, NIcon, NInput, NInputNumber, NModal, NPopconfirm, NRadioButton, NRadioGroup, NSelect, NSpin, NTag, NTooltip, useMessage,
-} from 'naive-ui'
+import { Toggle, useToast } from '@mushin/ui'
+import { NButton, NCheckbox, NIcon, NInput, NInputNumber, NModal, NPopconfirm, NRadioButton, NRadioGroup, NSelect, NSpin, NTag, NTooltip } from 'naive-ui'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call, on } from '../../api'
@@ -52,7 +50,7 @@ const emit = defineEmits<{
   status: [status: { failed: number; total: number }]
 }>()
 const { t } = useI18n()
-const message = useMessage()
+const message = useToast()
 const editor = useFlowEditor()
 
 const doc = ref<FlowTests>({ cases: [] })

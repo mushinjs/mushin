@@ -3,11 +3,8 @@ import {
   AddOutline, AlertCircleOutline, AppsOutline, ChatbubblesOutline, CloseCircleOutline, ExtensionPuzzleOutline, FilterOutline, GitNetworkOutline,
   LayersOutline, ListOutline, NotificationsOutline, SearchOutline, SparklesOutline, SwapVerticalOutline, TimeOutline, TrashOutline,
 } from '@vicons/ionicons5'
-import { Toggle } from '@mushin/ui'
-import {
-  type DataTableColumns, NBadge, NButton, NCard, NDataTable, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NPopover,
-  NRadioButton, NRadioGroup, NSelect, type SelectOption, NTag, useDialog, useMessage,
-} from 'naive-ui'
+import { Toggle, useConfirm, useToast } from '@mushin/ui'
+import { type DataTableColumns, NBadge, NButton, NCard, NDataTable, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NPopover, NRadioButton, NRadioGroup, NSelect, type SelectOption, NTag } from 'naive-ui'
 import { type Component, computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -25,8 +22,8 @@ import { formatTime, localize } from '../utils'
 const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const message = useMessage()
-const dialog = useDialog()
+const message = useToast()
+const dialog = useConfirm()
 const data = useDataStore()
 const flows = ref<FlowSummary[]>([])
 const loaded = ref(false)

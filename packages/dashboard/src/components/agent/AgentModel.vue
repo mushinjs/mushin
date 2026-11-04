@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { NAlert, NButton, NCard, NForm, NFormItem, NInputNumber, NProgress, NSelect, NSpace, useMessage } from 'naive-ui'
+import { useToast } from '@mushin/ui'
+import { NAlert, NButton, NCard, NForm, NFormItem, NInputNumber, NProgress, NSelect, NSpace } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
@@ -16,7 +17,7 @@ interface AgentConfig {
 }
 
 const { t } = useI18n()
-const message = useMessage()
+const message = useToast()
 const data = useDataStore()
 
 const entryId = ref<string>()

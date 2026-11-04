@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { AddOutline, CreateOutline, GitMergeOutline, TrashOutline } from '@vicons/ionicons5'
-import { NButton, NCard, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NPagination, NSelect, NSpace, NSpin, NTag, useDialog, useMessage } from 'naive-ui'
+import { useConfirm, useToast } from '@mushin/ui'
+import { NButton, NCard, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NPagination, NSelect, NSpace, NSpin, NTag } from 'naive-ui'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -12,8 +13,8 @@ const props = defineProps<{ base: KnowledgeSummary }>()
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const message = useMessage()
-const dialog = useDialog()
+const message = useToast()
+const dialog = useConfirm()
 
 const PAGE = 50
 const docs = ref<KnowledgeDoc[]>([])

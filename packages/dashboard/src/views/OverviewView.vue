@@ -2,7 +2,8 @@
 import {
   AlertCircleOutline, ChatbubblesOutline, ChevronDownOutline, ChevronForwardOutline, FlashOutline, GitNetworkOutline, KeyOutline, SparklesOutline,
 } from '@vicons/ionicons5'
-import { NButton, NEmpty, NIcon, NRadioButton, NRadioGroup, NSelect, useMessage } from 'naive-ui'
+import { useToast } from '@mushin/ui'
+import { NButton, NEmpty, NIcon, NRadioButton, NRadioGroup, NSelect } from 'naive-ui'
 import { type Component, computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -17,7 +18,7 @@ import { formatTime } from '../utils'
 
 const { t } = useI18n()
 const router = useRouter()
-const message = useMessage()
+const message = useToast()
 const agent = useAgentStore()
 const data = useDataStore()
 const { isDark } = useTheme()

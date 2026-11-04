@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { AddOutline, ArchiveOutline, CloseOutline, CreateOutline, DownloadOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5'
-import {
-  type DataTableColumns, type DataTableSortState, NAlert, NButton, NDataTable, NDropdown, NEmpty, NIcon, NInput, NModal, NSelect, NSpace, NSpin, NTag,
-  useDialog, useMessage,
-} from 'naive-ui'
+import { useConfirm, useToast } from '@mushin/ui'
+import { type DataTableColumns, type DataTableSortState, NAlert, NButton, NDataTable, NDropdown, NEmpty, NIcon, NInput, NModal, NSelect, NSpace, NSpin, NTag } from 'naive-ui'
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -15,8 +13,8 @@ import type { AppPlugin, DatabaseStatus, DatabaseTable } from '../types'
 import { formatBytes, pretty } from '../utils'
 
 const { t } = useI18n()
-const message = useMessage()
-const dialog = useDialog()
+const message = useToast()
+const dialog = useConfirm()
 const route = useRoute()
 const router = useRouter()
 const scene = useAgentSceneStore()

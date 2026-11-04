@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { AddOutline, ArrowBackOutline, LibraryOutline } from '@vicons/ionicons5'
-import {
-  NAlert, NButton, NCard, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NModal, NSpace, NSpin, NTabPane, NTabs, NTag, useMessage,
-} from 'naive-ui'
+import { useToast } from '@mushin/ui'
+import { NAlert, NButton, NCard, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NModal, NSpace, NSpin, NTabPane, NTabs, NTag } from 'naive-ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -23,7 +22,7 @@ import type { AppPlugin, KnowledgeSummary } from '../types'
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const message = useMessage()
+const message = useToast()
 const data = useDataStore()
 
 const bases = ref<KnowledgeSummary[]>([])

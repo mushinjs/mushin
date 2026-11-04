@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { CheckmarkCircle } from '@vicons/ionicons5'
-import { NAlert, NButton, NCard, NIcon, NSpace, NStep, NSteps, useMessage } from 'naive-ui'
+import { useToast } from '@mushin/ui'
+import { NAlert, NButton, NCard, NIcon, NSpace, NStep, NSteps } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -13,7 +14,7 @@ import type { Provider, ProviderDraft, ProviderTest } from '../types'
 
 const { t } = useI18n()
 const router = useRouter()
-const message = useMessage()
+const message = useToast()
 const data = useDataStore()
 const agent = useAgentStore()
 

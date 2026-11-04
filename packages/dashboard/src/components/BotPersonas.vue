@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { AddOutline, ArrowDownOutline, ArrowUpOutline, TrashOutline } from '@vicons/ionicons5'
-import { Toggle } from '@mushin/ui'
-import {
-  NAlert, NButton, NCard, NDynamicTags, NEmpty, NForm, NFormItem, NIcon, NInput, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NTag, NTimePicker, useMessage,
-} from 'naive-ui'
+import { Toggle, useToast } from '@mushin/ui'
+import { NAlert, NButton, NCard, NDynamicTags, NEmpty, NForm, NFormItem, NIcon, NInput, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NTag, NTimePicker } from 'naive-ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -14,7 +12,7 @@ import IconAction from './IconAction.vue'
 /** How a bot picks its persona: a default, rules by group, user or time, and the /persona command. */
 const props = defineProps<{ bot: Bot }>()
 const { t } = useI18n()
-const message = useMessage()
+const message = useToast()
 
 const available = ref<boolean>()
 const loading = ref(true)

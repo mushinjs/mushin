@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { AddOutline, CloudDownloadOutline, CloudUploadOutline, CreateOutline, TrashOutline } from '@vicons/ionicons5'
-import { Toggle } from '@mushin/ui'
-import {
-  NButton, NCard, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NSelect, NSpace, NTag, useDialog, useMessage,
-} from 'naive-ui'
+import { Toggle, useConfirm, useToast } from '@mushin/ui'
+import { NButton, NCard, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NSelect, NSpace, NTag } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
@@ -13,8 +11,8 @@ import type { AgentSkill } from '../../types'
 import IconAction from '../IconAction.vue'
 
 const { t } = useI18n()
-const message = useMessage()
-const dialog = useDialog()
+const message = useToast()
+const dialog = useConfirm()
 const agent = useAgentStore()
 
 const actionNames = ref<string[]>([])

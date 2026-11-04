@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { AddOutline, TrashOutline } from '@vicons/ionicons5'
-import { Toggle } from '@mushin/ui'
-import { NButton, NCard, NForm, NFormItem, NIcon, NInput, NSelect, NSpace, NTag, useMessage } from 'naive-ui'
+import { Toggle, useToast } from '@mushin/ui'
+import { NButton, NCard, NForm, NFormItem, NIcon, NInput, NSelect, NSpace, NTag } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
@@ -10,7 +10,7 @@ import { SCENE_RECOMMENDATIONS, SCENES, type SceneProfile, useAgentSceneStore } 
 import { clone } from '../../utils'
 
 const { t } = useI18n()
-const message = useMessage()
+const message = useToast()
 const agent = useAgentStore()
 const scenes = useAgentSceneStore()
 

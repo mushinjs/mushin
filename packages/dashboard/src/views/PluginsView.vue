@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ChevronDownOutline, RefreshOutline, SearchOutline, SettingsOutline } from '@vicons/ionicons5'
-import { Toggle } from '@mushin/ui'
-import { NButton, NEmpty, NIcon, NInput, NModal, NSpace, NSpin, NTooltip, useDialog, useMessage } from 'naive-ui'
+import { Toggle, useConfirm, useToast } from '@mushin/ui'
+import { NButton, NEmpty, NIcon, NInput, NModal, NSpace, NSpin, NTooltip } from 'naive-ui'
 import IconAction from '../components/IconAction.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -14,8 +14,8 @@ import type { AppPlugin, CatalogEntry, DependencyPlan, PluginDependencies } from
 import { clone, localize } from '../utils'
 
 const { t, locale } = useI18n()
-const message = useMessage()
-const dialog = useDialog()
+const message = useToast()
+const dialog = useConfirm()
 const route = useRoute()
 
 

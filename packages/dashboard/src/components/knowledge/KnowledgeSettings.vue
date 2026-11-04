@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Toggle } from '@mushin/ui'
-import { NButton, NCard, NForm, NFormItem, NGrid, NGridItem, NInput, NInputNumber, NSelect, NSpace, useDialog, useMessage } from 'naive-ui'
+import { Toggle, useConfirm, useToast } from '@mushin/ui'
+import { NButton, NCard, NForm, NFormItem, NGrid, NGridItem, NInput, NInputNumber, NSelect, NSpace } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
@@ -11,8 +11,8 @@ import EmbeddingPicker from './EmbeddingPicker.vue'
 const props = defineProps<{ base: KnowledgeSummary }>()
 const emit = defineEmits<{ deleted: [] }>()
 const { t } = useI18n()
-const message = useMessage()
-const dialog = useDialog()
+const message = useToast()
+const dialog = useConfirm()
 const data = useDataStore()
 
 const draftOf = (base: KnowledgeSummary) => ({

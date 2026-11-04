@@ -2,7 +2,8 @@
 import {
   AddOutline, ArrowForwardOutline, CreateOutline, EllipsisHorizontal, FlashOutline, GitBranchOutline, KeyOutline, Star, StarOutline, TrashOutline,
 } from '@vicons/ionicons5'
-import { type DropdownOption, NButton, NDropdown, NIcon, NModal, NSpace, NTooltip, useDialog, useMessage } from 'naive-ui'
+import { useConfirm, useToast } from '@mushin/ui'
+import { type DropdownOption, NButton, NDropdown, NIcon, NModal, NSpace, NTooltip } from 'naive-ui'
 import { type Component, h, nextTick, onMounted, ref, watch } from 'vue'
 import IconAction from '../components/IconAction.vue'
 import EmptyState from '../components/EmptyState.vue'
@@ -20,8 +21,8 @@ import { clone, localize } from '../utils'
 
 const { t, locale } = useI18n()
 const data = useDataStore()
-const message = useMessage()
-const dialog = useDialog()
+const message = useToast()
+const dialog = useConfirm()
 
 const editing = ref<string | null>(null)
 const showEditor = ref(false)

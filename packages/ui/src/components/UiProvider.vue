@@ -70,13 +70,14 @@ function removeToast(id: number) {
 
   <AlertDialogRoot v-for="item in feedback.confirms" :key="item.id" :open="true" @update:open="(open) => !open && negative(item)">
     <AlertDialogPortal>
-      <AlertDialogOverlay class="mu-modal-mask" @click="item.maskClosable !== false && negative(item)" />
+      <AlertDialogOverlay class="mu-modal-mask" @click="item.maskClosable !== false && (item.onMaskClick?.(), negative(item))" />
       <AlertDialogContent class="mu-modal mu-confirm" :class="`mu-confirm--${item.type}`" :style="{ width: '420px' }">
         <div class="mu-confirm__head">
           <span class="mu-confirm__icon" :class="confirmIcon[item.type]" />
           <AlertDialogTitle class="mu-modal__title">{{ item.title }}</AlertDialogTitle>
         </div>
-        <AlertDialogDescription v-if="item.content" class="mu-confirm__body">{{ item.content }}</AlertDialogDescription>
+        <AlertDialogDescription v-if="typeof item.content === 'string'" class="mu-confirm__body">{{ item.content }}</AlertDialogDescription>
+        <AlertDialogDescription v-else-if="item.content" as="div" class="mu-confirm__body"><component :is="item.content" /></AlertDialogDescription>
         <div class="mu-modal__footer">
           <AlertDialogCancel v-if="item.negativeText !== ''" as-child @click.prevent="negative(item)">
             <Button size="small">{{ item.negativeText ?? words.cancel }}</Button>

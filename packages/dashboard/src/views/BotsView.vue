@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { AddOutline, AlertCircleOutline, ArrowBackOutline, ChatbubblesOutline, ArrowForwardOutline, PlayOutline, SearchOutline, StopOutline, TimeOutline } from '@vicons/ionicons5'
-import { NButton, NEmpty, NIcon, NInput, useMessage } from 'naive-ui'
+import { useToast } from '@mushin/ui'
+import { NButton, NEmpty, NIcon, NInput } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -16,7 +17,7 @@ import type { Bot } from '../types'
 const { t } = useI18n()
 const router = useRouter()
 const data = useDataStore()
-const message = useMessage()
+const message = useToast()
 const route = useRoute()
 const showCreate = ref(false)
 // /bots?new=1 (from search) opens the add dialog.

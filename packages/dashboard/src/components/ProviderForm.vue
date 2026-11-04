@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { NButton, NForm, NFormItem, NInput, NSelect, NSpace, NTag, type SelectOption, useMessage } from 'naive-ui'
+import { useToast } from '@mushin/ui'
+import { NButton, NForm, NFormItem, NInput, NSelect, NSpace, NTag, type SelectOption } from 'naive-ui'
 import { computed, h, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../api'
@@ -16,7 +17,7 @@ const props = defineProps<{
 
 const draft = defineModel<ProviderDraft>({ required: true })
 const { t, locale } = useI18n()
-const message = useMessage()
+const message = useToast()
 
 const presetId = ref<string>()
 const fetching = ref(false)

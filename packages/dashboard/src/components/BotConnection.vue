@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { NAlert, NCard, NForm, NFormItem, NInput, NSelect, useMessage } from 'naive-ui'
+import { useToast } from '@mushin/ui'
+import { NAlert, NCard, NForm, NFormItem, NInput, NSelect } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../api'
@@ -13,7 +14,7 @@ import SaveBar from './SaveBar.vue'
 const props = defineProps<{ bot: Bot }>()
 const { t } = useI18n()
 const data = useDataStore()
-const message = useMessage()
+const message = useToast()
 
 const name = ref('')
 const config = ref<Record<string, any>>({})

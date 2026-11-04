@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Toggle } from '@mushin/ui'
-import { NAlert, NButton, NCard, NDataTable, NDynamicTags, NForm, NFormItem, NInput, NSpace, NTag, useMessage } from 'naive-ui'
+import { Toggle, useToast } from '@mushin/ui'
+import { NAlert, NButton, NCard, NDataTable, NDynamicTags, NForm, NFormItem, NInput, NSpace, NTag } from 'naive-ui'
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -11,7 +11,7 @@ import type { Bot, CommandEntry, CommandList, CommandSource } from '../types'
 const props = defineProps<{ bot: Bot }>()
 const { t } = useI18n()
 const data = useDataStore()
-const message = useMessage()
+const message = useToast()
 
 const prefixes = ref<string[]>([])
 const help = ref(true)

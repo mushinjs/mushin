@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { NButton, NCard, NTabPane, NTabs, useMessage } from 'naive-ui'
+import { useToast } from '@mushin/ui'
+import { NButton, NCard, NTabPane, NTabs } from 'naive-ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAgentStore } from '../../stores/agent'
 import AgentMessage from './AgentMessage.vue'
 
 const { t, locale } = useI18n()
-const message = useMessage()
+const message = useToast()
 const agent = useAgentStore()
 
 const fence = '```'

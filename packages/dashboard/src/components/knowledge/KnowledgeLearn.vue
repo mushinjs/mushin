@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { CheckmarkOutline, CloseOutline } from '@vicons/ionicons5'
-import { Toggle } from '@mushin/ui'
-import {
-  NAlert, NButton, NCard, NDynamicTags, NEmpty, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect,
-  NSpace, NTag, useMessage,
-} from 'naive-ui'
+import { Toggle, useToast } from '@mushin/ui'
+import { NAlert, NButton, NCard, NDynamicTags, NEmpty, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSpace, NTag } from 'naive-ui'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call, on } from '../../api'
@@ -16,7 +13,7 @@ import { clone, formatTime } from '../../utils'
 
 const props = defineProps<{ base: KnowledgeSummary }>()
 const { t } = useI18n()
-const message = useMessage()
+const message = useToast()
 const data = useDataStore()
 
 // ---- settings ----

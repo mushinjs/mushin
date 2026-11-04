@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { SearchOutline } from '@vicons/ionicons5'
-import { type DataTableColumns, NButton, NDataTable, NIcon, NInput, NSelect, NSpace, NTag, useMessage } from 'naive-ui'
+import { useToast } from '@mushin/ui'
+import { type DataTableColumns, NButton, NDataTable, NIcon, NInput, NSelect, NSpace, NTag } from 'naive-ui'
 import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call, on } from '../../api'
@@ -18,7 +19,7 @@ interface ToolRow {
 }
 
 const { t } = useI18n()
-const message = useMessage()
+const message = useToast()
 const rows = ref<ToolRow[]>([])
 const loading = ref(false)
 const query = ref('')

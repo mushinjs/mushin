@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { CloudUploadOutline, DocumentTextOutline, GlobeOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5'
-import { NButton, NCard, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NProgress, NSpace, NTag, useDialog, useMessage } from 'naive-ui'
+import { useConfirm, useToast } from '@mushin/ui'
+import { NButton, NCard, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NProgress, NSpace, NTag } from 'naive-ui'
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -11,8 +12,8 @@ import IconAction from '../IconAction.vue'
 
 const props = defineProps<{ base: KnowledgeSummary }>()
 const { t } = useI18n()
-const message = useMessage()
-const dialog = useDialog()
+const message = useToast()
+const dialog = useConfirm()
 
 const docs = ref<KnowledgeDoc[]>([])
 /** Document id → how far splitting or embedding has got. */

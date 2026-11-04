@@ -4,7 +4,7 @@
  * behaviour on top; `useFlowEditorView` puts them together.
  */
 import { type Edge, type Node, useVueFlow } from '@vue-flow/core'
-import { useDialog, useMessage } from 'naive-ui'
+import { useConfirm, useToast } from '@mushin/ui'
 import { computed, type Ref, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -32,8 +32,8 @@ export function createEditorState() {
   const { t, locale } = useI18n()
   const route = useRoute()
   const router = useRouter()
-  const message = useMessage()
-  const dialog = useDialog()
+  const message = useToast()
+  const dialog = useConfirm()
   const data = useDataStore()
   const flow = useVueFlow('flow-editor')
   const flowId = computed(() => String(route.params.id))

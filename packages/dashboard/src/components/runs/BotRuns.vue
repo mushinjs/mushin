@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { OpenOutline, StopCircleOutline } from '@vicons/ionicons5'
-import { NButton, NEmpty, NIcon, NSelect, NSpin, NTooltip, useDialog, useMessage } from 'naive-ui'
+import { useConfirm, useToast } from '@mushin/ui'
+import { NButton, NEmpty, NIcon, NSelect, NSpin, NTooltip } from 'naive-ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -13,8 +14,8 @@ import { runColors, useRunText } from './useRunText'
 const props = defineProps<{ botId: string }>()
 const { t } = useI18n()
 const router = useRouter()
-const message = useMessage()
-const dialog = useDialog()
+const message = useToast()
+const dialog = useConfirm()
 const store = useRunsStore()
 const { nodeName, userName, duration, statusText, stoppedByText } = useRunText()
 

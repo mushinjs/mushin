@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { NAlert, NButton, NCard, NDynamicTags, NForm, NFormItem, NSpace, NSpin, useMessage } from 'naive-ui'
+import { useToast } from '@mushin/ui'
+import { NAlert, NButton, NCard, NDynamicTags, NForm, NFormItem, NSpace, NSpin } from 'naive-ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -10,7 +11,7 @@ import BotChatPermissions from './BotChatPermissions.vue'
 /** A bot's masters and admins, kept by the permissions plugin. */
 const props = defineProps<{ bot: Bot }>()
 const { t } = useI18n()
-const message = useMessage()
+const message = useToast()
 
 const masters = ref<string[]>([])
 const admins = ref<string[]>([])

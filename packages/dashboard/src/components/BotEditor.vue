@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { NAlert, NButton, NCheckbox, NCheckboxGroup, NForm, NFormItem, NInput, NModal, NSelect, NSpace, useMessage } from 'naive-ui'
+import { useToast } from '@mushin/ui'
+import { NAlert, NButton, NCheckbox, NCheckboxGroup, NForm, NFormItem, NInput, NModal, NSelect, NSpace } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../api'
@@ -13,7 +14,7 @@ const emit = defineEmits<{ created: [bot: Bot] }>()
 
 const { t, locale } = useI18n()
 const data = useDataStore()
-const message = useMessage()
+const message = useToast()
 
 const name = ref('')
 const adapterType = ref('onebot')

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ArrowDownOutline, CopyOutline, SearchOutline, TrashOutline } from '@vicons/ionicons5'
 import { useVirtualizer } from '@tanstack/vue-virtual'
-import { NButton, NIcon, NInput, NRadioButton, NRadioGroup, NTag, useMessage } from 'naive-ui'
+import { useToast } from '@mushin/ui'
+import { NButton, NIcon, NInput, NRadioButton, NRadioGroup, NTag } from 'naive-ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -15,7 +16,7 @@ const emit = defineEmits<{ clear: [] }>()
 
 const { t } = useI18n()
 const router = useRouter()
-const message = useMessage()
+const message = useToast()
 const refs = useLogRefs()
 
 const level = ref<'all' | 'info' | 'warn' | 'error'>('all')

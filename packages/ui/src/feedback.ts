@@ -1,4 +1,4 @@
-import { reactive } from 'vue'
+import { reactive, type VNodeChild } from 'vue'
 
 /**
  * Toasts and confirmation dialogs. The calls take the shapes of Naive UI's `useMessage()` and
@@ -31,7 +31,8 @@ export interface ToastHandle {
 
 export interface ConfirmOptions {
   title?: string
-  content?: string
+  /** Text, or a render function for richer content such as a list. */
+  content?: string | (() => VNodeChild)
   positiveText?: string
   negativeText?: string
   /** Return false (or a promise of false) to keep the dialog open. */
@@ -40,6 +41,8 @@ export interface ConfirmOptions {
   onClose?: () => unknown
   /** Clicking outside closes it as if cancelled; on by default. */
   maskClosable?: boolean
+  /** Called when a click outside closes it, before onNegativeClick. */
+  onMaskClick?: () => unknown
 }
 
 export interface Confirm extends ConfirmOptions {

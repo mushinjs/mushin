@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { SearchOutline } from '@vicons/ionicons5'
-import { NAlert, NButton, NCard, NEmpty, NFormItem, NIcon, NInput, NInputNumber, NSpace, NTag, useMessage } from 'naive-ui'
+import { useToast } from '@mushin/ui'
+import { NAlert, NButton, NCard, NEmpty, NFormItem, NIcon, NInput, NInputNumber, NSpace, NTag } from 'naive-ui'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -10,7 +11,7 @@ import type { KnowledgeHit, KnowledgeSummary } from '../../types'
 
 const props = defineProps<{ base: KnowledgeSummary }>()
 const { t } = useI18n()
-const message = useMessage()
+const message = useToast()
 const data = useDataStore()
 
 const query = ref('')

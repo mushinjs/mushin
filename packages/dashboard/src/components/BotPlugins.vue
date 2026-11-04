@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { GitNetworkOutline, SettingsOutline } from '@vicons/ionicons5'
 import IconAction from './IconAction.vue'
-import { Toggle } from '@mushin/ui'
-import { NButton, NCard, NEmpty, NIcon, NList, NListItem, NModal, NSpace, NSpin, NTag, NThing, useMessage } from 'naive-ui'
+import { Toggle, useToast } from '@mushin/ui'
+import { NButton, NCard, NEmpty, NIcon, NList, NListItem, NModal, NSpace, NSpin, NTag, NThing } from 'naive-ui'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -15,7 +15,7 @@ import StatusBadge from './StatusBadge.vue'
 
 const props = defineProps<{ botId: string }>()
 const { t, locale } = useI18n()
-const message = useMessage()
+const message = useToast()
 
 const plugins = ref<BotPluginInfo[]>([])
 /** Flows each plugin made on this bot, such as LLM chat's flow, by package. */

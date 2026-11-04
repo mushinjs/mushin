@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { AddOutline, CreateOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5'
-import { Toggle } from '@mushin/ui'
-import {
-  NAlert, NButton, NCard, NDynamicInput, NDynamicTags, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup, NSelect,
-  NSpace, NSpin, NTag, useDialog, useMessage,
-} from 'naive-ui'
+import { Toggle, useConfirm, useToast } from '@mushin/ui'
+import { NAlert, NButton, NCard, NDynamicInput, NDynamicTags, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NTag } from 'naive-ui'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -51,8 +48,8 @@ interface Form {
 }
 
 const { t } = useI18n()
-const message = useMessage()
-const dialog = useDialog()
+const message = useToast()
+const dialog = useConfirm()
 
 const servers = ref<McpServer[]>([])
 const available = ref<boolean>()
