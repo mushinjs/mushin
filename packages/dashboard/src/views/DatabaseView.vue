@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { AddOutline, ArchiveOutline, CloseOutline, CreateOutline, DownloadOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5'
-import { useConfirm, useToast } from '@mushin/ui'
-import { type DataTableColumns, type DataTableSortState, NAlert, NButton, NDataTable, NDropdown, NEmpty, NIcon, NInput, NModal, NSelect, NSpace, NSpin, NTag } from 'naive-ui'
+import { Alert, Button, DataTable, type DataTableColumn, type DataTableSortState, Dropdown, Empty, Input, Modal, Pagination, Select, Spin, Tag, useConfirm, useToast } from '@mushin/ui'
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -146,7 +144,7 @@ function cell(value: unknown) {
     const text = JSON.stringify(value)
     return h('a', { class: 'json-cell mono', onClick: () => (viewing.value = { title: t('database.json'), text: pretty(value) }) }, text.length > 60 ? `${text.slice(0, 60)}…` : text)
   }
-  if (typeof value === 'boolean') return h(NTag, { size: 'small', bordered: false, type: value ? 'success' : 'default' }, { default: () => String(value) })
+  if (typeof value === 'boolean') return h(Tag, { size: 'small', type: value ? 'success' : 'default' }, { default: () => String(value) })
   const text = String(value)
   return h('span', { class: 'mono', title: text.length > 80 ? text : undefined }, text.length > 80 ? `${text.slice(0, 80)}…` : text)
 }
@@ -200,7 +198,7 @@ function removeRow(row: Record<string, unknown>) {
   })
 }
 
-const columns = computed<DataTableColumns<Record<string, unknown>>>(() => {
+const columns = computed<DataTableColumn<Record<string, unknown>>[]>(() => {
   if (!table.value) return []
   return [
     ...table.value.columns.map((column) => ({
@@ -217,39 +215,32 @@ const columns = computed<DataTableColumns<Record<string, unknown>>>(() => {
       title: t('common.actions'),
       width: 90,
       fixed: 'right' as const,
-      render: (row: Record<string, unknown>) => h(NSpace, { size: 2, wrap: false }, {
-        default: () => [
-          h(IconAction, { icon: CreateOutline, label: t('common.edit'), onClick: () => openEdit(row) }),
-          h(IconAction, { icon: TrashOutline, label: t('common.delete'), type: 'error', onClick: () => removeRow(row) }),
-        ],
-      }),
+      render: (row: Record<string, unknown>) => h('div', { class: 'flex gap-[2px] items-center' }, [
+        h(IconAction, { icon: 'i-lucide-pencil', label: t('common.edit'), onClick: () => openEdit(row) }),
+        h(IconAction, { icon: 'i-lucide-trash-2', label: t('common.delete'), type: 'error', onClick: () => removeRow(row) }),
+      ]),
     },
   ]
 })
 
-function onSort(state: DataTableSortState | DataTableSortState[] | null) {
-  const next = Array.isArray(state) ? state[0] : state
-  sort.value = next?.order ? { column: String(next.columnKey), order: next.order === 'ascend' ? 'asc' : 'desc' } : undefined
+function onSort(next: DataTableSortState) {
+  sort.value = next.order ? { column: String(next.columnKey), order: next.order === 'ascend' ? 'asc' : 'desc' } : undefined
   page.value = 1
   void loadRows()
 }
 
-const pagination = computed(() => ({
-  page: page.value,
-  pageSize: pageSize.value,
-  itemCount: total.value,
-  showSizePicker: true,
-  pageSizes: [20, 50, 100, 200],
-  onUpdatePage: (value: number) => {
-    page.value = value
-    void loadRows()
-  },
-  onUpdatePageSize: (value: number) => {
-    pageSize.value = value
-    page.value = 1
-    void loadRows()
-  },
-}))
+const PAGE_SIZES = [20, 50, 100, 200]
+
+function setPage(value: number) {
+  page.value = value
+  void loadRows()
+}
+
+function setPageSize(value: number) {
+  pageSize.value = value
+  page.value = 1
+  void loadRows()
+}
 
 // ---- export and backup ----
 
@@ -362,28 +353,26 @@ async function backup() {
 <template>
   <div class="page">
     <PageHeader :title="t('nav.database')" :lead="t('database.lead')">
-      <NSpace v-if="available" align="center">
-        <NButton @click="newFlowTable">
-          <template #icon><NIcon><AddOutline /></NIcon></template>
+      <div v-if="available" class="flex flex-wrap gap-x-3 gap-y-2 items-center">
+        <Button icon="i-lucide-plus" @click="newFlowTable">
           {{ t('database.newFlowTable') }}
-        </NButton>
-        <NTag v-if="status" :bordered="false">
+        </Button>
+        <Tag v-if="status">
           {{ status.driver === 'sqlite' ? 'SQLite' : t('database.memory') }}
           <template v-if="status.path"> · <span class="mono">{{ status.path }}</span> · {{ formatBytes(status.size ?? 0) }}</template>
-        </NTag>
-        <NButton v-if="status?.driver === 'sqlite'" :loading="backingUp" @click="backup">
-          <template #icon><NIcon><ArchiveOutline /></NIcon></template>
+        </Tag>
+        <Button v-if="status?.driver === 'sqlite'" :loading="backingUp" icon="i-lucide-archive" @click="backup">
           {{ t('database.backup') }}
-        </NButton>
-      </NSpace>
+        </Button>
+      </div>
     </PageHeader>
 
-    <NSpin :show="loading">
-      <NAlert v-if="available === false" type="warning" :title="t('database.unavailable')">
+    <Spin :show="loading">
+      <Alert v-if="available === false" type="warning" :title="t('database.unavailable')">
         {{ t('database.unavailableHint') }}
         <RouterLink to="/plugins">{{ t('nav.plugins') }}</RouterLink>
-      </NAlert>
-      <NEmpty v-else-if="available && !tables.length" :description="t('database.noTables')" />
+      </Alert>
+      <Empty v-else-if="available && !tables.length" :description="t('database.noTables')" />
       <div v-else-if="available" class="layout">
         <nav class="tables">
           <div v-for="[group, list] in groups" :key="group" class="group">
@@ -403,100 +392,100 @@ async function backup() {
 
         <section v-if="table" class="rows">
           <div class="toolbar">
-            <NSelect v-model:value="filterColumn" :options="filterOptions" :placeholder="t('database.column')" size="small" class="filter-column" clearable />
-            <NInput v-model:value="filterText" size="small" :placeholder="t('database.value')" :title="t('database.filterHint')" class="filter-text" @keyup.enter="addFilter" />
-            <NButton size="small" :disabled="!filterColumn || filterText === ''" @click="addFilter">{{ t('database.filter') }}</NButton>
-            <NTag v-for="(value, name) in filters" :key="name" size="small" closable @close="removeFilter(String(name))">
+            <Select v-model:value="filterColumn" :options="filterOptions" :placeholder="t('database.column')" size="small" class="filter-column" clearable />
+            <Input v-model:value="filterText" size="small" :placeholder="t('database.value')" :title="t('database.filterHint')" class="filter-text" @keyup.enter="addFilter" />
+            <Button size="small" :disabled="!filterColumn || filterText === ''" @click="addFilter">{{ t('database.filter') }}</Button>
+            <Tag v-for="(value, name) in filters" :key="name" size="small" closable @close="removeFilter(String(name))">
               <span class="mono">{{ name }}</span>: {{ value }}
-            </NTag>
+            </Tag>
             <div class="spacer" />
             <span class="muted">{{ t('database.total', { count: total }) }}</span>
-            <IconAction :icon="RefreshOutline" :label="t('common.reload')" @click="loadRows" />
+            <IconAction icon="i-lucide-refresh-cw" :label="t('common.reload')" @click="loadRows" />
             <template v-if="flowTable">
-              <NButton size="small" @click="addFields">
-                <template #icon><NIcon><AddOutline /></NIcon></template>
+              <Button size="small" icon="i-lucide-plus" @click="addFields">
                 {{ t('database.addFields') }}
-              </NButton>
-              <IconAction :icon="TrashOutline" :label="t('database.dropTable')" type="error" @click="dropFlowTable" />
+              </Button>
+              <IconAction icon="i-lucide-trash-2" :label="t('database.dropTable')" type="error" @click="dropFlowTable" />
             </template>
-            <NDropdown :options="exportOptions" trigger="click" @select="exportTable">
-              <NButton size="small">
-                <template #icon><NIcon><DownloadOutline /></NIcon></template>
+            <Dropdown :options="exportOptions" @select="exportTable">
+              <Button size="small" icon="i-lucide-download">
                 {{ t('database.export') }}
-              </NButton>
-            </NDropdown>
+              </Button>
+            </Dropdown>
           </div>
-          <NDataTable
-            remote
+          <DataTable
             size="small"
             :columns="columns"
             :data="rows"
             :loading="loadingRows"
-            :pagination="pagination"
             :row-key="(row: Record<string, unknown>) => JSON.stringify(keyOf(row))"
             :scroll-x="Math.max(600, (table.columns.length + 1) * 140)"
             :max-height="'calc(100vh - 300px)'"
             @update:sorter="onSort"
           />
+          <Pagination
+            v-if="total > PAGE_SIZES[0]"
+            :page="page"
+            :page-size="pageSize"
+            :page-sizes="PAGE_SIZES"
+            :item-count="total"
+            size="small"
+            class="pager"
+            @update:page="setPage"
+            @update:page-size="setPageSize"
+          />
         </section>
       </div>
-    </NSpin>
+    </Spin>
 
-    <NModal
+    <Modal
       :show="!!designing"
-      preset="card"
       class="design-modal"
       :title="designing?.isNew ? t('database.newFlowTable') : t('database.addFieldsTo', { name: designing?.name })"
       @update:show="(value: boolean) => !value && (designing = undefined)"
     >
       <template v-if="designing">
         <p class="muted">{{ t('database.flowTableHint') }}</p>
-        <NInput v-if="designing.isNew" v-model:value="designing.name" :placeholder="t('database.tableName')" class="design-name">
+        <Input v-if="designing.isNew" v-model:value="designing.name" :placeholder="t('database.tableName')" class="design-name">
           <template #prefix><span class="mono muted">flow_</span></template>
-        </NInput>
+        </Input>
         <div v-for="item in designing.existing" :key="item.name" class="design-row">
-          <NInput :value="item.name" disabled size="small" />
-          <NInput :value="item.type" disabled size="small" class="design-type" />
+          <Input :value="item.name" disabled size="small" />
+          <Input :value="item.type" disabled size="small" class="design-type" />
           <span class="design-gap" />
         </div>
         <div v-for="(item, index) in designing.fields" :key="index" class="design-row">
-          <NInput v-model:value="item.name" size="small" :placeholder="t('database.fieldName')" />
-          <NSelect v-model:value="item.type" size="small" :options="fieldTypeOptions" class="design-type" />
-          <IconAction :icon="CloseOutline" :label="t('common.delete')" @click="designing.fields.splice(index, 1)" />
+          <Input v-model:value="item.name" size="small" :placeholder="t('database.fieldName')" />
+          <Select v-model:value="item.type" size="small" :options="fieldTypeOptions" class="design-type" />
+          <IconAction icon="i-lucide-x" :label="t('common.delete')" @click="designing.fields.splice(index, 1)" />
         </div>
-        <NButton dashed size="small" @click="designing.fields.push({ name: '', type: 'text' })">
-          <template #icon><NIcon><AddOutline /></NIcon></template>
+        <Button dashed size="small" icon="i-lucide-plus" @click="designing.fields.push({ name: '', type: 'text' })">
           {{ t('database.addField') }}
-        </NButton>
+        </Button>
         <p class="muted small">{{ t('database.builtinColumns') }}</p>
       </template>
       <template #footer>
-        <NSpace justify="end">
-          <NButton @click="designing = undefined">{{ t('common.cancel') }}</NButton>
-          <NButton type="primary" :loading="saving" :disabled="!designing?.name.trim()" @click="saveDesign">{{ t('common.save') }}</NButton>
-        </NSpace>
+        <Button @click="designing = undefined">{{ t('common.cancel') }}</Button>
+        <Button type="primary" :loading="saving" :disabled="!designing?.name.trim()" @click="saveDesign">{{ t('common.save') }}</Button>
       </template>
-    </NModal>
+    </Modal>
 
-    <NModal :show="!!viewing" preset="card" :title="viewing?.title" class="json-modal" @update:show="(value: boolean) => !value && (viewing = undefined)">
+    <Modal :show="!!viewing" :title="viewing?.title" class="json-modal" @update:show="(value: boolean) => !value && (viewing = undefined)">
       <pre class="json mono">{{ viewing?.text }}</pre>
-    </NModal>
+    </Modal>
 
-    <NModal :show="!!editing" preset="card" :title="t('database.editRow')" class="json-modal" @update:show="(value: boolean) => !value && (editing = undefined)">
+    <Modal :show="!!editing" :title="t('database.editRow')" class="json-modal" @update:show="(value: boolean) => !value && (editing = undefined)">
       <template v-if="editing">
         <p class="muted">{{ t('database.editHint', { key: JSON.stringify(editing.key) }) }}</p>
-        <NInput v-model:value="editing.text" type="textarea" class="mono" :autosize="{ minRows: 8, maxRows: 24 }" />
+        <Input v-model:value="editing.text" type="textarea" class="mono" :autosize="{ minRows: 8, maxRows: 24 }" />
       </template>
       <template #footer>
-        <NSpace justify="end">
-          <NButton @click="editing = undefined">
-            <template #icon><NIcon><CloseOutline /></NIcon></template>
-            {{ t('common.cancel') }}
-          </NButton>
-          <NButton type="warning" :loading="saving" @click="saveEdit">{{ t('common.save') }}</NButton>
-        </NSpace>
+        <Button icon="i-lucide-x" @click="editing = undefined">
+          {{ t('common.cancel') }}
+        </Button>
+        <Button type="warning" :loading="saving" @click="saveEdit">{{ t('common.save') }}</Button>
       </template>
-    </NModal>
+    </Modal>
   </div>
 </template>
 
@@ -562,8 +551,13 @@ async function backup() {
   flex: 1;
 }
 
-:deep(.n-data-table-td),
-:deep(.n-data-table-th) {
+.pager {
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+:deep(.mu-table td),
+:deep(.mu-table th) {
   white-space: nowrap;
 }
 
