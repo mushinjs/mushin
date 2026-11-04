@@ -20,9 +20,11 @@
     "@mushin/core": "workspace:*"
   },
   "devDependencies": {
+    "@iconify/json": "catalog:",
     "@types/node": "catalog:",
     "@types/ws": "catalog:",
     "typescript": "catalog:",
+    "unocss": "catalog:",
     "vitest": "catalog:"
   }
 }

@@ -13,6 +13,7 @@
     "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@mushin/ui": "workspace:*",
     "@tanstack/vue-virtual": "catalog:",
     "@vicons/ionicons5": "catalog:",
     "ansi_up": "catalog:",
@@ -35,6 +36,7 @@
     "@types/markdown-it": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
     "typescript": "catalog:",
+    "unocss": "catalog:",
     "vite": "catalog:",
     "vue-tsc": "catalog:"
   }

@@ -6,6 +6,8 @@ import { highlight } from './highlight'
 import { i18n } from './i18n'
 import { router } from './router'
 import { useAgentStore } from './stores/agent'
+import '@mushin/ui/theme.css'
+import 'virtual:uno.css'
 import './style.css'
 
 // Client actions the Agent can run in this tab.

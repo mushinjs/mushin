@@ -29,7 +29,7 @@ const form: GlobalThemeOverrides['Form'] = {
 }
 
 /**
- * The palette behind both themes. style.css declares the same values as CSS variables
+ * The palette behind both themes. @mushin/ui/theme.css declares the same values as CSS variables
  * (--bg, --s1, --primary, …) for the dashboard's own markup; keep the two in step.
  */
 export const palettes = {

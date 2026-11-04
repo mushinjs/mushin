@@ -1,0 +1,77 @@
+/*
+ * Mushin.js design tokens, for the dashboard and for plugin pages. Set data-theme="dark" on <html>
+ * for the dark palette. Surfaces: --bg is the page, --s1 cards and panels, --s2 inputs and hover,
+ * --s3 pressed. Text: --fg, --fg2 for secondary text, --fg3 for hints. Status: --ok, --warn, --bad
+ * and --info, each with a -soft fill for pills and notes.
+ *
+ * Colours are written out instead of mixed with color-mix(), so older WebKit builds (Tauri on
+ * Linux) render them the same.
+ */
+:root {
+  --bg: #F5F6FA;
+  --s1: #FFFFFF;
+  --s2: #EEF0F6;
+  --s3: #E3E6EF;
+  /* The selected segment of a segmented control, above --s2. */
+  --raised: #FFFFFF;
+  --line: #E1E4EE;
+  --line-strong: #CDD1DE;
+  --fg: #1B1D29;
+  --fg2: #5D6175;
+  --fg3: #8B8FA3;
+  --primary: #4F5BD5;
+  --primary-hover: #6370E0;
+  --primary-pressed: #3F4AB8;
+  --primary-fg: #FFFFFF;
+  --primary-soft: rgba(79, 91, 213, 0.1);
+  --primary-soft-hover: rgba(79, 91, 213, 0.16);
+  --focus: rgba(79, 91, 213, 0.35);
+  --ok: #1F9D63;
+  --ok-soft: rgba(31, 157, 99, 0.12);
+  --warn: #C27A06;
+  --warn-soft: rgba(194, 122, 6, 0.12);
+  --bad: #D2344D;
+  --bad-soft: rgba(210, 52, 77, 0.1);
+  --info: #2F7FC1;
+  --info-soft: rgba(47, 127, 193, 0.1);
+  --idle: #9095A8;
+  --shadow: 0 1px 2px rgba(20, 22, 40, 0.06), 0 4px 16px rgba(20, 22, 40, 0.05);
+  --shadow-pop: 0 4px 10px rgba(20, 22, 40, 0.08), 0 12px 32px rgba(20, 22, 40, 0.12);
+  --overlay: rgba(15, 17, 30, 0.38);
+  --radius: 10px;
+  --radius-sm: 7px;
+  --mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
+}
+
+html[data-theme='dark'] {
+  --bg: #0E0F14;
+  --s1: #16171F;
+  --s2: #1F212B;
+  --s3: #282B37;
+  --raised: #343849;
+  --line: #2A2D3A;
+  --line-strong: #3A3E4F;
+  --fg: #E8E9F0;
+  --fg2: #A0A3B6;
+  --fg3: #6E7287;
+  --primary: #7D8BF5;
+  --primary-hover: #97A3F8;
+  --primary-pressed: #6474EC;
+  --primary-fg: #FFFFFF;
+  --primary-soft: rgba(125, 139, 245, 0.14);
+  --primary-soft-hover: rgba(125, 139, 245, 0.22);
+  --focus: rgba(125, 139, 245, 0.45);
+  --ok: #3CCB8A;
+  --ok-soft: rgba(60, 203, 138, 0.13);
+  --warn: #F0B04A;
+  --warn-soft: rgba(240, 176, 74, 0.13);
+  --bad: #F06A7E;
+  --bad-soft: rgba(240, 106, 126, 0.13);
+  --info: #5FA8E8;
+  --info-soft: rgba(95, 168, 232, 0.13);
+  --idle: #6E7287;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-pop: 0 6px 16px rgba(0, 0, 0, 0.35), 0 16px 40px rgba(0, 0, 0, 0.3);
+  --overlay: rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
