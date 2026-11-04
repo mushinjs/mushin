@@ -167,6 +167,7 @@ export default {
   },
   common: {
     refresh: 'Refresh',
+    invalidJson: 'Invalid JSON',
     peoplePlaceholder: 'Pick or type ids',
     add: 'Add',
     actions: 'Actions',

@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { AddOutline, InformationCircleOutline, TrashOutline } from '@vicons/ionicons5'
-import { NButton, NCheckbox, NDynamicTags, NFormItem, NIcon, NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSwitch, NTooltip } from 'naive-ui'
+import { Button, FormItem, Input, NumberInput, RadioGroup, Select, TagsInput, Toggle, Tooltip } from '@mushin/ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { JsonSchema } from '../types'
@@ -15,8 +14,8 @@ const props = defineProps<{
   required?: boolean
   secret?: boolean
   /**
-   * The flow editor's dense layout: descriptions fold into a hint icon, booleans are checkboxes
-   * (or a switch on the label's row), and short choices are buttons.
+   * The flow editor's dense layout: descriptions fold into an info icon by the label (unless the
+   * field asks for an inline hint) and short choices fill the row as buttons.
    */
   compact?: boolean
 }>()
@@ -81,9 +80,12 @@ const choiceOptions = computed(() => {
     })),
   ]
 })
-/** In compact forms, up to four choices show as buttons. */
-const asButtons = computed(() => props.compact && kind.value === 'enum' && options.value.length <= 4)
-const widget = computed(() => schema.value['x-widget'] ?? props.schema['x-widget'] ?? 'checkbox')
+/** Up to four short choices show as buttons (CJK characters count double); in compact forms they fill the row. */
+const textWidth = (text: string) => [...text].reduce((sum, char) => sum + (/[\u3000-\u9fff\uff00-\uffef]/.test(char) ? 2 : 1), 0)
+const asButtons = computed(() => kind.value === 'enum' && options.value.length <= 4 && options.value.reduce((sum: number, option: { label: string }) => sum + textWidth(option.label), 0) <= 34)
+const widget = computed(() => schema.value['x-widget'] ?? props.schema['x-widget'])
+/** Under the field: the description (unless folded into the label's info icon) or the JSON error. */
+const feedback = computed(() => jsonError.value || (props.compact && !hintInline.value ? undefined : description.value))
 
 // Lists of objects, such as the conditions of a database node: one small form per item.
 const items = computed<Record<string, any>[]>(() => (Array.isArray(props.modelValue) ? props.modelValue : []))
@@ -119,87 +121,87 @@ function onJson(text: string) {
     value.value = JSON.parse(text)
     jsonError.value = ''
   } catch {
-    jsonError.value = 'Invalid JSON'
+    jsonError.value = t('common.invalidJson')
   }
 }
 </script>
 
 <template>
-  <!-- Compact checkbox: the label sits next to the box, the description in its hint. -->
-  <div v-if="compact && kind === 'boolean' && widget === 'checkbox'" class="check">
-    <NCheckbox :checked="!!value" @update:checked="(next: boolean) => (value = next)">{{ label }}</NCheckbox>
-    <NTooltip v-if="description" :style="{ maxWidth: '280px' }">
-      <template #trigger><NIcon :size="14" class="hint"><InformationCircleOutline /></NIcon></template>
-      {{ description }}
-    </NTooltip>
+  <!-- On/off: the label and its toggle share one row. -->
+  <div v-if="kind === 'boolean'" class="switch-row" :class="{ compact }">
+    <div class="switch-text">
+      <span class="switch-label">
+        {{ label }}
+        <span v-if="required" class="required" aria-hidden="true">*</span>
+        <Tooltip v-if="compact && description && !hintInline">
+          <template #trigger><span class="i-lucide-info info" tabindex="0" /></template>
+          {{ description }}
+        </Tooltip>
+      </span>
+      <span v-if="feedback" class="switch-desc">{{ feedback }}</span>
+    </div>
+    <Toggle :value="!!value" :size="compact ? 'small' : 'medium'" :aria-label="label" @update:value="(next: boolean) => (value = next)" />
   </div>
-  <NFormItem
+  <FormItem
     v-else
+    :label="label"
     :required="required"
-    :label-placement="compact && kind === 'boolean' ? 'left' : undefined"
-    :show-feedback="!compact || !!jsonError || (hintInline && !!description)"
-    :feedback="jsonError || (compact && !hintInline ? undefined : description)"
+    :info="compact && !hintInline ? description : undefined"
+    :feedback="feedback"
     :validation-status="jsonError ? 'error' : undefined"
   >
-    <template #label>
-      <span class="label">
-        {{ label }}
-        <NTooltip v-if="compact && description && !hintInline" :style="{ maxWidth: '280px' }">
-          <template #trigger><NIcon :size="14" class="hint"><InformationCircleOutline /></NIcon></template>
-          {{ description }}
-        </NTooltip>
-      </span>
-    </template>
-    <NRadioGroup v-if="asButtons" v-model:value="value" size="small" class="choices">
-      <NRadioButton v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</NRadioButton>
-    </NRadioGroup>
-    <NSelect
+    <RadioGroup v-if="asButtons" v-model:value="value" :size="compact ? 'small' : 'medium'" :block="compact" :options="options" />
+    <Select
       v-else-if="kind === 'enum'"
       v-model:value="value"
+      :size="compact ? 'small' : 'medium'"
       :options="options"
       :clearable="!required"
     />
-    <NSelect
+    <Select
       v-else-if="kind === 'choices'"
       :value="value ?? ''"
-      :options="choiceOptions"
+      :size="compact ? 'small' : 'medium'"
+      :options="choiceOptions as any"
       filterable
       tag
       :clearable="!required"
       @update:value="(next: string | null) => (value = next ?? '')"
     />
-    <NInput
+    <Input
       v-else-if="kind === 'string'"
       v-model:value="value"
+      :size="compact ? 'small' : 'medium'"
       :type="secret ? 'password' : 'text'"
       :show-password-on="secret ? 'click' : undefined"
       :placeholder="schema.default !== undefined ? String(schema.default) : ''"
       :input-props="{ autocomplete: secret ? 'new-password' : 'off' }"
       clearable
     />
-    <NInput
+    <Input
       v-else-if="kind === 'text'"
       v-model:value="value"
+      :size="compact ? 'small' : 'medium'"
       type="textarea"
       :autosize="{ minRows: 3, maxRows: 10 }"
     />
-    <NInputNumber
+    <NumberInput
       v-else-if="kind === 'number'"
       v-model:value="value"
+      :size="compact ? 'small' : 'medium'"
       :min="schema.minimum"
       :max="schema.maximum"
       :step="schema.type === 'integer' ? 1 : undefined"
       :precision="schema.type === 'integer' ? 0 : undefined"
       :placeholder="schema.default !== undefined ? String(schema.default) : ''"
       clearable
-      style="width: 100%"
     />
-    <NSwitch v-else-if="kind === 'boolean'" v-model:value="value" />
-    <NDynamicTags v-else-if="kind === 'tags'" v-model:value="value" />
-    <NSelect
+    <TagsInput v-else-if="kind === 'tags'" v-model:value="value" :size="compact ? 'small' : 'medium'" />
+    <Select
       v-else-if="kind === 'multiChoices'"
       :value="Array.isArray(value) ? value : []"
-      :options="choiceOptions"
+      :size="compact ? 'small' : 'medium'"
+      :options="choiceOptions as any"
       multiple
       filterable
       clearable
@@ -208,79 +210,128 @@ function onJson(text: string) {
       @update:value="(next: string[]) => (value = next)"
     />
     <div v-else-if="kind === 'object'" class="nested">
-      <SchemaForm v-model="value" :schema="schema" />
+      <SchemaForm v-model="value" :schema="schema" :compact="compact" />
     </div>
     <div v-else-if="kind === 'list'" class="list">
       <div v-for="(item, index) in items" :key="index" class="list-item">
-        <SchemaForm :model-value="item" :schema="schema.items" :compact="compact" @update:model-value="(next) => setItem(index, next)" />
-        <NButton quaternary circle size="tiny" class="list-remove" :aria-label="t('common.delete')" @click="removeItem(index)">
-          <template #icon><NIcon><TrashOutline /></NIcon></template>
-        </NButton>
+        <span class="list-index">{{ index + 1 }}</span>
+        <SchemaForm class="list-form" :model-value="item" :schema="schema.items" :compact="compact" @update:model-value="(next) => setItem(index, next)" />
+        <Button quaternary circle size="tiny" type="error" class="list-remove" icon="i-lucide-trash-2" :aria-label="t('common.delete')" @click="removeItem(index)" />
       </div>
-      <NButton dashed size="small" @click="addItem">
-        <template #icon><NIcon><AddOutline /></NIcon></template>
-        {{ t('common.add') }}
-      </NButton>
+      <Button dashed size="small" block icon="i-lucide-plus" @click="addItem">{{ t('common.add') }}</Button>
     </div>
-    <NInput
+    <Input
       v-else
       :value="jsonText"
       type="textarea"
       class="mono"
+      :size="compact ? 'small' : 'medium'"
       :autosize="{ minRows: 2, maxRows: 10 }"
       placeholder="{}"
+      :status="jsonError ? 'error' : undefined"
       @update:value="onJson"
     />
-  </NFormItem>
+  </FormItem>
 </template>
 
 <style scoped>
-.label {
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+}
+
+.switch-row.compact {
+  min-height: 28px;
+}
+
+.switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.switch-label {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
-.hint {
-  opacity: 0.5;
+.switch-desc {
+  color: var(--fg3);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.required {
+  color: var(--bad);
+}
+
+.info {
+  color: var(--fg3);
+  font-size: 13px;
   cursor: help;
 }
 
-.check {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin: 0 16px 10px 0;
-}
-
-.choices {
-  flex-wrap: wrap;
+.info:hover,
+.info:focus-visible {
+  color: var(--fg2);
+  outline: none;
 }
 
 .list {
-  width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .list-item {
   position: relative;
-  padding: 8px 28px 0 10px;
-  border: 1px solid rgba(127, 127, 127, 0.22);
+  display: flex;
+  gap: 8px;
+  padding: 10px 32px 10px 10px;
+  border: 1px solid var(--line);
   border-radius: 8px;
+  background: var(--s1);
+}
+
+.list-index {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--s2);
+  color: var(--fg3);
+  font-size: 11px;
+  font-family: var(--mono);
+}
+
+.list-form {
+  flex: 1;
+  min-width: 0;
 }
 
 .list-remove {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 6px;
+  right: 6px;
 }
 
 .nested {
-  width: 100%;
-  padding: 12px 12px 0;
-  border: 1px dashed rgba(127, 127, 127, 0.3);
+  padding: 12px;
+  border: 1px solid var(--line);
   border-radius: 8px;
+  background: var(--s1);
 }
 </style>

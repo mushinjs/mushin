@@ -168,6 +168,7 @@ const zhCN: typeof en = {
   },
   common: {
     refresh: '刷新',
+    invalidJson: 'JSON 格式不对',
     peoplePlaceholder: '选择或输入 ID',
     add: '添加',
     actions: '操作',

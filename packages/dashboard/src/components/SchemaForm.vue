@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NForm } from 'naive-ui'
+import { Form } from '@mushin/ui'
 import { computed, watch } from 'vue'
 import type { JsonSchema } from '../types'
 import SchemaField from './SchemaField.vue'
@@ -44,7 +44,7 @@ function update(name: string, next: any) {
 </script>
 
 <template>
-  <NForm label-placement="top" size="medium">
+  <Form class="schema-form" :class="{ compact }" :compact="compact">
     <SchemaField
       v-for="[name, field] in fields"
       :key="name"
@@ -56,5 +56,20 @@ function update(name: string, next: any) {
       :compact="compact"
       @update:model-value="(next: any) => update(name, next)"
     />
-  </NForm>
+  </Form>
 </template>
+
+<style scoped>
+/* Space before whatever follows, as a Naive UI form leaves under its last field. */
+.schema-form:not(.compact) {
+  margin-bottom: 24px;
+}
+
+.schema-form.compact {
+  margin-bottom: 14px;
+}
+
+.schema-form:empty {
+  display: none;
+}
+</style>
