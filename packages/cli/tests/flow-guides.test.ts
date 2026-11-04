@@ -24,7 +24,10 @@ describe('node tutorials', () => {
       expect(run.error, context).toBeUndefined()
       expect(run.steps.filter((step: any) => step.error), context).toEqual([])
       expect(run.steps.some((step: any) => run.nodes.find((node: any) => node.id === step.nodeId)?.type === type.type), context).toBe(true)
-      if (type.guide.captions) expect(run.steps.length, context).toBe(type.guide.captions.length)
+      if (type.guide.captions) {
+        expect(type.guide.example.repeat ? run.passes.length : run.steps.length, context).toBe(type.guide.captions.length)
+      }
+      for (const pass of run.passes) expect(pass.steps.filter((step: any) => step.error), context).toEqual([])
     }
   })
 

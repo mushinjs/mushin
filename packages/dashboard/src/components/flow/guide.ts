@@ -6,15 +6,21 @@ import { onBeforeUnmount, ref, shallowRef } from 'vue'
 import { call } from '../../api'
 import type { NodeTypeInfo } from '../../types'
 
-export interface GuideRun {
-  nodes: { id: string; type: string; config: Record<string, any> }[]
-  edges: ([string, string] | [string, string, string])[]
-  input: { text: string; userName: string; private: boolean }
+export interface GuidePass {
+  input: { text: string; userName: string; userId: string; private: boolean; role?: string }
   matched: boolean
-  steps: { nodeId: string; exec?: string; outputs?: Record<string, unknown>; error?: string }[]
+  steps: { nodeId: string; exec?: string; inputs?: Record<string, unknown>; outputs?: Record<string, unknown>; error?: string }[]
   replies: string[]
-  waits: string[]
   error?: string
+}
+
+/** A node type's example after the server ran it; the first message's run is spread at the top. */
+export interface GuideRun extends GuidePass {
+  nodes: { id: string; type: string; config: Record<string, any>; inputs?: Record<string, string> }[]
+  edges: ([string, string] | [string, string, string])[]
+  /** Every message in order, the first included. */
+  passes: GuidePass[]
+  waits: string[]
 }
 
 const runs = new Map<string, Promise<GuideRun | null>>()

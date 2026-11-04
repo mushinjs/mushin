@@ -535,11 +535,12 @@ export function permissionNode(permissions: Permissions): NodeType {
         ],
         edges: [['cmd', 'perm'], ['perm', 'ok', 'allow'], ['perm', 'no', 'deny']],
         input: { text: '/重启', userId: '10000', role: 'admin' },
+        repeat: [{ text: '/重启', userId: '20000', role: 'admin' }, { text: '/重启', userId: '30000', role: 'user' }],
       },
       captions: [
-        { en: 'Someone runs the command', 'zh-CN': '有人运行了指令' },
-        { en: 'They are an admin, but on the block list, so the check goes to "deny"', 'zh-CN': '虽然是管理员，但在黑名单里，所以走 deny' },
-        { en: 'The deny branch replies with the reason', 'zh-CN': 'deny 分支回复未通过原因' },
+        { en: 'An admin, but on the block list: "deny", and the reply gives the reason', 'zh-CN': '虽然是管理员，但在黑名单里：走 deny，并回复原因' },
+        { en: 'Another admin passes every check: "allow"', 'zh-CN': '另一位管理员各项都通过：走 allow' },
+        { en: 'An ordinary member does not have an allowed role: "deny"', 'zh-CN': '普通成员没有允许的角色：走 deny' },
       ],
     },
     testOptions(config) {

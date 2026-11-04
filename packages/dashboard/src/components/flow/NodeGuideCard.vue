@@ -1,18 +1,21 @@
 <script setup lang="ts">
 /**
- * A node type's tutorial, shown beside the node list while a node is hovered. It plays the
- * type's example flow as it really ran (the server ran it as a test): the message comes in, each
- * node lights up in turn with what it produced, and the bot's replies appear in a chat beside it.
- * Types without an example show their inputs, outputs and branches. With reduced motion the
- * finished run shows at once, with every caption listed.
+ * A node type's tutorial, shown beside the node list while a node is hovered. It replays the
+ * type's example flow as it really ran (the server ran it as a test), drawn like the canvas: node
+ * cards with their settings and branches, wires between them. A light runs along each wire the run
+ * took, each node shows a check when it finishes and what it produced pops out of its output, and
+ * the conversation plays below. Types without an example show their inputs, outputs and branches.
+ * With reduced motion the finished run shows at once, with every caption listed.
  */
+import { CheckmarkOutline } from '@vicons/ionicons5'
 import { NIcon, useThemeVars } from 'naive-ui'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { categoryColors } from '../../flow'
+import { categoryColors, configSummary, portsOf, schemaDefaults, wholeRef } from '../../flow'
 import type { NodeTypeInfo, PortDef } from '../../types'
 import { localize } from '../../utils'
-import { type GuideRun, guideRun } from './guide'
+import { type GuidePass, type GuideRun, guideRun } from './guide'
+import GuideScene, { type SceneStage } from './GuideScene.vue'
 import { nodeIcon } from './icons'
 
 const props = defineProps<{
@@ -28,12 +31,7 @@ const emit = defineEmits<{ enter: []; leave: [] }>()
 const { t, locale } = useI18n()
 const theme = useThemeVars()
 
-const WIDTH = 340
-const STEP_MS = 1300
-const START_MS = 900
-const HOLD_MS = 2600
-
-const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+const reduced = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
 const run = ref<GuideRun | null>()
 const loading = ref(false)
@@ -52,16 +50,35 @@ watch(() => props.type.type, async (type) => {
 }, { immediate: true })
 
 const typeOf = (id: string) => props.types.find((item) => item.type === id)
+const portTitle = (port: PortDef | undefined, name: string) => (port ? localize(port.title, locale.value) || port.name : name)
 
-// ---- layout: top to bottom by depth from the trigger, side by side within a depth ----
+// ---- the example's nodes, drawn as small canvas cards ----
 
-const BOX_H = 30
-const ROW_GAP = 36
-const STAGE_W = 150
+const NODE_W = 138
+const HEAD_H = 28
+const ROW_H = 17
+const PAD = 5
+const COL_GAP = 46
+const ROW_GAP = 26
+const MAX_W = 432
 
-const layout = computed(() => {
+interface MiniNode {
+  id: string
+  type: string
+  title: string
+  category: NodeTypeInfo['category']
+  rows: { key: string; label: string; value: string; ref?: { node: string; name: string } }[]
+  /** Exec outputs shown as rows; empty when the node only goes on to `next`. */
+  branches: string[]
+  x: number
+  y: number
+  h: number
+}
+
+const nodes = computed<MiniNode[]>(() => {
   const value = run.value
-  if (!value) return
+  if (!value) return []
+  // Columns by distance from the trigger, like the canvas reads left to right.
   const depth = new Map<string, number>([[value.nodes[0].id, 0]])
   const queue = [value.nodes[0].id]
   while (queue.length) {
@@ -73,132 +90,254 @@ const layout = computed(() => {
       }
     }
   }
-  const rows: string[][] = []
-  for (const node of value.nodes) {
-    const row = depth.get(node.id) ?? rows.length
-    ;(rows[row] ??= []).push(node.id)
-  }
-  const boxes = new Map<string, { x: number; y: number; w: number }>()
-  rows.forEach((ids, row) => {
-    const w = Math.min(STAGE_W, (STAGE_W - (ids.length - 1) * 8) / ids.length)
-    const total = ids.length * w + (ids.length - 1) * 8
-    ids.forEach((id, index) => boxes.set(id, { x: (STAGE_W - total) / 2 + index * (w + 8), y: row * (BOX_H + ROW_GAP), w }))
-  })
-  return { boxes, height: rows.length * BOX_H + (rows.length - 1) * ROW_GAP }
-})
-
-const edgePaths = computed(() => {
-  const value = run.value
-  const boxes = layout.value?.boxes
-  if (!value || !boxes) return []
-  return value.edges.map(([from, to, exec = 'next']) => {
-    const a = boxes.get(from)!
-    const b = boxes.get(to)!
-    const x1 = a.x + a.w / 2
-    const y1 = a.y + BOX_H
-    const x2 = b.x + b.w / 2
-    const y2 = b.y
-    const mid = (y1 + y2) / 2
+  const built = value.nodes.map((node) => {
+    const type = typeOf(node.type)
+    const config = { ...schemaDefaults(type?.configSchema), ...node.config }
+    const ports = type ? portsOf(type, config) : undefined
+    const execOut = ports?.execOut ?? ['next']
+    const inputRows = Object.entries(node.inputs ?? {}).map(([name, binding]) => {
+      const ref = wholeRef(binding)
+      return { key: `in-${name}`, label: portTitle(type?.inputs.find((port) => port.name === name), name), value: binding, ...(ref ? { ref: { node: ref.head, name: ref.name } } : {}) }
+    })
+    const summary = type ? configSummary(type, node.config, locale.value, 2) : []
     return {
-      key: `${from}-${to}-${exec}`,
-      from, to, exec,
-      d: `M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`,
-      // Near the target, below the chip of what the source produced.
-      labelX: x2,
-      labelY: y2 - 5,
+      id: node.id,
+      type: node.type,
+      title: localize(type?.title, locale.value) || node.type,
+      category: type?.category ?? 'logic',
+      rows: [...inputRows, ...summary].slice(0, 2),
+      branches: execOut.length === 1 && execOut[0] === 'next' ? [] : execOut,
+      x: 0,
+      y: 0,
+      h: 0,
+      col: depth.get(node.id) ?? 0,
     }
   })
+  const columns: (typeof built)[] = []
+  for (const node of built) (columns[node.col] ??= []).push(node)
+  for (const node of built) {
+    node.h = HEAD_H + (node.rows.length ? node.rows.length * ROW_H + PAD : 0) + (node.branches.length ? node.branches.length * ROW_H + PAD : 0)
+  }
+  const heights = columns.map((column) => column.reduce((sum, node) => sum + node.h, 0) + (column.length - 1) * ROW_GAP)
+  const tallest = Math.max(...heights)
+  columns.forEach((column, col) => {
+    let y = (tallest - heights[col]) / 2
+    for (const node of column) {
+      node.x = col * (NODE_W + COL_GAP)
+      node.y = y
+      y += node.h + ROW_GAP
+    }
+  })
+  return built
 })
 
-// ---- playback ----
+const nodeById = computed(() => new Map(nodes.value.map((node) => [node.id, node])))
 
-/** -1 before anything, 0 when the message is in, i + 1 while step i runs, steps + 1 when done. */
-const phase = ref(-1)
-let timer: ReturnType<typeof setTimeout> | undefined
-const hovering = ref(false)
+const size = computed(() => {
+  const width = Math.max(...nodes.value.map((node) => node.x + NODE_W), NODE_W) + 12
+  const height = Math.max(...nodes.value.map((node) => node.y + node.h), HEAD_H) + 24
+  return { width, height, scale: Math.min(1, MAX_W / width) }
+})
 
-function schedule(next: number, delay: number) {
-  clearTimeout(timer)
-  timer = setTimeout(() => {
-    if (hovering.value && next < phase.value) return schedule(next, 400)
-    phase.value = next
-    tick()
-  }, delay)
+/** Where an exec output leaves a node: its header, or its branch row. */
+function outPoint(node: MiniNode, exec: string) {
+  const index = node.branches.indexOf(exec)
+  if (index < 0) return { x: node.x + NODE_W, y: node.y + HEAD_H / 2 }
+  const top = node.y + HEAD_H + (node.rows.length ? node.rows.length * ROW_H + PAD : 0)
+  return { x: node.x + NODE_W, y: top + index * ROW_H + ROW_H / 2 }
 }
 
-function tick() {
-  const steps = run.value?.steps.length ?? 0
-  if (phase.value <= steps) schedule(phase.value + 1, phase.value === 0 ? START_MS : STEP_MS)
-  else schedule(0, HOLD_MS)
+const wires = computed(() => (run.value?.edges ?? []).map(([from, to, exec = 'next']) => {
+  const a = outPoint(nodeById.value.get(from)!, exec)
+  const target = nodeById.value.get(to)!
+  const b = { x: target.x, y: target.y + HEAD_H / 2 }
+  const bend = Math.max(18, (b.x - a.x) / 2)
+  return { key: `${from}>${to}:${exec}`, from, to, exec, d: `M ${a.x} ${a.y} C ${a.x + bend} ${a.y}, ${b.x - bend} ${b.y}, ${b.x} ${b.y}` }
+}))
+
+// ---- playback: run a node, show what it made, send a light down the wire, run the next ----
+
+const RUN_MS = 700
+const SHOW_MS = 650
+const TRAVEL_MS = 520
+const START_MS = 900
+const HOLD_MS = 2800
+
+const running = ref<string>()
+const done = ref(new Set<string>())
+const lit = ref(new Set<string>())
+const travelling = ref<string>()
+/** How many chat lines are showing, and which caption. */
+const said = ref(0)
+const step = ref(-1)
+const finished = ref(false)
+/** Which message of the example is playing, and for a scene how far it got. */
+const beat = ref(0)
+const stage = ref<SceneStage>('in')
+
+/** Logic nodes act out what makes them themselves; the others replay the run on the mini canvas. */
+const SCENES = new Set(['logic.if', 'logic.compare', 'logic.random', 'logic.cooldown', 'logic.rateLimit', 'logic.dailyQuota', 'logic.delay', 'logic.waitReply', 'logic.permission', 'ai.classify', 'data.increment'])
+const focus = computed(() => run.value?.nodes.find((node) => node.type === props.type.type))
+const scene = computed(() => !!run.value && !!focus.value && SCENES.has(props.type.type))
+const focusConfig = computed(() => ({ ...schemaDefaults(props.type.configSchema), ...focus.value?.config }))
+const passes = computed<GuidePass[]>(() => run.value?.passes ?? (run.value ? [run.value] : []))
+const current = computed(() => passes.value[beat.value] ?? passes.value[0])
+
+let generation = 0
+const sleep = (ms: number, mine: number) => new Promise<boolean>((resolve) => setTimeout(() => resolve(mine === generation), ms))
+
+function reset() {
+  running.value = undefined
+  done.value = new Set()
+  lit.value = new Set()
+  travelling.value = undefined
+  said.value = 0
+  step.value = -1
+  finished.value = false
 }
 
-watch(run, (value) => {
-  clearTimeout(timer)
-  if (!value) return
-  if (reduced) {
-    phase.value = value.steps.length + 1
-    return
-  }
-  phase.value = 0
-  tick()
-}, { immediate: true })
-onBeforeUnmount(() => clearTimeout(timer))
-
-const stepIndex = (id: string) => run.value?.steps.findIndex((step) => step.nodeId === id) ?? -1
-const visited = (id: string) => {
-  const index = stepIndex(id)
-  return index >= 0 && index < phase.value
-}
-const activeId = computed(() => run.value?.steps[phase.value - 1]?.nodeId)
-
-/** The run went along this edge: its source ran, took this exec output, and its target ran after. */
-function travelled(edge: { from: string; to: string; exec: string }) {
-  const steps = run.value?.steps ?? []
-  const a = stepIndex(edge.from)
-  const b = stepIndex(edge.to)
-  return a >= 0 && b > a && (steps[a].exec ?? 'next') === edge.exec && b < phase.value
-}
-
-const SESSION_KEYS = new Set(['text', 'userName', 'userId', 'command', 'args', 'isPrivate', 'message', 'messageId', 'groupId', 'mentioned', 'role', 'tokens', 'model', 'sent', 'first', 'retryAfter'])
-
-/** The most telling thing a step produced, short; the branch it took shows on its edge. */
-function chipOf(index: number) {
-  const step = run.value?.steps[index]
-  if (!step) return ''
-  if (step.error) return step.error
-  const node = run.value!.nodes.find((item) => item.id === step.nodeId)
-  const type = node && typeOf(node.type)
-  const entries = Object.entries(step.outputs ?? {}).filter(([key, value]) => value !== '' && value !== undefined && value !== null && !(SESSION_KEYS.has(key) && type?.kind === 'trigger'))
-  const picked = entries.find(([key]) => !SESSION_KEYS.has(key)) ?? (type?.kind === 'trigger' ? undefined : entries.find(([key]) => key !== 'messageId'))
-  if (!picked) return ''
-  const port = type?.outputs.find((item) => item.name === picked[0])
-  const label = port ? localize(port.title, locale.value) : picked[0]
-  const value = typeof picked[1] === 'string' ? picked[1] : JSON.stringify(picked[1])
-  const text = `${label}：${value}`
-  return text.length > 26 ? `${text.slice(0, 25)}…` : text
-}
-
-/** The chat beside the graph, each line with the phase it appears at. */
+/** The chat of the message playing, each line with the step it appears after (-1: the message itself). */
 const chat = computed(() => {
   const value = run.value
-  if (!value) return []
-  const lines: { who: 'user' | 'bot'; text: string; at: number }[] = [{ who: 'user', text: value.input.text, at: 0 }]
-  const replies = [...value.replies]
-  const waits = [...value.waits]
-  value.steps.forEach((step, index) => {
-    const type = value.nodes.find((node) => node.id === step.nodeId)?.type
-    if ((type === 'action.reply' || type === 'action.send') && !step.error && replies.length) lines.push({ who: 'bot', text: replies.shift()!, at: index + 1 })
-    if (type === 'logic.waitReply' && step.exec === 'reply' && waits.length) lines.push({ who: 'user', text: waits.shift()!, at: index + 1 })
+  const item = current.value
+  if (!value || !item) return []
+  const lines: { who: 'user' | 'bot'; text: string; after: number }[] = [{ who: 'user', text: item.input.text, after: -1 }]
+  const replies = [...item.replies]
+  const waits = beat.value === 0 ? [...value.waits] : []
+  item.steps.forEach((entry, index) => {
+    const type = value.nodes.find((node) => node.id === entry.nodeId)?.type
+    if ((type === 'action.reply' || type === 'action.send') && !entry.error && replies.length) lines.push({ who: 'bot', text: replies.shift()!, after: index })
+    if (type === 'logic.waitReply' && entry.exec === 'reply' && waits.length) lines.push({ who: 'user', text: waits.shift()!, after: index })
   })
   return lines
 })
-const shownChat = computed(() => chat.value.filter((line) => line.at <= phase.value && phase.value >= 0))
+const saidUpTo = (index: number) => chat.value.filter((line) => line.after <= index).length
+
+/** The wire the run took out of step `index`, to the next step. */
+function wireAfter(index: number) {
+  const steps = current.value?.steps ?? []
+  const from = steps[index]
+  const to = steps[index + 1]
+  if (!from || !to) return
+  return wires.value.find((wire) => wire.from === from.nodeId && wire.to === to.nodeId && wire.exec === (from.exec ?? 'next'))
+}
+
+async function play(mine: number) {
+  while (mine === generation) {
+    beat.value = 0
+    reset()
+    const steps = current.value?.steps ?? []
+    said.value = saidUpTo(-1)
+    if (!await sleep(START_MS, mine)) return
+    for (let index = 0; index < steps.length; index++) {
+      step.value = index
+      running.value = steps[index].nodeId
+      if (!await sleep(RUN_MS, mine)) return
+      running.value = undefined
+      done.value = new Set([...done.value, steps[index].nodeId])
+      said.value = saidUpTo(index)
+      if (!await sleep(SHOW_MS, mine)) return
+      const wire = wireAfter(index)
+      if (wire) {
+        travelling.value = wire.key
+        if (!await sleep(TRAVEL_MS, mine)) return
+        travelling.value = undefined
+        lit.value = new Set([...lit.value, wire.key])
+      }
+    }
+    finished.value = true
+    if (!await sleep(HOLD_MS, mine)) return
+  }
+}
+
+/** Marks the message playing as run up to its focus node (`decide`) or all the way (`out`). */
+function markPass(upTo: 'before' | 'focus' | 'all') {
+  const steps = current.value?.steps ?? []
+  const at = steps.findIndex((item) => item.nodeId === focus.value?.id)
+  const last = upTo === 'all' ? steps.length - 1 : at - 1
+  done.value = new Set(steps.slice(0, last + 1).map((item) => item.nodeId))
+  lit.value = new Set(steps.slice(0, Math.max(0, upTo === 'all' ? steps.length - 1 : at)).map((_, index) => wireAfter(index)?.key).filter((key): key is string => !!key))
+  running.value = upTo === 'focus' ? focus.value?.id : undefined
+  said.value = upTo === 'all' ? chat.value.length : saidUpTo(-1)
+}
+
+const SCENE_IN_MS = 800
+const SCENE_DECIDE_MS = 1300
+const SCENE_OUT_MS = 1900
+
+async function playScenes(mine: number) {
+  while (mine === generation) {
+    for (let index = 0; index < passes.value.length; index++) {
+      reset()
+      beat.value = index
+      step.value = index
+      stage.value = 'in'
+      markPass('before')
+      if (!await sleep(SCENE_IN_MS, mine)) return
+      stage.value = 'decide'
+      markPass('focus')
+      if (!await sleep(SCENE_DECIDE_MS, mine)) return
+      stage.value = 'out'
+      markPass('all')
+      if (!await sleep(SCENE_OUT_MS, mine)) return
+    }
+    finished.value = true
+    if (!await sleep(HOLD_MS / 2, mine)) return
+  }
+}
+
+function showAll() {
+  reset()
+  if (scene.value) {
+    beat.value = passes.value.length - 1
+    stage.value = 'out'
+    step.value = beat.value
+    markPass('all')
+    finished.value = true
+    return
+  }
+  beat.value = 0
+  const steps = current.value?.steps ?? []
+  done.value = new Set(steps.map((item) => item.nodeId))
+  lit.value = new Set(steps.map((_, index) => wireAfter(index)?.key).filter((key): key is string => !!key))
+  said.value = chat.value.length
+  step.value = steps.length - 1
+  finished.value = true
+}
+
+watch(run, (value) => {
+  generation++
+  beat.value = 0
+  if (!value) return reset()
+  if (reduced) showAll()
+  else if (scene.value) void playScenes(generation)
+  else void play(generation)
+}, { immediate: true })
+onBeforeUnmount(() => generation++)
+
+const stepOf = (id: string) => current.value?.steps.find((item) => item.nodeId === id)
+const SESSION_KEYS = new Set(['text', 'userName', 'userId', 'command', 'args', 'isPrivate', 'message', 'messageId', 'groupId', 'mentioned', 'role', 'tokens', 'model', 'sent', 'first', 'retryAfter'])
+
+/** The most telling value a node produced, for the chip at its output; nothing for plain sends. */
+function producedBy(node: MiniNode) {
+  const item = stepOf(node.id)
+  if (!item) return
+  if (item.error) return { label: '!', value: item.error, error: true }
+  const type = typeOf(node.type)
+  const entries = Object.entries(item.outputs ?? {}).filter(([, value]) => value !== '' && value !== undefined && value !== null)
+  const picked = entries.find(([key]) => !SESSION_KEYS.has(key)) ?? (type?.kind === 'trigger' ? entries.find(([key]) => key === 'text') : undefined)
+  if (!picked) return
+  const port = type?.outputs.find((output) => output.name === picked[0])
+  const raw = typeof picked[1] === 'string' ? picked[1] : JSON.stringify(picked[1])
+  return { label: portTitle(port, picked[0]), value: raw.length > 18 ? `${raw.slice(0, 17)}…` : raw, error: false }
+}
+
+const takenBranch = (node: MiniNode) => (done.value.has(node.id) ? stepOf(node.id)?.exec : undefined)
+const travelPath = computed(() => wires.value.find((wire) => wire.key === travelling.value)?.d)
 
 const captions = computed(() => (props.type.guide?.captions ?? []).map((text) => localize(text, locale.value)))
-const caption = computed(() => {
-  if (phase.value <= 0) return run.value ? t('flows.guideIncoming') : ''
-  return captions.value[phase.value - 1] ?? captions.value[captions.value.length - 1] ?? ''
-})
+const caption = computed(() => (scene.value ? captions.value[beat.value] ?? '' : step.value < 0 ? t('flows.guideIncoming') : captions.value[step.value] ?? ''))
+const total = computed(() => (scene.value ? passes.value.length : current.value?.steps.length ?? 0))
 
 // ---- the card without an example: ports and branches ----
 
@@ -212,96 +351,122 @@ const fallback = computed(() => ({
 
 // ---- placement ----
 
+const WIDTH = 460
+// The card's real height keeps it inside the window as it grows and shrinks with the example.
+const card = ref<HTMLElement>()
+const height = ref(420)
+let observer: ResizeObserver | undefined
+onMounted(() => {
+  if (!card.value || typeof ResizeObserver === 'undefined') return
+  observer = new ResizeObserver(() => (height.value = card.value?.offsetHeight ?? height.value))
+  observer.observe(card.value)
+})
+onBeforeUnmount(() => observer?.disconnect())
 const style = computed(() => {
+  const width = Math.min(WIDTH, window.innerWidth - 16)
   const side = props.beside ?? props.anchor
-  const left = side.right + 8 + WIDTH <= window.innerWidth - 8 ? side.right + 8 : Math.max(8, side.left - 8 - WIDTH)
-  const top = Math.max(8, Math.min(props.anchor.top - 12, window.innerHeight - 380))
+  const left = side.right + 8 + width <= window.innerWidth - 8 ? side.right + 8 : Math.max(8, side.left - 8 - width)
+  const top = Math.max(8, Math.min(props.anchor.top - 12, window.innerHeight - height.value - 8))
   return {
     left: `${left}px`,
     top: `${top}px`,
-    width: `${WIDTH}px`,
+    width: `${width}px`,
     background: theme.value.popoverColor,
     color: theme.value.textColor2,
     '--accent': categoryColors[props.type.category],
   }
 })
-
-const titleOf = (type: string) => localize(typeOf(type)?.title, locale.value) || type
 </script>
 
 <template>
   <Teleport to="body">
-    <div
-      class="guide-card"
-      :style="style"
-      role="tooltip"
-      @mouseenter="hovering = true; emit('enter')"
-      @mouseleave="hovering = false; emit('leave')"
-    >
+    <div ref="card" class="guide-card" :style="style" role="tooltip" @mouseenter="emit('enter')" @mouseleave="emit('leave')">
       <header class="head">
         <span class="icon"><NIcon :size="15"><component :is="nodeIcon(type.type, type.category)" /></NIcon></span>
         <span class="title">{{ localize(type.title, locale) }}</span>
       </header>
       <p v-if="type.description" class="description">{{ localize(type.description, locale) }}</p>
 
-      <div v-if="run && layout" class="demo">
-        <div class="stage" :style="{ width: `${STAGE_W}px`, height: `${layout.height + 18}px` }">
-          <svg class="edges" :width="STAGE_W" :height="layout.height + 18" aria-hidden="true">
-            <g v-for="edge in edgePaths" :key="edge.key">
-              <path :d="edge.d" class="edge" :class="{ on: travelled(edge) }" />
-              <text v-if="edge.exec !== 'next'" :x="edge.labelX" :y="edge.labelY" class="edge-label" :class="{ on: travelled(edge) }">{{ edge.exec }}</text>
-            </g>
-          </svg>
-          <div
-            v-for="node in run.nodes"
-            :key="node.id"
-            class="box"
-            :class="{ focus: node.type === type.type, on: visited(node.id), active: activeId === node.id, missed: phase > run.steps.length && stepIndex(node.id) < 0 }"
-            :style="{
-              left: `${layout.boxes.get(node.id)!.x}px`,
-              top: `${layout.boxes.get(node.id)!.y}px`,
-              width: `${layout.boxes.get(node.id)!.w}px`,
-              '--box-accent': categoryColors[typeOf(node.type)?.category ?? 'logic'],
-            }"
-          >
-            <NIcon :size="11" class="box-icon"><component :is="nodeIcon(node.type, typeOf(node.type)?.category)" /></NIcon>
-            <span class="box-title">{{ titleOf(node.type) }}</span>
-            <span v-if="visited(node.id) && chipOf(stepIndex(node.id))" class="chip" :class="{ error: run.steps[stepIndex(node.id)]?.error }">{{ chipOf(stepIndex(node.id)) }}</span>
+      <template v-if="run && nodes.length">
+        <GuideScene v-if="scene && focus" :type="type.type" :config="focusConfig" :passes="passes" :focus-id="focus.id" :beat="beat" :stage="stage" />
+        <div class="canvas" :class="{ compact: scene }" :style="{ height: `${size.height * size.scale * (scene ? 0.7 : 1) + 16}px` }">
+          <div class="stage" :style="{ width: `${size.width}px`, height: `${size.height}px`, transform: `scale(${size.scale * (scene ? 0.7 : 1)})` }">
+            <svg class="wires" :width="size.width" :height="size.height" aria-hidden="true">
+              <path v-for="wire in wires" :key="wire.key" :d="wire.d" class="wire" :class="{ lit: lit.has(wire.key) }" />
+            </svg>
+            <span v-if="travelPath" :key="travelling" class="spark" :style="{ offsetPath: `path('${travelPath}')`, animationDuration: `${TRAVEL_MS}ms` }" />
+            <div
+              v-for="node in nodes"
+              :key="node.id"
+              class="mini"
+              :class="{ focus: node.type === type.type, running: running === node.id, done: done.has(node.id), missed: finished && !stepOf(node.id) }"
+              :style="{ left: `${node.x}px`, top: `${node.y}px`, width: `${NODE_W}px`, height: `${node.h}px`, '--node-accent': categoryColors[node.category] }"
+            >
+              <span v-if="node.id !== nodes[0].id" class="port-in" />
+              <div class="mini-head">
+                <span class="mini-icon"><NIcon :size="11"><component :is="nodeIcon(node.type, node.category)" /></NIcon></span>
+                <span class="mini-title">{{ node.title }}</span>
+                <span v-if="done.has(node.id) && !stepOf(node.id)?.error" class="check"><NIcon :size="9"><CheckmarkOutline /></NIcon></span>
+                <span v-if="!node.branches.length" class="port-out" :class="{ on: done.has(node.id) }" />
+              </div>
+              <div v-if="node.rows.length" class="mini-rows">
+                <div v-for="row in node.rows" :key="row.key" class="mini-row">
+                  <span class="mini-label">{{ row.label }}</span>
+                  <span v-if="row.ref" class="var-chip">{{ row.ref.node }}<span class="var-sep">/</span>{{ row.ref.name }}</span>
+                  <span v-else class="mini-value">{{ row.value }}</span>
+                </div>
+              </div>
+              <div v-if="node.branches.length" class="mini-branches">
+                <div v-for="name in node.branches" :key="name" class="mini-branch" :class="{ taken: takenBranch(node) === name }">
+                  <span>{{ name }}</span>
+                  <span class="port-out" :class="{ on: takenBranch(node) === name }" />
+                </div>
+              </div>
+              <Transition name="pop">
+                <span v-if="done.has(node.id) && producedBy(node)" class="produced" :class="{ error: producedBy(node)!.error }">
+                  <span class="produced-label">{{ producedBy(node)!.label }}</span>{{ producedBy(node)!.value }}
+                </span>
+              </Transition>
+            </div>
           </div>
         </div>
-        <div class="chat" aria-live="off">
+
+        <div class="chat" :class="{ row: scene }">
           <TransitionGroup name="bubble">
-            <div v-for="(line, index) in shownChat" :key="index" class="bubble" :class="line.who">
-              <span v-if="line.who === 'user' && index === 0" class="who">{{ run.input.userName }}</span>
-              {{ line.text }}
+            <div v-for="(line, index) in chat.slice(0, said)" :key="`${beat}-${index}`" class="bubble" :class="line.who">
+              <span v-if="line.who === 'user'" class="who">{{ run.input.userName }}</span>
+              <span v-else class="who">{{ t('flows.guideBot') }}</span>
+              <span class="said">{{ line.text }}</span>
             </div>
           </TransitionGroup>
         </div>
-      </div>
+
+        <ol v-if="reduced && captions.length" class="captions">
+          <li v-for="(text, index) in captions" :key="index">{{ text }}</li>
+        </ol>
+        <div v-else class="caption-row">
+          <span class="counter">{{ Math.max(step + 1, 0) }}/{{ total }}</span>
+          <Transition name="caption" mode="out-in">
+            <span :key="caption" class="caption">{{ caption }}</span>
+          </Transition>
+        </div>
+      </template>
       <p v-else-if="loading" class="muted small">{{ t('flows.guideLoading') }}</p>
       <div v-else class="ports">
         <div v-if="fallback.inputs.length" class="port-row">
           <span class="port-label">{{ t('flows.guideInputs') }}</span>
-          <span v-for="name in fallback.inputs" :key="name" class="port in">{{ name }}</span>
+          <span v-for="name in fallback.inputs" :key="name" class="port">{{ name }}</span>
         </div>
-        <div class="flow-line" :class="{ still: reduced }" aria-hidden="true"><span class="dot" /></div>
         <div v-if="fallback.outputs.length" class="port-row">
           <span class="port-label">{{ t('flows.guideOutputs') }}</span>
-          <span v-for="name in fallback.outputs" :key="name" class="port out">{{ name }}</span>
+          <span v-for="name in fallback.outputs" :key="name" class="port">{{ name }}</span>
         </div>
         <div v-if="fallback.branches.length || fallback.fromConfig" class="port-row">
           <span class="port-label">{{ t('flows.guideBranches') }}</span>
           <span v-for="name in fallback.branches" :key="name" class="port branch">{{ name }}</span>
-          <span v-if="fallback.fromConfig" class="muted small">{{ t('flows.guideBranchesFromConfig') }}</span>
+          <span v-if="fallback.fromConfig" class="muted">{{ t('flows.guideBranchesFromConfig') }}</span>
         </div>
       </div>
-
-      <ol v-if="run && reduced && captions.length" class="captions">
-        <li v-for="(text, index) in captions" :key="index">{{ text }}</li>
-      </ol>
-      <Transition v-else-if="run" name="caption" mode="out-in">
-        <p :key="caption" class="caption">{{ caption }}</p>
-      </Transition>
       <p class="foot muted">{{ t('flows.guideAdd') }}</p>
     </div>
   </Teleport>
@@ -311,12 +476,13 @@ const titleOf = (type: string) => localize(typeOf(type)?.title, locale.value) ||
 .guide-card {
   position: fixed;
   z-index: 3000;
+  box-sizing: border-box;
   padding: 12px 14px 10px;
-  border-radius: 10px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+  border-radius: 12px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.2);
   font-size: 12px;
   line-height: 1.5;
-  animation: card-in 0.16s ease-out;
+  animation: card-in 0.18s ease-out;
 }
 
 @keyframes card-in {
@@ -326,15 +492,15 @@ const titleOf = (type: string) => localize(typeOf(type)?.title, locale.value) ||
 .head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .icon {
   display: inline-flex;
   padding: 4px;
-  border-radius: 6px;
-  color: var(--accent-fg, var(--accent));
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-radius: 7px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
 .title {
@@ -344,148 +510,313 @@ const titleOf = (type: string) => localize(typeOf(type)?.title, locale.value) ||
 
 .description {
   margin: 6px 0 10px;
-  opacity: 0.8;
+  opacity: 0.75;
 }
 
-.demo {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 10px;
-  border-radius: 8px;
-  background: rgba(127, 127, 127, 0.07);
+/* A dotted patch of canvas, like the editor's background. */
+.canvas {
+  position: relative;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 10px;
+  padding: 8px;
+  box-sizing: border-box;
+  background-color: rgba(127, 127, 127, 0.06);
+  background-image: radial-gradient(rgba(127, 127, 127, 0.35) 1px, transparent 1.2px);
+  background-size: 14px 14px;
 }
 
 .stage {
   position: relative;
-  flex: none;
+  transform-origin: top left;
+  margin-top: 4px;
 }
 
-.edges {
+.wires {
   position: absolute;
   inset: 0;
   overflow: visible;
 }
 
-.edge {
+.wire {
   fill: none;
-  stroke: rgba(127, 127, 127, 0.45);
+  stroke: rgba(127, 127, 127, 0.5);
   stroke-width: 1.5;
-  transition: stroke 0.3s;
+  transition: stroke 0.35s, stroke-width 0.35s;
 }
 
-.edge.on {
+.wire.lit {
   stroke: var(--primary, #18a058);
   stroke-width: 2;
-  stroke-dasharray: 5 3;
-  animation: dash 0.6s linear infinite;
 }
 
-@keyframes dash {
-  to { stroke-dashoffset: -8; }
+/* The light that runs down a wire as the run moves on. */
+.spark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--primary, #18a058);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary, #18a058) 25%, transparent), 0 0 10px var(--primary, #18a058);
+  offset-rotate: 0deg;
+  offset-anchor: center;
+  animation: travel ease-in-out forwards;
+  z-index: 3;
 }
 
-.edge-label {
-  font-size: 9px;
-  text-anchor: middle;
-  fill: currentColor;
-  opacity: 0.55;
+@keyframes travel {
+  from { offset-distance: 0%; }
+  to { offset-distance: 100%; }
 }
 
-.edge-label.on {
-  fill: var(--primary, #18a058);
-  opacity: 1;
-}
-
-.box {
+.mini {
   position: absolute;
   box-sizing: border-box;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 6px;
-  border-radius: 6px;
-  border: 1px solid rgba(127, 127, 127, 0.35);
-  background: var(--flow-node-bg, rgba(127, 127, 127, 0.06));
-  font-size: 11px;
-  transition: border-color 0.3s, box-shadow 0.3s, opacity 0.3s;
+  border-radius: 8px;
+  border: 1.5px solid rgba(127, 127, 127, 0.25);
+  background: var(--flow-node-bg, #fff);
+  color: var(--flow-node-fg, inherit);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  font-size: 10.5px;
+  transition: border-color 0.3s, box-shadow 0.3s, opacity 0.4s, transform 0.3s;
 }
 
-.box.focus {
-  border-color: var(--accent);
-  border-width: 1.5px;
+.mini.focus {
+  border-color: color-mix(in srgb, var(--node-accent) 70%, transparent);
 }
 
-.box.on {
+.mini.running {
   border-color: var(--primary, #18a058);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary, #18a058) 20%, transparent), 0 4px 12px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
 }
 
-.box.active {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary, #18a058) 30%, transparent);
-  animation: pulse 0.9s ease-in-out infinite alternate;
+.mini.done {
+  border-color: var(--ok, #18a058);
 }
 
-.box.missed {
+.mini.missed {
   opacity: 0.4;
 }
 
-@keyframes pulse {
-  to { box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary, #18a058) 12%, transparent); }
+.mini-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 8px 0 7px;
+  box-sizing: border-box;
 }
 
-.box-icon {
+.mini-icon {
   flex: none;
-  color: var(--box-accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 5px;
+  color: var(--node-accent);
+  background: color-mix(in srgb, var(--node-accent) 15%, transparent);
 }
 
-.box-title {
+.mini-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.chip {
+.check {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--ok, #18a058);
+  animation: pop-in 0.3s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+.mini-rows,
+.mini-branches {
+  padding: 0 7px 5px;
+}
+
+.mini-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(127, 127, 127, 0.08);
+  margin-bottom: 0;
+}
+
+.mini-row + .mini-row {
+  margin-top: 0;
+}
+
+.mini-label {
+  flex: none;
+  opacity: 0.55;
+  font-size: 9.5px;
+}
+
+.mini-value,
+.var-chip {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.var-chip {
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 9.5px;
+  color: #2080f0;
+  background: rgba(32, 128, 240, 0.12);
+}
+
+.var-sep {
+  opacity: 0.5;
+  margin: 0 1px;
+}
+
+.mini-branch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 17px;
+  padding-right: 6px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  border-radius: 4px;
+  transition: background 0.3s, color 0.3s, opacity 0.3s;
+}
+
+.mini-branch.taken {
+  opacity: 1;
+  color: var(--primary, #18a058);
+  background: color-mix(in srgb, var(--primary, #18a058) 12%, transparent);
+}
+
+/* Handles: the exec input on the left of the header, outputs on the right. */
+.port-in,
+.port-out {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8c8c8c;
+  border: 1.5px solid var(--flow-node-bg, #fff);
+  box-sizing: content-box;
+  transition: background 0.3s;
+}
+
+.port-in {
+  left: -5px;
+  top: 9.5px;
+}
+
+.mini-head .port-out {
+  right: -5px;
+  top: 9.5px;
+}
+
+.mini-branch .port-out {
+  right: -12px;
+  top: 3.5px;
+}
+
+.port-out.on {
+  background: var(--primary, #18a058);
+}
+
+/* What the node produced, popping out of it. */
+.produced {
   position: absolute;
   left: 50%;
-  top: calc(100% + 2px);
+  top: calc(100% + 4px);
   transform: translateX(-50%);
-  max-width: 150px;
-  padding: 0 5px;
-  border-radius: 4px;
+  display: inline-flex;
+  gap: 4px;
+  max-width: 170px;
+  padding: 1px 6px;
+  border-radius: 5px;
   font-size: 10px;
-  line-height: 16px;
+  line-height: 15px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--primary, #18a058);
-  background: color-mix(in srgb, var(--primary, #18a058) 12%, transparent);
-  z-index: 1;
-  animation: chip-in 0.25s ease-out;
+  background: var(--flow-node-bg, #fff);
+  border: 1px solid color-mix(in srgb, var(--primary, #18a058) 40%, transparent);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  z-index: 2;
 }
 
-.chip.error {
-  color: var(--error, #d03050);
-  background: color-mix(in srgb, var(--error, #d03050) 12%, transparent);
+.produced.error {
+  color: var(--bad, #d03050);
+  border-color: color-mix(in srgb, var(--bad, #d03050) 40%, transparent);
 }
 
-@keyframes chip-in {
-  from { opacity: 0; transform: translate(-50%, -3px); }
+.produced-label {
+  opacity: 0.6;
+}
+
+.pop-enter-active {
+  transition: opacity 0.25s, transform 0.35s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+.pop-enter-from {
+  opacity: 0;
+  transform: translate(-50%, -6px) scale(0.85);
+}
+
+@keyframes pop-in {
+  from { transform: scale(0); }
+}
+
+.guide-card {
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+}
+
+/* Beside a scene the chat is one line: what came in, what went out. */
+.chat.row {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-end;
 }
 
 .chat {
-  flex: 1;
-  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
+  margin-top: 10px;
+  min-height: 30px;
 }
 
 .bubble {
-  max-width: 100%;
-  padding: 5px 8px;
-  border-radius: 10px;
-  font-size: 11.5px;
+  max-width: 80%;
+  padding: 4px 9px 5px;
+  border-radius: 11px;
+  font-size: 12px;
   word-break: break-word;
   white-space: pre-wrap;
 }
@@ -493,48 +824,65 @@ const titleOf = (type: string) => localize(typeOf(type)?.title, locale.value) ||
 .bubble.user {
   align-self: flex-start;
   border-bottom-left-radius: 3px;
-  background: rgba(127, 127, 127, 0.16);
+  background: rgba(127, 127, 127, 0.14);
 }
 
 .bubble.bot {
   align-self: flex-end;
   border-bottom-right-radius: 3px;
-  background: color-mix(in srgb, var(--primary, #18a058) 18%, transparent);
+  background: color-mix(in srgb, var(--primary, #18a058) 16%, transparent);
 }
 
 .who {
   display: block;
   font-size: 10px;
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
 .bubble-enter-active {
-  transition: opacity 0.25s, transform 0.25s;
+  transition: opacity 0.3s, transform 0.3s ease-out;
 }
 
 .bubble-enter-from {
   opacity: 0;
-  transform: translateY(6px);
+  transform: translateY(8px);
+}
+
+.caption-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 10px;
+  min-height: 36px;
+}
+
+.counter {
+  flex: none;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.5;
 }
 
 .caption {
-  margin: 8px 0 0;
-  min-height: 36px;
-  font-size: 12px;
+  font-size: 12.5px;
 }
 
 .caption-enter-active,
 .caption-leave-active {
-  transition: opacity 0.2s;
+  transition: opacity 0.2s, transform 0.2s;
 }
 
-.caption-enter-from,
+.caption-enter-from {
+  opacity: 0;
+  transform: translateY(3px);
+}
+
 .caption-leave-to {
   opacity: 0;
 }
 
 .captions {
-  margin: 8px 0 0;
+  margin: 10px 0 0;
   padding-left: 18px;
 }
 
@@ -542,7 +890,7 @@ const titleOf = (type: string) => localize(typeOf(type)?.title, locale.value) ||
   display: grid;
   gap: 6px;
   padding: 10px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: rgba(127, 127, 127, 0.07);
 }
 
@@ -572,34 +920,6 @@ const titleOf = (type: string) => localize(typeOf(type)?.title, locale.value) ||
   background: color-mix(in srgb, var(--primary, #18a058) 12%, transparent);
 }
 
-.flow-line {
-  position: relative;
-  height: 2px;
-  margin: 4px 0;
-  background: rgba(127, 127, 127, 0.25);
-  overflow: hidden;
-}
-
-.flow-line .dot {
-  position: absolute;
-  top: -2px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: travel 1.6s ease-in-out infinite;
-}
-
-.flow-line.still .dot {
-  animation: none;
-  left: 50%;
-}
-
-@keyframes travel {
-  from { left: 0; }
-  to { left: calc(100% - 6px); }
-}
-
 .foot {
   margin: 8px 0 0;
   font-size: 11px;
@@ -611,15 +931,16 @@ const titleOf = (type: string) => localize(typeOf(type)?.title, locale.value) ||
 
 @media (prefers-reduced-motion: reduce) {
   .guide-card,
-  .chip,
-  .box.active,
-  .edge.on {
+  .check {
     animation: none;
   }
 
+  .pop-enter-active,
   .bubble-enter-active,
   .caption-enter-active,
-  .caption-leave-active {
+  .caption-leave-active,
+  .mini,
+  .wire {
     transition: none;
   }
 }

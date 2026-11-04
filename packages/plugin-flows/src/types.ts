@@ -103,12 +103,17 @@ export interface NodeGuide {
     edges: ([string, string] | [string, string, string])[]
     /** The message (or test input) that runs it. */
     input: TestOption['input']
+    /**
+     * More messages sent after `input`, sharing variables with it, to show what changes from one
+     * message to the next (a cooldown, a counter). With these, captions are one per message.
+     */
+    repeat?: TestOption['input'][]
     /** What the user answers when the example waits for a reply, in order. */
     replies?: string[]
     /** What the stand-in model answers, in order. */
     llm?: string[]
   }
-  /** One line per step of the animation, in order of the nodes that run; extra steps are ignored. */
+  /** One line per step of the animation, in order of the nodes that run (one per message with `repeat`). */
   captions?: LocalizedText[]
   /** At most three short notes on what is easy to get wrong, shown under the node's settings. */
   notes?: LocalizedText[]

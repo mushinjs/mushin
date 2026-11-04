@@ -209,16 +209,23 @@ export interface TestInput {
 }
 /** How a test run differs from the editor's test button; test cases use their own variables and model. */
 /** A node type's tutorial example after running it; see `FlowService.guide`. */
-export interface GuideRun {
-  nodes: { id: string; type: string; config: Record<string, any> }[]
-  edges: ([string, string] | [string, string, string])[]
-  input: { text: string; userName: string; private: boolean }
+/** One message of a tutorial example and how the run went. */
+export interface GuidePass {
+  input: { text: string; userName: string; userId: string; private: boolean; role?: string }
   matched: boolean
-  steps: { nodeId: string; exec?: string; outputs?: Record<string, unknown>; error?: string }[]
+  steps: { nodeId: string; exec?: string; inputs?: Record<string, unknown>; outputs?: Record<string, unknown>; error?: string }[]
   replies: string[]
+  error?: string
+}
+
+/** A node type's tutorial example after running it; the first message's run is spread at the top. */
+export interface GuideRun extends GuidePass {
+  nodes: { id: string; type: string; config: Record<string, any>; inputs?: Record<string, string> }[]
+  edges: ([string, string] | [string, string, string])[]
+  /** Every message in order, the first included. */
+  passes: GuidePass[]
   /** What the user answers when the example waits for a reply, in order. */
   waits: string[]
-  error?: string
 }
 
 export interface TestOptions {
@@ -226,6 +233,8 @@ export interface TestOptions {
   llm?: LlmLike
   /** Keep the trace in the flow's recent runs and send live steps (default true). */
   record?: boolean
+  /** Daily quota counts; a fresh one per run when not given. */
+  usage?: MemoryUsage
 }
 
 type EdgeInput = z.infer<typeof edgeInput>
@@ -1171,6 +1180,7 @@ export class FlowService extends Service {
       llm: options.llm ?? this.home.get('llm') as LlmLike | undefined,
       logger: this.home.logger('flows'),
       test: true,
+      ...(options.usage ? { usage: options.usage } : {}),
       ...(sampleBot ? { bot: sampleBot } : {}),
       stopAt: input.nodeId,
       ...(options.record === false ? {} : { onStep: this.onStep }),
@@ -1222,32 +1232,42 @@ export class FlowService extends Service {
     }))
     const now = Date.now()
     const doc: FlowDocument = { id: `guide:${type.type}`, name: type.type, bots: [], nodes, edges, createdAt: now, updatedAt: now }
-    const { input } = example
-    const result = await this.test(doc, {
-      ...input,
-      ...(input.role ? { role: input.role } : {}),
-      ...(example.replies ? { replies: example.replies } : {}),
-    } as TestInput, { llm: mockLlm(example.llm ?? []), record: false, vars: scratchVars([]) })
     const short = (value: unknown): unknown => {
       if (typeof value === 'string') return value.length > 80 ? `${value.slice(0, 80)}…` : value
       if (Array.isArray(value)) return value.length > 4 ? `[${value.length}]` : value.map(short)
       if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).slice(0, 6).map(([key, item]) => [key, short(item)]))
       return value
     }
+    // One message, or a few in a row that share variables, so cooldowns and counters show both ways.
+    const vars = scratchVars([])
+    const llm = mockLlm(example.llm ?? [])
+    const usage = new MemoryUsage()
+    const passes: GuidePass[] = []
+    for (const [index, input] of [example.input, ...(example.repeat ?? [])].entries()) {
+      const result = await this.test(doc, {
+        ...input,
+        ...(index === 0 && example.replies ? { replies: example.replies } : {}),
+      } as TestInput, { llm, record: false, vars, usage })
+      passes.push({
+        input: { text: input.text ?? '', userName: input.userName ?? 'Tester', userId: input.userId ?? '10000', private: !!input.private, ...(input.role ? { role: input.role } : {}) },
+        matched: result.matched,
+        steps: result.trace.steps.map((step) => ({
+          nodeId: step.nodeId,
+          ...(step.exec ? { exec: step.exec } : {}),
+          ...(step.inputs ? { inputs: short(step.inputs) as Record<string, unknown> } : {}),
+          ...(step.outputs ? { outputs: short(step.outputs) as Record<string, unknown> } : {}),
+          ...(step.error ? { error: step.error } : {}),
+        })),
+        replies: result.trace.replies,
+        ...(result.trace.error ? { error: result.trace.error } : {}),
+      })
+    }
     return {
-      nodes: nodes.map(({ id, type: nodeType, config }) => ({ id, type: nodeType, config })),
+      nodes: nodes.map(({ id, type: nodeType, config, inputs }) => ({ id, type: nodeType, config, ...(inputs ? { inputs } : {}) })),
       edges: example.edges,
-      input: { text: input.text ?? '', userName: input.userName ?? 'Tester', private: !!input.private },
-      matched: result.matched,
-      steps: result.trace.steps.map((step) => ({
-        nodeId: step.nodeId,
-        ...(step.exec ? { exec: step.exec } : {}),
-        ...(step.outputs ? { outputs: short(step.outputs) as Record<string, unknown> } : {}),
-        ...(step.error ? { error: step.error } : {}),
-      })),
-      replies: result.trace.replies,
+      ...passes[0],
+      passes,
       waits: example.replies ?? [],
-      ...(result.trace.error ? { error: result.trace.error } : {}),
     }
   }
 
