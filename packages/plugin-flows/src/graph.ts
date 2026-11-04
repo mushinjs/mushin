@@ -1,5 +1,6 @@
 import { z } from '@mushin/core'
 import { refsIn, SCOPES } from './refs'
+import { similarHint } from './suggest'
 import type { FlowDocument, FlowIssue, FlowNode, Intercept, NodeType, PortDef, PortType } from './types'
 
 export const EXEC_IN = 'exec'
@@ -136,7 +137,7 @@ export function compile(doc: FlowDocument, types: Map<string, NodeType>): Compil
     }
     const type = types.get(node.type)
     if (!type) {
-      issues.push({ severity: 'error', nodeId: node.id, message: `Unknown node type "${node.type}"; is the plugin that provides it enabled?` })
+      issues.push({ severity: 'error', nodeId: node.id, message: `Unknown node type "${node.type}"; is the plugin that provides it enabled?${similarHint(node.type, types.values())}` })
       nodes.set(node.id, { node, config: node.config ?? {} })
       continue
     }

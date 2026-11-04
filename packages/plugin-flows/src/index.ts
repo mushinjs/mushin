@@ -10,6 +10,7 @@ import { migrateDataEdges, sysValues } from './refs'
 import { branchSteps, candidates, type CaseResult, check, judgeWith, MOCK_REPLY, mockLlm, newCase, scratchVars, snapshot, type TestCase, TestCaseInput, type TestRunSummary, type TestsDocument } from './tests'
 import { FIELD_TYPES, TableField, TableName, tableNodes, TableStore } from './tables'
 import { ResourceLocks } from './locks'
+import { english, titleOf, unknownTypeMessage } from './suggest'
 import { KEEP_DAYS, type RunInfo, type RunStatus, RunStore, stopRunsNode } from './runs'
 import { VariableStore } from './variables'
 import type { ChatLine, DailyCounter, FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, FlowSource, Intercept, FlowSession, LlmLike, NodeType, PersonaResolver, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
@@ -415,8 +416,12 @@ export class FlowService extends Service {
     return () => this.personas?.forRun(botId, session)
   }
 
-  nodeTypes() {
-    return [...this.types.values()].map((type) => ({
+  /** Every node type with its schemas and ports, or only the named ones; an unknown name is an error. */
+  nodeTypes(names?: string[]) {
+    const unknown = names?.filter((name) => !this.types.has(name)) ?? []
+    if (unknown.length) throw new MushinError('not_found', unknown.map((name) => unknownTypeMessage(name, this.types.values())).join(' '))
+    const picked = names ? [...new Set(names)].map((name) => this.types.get(name)!) : [...this.types.values()]
+    return picked.map((type) => ({
       type: type.type,
       kind: type.kind,
       category: type.category,
@@ -435,6 +440,25 @@ export class FlowService extends Service {
       ...(type.unavailable?.() ? { unavailable: type.unavailable() } : {}),
       ...(type.guide ? { guide: type.guide } : {}),
     }))
+  }
+
+  /**
+   * One line per node type, for the Agent: every schema at once is far more than a model reads
+   * (and more than a tool result holds), so it picks types here and asks `nodeTypes` for those.
+   */
+  nodeCatalog() {
+    return [...this.types.values()].map((type) => {
+      const unavailable = type.unavailable?.()
+      return {
+        type: type.type,
+        category: type.category,
+        title: titleOf(type),
+        description: english(type.description ?? ''),
+        ...(type.platforms ? { platforms: type.platforms } : {}),
+        ...(type.restricted ? { restricted: true } : {}),
+        ...(unavailable ? { unavailable: english(unavailable) } : {}),
+      }
+    })
   }
 
   /** The test runs the nodes' configs call for (see `testOptions` on node types), by node. */
@@ -1206,7 +1230,7 @@ export class FlowService extends Service {
    */
   guide(typeId: string) {
     const type = this.types.get(typeId)
-    if (!type) throw new MushinError('not_found', `No node type "${typeId}"`)
+    if (!type) throw new MushinError('not_found', unknownTypeMessage(typeId, this.types.values()))
     const cached = this.guides.get(typeId)
     if (cached?.type === type) return cached.result
     const result = this.runGuide(type).catch((error) => {
@@ -1620,10 +1644,12 @@ export class FlowService extends Service {
 
     yield actions.define({
       name: 'flows.nodeTypes',
-      description: 'List node types for conversation flows: their ports, exec outputs and config schemas. Read this before creating or editing a flow.',
+      description: 'Node types for conversation flows. Without types, the Agent gets one line per type (id, title, what it does); pass types with the ids you plan to use to get their config schemas, input and output ports, exec outputs and a worked example. Read this before creating or editing a flow, and use only type ids it lists.',
       risk: 'read',
-      input: z.object({}),
-      handler: () => this.nodeTypes(),
+      input: z.object({
+        types: z.array(z.string()).max(30).optional().describe('Node type ids, e.g. ["trigger.command", "onebot.sendPoke"]; omit to list every type briefly'),
+      }),
+      handler: ({ types }, caller) => (!types && caller.kind === 'agent' ? this.nodeCatalog() : this.nodeTypes(types)),
     })
 
     yield actions.define({
