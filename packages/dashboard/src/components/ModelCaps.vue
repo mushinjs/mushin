@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NIcon, NTooltip } from 'naive-ui'
+import { Tooltip } from '@mushin/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CAPABILITY_ICONS, modelCapabilities } from '../models'
@@ -12,14 +12,14 @@ const caps = computed(() => modelCapabilities(props.model))
 
 <template>
   <span v-if="caps.length" class="model-caps">
-    <NTooltip v-for="cap in caps" :key="cap" :delay="300">
+    <Tooltip v-for="cap in caps" :key="cap" :delay="300">
       <template #trigger>
         <span :class="['model-cap', `model-cap-${cap}`]" :aria-label="t(`profiles.caps.${cap}`)">
-          <NIcon :size="12"><component :is="CAPABILITY_ICONS[cap]" /></NIcon>
+          <span :class="CAPABILITY_ICONS[cap]" />
         </span>
       </template>
       {{ t(`profiles.caps.${cap}`) }}
-    </NTooltip>
+    </Tooltip>
   </span>
 </template>
 
@@ -38,6 +38,7 @@ const caps = computed(() => modelCapabilities(props.model))
   width: 18px;
   height: 18px;
   border-radius: 4px;
+  font-size: 12px;
 }
 
 .model-cap-vision { color: #2080f0; background: rgba(32, 128, 240, 0.12); }

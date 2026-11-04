@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { NSelect } from 'naive-ui'
+import { Select } from '@mushin/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { modelOptions, renderModelOption } from '../models'
+import { modelOptions } from '../models'
+import ModelCaps from './ModelCaps.vue'
 import { useDataStore } from '../stores/data'
 
 /**
@@ -28,22 +29,25 @@ const profileOrder = computed(() => profile.value?.models.map((item) => item.mod
 </script>
 
 <template>
-  <NSelect
+  <Select
     v-if="profile"
     :value="null"
     disabled
     :size="size"
     :placeholder="t('profiles.decidedBy', { order: profileOrder })"
   />
-  <NSelect
+  <Select
     v-else
     v-model:value="model"
     :options="options"
-    :render-label="renderModelOption"
     filterable
     tag
     clearable
     :size="size"
     :placeholder="placeholder ?? t('profiles.typeOrPick')"
-  />
+  >
+    <template #option="{ option }">
+      <span class="model-label"><span class="model-label-name">{{ option.label }}</span><ModelCaps :model="String(option.value)" /></span>
+    </template>
+  </Select>
 </template>

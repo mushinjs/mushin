@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { ArrowDownOutline, ArrowUpOutline, TrashOutline } from '@vicons/ionicons5'
-import { NButton, NForm, NFormItem, NInput, NSelect, NTag, type SelectGroupOption, type SelectOption } from 'naive-ui'
+import { Button, Form, FormItem, Input, Select, type SelectGroup, Tag } from '@mushin/ui'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { renderModel } from '../models'
 import { useDataStore } from '../stores/data'
 import type { ProfileModel } from '../types'
 import IconAction from './IconAction.vue'
@@ -24,8 +22,8 @@ const SEP = '\u0000'
 const keyOf = (item: ProfileModel) => `${item.provider}${SEP}${item.model}`
 
 /** Every listed model of every provider, grouped by provider, for picking several at once. */
-const listed = computed<SelectGroupOption[]>(() => data.providers.filter((provider) => provider.models.length).map((provider) => ({
-  type: 'group',
+const listed = computed<SelectGroup[]>(() => data.providers.filter((provider) => provider.models.length).map((provider) => ({
+  type: 'group' as const,
   key: provider.id,
   label: provider.name,
   children: provider.models.map((model) => ({ label: model, value: keyOf({ provider: provider.id, model }) })),
@@ -70,54 +68,56 @@ function addManual() {
 }
 
 const providerName = (id: string) => data.providers.find((provider) => provider.id === id)?.name ?? id
-const renderPicked = (option: SelectOption | SelectGroupOption) => (option.type === 'group' ? String(option.label) : renderModel(String(option.label)))
 </script>
 
 <template>
-  <NForm label-placement="top">
-    <NFormItem :label="t('common.name')" required>
-      <NInput v-model:value="draft.name" :placeholder="t('profiles.namePlaceholder')" />
-    </NFormItem>
-    <NFormItem :label="t('profiles.pick')" :feedback="t('profiles.pickHint')">
-      <NSelect
+  <Form>
+    <FormItem :label="t('common.name')" required>
+      <Input v-model:value="draft.name" :placeholder="t('profiles.namePlaceholder')" />
+    </FormItem>
+    <FormItem :label="t('profiles.pick')" :feedback="t('profiles.pickHint')">
+      <Select
         :value="picked"
         :options="listed"
-        :render-label="renderPicked"
         multiple
         filterable
         :max-tag-count="0"
         :placeholder="t('profiles.pickPlaceholder')"
         @update:value="setPicked"
-      />
-    </NFormItem>
-    <NFormItem :label="t('profiles.manual')">
+      >
+        <template #option="{ option }">
+          <span class="model-label"><span class="model-label-name">{{ option.label }}</span><ModelCaps :model="option.label" /></span>
+        </template>
+      </Select>
+    </FormItem>
+    <FormItem :label="t('profiles.manual')">
       <div class="manual">
-        <NSelect v-model:value="manual.provider" :options="providerOnly" class="manual-provider" />
+        <Select v-model:value="manual.provider" :options="providerOnly" class="manual-provider" />
         <ModelSelect v-model="manual.model" :provider="manual.provider" class="manual-model" />
-        <NButton :disabled="!manual.provider || !manual.model?.trim()" @click="addManual">{{ t('common.add') }}</NButton>
+        <Button :disabled="!manual.provider || !manual.model?.trim()" @click="addManual">{{ t('common.add') }}</Button>
       </div>
-    </NFormItem>
-    <NFormItem :label="t('profiles.order')" :feedback="t('profiles.orderHint')" required>
+    </FormItem>
+    <FormItem :label="t('profiles.order')" :feedback="t('profiles.orderHint')" required>
       <div v-if="draft.models.length" class="order">
         <div v-for="(item, index) in draft.models" :key="keyOf(item)" class="order-row">
-          <NTag size="small" :type="index === 0 ? 'primary' : 'default'" :bordered="false" class="order-tag">
+          <Tag size="small" :type="index === 0 ? 'primary' : 'default'" class="order-tag">
             {{ index === 0 ? t('profiles.primary') : t('profiles.fallback', { n: index }) }}
-          </NTag>
+          </Tag>
           <span class="order-provider">{{ providerName(item.provider) }}</span>
           <span class="order-model">
             <span class="mono">{{ item.model }}</span>
             <ModelCaps :model="item.model" />
           </span>
           <span class="order-actions">
-            <IconAction :icon="ArrowUpOutline" :label="t('profiles.moveUp')" :disabled="index === 0" @click="move(index, -1)" />
-            <IconAction :icon="ArrowDownOutline" :label="t('profiles.moveDown')" :disabled="index === draft.models.length - 1" @click="move(index, 1)" />
-            <IconAction :icon="TrashOutline" :label="t('common.remove')" type="error" @click="remove(index)" />
+            <IconAction icon="i-lucide-arrow-up" :label="t('profiles.moveUp')" :disabled="index === 0" @click="move(index, -1)" />
+            <IconAction icon="i-lucide-arrow-down" :label="t('profiles.moveDown')" :disabled="index === draft.models.length - 1" @click="move(index, 1)" />
+            <IconAction icon="i-lucide-trash-2" :label="t('common.remove')" type="error" @click="remove(index)" />
           </span>
         </div>
       </div>
       <span v-else class="empty">{{ t('profiles.noModels') }}</span>
-    </NFormItem>
-  </NForm>
+    </FormItem>
+  </Form>
 </template>
 
 <style scoped>
@@ -148,7 +148,7 @@ const renderPicked = (option: SelectOption | SelectGroupOption) => (option.type 
   align-items: center;
   gap: 8px;
   padding: 4px 4px 4px 8px;
-  border: 1px solid rgba(127, 127, 127, 0.18);
+  border: 1px solid var(--line);
   border-radius: 6px;
 }
 
@@ -158,7 +158,7 @@ const renderPicked = (option: SelectOption | SelectGroupOption) => (option.type 
 
 .order-provider {
   flex: 0 0 auto;
-  opacity: 0.65;
+  color: var(--fg2);
   font-size: 13px;
 }
 
@@ -177,6 +177,6 @@ const renderPicked = (option: SelectOption | SelectGroupOption) => (option.type 
 }
 
 .empty {
-  opacity: 0.55;
+  color: var(--fg3);
 }
 </style>

@@ -5,7 +5,8 @@
  * - `tag`: typed text that matches no option can be chosen as it is.
  * - `multiple`: several values, shown as tags (`maxTagCount` folds the rest into "+N").
  * - Options in groups: `{ type: 'group', key, label, children }`.
- * The #option slot draws an option's label; it gets `{ option }`.
+ * The #option slot draws an option's label; it gets `{ option }`. The #tag slot draws a chosen
+ * value's tag in a multiple select; it gets `{ value, label }`.
  */
 import {
   ComboboxAnchor, ComboboxContent, ComboboxGroup, ComboboxInput, ComboboxItem, ComboboxItemIndicator, ComboboxLabel, ComboboxPortal, ComboboxRoot,
@@ -149,7 +150,7 @@ const showClear = computed(() => props.clearable && !props.disabled && selected.
       >
         <template v-if="multiple">
           <span v-for="item in shownTags" :key="item" class="mu-select__tag">
-            <span class="mu-select__tag-text">{{ labelOf(item) }}</span>
+            <span class="mu-select__tag-text"><slot name="tag" :value="item" :label="labelOf(item)">{{ labelOf(item) }}</slot></span>
             <button v-if="!disabled" type="button" class="mu-select__tag-x" tabindex="-1" :aria-label="text.close" @pointerdown.stop.prevent @click.stop="remove(item)">
               <span class="i-lucide-x" />
             </button>

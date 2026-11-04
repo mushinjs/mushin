@@ -1,10 +1,6 @@
 <script setup lang="ts">
-import {
-  AddOutline, ArrowForwardOutline, CreateOutline, EllipsisHorizontal, FlashOutline, GitBranchOutline, KeyOutline, Star, StarOutline, TrashOutline,
-} from '@vicons/ionicons5'
-import { useConfirm, useToast } from '@mushin/ui'
-import { type DropdownOption, NButton, NDropdown, NIcon, NModal, NSpace, NTooltip } from 'naive-ui'
-import { type Component, h, nextTick, onMounted, ref, watch } from 'vue'
+import { Button, Dropdown, type DropdownOption, Modal, Tooltip, useConfirm, useToast } from '@mushin/ui'
+import { nextTick, onMounted, ref, watch } from 'vue'
 import IconAction from '../components/IconAction.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -147,15 +143,14 @@ const typeName = (id: string) => localize(data.providerTypes.find((type) => type
 
 // ---- rows ----
 
-const icon = (component: Component) => () => h(NIcon, null, { default: () => h(component) })
 
 /** The row's menu: what is not on the row itself. */
 function menuOf(provider: Provider): DropdownOption[] {
   return [
-    { key: 'default', label: t('providers.makeDefault'), icon: icon(StarOutline), disabled: provider.isDefault },
-    { key: 'edit', label: t('common.edit'), icon: icon(CreateOutline) },
+    { key: 'default', label: t('providers.makeDefault'), icon: 'i-lucide-star', disabled: provider.isDefault },
+    { key: 'edit', label: t('common.edit'), icon: 'i-lucide-pencil' },
     { key: 'divider', type: 'divider' },
-    { key: 'delete', label: () => h('span', { style: 'color: var(--bad)' }, t('common.delete')), icon: () => h(NIcon, { color: 'var(--bad)' }, { default: () => h(TrashOutline) }) },
+    { key: 'delete', label: t('common.delete'), icon: 'i-lucide-trash-2', danger: true },
   ]
 }
 
@@ -178,10 +173,9 @@ const initial = (provider: Provider) => [...provider.name.trim()][0]?.toUpperCas
 <template>
   <div class="page">
     <PageHeader :title="t('nav.providers')" :lead="t('providers.lead')">
-      <NButton type="primary" data-agent-target="providers.add" @click="openCreate">
-        <template #icon><NIcon><AddOutline /></NIcon></template>
+      <Button type="primary" data-agent-target="providers.add" icon="i-lucide-plus" @click="openCreate">
         {{ t('providers.add') }}
-      </NButton>
+      </Button>
     </PageHeader>
 
     <ul v-if="data.providers.length" class="rows">
@@ -199,7 +193,7 @@ const initial = (provider: Provider) => [...provider.name.trim()][0]?.toUpperCas
         <div class="main">
           <div class="title">
             <strong>{{ provider.name }}</strong>
-            <span v-if="provider.isDefault" class="tag primary"><NIcon :size="12"><Star /></NIcon>{{ t('common.default') }}</span>
+            <span v-if="provider.isDefault" class="tag primary"><span class="i-ph-star-fill text-[12px]" />{{ t('common.default') }}</span>
             <span v-if="!provider.typeAvailable" class="tag warn">{{ t('providers.typeMissing') }}</span>
           </div>
           <div class="sub">
@@ -213,27 +207,24 @@ const initial = (provider: Provider) => [...provider.name.trim()][0]?.toUpperCas
           </div>
         </div>
         <div class="health" @click.stop>
-          <NTooltip v-if="provider.lastTest && !provider.lastTest.ok" :style="{ maxWidth: '320px' }">
+          <Tooltip v-if="provider.lastTest && !provider.lastTest.ok" :max-width="320">
             <template #trigger>
               <span class="pill bad"><span class="dot" />{{ t('providers.unreachable') }}</span>
             </template>
             {{ provider.lastTest.error }}
-          </NTooltip>
+          </Tooltip>
           <span v-else-if="provider.lastTest" class="pill ok"><span class="dot" />{{ provider.lastTest.latencyMs }} ms</span>
-          <NButton size="small" :secondary="!provider.lastTest" :quaternary="!!provider.lastTest" :type="provider.lastTest ? 'default' : 'primary'" :loading="testing === provider.id" @click="test(provider)">
-            <template #icon><NIcon><FlashOutline /></NIcon></template>
+          <Button size="small" :secondary="!provider.lastTest" :quaternary="!!provider.lastTest" :type="provider.lastTest ? 'default' : 'primary'" :loading="testing === provider.id" icon="i-lucide-zap" @click="test(provider)">
             {{ provider.lastTest ? t('providers.retest') : t('common.test') }}
-          </NButton>
-          <NDropdown trigger="click" placement="bottom-end" :options="menuOf(provider)" @select="(key: string) => onMenu(provider, key)">
-            <NButton size="small" quaternary circle :aria-label="t('common.actions')">
-              <template #icon><NIcon><EllipsisHorizontal /></NIcon></template>
-            </NButton>
-          </NDropdown>
+          </Button>
+          <Dropdown placement="bottom" align="end" :options="menuOf(provider)" @select="(key: string) => onMenu(provider, key)">
+            <Button size="small" quaternary circle :aria-label="t('common.actions')" icon="i-lucide-ellipsis" />
+          </Dropdown>
         </div>
       </li>
     </ul>
-    <EmptyState v-else :icon="KeyOutline" :title="t('providers.empty')" :hint="t('providers.emptyHint')">
-      <NButton type="primary" @click="openCreate">{{ t('providers.add') }}</NButton>
+    <EmptyState v-else icon="i-lucide-key-round" :title="t('providers.empty')" :hint="t('providers.emptyHint')">
+      <Button type="primary" @click="openCreate">{{ t('providers.add') }}</Button>
     </EmptyState>
 
     <section class="profiles">
@@ -242,10 +233,9 @@ const initial = (provider: Provider) => [...provider.name.trim()][0]?.toUpperCas
           <h2>{{ t('profiles.title') }}</h2>
           <p class="section-lead" :title="t('profiles.lead')">{{ t('profiles.lead') }}</p>
         </div>
-        <NButton :disabled="!data.providers.length" @click="openProfile()">
-          <template #icon><NIcon><GitBranchOutline /></NIcon></template>
+        <Button :disabled="!data.providers.length" icon="i-lucide-git-branch" @click="openProfile()">
           {{ t('profiles.add') }}
-        </NButton>
+        </Button>
       </header>
       <ul v-if="data.profiles.length" class="rows">
         <li
@@ -258,12 +248,12 @@ const initial = (provider: Provider) => [...provider.name.trim()][0]?.toUpperCas
           @click="openProfile(profile)"
           @keyup.enter.self="openProfile(profile)"
         >
-          <span class="badge chain-badge" aria-hidden="true"><NIcon :size="16"><GitBranchOutline /></NIcon></span>
+          <span class="badge chain-badge" aria-hidden="true"><span class="i-lucide-git-branch text-[16px]" /></span>
           <div class="main">
             <div class="title"><strong>{{ profile.name }}</strong></div>
             <div class="chain">
               <template v-for="(item, index) in profile.models" :key="index">
-                <NIcon v-if="index" :size="12" class="chain-arrow"><ArrowForwardOutline /></NIcon>
+                <span v-if="index" class="i-lucide-arrow-right chain-arrow text-[12px]" />
                 <span class="step" :class="{ first: !index }">
                   <span class="mono">{{ profileModelLabel(data.providers, item) }}</span>
                   <ModelCaps :model="item.model" />
@@ -273,33 +263,29 @@ const initial = (provider: Provider) => [...provider.name.trim()][0]?.toUpperCas
             </div>
           </div>
           <div class="health" @click.stop>
-            <IconAction :icon="CreateOutline" :label="t('common.edit')" @click="openProfile(profile)" />
-            <IconAction :icon="TrashOutline" :label="t('common.delete')" type="error" @click="removeProfile(profile)" />
+            <IconAction icon="i-lucide-pencil" :label="t('common.edit')" @click="openProfile(profile)" />
+            <IconAction icon="i-lucide-trash-2" :label="t('common.delete')" type="error" @click="removeProfile(profile)" />
           </div>
         </li>
       </ul>
       <p v-else class="faint none">{{ t('profiles.none') }}</p>
     </section>
 
-    <NModal v-model:show="showProfileEditor" preset="card" :title="editingProfile ? t('profiles.edit') : t('profiles.add')" style="width: min(640px, calc(100vw - 32px))">
+    <Modal v-model:show="showProfileEditor" :title="editingProfile ? t('profiles.edit') : t('profiles.add')" :width="640">
       <ProfileForm v-model="profileDraft" />
       <template #footer>
-        <NSpace justify="end">
-          <NButton @click="showProfileEditor = false">{{ t('common.cancel') }}</NButton>
-          <NButton type="primary" :loading="savingProfile" :disabled="!profileDraft.name.trim() || !profileDraft.models.length" @click="saveProfile">{{ t('common.save') }}</NButton>
-        </NSpace>
+        <Button @click="showProfileEditor = false">{{ t('common.cancel') }}</Button>
+        <Button type="primary" :loading="savingProfile" :disabled="!profileDraft.name.trim() || !profileDraft.models.length" @click="saveProfile">{{ t('common.save') }}</Button>
       </template>
-    </NModal>
+    </Modal>
 
-    <NModal v-model:show="showEditor" preset="card" :title="editing ? t('providers.edit') : t('providers.add')" style="width: min(600px, calc(100vw - 32px))">
+    <Modal v-model:show="showEditor" :title="editing ? t('providers.edit') : t('providers.add')" :width="600">
       <ProviderForm v-model="draft" :types="data.providerTypes" :provider-id="editing ?? undefined" />
       <template #footer>
-        <NSpace justify="end">
-          <NButton @click="showEditor = false">{{ t('common.cancel') }}</NButton>
-          <NButton type="primary" :loading="saving" :disabled="!draft.name" @click="save">{{ t('common.save') }}</NButton>
-        </NSpace>
+        <Button @click="showEditor = false">{{ t('common.cancel') }}</Button>
+        <Button type="primary" :loading="saving" :disabled="!draft.name" @click="save">{{ t('common.save') }}</Button>
       </template>
-    </NModal>
+    </Modal>
   </div>
 </template>
 

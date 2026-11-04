@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { useToast } from '@mushin/ui'
-import { NButton, NForm, NFormItem, NInput, NSelect, NSpace, NTag, type SelectOption } from 'naive-ui'
-import { computed, h, ref } from 'vue'
+import { Button, Form, FormItem, Input, Select, useToast } from '@mushin/ui'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../api'
 import type { ProviderDraft, ProviderType } from '../types'
-import { modelOptions as toOptions, renderModel, renderModelOption } from '../models'
+import { modelOptions as toOptions } from '../models'
+import ModelCaps from './ModelCaps.vue'
 import { localize } from '../utils'
 import SchemaForm from './SchemaForm.vue'
 
@@ -34,9 +34,6 @@ const presetOptions = computed(() => props.types.flatMap((item) => item.presets.
 const typeOptions = computed(() => props.types.map((item) => ({ label: localize(item.displayName, locale.value), value: item.id })))
 
 const modelOptions = computed(() => toOptions([...new Set([...draft.value.models, ...fetched.value])]))
-
-const renderModelTag = ({ option, handleClose }: { option: SelectOption; handleClose: () => void }) =>
-  h(NTag, { size: 'small', closable: true, onClose: (event: MouseEvent) => { event.stopPropagation(); handleClose() } }, () => renderModel(String(option.value)))
 
 function applyPreset(value: string) {
   presetId.value = value
@@ -91,17 +88,17 @@ function clearModels() {
 
 <template>
   <div class="provider-form">
-    <NForm label-placement="top">
-      <NFormItem v-if="!providerId" :label="t('providers.preset')">
-        <NSelect :value="presetId" :options="presetOptions" :placeholder="t('providers.presetHint')" filterable @update:value="applyPreset" />
-      </NFormItem>
-      <NFormItem :label="t('common.name')" required>
-        <NInput v-model:value="draft.name" />
-      </NFormItem>
-      <NFormItem :label="t('common.type')" required>
-        <NSelect :value="draft.type" :options="typeOptions" @update:value="setType" />
-      </NFormItem>
-    </NForm>
+    <Form>
+      <FormItem v-if="!providerId" :label="t('providers.preset')">
+        <Select :value="presetId" :options="presetOptions" :placeholder="t('providers.presetHint')" filterable @update:value="applyPreset" />
+      </FormItem>
+      <FormItem :label="t('common.name')" required>
+        <Input v-model:value="draft.name" />
+      </FormItem>
+      <FormItem :label="t('common.type')" required>
+        <Select :value="draft.type" :options="typeOptions" @update:value="setType" />
+      </FormItem>
+    </Form>
 
     <SchemaForm
       v-if="type"
@@ -110,38 +107,67 @@ function clearModels() {
       :secrets="type.secrets"
     />
 
-    <NForm label-placement="top">
-      <NFormItem :label="t('providers.models')" :feedback="t('providers.modelsHint')">
-        <NSpace vertical style="width: 100%">
-          <NSelect
+    <Form>
+      <FormItem :label="t('providers.models')" :feedback="t('providers.modelsHint')">
+        <div class="models">
+          <Select
             :value="draft.models"
             :options="modelOptions"
             multiple
             filterable
             tag
             :placeholder="t('providers.modelsPlaceholder')"
-            :render-label="renderModelOption"
-            :render-tag="renderModelTag"
             @update:value="setModels"
-          />
-          <NSpace :size="8">
-            <NButton size="small" :loading="fetching" :disabled="!draft.type" @click="fetchModels">{{ t('providers.fetchModels') }}</NButton>
-            <NButton size="small" :disabled="!draft.models.length" @click="clearModels">{{ t('providers.clearModels') }}</NButton>
-          </NSpace>
-        </NSpace>
-      </NFormItem>
-      <NFormItem :label="t('providers.defaultModel')" :feedback="t('providers.defaultModelHint')">
-        <NSelect
+          >
+            <template #option="{ option }">
+              <span class="model-label"><span class="model-label-name">{{ option.label }}</span><ModelCaps :model="String(option.value)" /></span>
+            </template>
+            <template #tag="{ label }">
+              <span class="model-label"><span class="model-label-name">{{ label }}</span><ModelCaps :model="label" /></span>
+            </template>
+          </Select>
+          <div class="model-actions">
+            <Button size="small" icon="i-lucide-download" :loading="fetching" :disabled="!draft.type" @click="fetchModels">{{ t('providers.fetchModels') }}</Button>
+            <Button size="small" :disabled="!draft.models.length" @click="clearModels">{{ t('providers.clearModels') }}</Button>
+          </div>
+        </div>
+      </FormItem>
+      <FormItem :label="t('providers.defaultModel')" :feedback="t('providers.defaultModelHint')">
+        <Select
           :value="draft.defaultModel || null"
           :options="modelOptions"
-          :render-label="renderModelOption"
           filterable
           tag
           clearable
           :placeholder="t('profiles.typeOrPick')"
           @update:value="(value: string | null) => (draft = { ...draft, defaultModel: value ?? '' })"
-        />
-      </NFormItem>
-    </NForm>
+        >
+          <template #option="{ option }">
+            <span class="model-label"><span class="model-label-name">{{ option.label }}</span><ModelCaps :model="String(option.value)" /></span>
+          </template>
+        </Select>
+      </FormItem>
+    </Form>
   </div>
 </template>
+
+<style scoped>
+/* The fixed fields, the type's own fields and the models read as one form. */
+.provider-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.models {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.model-actions {
+  display: flex;
+  gap: 8px;
+}
+</style>

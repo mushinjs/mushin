@@ -1,21 +1,17 @@
-import type { Component, VNodeChild } from 'vue'
-import { h } from 'vue'
-import { BulbOutline, CodeSlashOutline, ConstructOutline, EyeOutline, GitCompareOutline, ImageOutline, LayersOutline, MicOutline } from '@vicons/ionicons5'
-import type { SelectGroupOption, SelectOption } from 'naive-ui'
-import ModelCaps from './components/ModelCaps.vue'
+import type { SelectGroup, SelectOption } from '@mushin/ui'
 import type { ModelProfile, Provider } from './types'
 
 export type Capability = 'vision' | 'reasoning' | 'tools' | 'code' | 'embedding' | 'rerank' | 'image' | 'audio'
 
-export const CAPABILITY_ICONS: Record<Capability, Component> = {
-  vision: EyeOutline,
-  reasoning: BulbOutline,
-  tools: ConstructOutline,
-  code: CodeSlashOutline,
-  embedding: LayersOutline,
-  rerank: GitCompareOutline,
-  image: ImageOutline,
-  audio: MicOutline,
+export const CAPABILITY_ICONS: Record<Capability, string> = {
+  vision: 'i-lucide-eye',
+  reasoning: 'i-lucide-lightbulb',
+  tools: 'i-lucide-wrench',
+  code: 'i-lucide-code',
+  embedding: 'i-lucide-layers',
+  rerank: 'i-lucide-git-compare',
+  image: 'i-lucide-image',
+  audio: 'i-lucide-mic',
 }
 
 const has = (name: string, pattern: RegExp) => pattern.test(name)
@@ -39,14 +35,6 @@ export function modelCapabilities(model: string): Capability[] {
   return caps
 }
 
-/** A model name followed by its capability icons, for select options and tags. */
-export function renderModel(model: string, extra?: VNodeChild): VNodeChild {
-  return h('span', { class: 'model-label' }, [h('span', { class: 'model-label-name' }, model), h(ModelCaps, { model }), extra ?? null])
-}
-
-/** `renderLabel` for selects whose option values are model names. */
-export const renderModelOption = (option: SelectOption | SelectGroupOption) => (option.type === 'group' ? String(option.label) : renderModel(String(option.value)))
-
 /** Options for a model select: the given models with capability icons. */
 export function modelOptions(models: string[]): SelectOption[] {
   return models.map((model) => ({ label: model, value: model }))
@@ -54,21 +42,24 @@ export function modelOptions(models: string[]): SelectOption[] {
 
 export const isProfile = (profiles: ModelProfile[], id?: string | null) => !!id && profiles.some((profile) => profile.id === id)
 
+/** A heading in a provider select; also accepted by the Naive UI selects not yet moved over. */
+type ChoiceGroup = SelectGroup & Record<string, unknown>
+
 /** Providers and, unless left out, profiles under their own headings, for every provider select. */
 export function providerOptions(
   providers: Provider[],
   profiles: ModelProfile[],
   t: (key: string) => string,
   options: { profiles?: boolean; markDefault?: boolean } = {},
-): (SelectOption | SelectGroupOption)[] {
+): (SelectOption | ChoiceGroup)[] {
   const list = providers.map((provider) => ({
     label: options.markDefault && provider.isDefault ? `${provider.name} (${t('common.default')})` : provider.name,
     value: provider.id,
   }))
   if (options.profiles === false || !profiles.length) return list
   return [
-    { type: 'group', label: t('choiceGroups.providers'), key: 'providers', children: list },
-    { type: 'group', label: t('choiceGroups.profiles'), key: 'profiles', children: profiles.map((profile) => ({ label: profile.name, value: profile.id })) },
+    { type: 'group' as const, label: t('choiceGroups.providers'), key: 'providers', children: list },
+    { type: 'group' as const, label: t('choiceGroups.profiles'), key: 'profiles', children: profiles.map((profile) => ({ label: profile.name, value: profile.id })) },
   ]
 }
 
