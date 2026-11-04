@@ -1,9 +1,5 @@
 <script setup lang="ts">
-import {
-  AddOutline, CheckmarkCircle, CloseCircle, EllipseOutline, EyeOutline, FlaskOutline, PlayOutline, SaveOutline, SparklesOutline, TrashOutline,
-} from '@vicons/ionicons5'
-import { Toggle, useToast } from '@mushin/ui'
-import { NButton, NCheckbox, NIcon, NInput, NInputNumber, NModal, NPopconfirm, NRadioButton, NRadioGroup, NSelect, NSpin, NTag, NTooltip } from 'naive-ui'
+import { Button, Checkbox, Input, Modal, NumberInput, RadioButton, RadioGroup, Select, Spin, Tag, Toggle, Tooltip, useConfirm, useToast } from '@mushin/ui'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call, on } from '../../api'
@@ -51,6 +47,7 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 const message = useToast()
+const dialog = useConfirm()
 const editor = useFlowEditor()
 
 const doc = ref<FlowTests>({ cases: [] })
@@ -247,6 +244,10 @@ async function save() {
   }
 }
 
+function askRemove() {
+  dialog.warning({ content: t('flowTests.deleteConfirm'), positiveText: t('flowTests.delete'), negativeText: t('common.cancel'), onPositiveClick: remove })
+}
+
 async function remove() {
   const id = draft.value?.id
   if (!id) {
@@ -384,22 +385,18 @@ defineExpose({ run, reload: load })
   <div class="tests">
     <div class="cases">
       <div class="cases-bar">
-        <NButton size="tiny" type="primary" :disabled="!doc.cases.length" :loading="running === 'all'" @click="run()">
-          <template #icon><NIcon><PlayOutline /></NIcon></template>
+        <Button size="tiny" type="primary" :disabled="!doc.cases.length" :loading="running === 'all'" icon="i-lucide-play" @click="run()">
           {{ t('flowTests.runAll') }}
-        </NButton>
-        <NTooltip>
+        </Button>
+        <Tooltip>
           <template #trigger>
-            <NButton size="tiny" :loading="generating" @click="generate">
-              <template #icon><NIcon><SparklesOutline /></NIcon></template>
+            <Button size="tiny" :loading="generating" icon="i-lucide-sparkles" @click="generate">
               {{ t('flowTests.generate') }}
-            </NButton>
+            </Button>
           </template>
           {{ t('flowTests.generateHint') }}
-        </NTooltip>
-        <NButton size="tiny" quaternary :aria-label="t('flowTests.add')" @click="startNew">
-          <template #icon><NIcon><AddOutline /></NIcon></template>
-        </NButton>
+        </Tooltip>
+        <Button size="tiny" quaternary :aria-label="t('flowTests.add')" icon="i-lucide-plus" @click="startNew" />
       </div>
       <div class="cases-options">
         <div class="option">
@@ -414,7 +411,7 @@ defineExpose({ run, reload: load })
       <p v-if="doc.lastRun" class="muted small last-run">
         {{ t('flowTests.lastRun', { time: formatTime(doc.lastRun.at), passed: doc.lastRun.passed, failed: doc.lastRun.failed }) }}
       </p>
-      <NSpin v-if="loading" size="small" class="center" />
+      <Spin v-if="loading" size="small" class="center" />
       <p v-else-if="!doc.cases.length && !draft" class="muted small empty">{{ t('flowTests.empty') }}</p>
       <div
         v-for="item in doc.cases"
@@ -426,55 +423,44 @@ defineExpose({ run, reload: load })
         @click="select(item.id)"
         @keyup.enter="select(item.id)"
       >
-        <NIcon :size="14" class="case-mark">
-          <CheckmarkCircle v-if="caseState(item.id) === 'passed'" />
-          <CloseCircle v-else-if="caseState(item.id) === 'failed'" />
-          <EllipseOutline v-else />
-        </NIcon>
+        <span class="case-mark text-[14px]" :class="caseState(item.id) === 'passed' ? 'i-lucide-circle-check' : caseState(item.id) === 'failed' ? 'i-lucide-circle-x' : 'i-lucide-circle'" />
         <span class="case-name" :title="item.name">{{ item.name }}</span>
-        <NButton size="tiny" quaternary circle class="case-run" :loading="running === item.id" :aria-label="t('flowTests.runOne')" @click.stop="run([item.id])">
-          <template #icon><NIcon><PlayOutline /></NIcon></template>
-        </NButton>
+        <Button size="tiny" quaternary circle class="case-run" :loading="running === item.id" :aria-label="t('flowTests.runOne')" icon="i-lucide-play" @click.stop="run([item.id])" />
       </div>
       <div v-if="draft && !draft.id" class="case active none">
-        <NIcon :size="14" class="case-mark"><EllipseOutline /></NIcon>
+        <span class="i-lucide-circle case-mark text-[14px]" />
         <span class="case-name">{{ draft.name || t('flowTests.newCase') }}</span>
       </div>
     </div>
 
     <div class="detail">
       <p v-if="!draft" class="muted empty-detail">
-        <NIcon :size="22"><FlaskOutline /></NIcon><br>
+        <span class="i-lucide-flask-conical text-[22px]" /><br>
         {{ t('flowTests.pick') }}
       </p>
       <template v-else>
         <div class="detail-head">
-          <NInput v-model:value="draft.name" size="small" class="name-input" :placeholder="t('flowTests.namePlaceholder')" />
-          <NTag v-if="draft.id && selectedResult" size="small" :bordered="false" :type="selectedResult.passed ? 'success' : 'error'">
+          <Input v-model:value="draft.name" size="small" class="name-input" :placeholder="t('flowTests.namePlaceholder')" />
+          <Tag v-if="draft.id && selectedResult" size="small" :type="selectedResult.passed ? 'success' : 'error'">
             {{ selectedResult.passed ? t('flowTests.passed') : t('flowTests.failed') }} · {{ selectedResult.ms }} ms
-          </NTag>
+          </Tag>
           <span class="spacer" />
-          <NButton v-if="draft.id && traces.get(draft.id)" size="small" quaternary @click="openTrace">
-            <template #icon><NIcon><EyeOutline /></NIcon></template>
+          <Button v-if="draft.id && traces.get(draft.id)" size="small" quaternary icon="i-lucide-eye" @click="openTrace">
             {{ t('flowTests.showTrace') }}
-          </NButton>
-          <NButton v-if="draft.id" size="small" :loading="running === draft.id" :disabled="changed" @click="run([draft.id])">
-            <template #icon><NIcon><PlayOutline /></NIcon></template>
+          </Button>
+          <Button v-if="draft.id" size="small" :loading="running === draft.id" :disabled="changed" icon="i-lucide-play" @click="run([draft.id])">
             {{ t('flowTests.runOne') }}
-          </NButton>
-          <NButton size="small" type="primary" :disabled="!changed" :loading="saving" @click="save">
-            <template #icon><NIcon><SaveOutline /></NIcon></template>
+          </Button>
+          <Button size="small" type="primary" :disabled="!changed" :loading="saving" icon="i-lucide-save" @click="save">
             {{ t('flowTests.save') }}
-          </NButton>
-          <NPopconfirm v-if="draft.id" @positive-click="remove">
+          </Button>
+          <Tooltip v-if="draft.id">
             <template #trigger>
-              <NButton size="small" quaternary :aria-label="t('flowTests.delete')">
-                <template #icon><NIcon><TrashOutline /></NIcon></template>
-              </NButton>
+              <Button size="small" quaternary :aria-label="t('flowTests.delete')" icon="i-lucide-trash-2" @click="askRemove" />
             </template>
-            {{ t('flowTests.deleteConfirm') }}
-          </NPopconfirm>
-          <NButton v-else size="small" quaternary @click="remove">{{ t('flowTests.cancel') }}</NButton>
+            {{ t('flowTests.delete') }}
+          </Tooltip>
+          <Button v-else size="small" quaternary @click="remove">{{ t('flowTests.cancel') }}</Button>
         </div>
 
         <div v-if="draft.id && selectedResult?.failures.length" class="failures">
@@ -487,41 +473,41 @@ defineExpose({ run, reload: load })
         <section class="block">
           <div class="block-title">{{ t('flowTests.input') }}</div>
           <div class="row">
-            <NRadioGroup v-model:value="draft.mode" size="small">
-              <NRadioButton value="message">{{ t('flows.testModeMessage') }}</NRadioButton>
-              <NRadioButton value="event">{{ t('flows.testModeEvent') }}</NRadioButton>
-              <NRadioButton value="schedule">{{ t('flows.testModeSchedule') }}</NRadioButton>
-            </NRadioGroup>
+            <RadioGroup v-model:value="draft.mode" size="small">
+              <RadioButton value="message">{{ t('flows.testModeMessage') }}</RadioButton>
+              <RadioButton value="event">{{ t('flows.testModeEvent') }}</RadioButton>
+              <RadioButton value="schedule">{{ t('flows.testModeSchedule') }}</RadioButton>
+            </RadioGroup>
           </div>
           <template v-if="draft.mode === 'message'">
             <div class="row">
-              <NInput v-model:value="draft.text" size="small" class="grow" :placeholder="t('flows.testPlaceholder')" />
-              <NInput v-model:value="draft.userName" size="small" class="short" :placeholder="`${t('flows.testUser')}: Tester`" />
+              <Input v-model:value="draft.text" size="small" class="grow" :placeholder="t('flows.testPlaceholder')" />
+              <Input v-model:value="draft.userName" size="small" class="short" :placeholder="`${t('flows.testUser')}: Tester`" />
             </div>
             <div class="row">
-              <NCheckbox v-model:checked="draft.private" size="small">{{ t('flows.testPrivate') }}</NCheckbox>
-              <NCheckbox v-model:checked="draft.mentioned" size="small">{{ t('flows.testMentioned') }}</NCheckbox>
-              <NRadioGroup v-model:value="draft.role" size="small">
-                <NRadioButton value="user">{{ t('flows.roleUser') }}</NRadioButton>
-                <NRadioButton value="admin">{{ t('flows.roleAdmin') }}</NRadioButton>
-                <NRadioButton value="master">{{ t('flows.roleMaster') }}</NRadioButton>
-              </NRadioGroup>
-              <NRadioGroup v-if="!draft.private" v-model:value="draft.groupRole" size="small">
-                <NRadioButton value="">{{ t('flows.groupRoleNone') }}</NRadioButton>
-                <NRadioButton value="member">{{ t('flows.groupRoleMember') }}</NRadioButton>
-                <NRadioButton value="admin">{{ t('flows.groupRoleAdmin') }}</NRadioButton>
-                <NRadioButton value="owner">{{ t('flows.groupRoleOwner') }}</NRadioButton>
-              </NRadioGroup>
+              <Checkbox v-model:checked="draft.private" size="small">{{ t('flows.testPrivate') }}</Checkbox>
+              <Checkbox v-model:checked="draft.mentioned" size="small">{{ t('flows.testMentioned') }}</Checkbox>
+              <RadioGroup v-model:value="draft.role" size="small">
+                <RadioButton value="user">{{ t('flows.roleUser') }}</RadioButton>
+                <RadioButton value="admin">{{ t('flows.roleAdmin') }}</RadioButton>
+                <RadioButton value="master">{{ t('flows.roleMaster') }}</RadioButton>
+              </RadioGroup>
+              <RadioGroup v-if="!draft.private" v-model:value="draft.groupRole" size="small">
+                <RadioButton value="">{{ t('flows.groupRoleNone') }}</RadioButton>
+                <RadioButton value="member">{{ t('flows.groupRoleMember') }}</RadioButton>
+                <RadioButton value="admin">{{ t('flows.groupRoleAdmin') }}</RadioButton>
+                <RadioButton value="owner">{{ t('flows.groupRoleOwner') }}</RadioButton>
+              </RadioGroup>
             </div>
           </template>
           <template v-else-if="draft.mode === 'event'">
             <div class="row">
-              <NInput v-model:value="draft.eventName" size="small" class="short" :placeholder="t('flows.testEvent')" />
+              <Input v-model:value="draft.eventName" size="small" class="short" :placeholder="t('flows.testEvent')" />
             </div>
-            <NInput v-model:value="draft.eventData" type="textarea" size="small" class="mono" :autosize="{ minRows: 2, maxRows: 6 }" />
+            <Input v-model:value="draft.eventData" type="textarea" size="small" class="mono" :autosize="{ minRows: 2, maxRows: 6 }" />
           </template>
           <div v-else class="row">
-            <NSelect
+            <Select
               v-model:value="draft.schedule"
               size="small"
               class="short"
@@ -532,17 +518,17 @@ defineExpose({ run, reload: load })
           <div class="row top">
             <div class="grow">
               <div class="label">{{ t('flowTests.replies') }}</div>
-              <NInput v-model:value="draft.replies" type="textarea" size="small" :autosize="{ minRows: 1, maxRows: 4 }" :placeholder="t('flowTests.repliesPlaceholder')" />
+              <Input v-model:value="draft.replies" type="textarea" size="small" :autosize="{ minRows: 1, maxRows: 4 }" :placeholder="t('flowTests.repliesPlaceholder')" />
             </div>
             <div class="grow">
               <div class="label">
                 {{ t('flowTests.llm') }}
-                <NRadioGroup v-model:value="draft.llmMode" size="small" class="inline">
-                  <NRadioButton value="mock">{{ t('flowTests.llmMock') }}</NRadioButton>
-                  <NRadioButton value="real">{{ t('flowTests.llmReal') }}</NRadioButton>
-                </NRadioGroup>
+                <RadioGroup v-model:value="draft.llmMode" size="small" class="inline">
+                  <RadioButton value="mock">{{ t('flowTests.llmMock') }}</RadioButton>
+                  <RadioButton value="real">{{ t('flowTests.llmReal') }}</RadioButton>
+                </RadioGroup>
               </div>
-              <NInput
+              <Input
                 v-model:value="draft.llmReplies"
                 type="textarea"
                 size="small"
@@ -557,27 +543,21 @@ defineExpose({ run, reload: load })
         <section class="block">
           <div class="block-title">
             {{ t('flowTests.vars') }}
-            <NButton size="tiny" quaternary @click="draft.vars.push({ scope: 'chat', name: '', value: '' })">
-              <template #icon><NIcon><AddOutline /></NIcon></template>
-            </NButton>
+            <Button size="tiny" quaternary icon="i-lucide-plus" @click="draft.vars.push({ scope: 'chat', name: '', value: '' })" />
           </div>
           <p v-if="!draft.vars.length" class="muted small">{{ t('flowTests.varsEmpty') }}</p>
           <div v-for="(entry, index) in draft.vars" :key="index" class="row">
-            <NSelect v-model:value="entry.scope" size="small" class="scope" :options="scopeOptions" />
-            <NInput v-model:value="entry.name" size="small" class="short" :placeholder="t('flowTests.varName')" />
-            <NInput v-model:value="entry.value" size="small" class="grow" :placeholder="t('flowTests.varValue')" />
-            <NButton size="small" quaternary circle :aria-label="t('flowTests.delete')" @click="draft.vars.splice(index, 1)">
-              <template #icon><NIcon><TrashOutline /></NIcon></template>
-            </NButton>
+            <Select v-model:value="entry.scope" size="small" class="scope" :options="scopeOptions" />
+            <Input v-model:value="entry.name" size="small" class="short" :placeholder="t('flowTests.varName')" />
+            <Input v-model:value="entry.value" size="small" class="grow" :placeholder="t('flowTests.varValue')" />
+            <Button size="small" quaternary circle :aria-label="t('flowTests.delete')" icon="i-lucide-trash-2" @click="draft.vars.splice(index, 1)" />
           </div>
         </section>
 
         <section class="block">
           <div class="block-title">
             {{ t('flowTests.expect') }}
-            <NButton size="tiny" quaternary @click="draft.expect.push(blank('reply'))">
-              <template #icon><NIcon><AddOutline /></NIcon></template>
-            </NButton>
+            <Button size="tiny" quaternary icon="i-lucide-plus" @click="draft.expect.push(blank('reply'))" />
           </div>
           <p v-if="!draft.expect.length" class="muted small">{{ t('flowTests.expectEmpty') }}</p>
           <div
@@ -586,11 +566,11 @@ defineExpose({ run, reload: load })
             class="row assertion"
             :class="{ failing: !!selectedResult?.failures.some((entry) => entry.index === index) && !changed }"
           >
-            <NSelect :value="item.kind" size="small" class="kind" :options="kindOptions" @update:value="(kind: TestAssertion['kind']) => setKind(index, kind)" />
+            <Select :value="item.kind" size="small" class="kind" :options="kindOptions" @update:value="(kind: TestAssertion['kind']) => setKind(index, kind)" />
             <template v-if="item.kind === 'reply'">
-              <NSelect v-model:value="item.match" size="small" class="match" :options="matchOptions" />
-              <NInput v-model:value="item.value" size="small" class="grow" :placeholder="t('flowTests.replyValue')" />
-              <NInputNumber
+              <Select v-model:value="item.match" size="small" class="match" :options="matchOptions" />
+              <Input v-model:value="item.value" size="small" class="grow" :placeholder="t('flowTests.replyValue')" />
+              <NumberInput
                 :value="item.index === undefined ? null : item.index + 1"
                 size="small"
                 class="index"
@@ -602,41 +582,39 @@ defineExpose({ run, reload: load })
             </template>
             <Toggle v-else-if="item.kind === 'matched'" v-model:value="item.value" size="small" />
             <template v-else-if="item.kind === 'visits'">
-              <NSelect v-model:value="item.node" size="small" class="grow" filterable :options="nodes" />
-              <NCheckbox :checked="!!item.not" size="small" @update:checked="(value: boolean) => (item.not = value || undefined)">{{ t('flowTests.not') }}</NCheckbox>
+              <Select v-model:value="item.node" size="small" class="grow" filterable :options="nodes" />
+              <Checkbox :checked="!!item.not" size="small" @update:checked="(value: boolean) => (item.not = value || undefined)">{{ t('flowTests.not') }}</Checkbox>
             </template>
             <template v-else-if="item.kind === 'branch'">
-              <NSelect v-model:value="item.node" size="small" class="grow" filterable :options="nodes" />
-              <NSelect v-model:value="item.exec" size="small" class="match" filterable tag :options="execSelect(item.node)" :placeholder="t('flowTests.exec')" />
+              <Select v-model:value="item.node" size="small" class="grow" filterable :options="nodes" />
+              <Select v-model:value="item.exec" size="small" class="match" filterable tag :options="execSelect(item.node)" :placeholder="t('flowTests.exec')" />
             </template>
             <template v-else-if="item.kind === 'variable'">
-              <NSelect v-model:value="item.scope" size="small" class="scope" :options="scopeOptions" />
-              <NInput v-model:value="item.name" size="small" class="short" :placeholder="t('flowTests.varName')" />
-              <NInput v-model:value="item.value" size="small" class="grow" :placeholder="t('flowTests.varValue')" />
+              <Select v-model:value="item.scope" size="small" class="scope" :options="scopeOptions" />
+              <Input v-model:value="item.name" size="small" class="short" :placeholder="t('flowTests.varName')" />
+              <Input v-model:value="item.value" size="small" class="grow" :placeholder="t('flowTests.varValue')" />
             </template>
             <template v-else-if="item.kind === 'call'">
-              <NInput v-model:value="item.action" size="small" class="grow" placeholder="set_group_ban" />
-              <NCheckbox :checked="!!item.not" size="small" @update:checked="(value: boolean) => (item.not = value || undefined)">{{ t('flowTests.not') }}</NCheckbox>
+              <Input v-model:value="item.action" size="small" class="grow" placeholder="set_group_ban" />
+              <Checkbox :checked="!!item.not" size="small" @update:checked="(value: boolean) => (item.not = value || undefined)">{{ t('flowTests.not') }}</Checkbox>
             </template>
-            <NInput v-else-if="item.kind === 'judge'" v-model:value="item.criterion" size="small" class="grow" :placeholder="t('flowTests.judgePlaceholder')" />
+            <Input v-else-if="item.kind === 'judge'" v-model:value="item.criterion" size="small" class="grow" :placeholder="t('flowTests.judgePlaceholder')" />
             <span v-else class="grow" />
-            <NButton size="small" quaternary circle :aria-label="t('flowTests.delete')" @click="draft.expect.splice(index, 1)">
-              <template #icon><NIcon><TrashOutline /></NIcon></template>
-            </NButton>
+            <Button size="small" quaternary circle :aria-label="t('flowTests.delete')" icon="i-lucide-trash-2" @click="draft.expect.splice(index, 1)" />
           </div>
         </section>
       </template>
     </div>
 
-    <NModal :show="!!drafts" preset="card" class="drafts-modal" :title="t('flowTests.generateTitle')" @update:show="(value: boolean) => !value && (drafts = undefined)">
+    <Modal :show="!!drafts" class="drafts-modal" :title="t('flowTests.generateTitle')" @update:show="(value: boolean) => !value && (drafts = undefined)">
       <p class="muted small">{{ t('flowTests.generateIntro', { n: drafts?.length ?? 0 }) }}</p>
       <div class="drafts">
         <label v-for="(item, index) in drafts" :key="index" class="draft">
-          <NCheckbox :checked="picked.includes(index)" @update:checked="(value: boolean) => togglePick(index, value)" />
+          <Checkbox :checked="picked.includes(index)" @update:checked="(value: boolean) => togglePick(index, value)" />
           <div class="draft-body">
             <div class="draft-name">{{ item.name }}</div>
             <div class="draft-expect">
-              <NTag v-for="(assertion, position) in item.expect" :key="position" size="tiny" :bordered="false">{{ describe(assertion) }}</NTag>
+              <Tag v-for="(assertion, position) in item.expect" :key="position" size="tiny">{{ describe(assertion) }}</Tag>
             </div>
           </div>
         </label>
@@ -646,13 +624,13 @@ defineExpose({ run, reload: load })
       </p>
       <template #footer>
         <div class="modal-foot">
-          <NButton @click="drafts = undefined">{{ t('flowTests.cancel') }}</NButton>
-          <NButton type="primary" :disabled="!picked.length" :loading="saving" @click="savePicked">
+          <Button @click="drafts = undefined">{{ t('flowTests.cancel') }}</Button>
+          <Button type="primary" :disabled="!picked.length" :loading="saving" @click="savePicked">
             {{ t('flowTests.savePicked', { n: picked.length }) }}
-          </NButton>
+          </Button>
         </div>
       </template>
-    </NModal>
+    </Modal>
   </div>
 </template>
 

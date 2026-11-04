@@ -1,6 +1,6 @@
 /** The canvas's right-click menu, and copying and pasting nodes. */
 import type { GraphNode, Node } from '@vue-flow/core'
-import type { DropdownOption } from 'naive-ui'
+import type { DropdownOption } from '@mushin/ui'
 import { computed, nextTick, ref } from 'vue'
 import { clone } from '../../../utils'
 import type { CanvasNodeData } from '../context'
@@ -152,7 +152,7 @@ export function useMenu(
     if (kind === 'edge') {
       return [
         { key: 'insert', label: t('flows.menuInsertNode') },
-        { key: 'deleteEdge', label: t('flows.menuDeleteEdge') },
+        { key: 'deleteEdge', label: t('flows.menuDeleteEdge'), danger: true },
       ]
     }
     if (kind === 'group') {
@@ -164,7 +164,7 @@ export function useMenu(
         { key: 'duplicate', label: t('flows.menuDuplicate') },
         divider('d1'),
         { key: 'ungroup', label: t('flows.menuUngroup') },
-        { key: 'delete', label: t('flows.menuDeleteGroup') },
+        { key: 'delete', label: t('flows.menuDeleteGroup'), danger: true },
       ]
     }
     const allSkipped = ids.every((id) => realNodes.value.find((node) => node.id === id)?.data?.skip)
@@ -178,7 +178,7 @@ export function useMenu(
       { key: 'copy', label: t('flows.menuCopy') },
       { key: 'duplicate', label: t('flows.menuDuplicate') },
       divider('d2'),
-      { key: 'delete', label: t('flows.menuDelete') },
+      { key: 'delete', label: t('flows.menuDelete'), danger: true },
     ]
   })
 

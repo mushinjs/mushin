@@ -9,7 +9,7 @@ import { VueFlow } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
-import { NDropdown } from 'naive-ui'
+import { Dropdown } from '@mushin/ui'
 import { createFlowEditor } from '../components/flow/editor/editor'
 import EditorHeader from '../components/flow/editor/EditorHeader.vue'
 import GroupFrames from '../components/flow/editor/GroupFrames.vue'
@@ -93,16 +93,13 @@ const {
             <FlowMiniMap v-if="!narrow && realNodes.length" :extent="extent" :node-color="minimapColor" :dark="isDark" />
           </VueFlow>
           <div v-if="loaded && !nodes.length" class="canvas-empty">{{ t('flows.emptyCanvas') }}</div>
-          <NDropdown
-            trigger="manual"
-            placement="bottom-start"
-            size="small"
+          <Dropdown
             :show="!!menu"
             :x="menu?.x ?? 0"
             :y="menu?.y ?? 0"
             :options="menuOptions"
             @select="onMenuSelect"
-            @clickoutside="onMenuClickOutside"
+            @update:show="(open: boolean) => !open && onMenuClickOutside()"
           />
           <NodePicker
             v-if="picker"

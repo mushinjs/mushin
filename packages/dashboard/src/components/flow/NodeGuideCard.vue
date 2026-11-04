@@ -7,7 +7,6 @@
  * the conversation plays below. Types without an example show their inputs, outputs and branches.
  * With reduced motion the finished run shows at once, with every caption listed.
  */
-import { useThemeVars } from 'naive-ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { categoryColors, configSummary, portsOf, schemaDefaults, wholeRef } from '../../flow'
@@ -28,7 +27,6 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ enter: []; leave: [] }>()
 const { t, locale } = useI18n()
-const theme = useThemeVars()
 const { isDark } = useTheme()
 
 const reduced = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -379,14 +377,14 @@ const style = computed(() => {
     left: `${left}px`,
     top: `${top}px`,
     width: `${width}px`,
-    background: theme.value.popoverColor,
-    color: theme.value.textColor2,
+    background: 'var(--raised)',
+    color: 'var(--fg2)',
     '--accent': categoryColors[props.type.category],
     // Teleported out of the editor, so its node colours are set here, for light and dark.
-    '--accent-fg': `color-mix(in srgb, ${categoryColors[props.type.category]} ${isDark.value ? '62%' : '100%'}, ${theme.value.textColor1})`,
+    '--accent-fg': `color-mix(in srgb, ${categoryColors[props.type.category]} ${isDark.value ? '62%' : '100%'}, var(--fg))`,
     '--accent-strength': isDark.value ? '62%' : '100%',
     '--flow-node-bg': isDark.value ? '#26262c' : '#fff',
-    '--flow-node-fg': theme.value.textColor1,
+    '--flow-node-fg': 'var(--fg)',
   }
 })
 </script>

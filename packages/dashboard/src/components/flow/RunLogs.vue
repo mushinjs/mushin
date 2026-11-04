@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { Button, Checkbox, Input, Popover, RadioButton, RadioGroup, Select, Tag } from '@mushin/ui'
-import { NSpace } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { categoryColors, eventSamples } from '../../flow'
@@ -256,7 +255,7 @@ const iconOf = (nodeId: string) => {
           <template #trigger>
             <Button size="small" quaternary circle :aria-label="t('flows.testOptions')" icon="i-lucide-sliders-horizontal" />
           </template>
-          <NSpace vertical size="small" class="test-options">
+          <div class="flex flex-col gap-1 test-options">
             <Checkbox v-if="sample" v-model:checked="test.useSample">{{ t('flows.sampleUse') }}</Checkbox>
             <template v-if="quick?.length">
               <span class="muted small">{{ t('flows.testQuick') }}</span>
@@ -305,7 +304,7 @@ const iconOf = (nodeId: string) => {
             <span class="muted small">{{ t('flows.testReplyLines') }}</span>
             <Input v-model:value="test.replies" type="textarea" size="small" :autosize="{ minRows: 1, maxRows: 4 }" />
             <span class="muted small">{{ t('flows.testHint') }}</span>
-          </NSpace>
+          </div>
         </Popover>
         <Button
           size="small"

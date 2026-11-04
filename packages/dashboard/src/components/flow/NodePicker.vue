@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { Input } from '@mushin/ui'
-import { useThemeVars } from 'naive-ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { categories, categoryColors, supports } from '../../flow'
@@ -29,7 +28,6 @@ const query = ref('')
 const root = ref<HTMLElement>()
 const search = ref<InstanceType<typeof Input>>()
 const active = ref(0)
-const theme = useThemeVars()
 const guide = useGuideHover()
 
 const usable = (type: NodeTypeInfo) => supports(type, props.adapter)
@@ -80,8 +78,8 @@ function onKeydown(event: KeyboardEvent) {
 const style = computed(() => ({
   left: `${Math.max(8, Math.min(props.x, window.innerWidth - 268))}px`,
   top: `${Math.max(8, Math.min(props.y, window.innerHeight - 388))}px`,
-  background: theme.value.popoverColor,
-  color: theme.value.textColor2,
+  background: 'var(--raised)',
+  color: 'var(--fg2)',
 }))
 
 function onPointerDown(event: PointerEvent) {
