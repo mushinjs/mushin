@@ -3,6 +3,9 @@
  * A menu opened from its trigger (the default slot). Options take the shape Naive UI used:
  * `{ label, key, icon?, disabled?, danger? }`, `{ type: 'divider' }` and
  * `{ type: 'group', label, children }`. Choosing one emits `select` with its key.
+ *
+ * With `x` and `y` it is a context menu: it opens at that point of the window while `show` is
+ * true, and needs no trigger.
  */
 import {
   DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuPortal, DropdownMenuRoot, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -29,15 +32,18 @@ withDefaults(defineProps<{
   align?: 'start' | 'center' | 'end'
   show?: boolean
   disabled?: boolean
+  x?: number
+  y?: number
 }>(), { placement: 'bottom', align: 'start', show: undefined })
 
 const emit = defineEmits<{ select: [key: any, option: DropdownOption]; 'update:show': [value: boolean] }>()
 </script>
 
 <template>
-  <DropdownMenuRoot :open="show" @update:open="(value) => emit('update:show', value)">
+  <DropdownMenuRoot :open="show" :modal="x === undefined" @update:open="(value) => emit('update:show', value)">
     <DropdownMenuTrigger as-child :disabled="disabled">
-      <slot />
+      <span v-if="x !== undefined" class="mu-menu-anchor" :style="{ left: `${x}px`, top: `${y ?? 0}px` }" aria-hidden="true" />
+      <slot v-else />
     </DropdownMenuTrigger>
     <DropdownMenuPortal>
       <DropdownMenuContent v-bind="$attrs" class="mu-pop mu-menu" :side="placement" :align="align" :side-offset="4" :collision-padding="8">
@@ -74,6 +80,8 @@ const emit = defineEmits<{ select: [key: any, option: DropdownOption]; 'update:s
 </template>
 
 <style>
+.mu-menu-anchor { position: fixed; width: 0; height: 0; pointer-events: none; }
+
 .mu-menu {
   min-width: 160px;
   max-height: min(420px, var(--reka-dropdown-menu-content-available-height, 420px));
