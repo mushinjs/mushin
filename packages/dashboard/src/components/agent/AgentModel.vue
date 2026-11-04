@@ -28,7 +28,7 @@ async function load() {
   const plugins = await call<{ id: string; package: string; config: AgentConfig }[]>('plugins.list')
   const entry = plugins.find((plugin) => plugin.package === '@mushin/plugin-agent')
   entryId.value = entry?.id
-  config.value = { maxSteps: 12, confirmTimeout: 600, dailyTokens: 0, ...entry?.config }
+  config.value = { maxSteps: 20, confirmTimeout: 600, dailyTokens: 0, ...entry?.config }
   usage.value = await call('agent.usage').catch(() => undefined)
 }
 

@@ -33,7 +33,8 @@ export type AgentEvent = { session: string } & (
   | { type: 'confirm'; id: string; action: string; input: unknown }
   | { type: 'tool-result'; id: string; ok: boolean; result?: unknown; error?: string }
   | { type: 'done'; text: string; usage?: { inputTokens: number; outputTokens: number } }
-  | { type: 'error'; error: string }
+  /** `code` is `max_steps` when the turn ran out of tool rounds, so the dashboard can offer to go on. */
+  | { type: 'error'; error: string; code?: 'max_steps' }
 )
 
 /**
@@ -113,7 +114,7 @@ export const Config = z.object({
   model: z.string().optional().meta(field('Model', 'Model for the Agent; empty uses the provider\'s default', {
     'zh-CN': { title: '模型', description: '智能体使用的模型；留空使用提供商默认模型' },
   })),
-  maxSteps: z.number().int().min(1).max(50).default(12).meta(field('Max steps', 'Most tool-calling rounds in one reply', {
+  maxSteps: z.number().int().min(1).max(50).default(20).meta(field('Max steps', 'Most tool-calling rounds in one reply', {
     'zh-CN': { title: '最大步数', description: '一次回复中最多调用工具的轮数' },
   })),
   confirmTimeout: z.number().int().min(10).default(600).meta(field('Approval timeout', 'Seconds to wait for approval of a dangerous action', {
@@ -131,7 +132,19 @@ interface Running {
   confirms: Map<string, (approved: boolean) => void>
   /** Tokens of every request in this turn. */
   usage: { inputTokens: number; outputTokens: number }
+  /** Failed calls per tool in this turn, to tell the model to stop guessing. */
+  failures: Map<string, number>
 }
+
+/** The turn used every tool round it may; the dashboard offers to continue. */
+class StepLimit extends Error {
+  constructor(steps: number) {
+    super(`Stopped after ${steps} tool rounds; send another message to continue`)
+  }
+}
+
+/** After this many failures of one tool in a turn, its errors ask the model to change course. */
+const FAILURE_HINT_AFTER = 3
 
 /** Runs conversations in which the LLM operates Mushin.js through the action registry. */
 export class Agent extends Service {
@@ -458,7 +471,7 @@ export class Agent extends Service {
     }
     const session = sessionId ? await this.session(sessionId) : await this.createSession()
     if (this.running.has(session.id)) throw new MushinError('conflict', 'The Agent is still working on this conversation')
-    const running: Running = { abort: new AbortController(), confirms: new Map(), usage: { inputTokens: 0, outputTokens: 0 } }
+    const running: Running = { abort: new AbortController(), confirms: new Map(), usage: { inputTokens: 0, outputTokens: 0 }, failures: new Map() }
     this.running.set(session.id, running)
     const skills = options.skills?.length ? await Promise.all(options.skills.map((id) => this.skill(id))) : []
     if (!session.title) session.title = (text || skills.map((skill) => skill.name).join(', ')).replace(/\s+/g, ' ').slice(0, 48)
@@ -482,7 +495,7 @@ export class Agent extends Service {
       this.emit({ session: session.id, type: 'done', text: final?.text ?? '', usage: running.usage })
     } catch (error) {
       const message = running.abort.signal.aborted ? 'Stopped' : error instanceof Error ? error.message : String(error)
-      this.emit({ session: session.id, type: 'error', error: message })
+      this.emit({ session: session.id, type: 'error', error: message, ...(error instanceof StepLimit && !running.abort.signal.aborted ? { code: 'max_steps' as const } : {}) })
     } finally {
       this.running.delete(session.id)
       await this.save(session)
@@ -535,9 +548,14 @@ export class Agent extends Service {
       for (const call of result.toolCalls) {
         await this.runTool(session, running, call, options)
       }
+      // One round is left: ask for a summary instead of a turn that just stops mid-way.
+      if (step === this.config.maxSteps - 2) {
+        const last = session.messages.at(-1)!
+        last.content += `\n\n[This was the last tool round for this message (the limit is ${this.config.maxSteps}). Do not call tools now: tell the user what is done, what is left, and that they can send another message to continue.]`
+      }
       await this.save(session)
     }
-    throw new Error(`Stopped after ${this.config.maxSteps} tool rounds; send another message to continue`)
+    throw new StepLimit(this.config.maxSteps)
   }
 
   private async runTool(session: AgentSession, running: Running, call: ToolCall, options: SendOptions) {
@@ -583,7 +601,12 @@ export class Agent extends Service {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: false, error: message })
-      reply(`Error: ${message}`, true)
+      const failures = (running.failures.get(name) ?? 0) + 1
+      running.failures.set(name, failures)
+      const hint = failures >= FAILURE_HINT_AFTER
+        ? `\n${call.name} has failed ${failures} times in this reply. Stop retrying it with guessed inputs: take valid values from the error above or from the tool that lists them, or tell the user what is missing.`
+        : ''
+      reply(`Error: ${message}${hint}`, true)
     }
   }
 

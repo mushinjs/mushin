@@ -62,7 +62,7 @@ export const BUILTIN_SKILLS: SkillDefinition[] = [
     whenToUse: '想让机器人在某种消息下做某件事',
     instructions: [
       '1. 先问清楚（或从描述中确定）：什么消息触发、要回复什么、用在哪个机器人上。',
-      '2. 用 flows.nodeTypes 读节点类型，选触发器和动作节点；需要计数、冷却、限额时用对应的逻辑节点。',
+      '2. 用 flows.nodeTypes 看全部节点类型的一行简介，选出触发器和动作节点（需要计数、冷却、限额时用对应的逻辑节点），再把选中的类型传给 flows.nodeTypes 的 types 读配置和端口。只用列表里有的类型名，不要猜。',
       '3. 用 flows.create 创建流程并绑定机器人，节点之间用 exec 连线，值用 {{节点.输出}} 引用。',
       '4. 用 flows.test 发几条样例消息（包括不该触发的），检查路径和回复；有问题就用 flows.update 修正后再测。',
       '5. 用 ui.navigate 打开 /flows/<id>，简要说明流程怎么工作。',
@@ -79,7 +79,7 @@ export const BUILTIN_SKILLS: SkillDefinition[] = [
       '1. 读消息里的 <quote>：被 → 标出的是用户选中的消息，记下机器人、会话和消息 id。',
       '2. 用 flows.history（带 message）看这条消息已经触发了哪些流程；用 flows.route 看现在发同样内容会被谁处理。',
       '3. 和用户确认想要的效果（触发方式、回复内容、谁能用）；能从引用的会话推断的不必再问。',
-      '4. 用 flows.nodeTypes 选节点，用 flows.create 创建流程并绑定到这个机器人。',
+      '4. 用 flows.nodeTypes 选节点（不带参数看列表，再用 types 读选中节点的配置），用 flows.create 创建流程并绑定到这个机器人。',
       '5. 用 flows.test 带上 sample（引用里给出的 bot、id、channel）验证真实消息能走通；有 AI 节点时用 flows.preview 检查发给模型的内容。再用一两条不该触发的消息测试。',
       '6. 用 ui.navigate 打开 /flows/<id>?sample=<bot>:<channel>:<id>，让用户直接看到样本下的效果。',
     ].join('\n'),
