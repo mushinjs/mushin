@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NButton, NTag, NTooltip } from 'naive-ui'
+import { Button, Tag, Tooltip } from '@mushin/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CatalogEntry, DependencyState, PluginDependencies } from '../types'
@@ -29,29 +29,29 @@ const dependents = computed(() => (props.showDependents ? props.deps?.dependents
 <template>
   <div v-if="requires.length || deps?.optional.length || dependents.length || deps?.mushin" class="deps">
     <div v-if="deps?.mushin && !deps.mushin.ok" class="row">
-      <NTag size="small" type="error" :bordered="false">{{ t('plugins.mushinVersion', { range: deps.mushin.range, version: deps.mushin.version }) }}</NTag>
+      <Tag size="small" type="error">{{ t('plugins.mushinVersion', { range: deps.mushin.range, version: deps.mushin.version }) }}</Tag>
     </div>
     <div v-if="requires.length" class="row">
       <span class="label">{{ t('plugins.requires') }}</span>
-      <NTooltip v-for="dep in requires" :key="dep.package" :disabled="!dep.problem">
+      <Tooltip v-for="dep in requires" :key="dep.package" :disabled="!dep.problem">
         <template #trigger>
-          <NTag size="small" :type="dep.problem ? 'error' : 'default'" :bordered="false">
+          <Tag size="small" :type="dep.problem ? 'error' : 'default'">
             {{ nameOf(dep.package) }}<template v-if="dep.problem">（{{ problemText(dep) }}）</template>
-          </NTag>
+          </Tag>
         </template>
         <span class="mono">{{ dep.package }}@{{ dep.range }}</span>
-      </NTooltip>
-      <NButton v-if="fixable" size="tiny" type="primary" secondary @click="emit('enableDeps')">{{ t('plugins.enableDeps') }}</NButton>
+      </Tooltip>
+      <Button v-if="fixable" size="tiny" type="primary" secondary @click="emit('enableDeps')">{{ t('plugins.enableDeps') }}</Button>
     </div>
     <div v-if="deps?.optional.length" class="row">
       <span class="label">{{ t('plugins.optionalDeps') }}</span>
-      <NTag v-for="dep in deps.optional" :key="dep.package" size="small" :type="dep.problem ? 'default' : 'info'" :bordered="false" :class="{ faint: !!dep.problem }">
+      <Tag v-for="dep in deps.optional" :key="dep.package" size="small" :type="dep.problem ? 'default' : 'info'" :class="{ faint: !!dep.problem }">
         {{ nameOf(dep.package) }}<template v-if="dep.problem">（{{ problemText(dep) }}）</template>
-      </NTag>
+      </Tag>
     </div>
     <div v-if="dependents.length" class="row">
       <span class="label">{{ t('plugins.dependents') }}</span>
-      <NTag v-for="dep in dependents" :key="dep.package" size="small" :bordered="false">{{ nameOf(dep.package) }}</NTag>
+      <Tag v-for="dep in dependents" :key="dep.package" size="small">{{ nameOf(dep.package) }}</Tag>
     </div>
   </div>
 </template>

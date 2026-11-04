@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { ChevronDownOutline, RefreshOutline, SearchOutline, SettingsOutline } from '@vicons/ionicons5'
-import { Toggle, useConfirm, useToast } from '@mushin/ui'
-import { NButton, NEmpty, NIcon, NInput, NModal, NSpace, NSpin, NTooltip } from 'naive-ui'
+import { Button, Empty, Input, Modal, Spin, Toggle, Tooltip, useConfirm, useToast } from '@mushin/ui'
 import IconAction from '../components/IconAction.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -266,16 +264,15 @@ async function save() {
 <template>
   <div class="page">
     <PageHeader :title="t('nav.plugins')" :lead="t('plugins.lead')">
-      <NButton :loading="loading" @click="rescan">
-        <template #icon><NIcon><RefreshOutline /></NIcon></template>
+      <Button :loading="loading" icon="i-lucide-refresh-cw" @click="rescan">
         {{ t('plugins.rescan') }}
-      </NButton>
+      </Button>
     </PageHeader>
 
     <div class="toolbar">
-      <NInput v-model:value="query" clearable :placeholder="t('plugins.search')" class="search">
-        <template #prefix><NIcon><SearchOutline /></NIcon></template>
-      </NInput>
+      <Input v-model:value="query" clearable :placeholder="t('plugins.search')" class="search">
+        <template #prefix><span class="i-lucide-search" /></template>
+      </Input>
       <div class="chips" role="radiogroup" :aria-label="t('plugins.filterLabel')">
         <button
           v-for="key in filters"
@@ -294,7 +291,7 @@ async function save() {
       </div>
     </div>
 
-    <NSpin :show="loading">
+    <Spin :show="loading">
       <section class="section">
         <h2 class="section-title">{{ t('plugins.appPlugins') }} <span class="count">{{ shownApp.length }}</span></h2>
         <ul v-if="shownApp.length" class="rows">
@@ -308,15 +305,15 @@ async function save() {
             <button type="button" class="row-main" :aria-expanded="expanded.has(keyOf(plugin))" @click="toggleDetails(keyOf(plugin))">
               <span class="title">
                 <strong>{{ localize(plugin.manifest?.displayName, locale) || plugin.package }}</strong>
-                <NTooltip v-if="plugin.error" :style="{ maxWidth: '320px' }">
+                <Tooltip v-if="plugin.error" :max-width="320">
                   <template #trigger><span class="pill" :class="stateOf(plugin).cls"><span class="dot" />{{ stateOf(plugin).text }}</span></template>
                   {{ plugin.error }}
-                </NTooltip>
+                </Tooltip>
                 <span v-else class="pill" :class="stateOf(plugin).cls"><span class="dot" />{{ stateOf(plugin).text }}</span>
-                <NTooltip v-if="plugin.manifest?.essential">
+                <Tooltip v-if="plugin.manifest?.essential">
                   <template #trigger><span class="tag">{{ t('plugins.essential') }}</span></template>
                   {{ t('plugins.essentialHint') }}
-                </NTooltip>
+                </Tooltip>
                 <span v-if="hasProblem(plugin) && plugin.status !== 'failed'" class="tag warn">{{ t('plugins.needsAttention') }}</span>
               </span>
               <span class="desc">{{ localize(plugin.manifest?.description, locale) }}</span>
@@ -326,12 +323,12 @@ async function save() {
                   <span class="sep">·</span>
                   <span>{{ t('plugins.neededBy', dependentCount(plugin)) }}</span>
                 </template>
-                <NIcon :size="14" class="chevron"><ChevronDownOutline /></NIcon>
+                <span class="i-lucide-chevron-down chevron text-[14px]" />
               </span>
             </button>
             <div class="actions">
-              <IconAction :icon="RefreshOutline" :label="t('common.reload')" :disabled="!plugin.enabled" @click="reload(plugin)" />
-              <IconAction :icon="SettingsOutline" :label="t('common.configure')" :disabled="!plugin.id" @click="configure(plugin)" />
+              <IconAction icon="i-lucide-refresh-cw" :label="t('common.reload')" :disabled="!plugin.enabled" @click="reload(plugin)" />
+              <IconAction icon="i-lucide-settings" :label="t('common.configure')" :disabled="!plugin.id" @click="configure(plugin)" />
               <Toggle
                 variant="button"
                 :value="plugin.enabled"
@@ -347,7 +344,7 @@ async function save() {
             </div>
           </li>
         </ul>
-        <NEmpty v-else-if="!loading" :description="t('plugins.noMatch')" class="none" />
+        <Empty v-else-if="!loading" :description="t('plugins.noMatch')" class="none" />
       </section>
 
       <section v-if="filter === 'all'" class="section">
@@ -371,27 +368,24 @@ async function save() {
         </ul>
         <p v-else-if="!loading" class="faint none">{{ query ? t('plugins.noMatch') : t('plugins.noBotPlugins') }}</p>
       </section>
-    </NSpin>
+    </Spin>
 
-    <NModal
+    <Modal
       :show="!!editing"
-      preset="card"
       :title="editing ? localize(editing.manifest?.displayName, locale) || editing.package : ''"
-      style="width: min(560px, calc(100vw - 32px))"
+      :width="560"
       @update:show="(value: boolean) => !value && (editing = undefined)"
     >
       <SchemaForm v-if="editing?.configSchema" v-model="draft" :schema="editing.configSchema" />
       <template v-else-if="editing">
         <p class="faint">{{ t('plugins.rawConfig') }}</p>
-        <NInput v-model:value="jsonDraft" type="textarea" class="mono" :autosize="{ minRows: 6, maxRows: 20 }" />
+        <Input v-model:value="jsonDraft" type="textarea" class="mono" :autosize="{ minRows: 6, maxRows: 20 }" />
       </template>
       <template #footer>
-        <NSpace justify="end">
-          <NButton @click="editing = undefined">{{ t('common.cancel') }}</NButton>
-          <NButton type="primary" :loading="saving" @click="save">{{ t('common.saveAndReload') }}</NButton>
-        </NSpace>
+        <Button @click="editing = undefined">{{ t('common.cancel') }}</Button>
+        <Button type="primary" :loading="saving" @click="save">{{ t('common.saveAndReload') }}</Button>
       </template>
-    </NModal>
+    </Modal>
   </div>
 </template>
 
