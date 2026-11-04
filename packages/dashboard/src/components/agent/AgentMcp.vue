@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { AddOutline, CreateOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5'
+import { Toggle } from '@mushin/ui'
 import {
   NAlert, NButton, NCard, NDynamicInput, NDynamicTags, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup, NSelect,
-  NSpace, NSpin, NSwitch, NTag, useDialog, useMessage,
+  NSpace, NSpin, NTag, useDialog, useMessage,
 } from 'naive-ui'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -177,7 +178,8 @@ const statusType = { connected: 'success', connecting: 'info', error: 'error', s
                 <span v-if="server.serverInfo?.name" class="hint small">{{ server.serverInfo.name }} {{ server.serverInfo.version }}</span>
               </div>
               <div class="server-actions">
-                <NSwitch
+                <Toggle
+                  variant="button"
                   size="small"
                   :value="server.enabled"
                   :loading="busy === server.id"
@@ -195,7 +197,7 @@ const statusType = { connected: 'success', connecting: 'info', error: 'error', s
             </NAlert>
             <div v-if="server.tools.length" class="tools">
               <div v-for="tool in server.tools" :key="tool.name" class="tool" :class="{ off: !tool.enabled }">
-                <NSwitch size="small" :value="tool.enabled" @update:value="(enabled: boolean) => run(server.id, () => call('mcp.tools.update', { id: server.id, tool: tool.name, enabled }))" />
+                <Toggle variant="button" size="small" :value="tool.enabled" @update:value="(enabled: boolean) => run(server.id, () => call('mcp.tools.update', { id: server.id, tool: tool.name, enabled }))" />
                 <div class="tool-main">
                   <div class="tool-name"><span class="mono">{{ tool.name }}</span><span class="hint small mono">{{ tool.action }}</span></div>
                   <div v-if="tool.description" class="hint small tool-desc">{{ tool.description }}</div>

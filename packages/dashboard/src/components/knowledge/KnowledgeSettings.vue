@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { NButton, NCard, NForm, NFormItem, NGrid, NGridItem, NInput, NInputNumber, NSelect, NSpace, NSwitch, useDialog, useMessage } from 'naive-ui'
+import { Toggle } from '@mushin/ui'
+import { NButton, NCard, NForm, NFormItem, NGrid, NGridItem, NInput, NInputNumber, NSelect, NSpace, useDialog, useMessage } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
@@ -132,7 +133,7 @@ function remove() {
         <NGrid cols="1 700:2" responsive="self" :x-gap="16">
           <NGridItem>
             <NFormItem :label="t('knowledge.settings.commands')" :feedback="t('knowledge.settings.commandsHint')">
-              <NSwitch v-model:value="draft.commands.enabled" />
+              <Toggle v-model:value="draft.commands.enabled" />
             </NFormItem>
           </NGridItem>
           <NGridItem>

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { GitNetworkOutline, SettingsOutline } from '@vicons/ionicons5'
 import IconAction from './IconAction.vue'
-import { NButton, NCard, NEmpty, NIcon, NList, NListItem, NModal, NSpace, NSpin, NSwitch, NTag, NThing, useMessage } from 'naive-ui'
+import { Toggle } from '@mushin/ui'
+import { NButton, NCard, NEmpty, NIcon, NList, NListItem, NModal, NSpace, NSpin, NTag, NThing, useMessage } from 'naive-ui'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -118,7 +119,7 @@ async function save() {
           <template #suffix>
             <NSpace :wrap="false" align="center">
               <IconAction v-if="hasSettings(plugin)" :icon="SettingsOutline" :label="t('common.configure')" @click="configure(plugin)" />
-              <NSwitch :value="plugin.enabled" :loading="busy === plugin.package" @update:value="(value: boolean) => toggle(plugin, value)" />
+              <Toggle variant="button" :value="plugin.enabled" :loading="busy === plugin.package" @update:value="(value: boolean) => toggle(plugin, value)" />
             </NSpace>
           </template>
         </NListItem>

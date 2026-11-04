@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { AddOutline, ArrowDownOutline, ArrowUpOutline, TrashOutline } from '@vicons/ionicons5'
+import { Toggle } from '@mushin/ui'
 import {
-  NAlert, NButton, NCard, NDynamicTags, NEmpty, NForm, NFormItem, NIcon, NInput, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NSwitch,
-  NTag, NTimePicker, useMessage,
+  NAlert, NButton, NCard, NDynamicTags, NEmpty, NForm, NFormItem, NIcon, NInput, NRadioButton, NRadioGroup, NSelect, NSpace, NSpin, NTag, NTimePicker, useMessage,
 } from 'naive-ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -174,7 +174,7 @@ async function tryIt() {
           </NFormItem>
           <NFormItem :label="t('botPersonas.command')" :feedback="t('botPersonas.commandHint')">
             <NSpace align="center">
-              <NSwitch v-model:value="settings.command.enabled" />
+              <Toggle v-model:value="settings.command.enabled" />
               <NRadioGroup v-model:value="settings.command.role" size="small" :disabled="!settings.command.enabled">
                 <NRadioButton value="user">{{ t('botPersonas.roleUser') }}</NRadioButton>
                 <NRadioButton value="admin">{{ t('botPersonas.roleAdmin') }}</NRadioButton>

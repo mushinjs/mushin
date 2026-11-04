@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { AddOutline, CloudDownloadOutline, CloudUploadOutline, CreateOutline, TrashOutline } from '@vicons/ionicons5'
+import { Toggle } from '@mushin/ui'
 import {
-  NButton, NCard, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NSelect, NSpace, NSwitch, NTag, useDialog, useMessage,
+  NButton, NCard, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NSelect, NSpace, NTag, useDialog, useMessage,
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -147,7 +148,7 @@ async function importFiles(event: Event) {
             <NTag size="tiny" :type="skill.source === 'user' ? 'success' : skill.source === 'plugin' ? 'info' : 'default'" :bordered="false">{{ sourceLabel(skill) }}</NTag>
             <NTag v-if="skill.source === 'user' && BUILTIN_IDS.has(skill.id)" size="tiny" type="warning" :bordered="false">{{ t('agentPage.skills.customized') }}</NTag>
           </div>
-          <NSwitch size="small" :value="skill.enabled" @update:value="(on: boolean) => setEnabled(skill, on)" />
+          <Toggle variant="button" size="small" :value="skill.enabled" @update:value="(on: boolean) => setEnabled(skill, on)" />
         </div>
         <p class="skill-desc">{{ skill.description }}</p>
         <div v-if="skill.scenes?.length" class="skill-tags">

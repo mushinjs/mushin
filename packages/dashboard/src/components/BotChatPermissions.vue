@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { AddOutline, CreateOutline, TrashOutline } from '@vicons/ionicons5'
+import { Toggle } from '@mushin/ui'
 import {
   type DataTableColumns, NAlert, NButton, NCard, NDataTable, NDynamicTags, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup, NSelect, NSpace,
-  NSwitch, NTag, useDialog, useMessage,
+  NTag, useDialog, useMessage,
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -225,7 +226,7 @@ function describeRule(rule: ChatRule) {
         @update:value="pickChannel"
       />
       <span class="spacer" />
-      <NSwitch :value="chatCommands" @update:value="setCommands" />
+      <Toggle :value="chatCommands" @update:value="setCommands" />
       <span>{{ t('chatPermissions.commands') }}</span>
     </div>
     <p class="muted small">{{ t('chatPermissions.commandsHint') }}</p>
@@ -284,7 +285,7 @@ function describeRule(rule: ChatRule) {
           <NDynamicTags v-model:value="editing.tags" />
         </NFormItem>
         <NFormItem :label="t('chatPermissions.blocked')">
-          <NSwitch v-model:value="editing.blocked" />
+          <Toggle v-model:value="editing.blocked" />
         </NFormItem>
         <NFormItem :label="t('chatPermissions.note')">
           <NInput v-model:value="editing.note" />

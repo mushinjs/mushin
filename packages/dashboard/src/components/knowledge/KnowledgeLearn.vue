@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { CheckmarkOutline, CloseOutline } from '@vicons/ionicons5'
+import { Toggle } from '@mushin/ui'
 import {
   NAlert, NButton, NCard, NDynamicTags, NEmpty, NForm, NFormItem, NGrid, NGridItem, NIcon, NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect,
-  NSpace, NSwitch, NTag, useMessage,
+  NSpace, NTag, useMessage,
 } from 'naive-ui'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -132,7 +133,7 @@ const botName = (id: string) => data.bots.find((bot) => bot.id === id)?.name ?? 
         <NGrid cols="1 700:3" responsive="self" :x-gap="16">
           <NGridItem>
             <NFormItem :label="t('knowledge.learn.enabled')" :feedback="t('knowledge.learn.enabledHint')">
-              <NSwitch v-model:value="learn.enabled" :disabled="!base.bots.length" />
+              <Toggle v-model:value="learn.enabled" :disabled="!base.bots.length" />
             </NFormItem>
           </NGridItem>
           <NGridItem>
@@ -152,7 +153,7 @@ const botName = (id: string) => data.bots.find((bot) => bot.id === id)?.name ?? 
         <NGrid cols="1 700:3" responsive="self" :x-gap="16">
           <NGridItem>
             <NFormItem :label="t('knowledge.learn.autoAccept')" :feedback="t('knowledge.learn.autoAcceptHint')">
-              <NSwitch v-model:value="learn.autoAccept" />
+              <Toggle v-model:value="learn.autoAccept" />
             </NFormItem>
           </NGridItem>
           <NGridItem>

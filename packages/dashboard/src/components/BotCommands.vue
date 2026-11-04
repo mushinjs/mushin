@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { NAlert, NButton, NCard, NDataTable, NDynamicTags, NForm, NFormItem, NInput, NSpace, NSwitch, NTag, useMessage } from 'naive-ui'
+import { Toggle } from '@mushin/ui'
+import { NAlert, NButton, NCard, NDataTable, NDynamicTags, NForm, NFormItem, NInput, NSpace, NTag, useMessage } from 'naive-ui'
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -111,13 +112,13 @@ const columns = computed(() => [
           <NDynamicTags v-model:value="prefixes" />
         </NFormItem>
         <NFormItem :label="t('bot.helpCommand')" :feedback="t('bot.helpCommandHint')" label-placement="left">
-          <NSwitch v-model:value="help" />
+          <Toggle v-model:value="help" />
         </NFormItem>
         <NFormItem v-if="help" :label="t('bot.helpTitle')">
           <NInput v-model:value="helpTitle" :placeholder="t('bot.helpTitlePlaceholder')" />
         </NFormItem>
         <NFormItem v-if="help" :label="t('bot.helpByRole')" :feedback="t('bot.helpByRoleHint')" label-placement="left">
-          <NSwitch v-model:value="helpByRole" />
+          <Toggle v-model:value="helpByRole" />
         </NFormItem>
         <p class="muted small">
           {{ t('bot.adminsMoved') }}

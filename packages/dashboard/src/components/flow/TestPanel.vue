@@ -2,8 +2,9 @@
 import {
   AddOutline, CheckmarkCircle, CloseCircle, EllipseOutline, EyeOutline, FlaskOutline, PlayOutline, SaveOutline, SparklesOutline, TrashOutline,
 } from '@vicons/ionicons5'
+import { Toggle } from '@mushin/ui'
 import {
-  NButton, NCheckbox, NIcon, NInput, NInputNumber, NModal, NPopconfirm, NRadioButton, NRadioGroup, NSelect, NSpin, NSwitch, NTag, NTooltip, useMessage,
+  NButton, NCheckbox, NIcon, NInput, NInputNumber, NModal, NPopconfirm, NRadioButton, NRadioGroup, NSelect, NSpin, NTag, NTooltip, useMessage,
 } from 'naive-ui'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -404,11 +405,11 @@ defineExpose({ run, reload: load })
       </div>
       <div class="cases-options">
         <div class="option">
-          <NSwitch size="small" :value="!!doc.autoRun" @update:value="setAutoRun" />
+          <Toggle size="small" :value="!!doc.autoRun" @update:value="setAutoRun" />
           <span @click="setAutoRun(!doc.autoRun)">{{ t('flowTests.autoRun') }}</span>
         </div>
         <div v-if="doc.lastRun" class="option">
-          <NSwitch v-model:value="coverage" size="small" />
+          <Toggle v-model:value="coverage" size="small" />
           <span @click="coverage = !coverage">{{ t('flowTests.coverage', { n: uncoveredCount }) }}</span>
         </div>
       </div>
@@ -601,7 +602,7 @@ defineExpose({ run, reload: load })
                 @update:value="(value: number | null) => (item.index = value ? value - 1 : undefined)"
               />
             </template>
-            <NSwitch v-else-if="item.kind === 'matched'" v-model:value="item.value" size="small" />
+            <Toggle v-else-if="item.kind === 'matched'" v-model:value="item.value" size="small" />
             <template v-else-if="item.kind === 'visits'">
               <NSelect v-model:value="item.node" size="small" class="grow" filterable :options="nodes" />
               <NCheckbox :checked="!!item.not" size="small" @update:checked="(value: boolean) => (item.not = value || undefined)">{{ t('flowTests.not') }}</NCheckbox>

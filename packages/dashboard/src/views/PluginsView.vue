@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ChevronDownOutline, RefreshOutline, SearchOutline, SettingsOutline } from '@vicons/ionicons5'
-import { NButton, NEmpty, NIcon, NInput, NModal, NSpace, NSpin, NSwitch, NTooltip, useDialog, useMessage } from 'naive-ui'
+import { Toggle } from '@mushin/ui'
+import { NButton, NEmpty, NIcon, NInput, NModal, NSpace, NSpin, NTooltip, useDialog, useMessage } from 'naive-ui'
 import IconAction from '../components/IconAction.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -331,7 +332,8 @@ async function save() {
             <div class="actions">
               <IconAction :icon="RefreshOutline" :label="t('common.reload')" :disabled="!plugin.enabled" @click="reload(plugin)" />
               <IconAction :icon="SettingsOutline" :label="t('common.configure')" :disabled="!plugin.id" @click="configure(plugin)" />
-              <NSwitch
+              <Toggle
+                variant="button"
                 :value="plugin.enabled"
                 :disabled="plugin.manifest?.essential && plugin.enabled"
                 :loading="busy === keyOf(plugin)"

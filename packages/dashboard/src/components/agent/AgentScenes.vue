@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { AddOutline, TrashOutline } from '@vicons/ionicons5'
-import { NButton, NCard, NForm, NFormItem, NIcon, NInput, NSelect, NSpace, NSwitch, NTag, useMessage } from 'naive-ui'
+import { Toggle } from '@mushin/ui'
+import { NButton, NCard, NForm, NFormItem, NIcon, NInput, NSelect, NSpace, NTag, useMessage } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
@@ -90,7 +91,7 @@ async function save(reset = false) {
         <NFormItem :label="t('agentPage.scenes.builtin')" :feedback="t('agentPage.scenes.builtinHelp')">
           <div class="builtin-list">
             <label v-for="id in builtins" :key="id" class="builtin">
-              <NSwitch size="small" :value="!draft.hidden?.includes(id)" @update:value="(on: boolean) => toggleBuiltin(id, on)" />
+              <Toggle size="small" :value="!draft.hidden?.includes(id)" @update:value="(on: boolean) => toggleBuiltin(id, on)" />
               <span>{{ t(`agentScene.rec.${id}`, { name: '…', count: 'N', names: '…' }) }}</span>
             </label>
           </div>
@@ -115,7 +116,7 @@ async function save(reset = false) {
           <NSelect v-model:value="draft.skills" multiple clearable :options="skillOptions" />
         </NFormItem>
         <NFormItem :label="t('agentPage.scenes.autoShow')" :feedback="t('agentPage.scenes.autoShowHelp')">
-          <NSwitch :value="draft.autoShow !== false" @update:value="(on: boolean) => (draft.autoShow = on ? undefined : false)" />
+          <Toggle :value="draft.autoShow !== false" @update:value="(on: boolean) => (draft.autoShow = on ? undefined : false)" />
         </NFormItem>
       </NForm>
       <template #action>

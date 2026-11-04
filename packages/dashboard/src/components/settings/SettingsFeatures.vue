@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { NCheckbox, NCheckboxGroup, NForm, NFormItem, NSpace, NSwitch } from 'naive-ui'
+import { Toggle } from '@mushin/ui'
+import { NCheckbox, NCheckboxGroup, NForm, NFormItem, NSpace } from 'naive-ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { OPTIONAL_PAGES, prefs } from '../../prefs'
@@ -15,7 +16,7 @@ const shownPages = computed({
 <template>
   <NForm label-placement="top" class="form">
     <NFormItem :label="t('settings.features.agentOpen')" :feedback="t('settings.features.agentOpenHelp')">
-      <NSwitch v-model:value="prefs.agentOpenOnStart" />
+      <Toggle v-model:value="prefs.agentOpenOnStart" />
     </NFormItem>
     <NFormItem :label="t('settings.features.pages')" :feedback="t('settings.features.pagesHelp')">
       <NCheckboxGroup v-model:value="shownPages">
