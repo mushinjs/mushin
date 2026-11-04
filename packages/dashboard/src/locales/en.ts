@@ -13,6 +13,8 @@ export default {
     ok: 'OK',
     cancel: 'Cancel',
     loading: 'Loading',
+    previous: 'Previous page',
+    next: 'Next page',
   },
   app: {
     tagline: 'Describe what you want. Get what you envision.',

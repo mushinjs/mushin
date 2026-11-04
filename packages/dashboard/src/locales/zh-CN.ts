@@ -14,6 +14,8 @@ const zhCN: typeof en = {
     ok: '确定',
     cancel: '取消',
     loading: '加载中',
+    previous: '上一页',
+    next: '下一页',
   },
   app: {
     tagline: '描述你想要的，得到你所设想的。',

@@ -15,6 +15,8 @@ export interface UiText {
   ok: string
   cancel: string
   loading: string
+  previous: string
+  next: string
 }
 
 export const defaultText: UiText = {
@@ -30,6 +32,8 @@ export const defaultText: UiText = {
   ok: 'OK',
   cancel: 'Cancel',
   loading: 'Loading',
+  previous: 'Previous',
+  next: 'Next',
 }
 
 const TEXT: InjectionKey<ComputedRef<UiText>> = Symbol('mushin-ui-text')
