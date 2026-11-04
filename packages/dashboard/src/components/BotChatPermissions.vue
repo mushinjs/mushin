@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { AddOutline, CreateOutline, TrashOutline } from '@vicons/ionicons5'
-import { Toggle, useConfirm, useToast } from '@mushin/ui'
-import { type DataTableColumns, NAlert, NButton, NCard, NDataTable, NDynamicTags, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NRadioButton, NRadioGroup, NSelect, NSpace, NTag } from 'naive-ui'
+import { Alert, Button, Card, DataTable, type DataTableColumn, Empty, Form, FormItem, Input, Modal, RadioButton, RadioGroup, Select, Tag, TagsInput, Toggle, useConfirm, useToast } from '@mushin/ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../api'
@@ -144,24 +142,24 @@ function removeMember(member: ChatMember) {
   })
 }
 
-const memberColumns = computed<DataTableColumns<ChatMember>>(() => [
+const memberColumns = computed<DataTableColumn<ChatMember>[]>(() => [
   { key: 'user', title: t('chatPermissions.user'), render: (row) => h('span', { class: 'mono' }, row.user) },
   {
     key: 'role',
     title: t('chatPermissions.role'),
     width: 110,
-    render: (row) => h(NTag, { size: 'small', bordered: false, type: row.role === 'admin' ? 'info' : 'default' }, { default: () => (row.role === 'admin' ? t('chatPermissions.chatAdmin') : t('chatPermissions.member')) }),
+    render: (row) => h(Tag, { size: 'small', type: row.role === 'admin' ? 'info' : 'default' }, { default: () => (row.role === 'admin' ? t('chatPermissions.chatAdmin') : t('chatPermissions.member')) }),
   },
   {
     key: 'tags',
     title: t('chatPermissions.tags'),
-    render: (row) => h(NSpace, { size: 4 }, { default: () => row.tags.map((tag) => h(NTag, { size: 'small', bordered: false }, { default: () => tag })) }),
+    render: (row) => h('div', { class: 'flex flex-wrap gap-[4px]' }, row.tags.map((tag) => h(Tag, { size: 'small' }, { default: () => tag }))),
   },
   {
     key: 'blocked',
     title: t('chatPermissions.blocked'),
     width: 90,
-    render: (row) => (row.blocked ? h(NTag, { size: 'small', bordered: false, type: 'error' }, { default: () => t('chatPermissions.blockedTag') }) : null),
+    render: (row) => (row.blocked ? h(Tag, { size: 'small', type: 'error' }, { default: () => t('chatPermissions.blockedTag') }) : null),
   },
   { key: 'note', title: t('chatPermissions.note'), ellipsis: { tooltip: true } },
   { key: 'joinedAt', title: t('chatPermissions.joinedAt'), width: 150, render: (row) => h('span', { class: 'muted' }, formatTime(row.joinedAt)) },
@@ -170,12 +168,10 @@ const memberColumns = computed<DataTableColumns<ChatMember>>(() => [
     title: t('common.actions'),
     width: 80,
     fixed: 'right' as const,
-    render: (row) => h(NSpace, { size: 2, wrap: false }, {
-      default: () => [
-        h(IconAction, { icon: CreateOutline, label: t('common.edit'), onClick: () => (editing.value = { ...row, tags: [...row.tags], isNew: false }) }),
-        h(IconAction, { icon: TrashOutline, label: t('common.delete'), type: 'error', onClick: () => removeMember(row) }),
-      ],
-    }),
+    render: (row) => h('div', { class: 'flex gap-[2px] items-center' }, [
+      h(IconAction, { icon: 'i-lucide-pencil', label: t('common.edit'), onClick: () => (editing.value = { ...row, tags: [...row.tags], isNew: false }) }),
+      h(IconAction, { icon: 'i-lucide-trash-2', label: t('common.delete'), type: 'error', onClick: () => removeMember(row) }),
+    ]),
   },
 ])
 
@@ -210,10 +206,10 @@ function describeRule(rule: ChatRule) {
 </script>
 
 <template>
-  <NCard :title="t('chatPermissions.title')">
+  <Card :title="t('chatPermissions.title')">
     <p class="muted lead">{{ t('chatPermissions.lead') }}</p>
     <div class="row">
-      <NSelect
+      <Select
         :value="channel ?? null"
         :options="channels"
         filterable
@@ -228,16 +224,15 @@ function describeRule(rule: ChatRule) {
     </div>
     <p class="muted small">{{ t('chatPermissions.commandsHint') }}</p>
 
-    <NEmpty v-if="!channel" :description="t('chatPermissions.noChat')" />
+    <Empty v-if="!channel" :description="t('chatPermissions.noChat')" />
     <template v-else>
       <div class="section-head">
         <h3>{{ t('chatPermissions.members') }}</h3>
-        <NButton size="small" @click="addMember">
-          <template #icon><NIcon><AddOutline /></NIcon></template>
+        <Button size="small" icon="i-lucide-plus" @click="addMember">
           {{ t('chatPermissions.addMember') }}
-        </NButton>
+        </Button>
       </div>
-      <NDataTable size="small" :columns="memberColumns" :data="members" :loading="loading" :row-key="(row: ChatMember) => row.user" :scroll-x="760" />
+      <DataTable size="small" :columns="memberColumns" :data="members" :loading="loading" :row-key="(row: ChatMember) => row.user" :scroll-x="760" />
 
       <div class="section-head">
         <h3>{{ t('chatPermissions.rules') }}</h3>
@@ -246,57 +241,54 @@ function describeRule(rule: ChatRule) {
       <div v-for="rule in rules" :key="rule.id" class="rule">
         <span>{{ describeRule(rule) }}</span>
         <span class="spacer" />
-        <IconAction :icon="TrashOutline" :label="t('common.delete')" type="error" @click="removeRule(rule)" />
+        <IconAction icon="i-lucide-trash-2" :label="t('common.delete')" type="error" @click="removeRule(rule)" />
       </div>
       <div class="row rule-form">
-        <NInput v-model:value="draft.feature" size="small" class="feature" :placeholder="t('chatPermissions.feature')" />
-        <NRadioGroup v-model:value="draft.effect" size="small">
-          <NRadioButton value="tags">{{ t('chatPermissions.effectTags') }}</NRadioButton>
-          <NRadioButton value="off">{{ t('chatPermissions.effectOff') }}</NRadioButton>
-        </NRadioGroup>
-        <NDynamicTags v-if="draft.effect === 'tags'" v-model:value="draft.tags" size="small" />
-        <NButton size="small" type="primary" :disabled="!draft.feature.trim() || (draft.effect === 'tags' && !draft.tags.length)" @click="addRule">
+        <Input v-model:value="draft.feature" size="small" class="feature" :placeholder="t('chatPermissions.feature')" />
+        <RadioGroup v-model:value="draft.effect" size="small">
+          <RadioButton value="tags">{{ t('chatPermissions.effectTags') }}</RadioButton>
+          <RadioButton value="off">{{ t('chatPermissions.effectOff') }}</RadioButton>
+        </RadioGroup>
+        <TagsInput v-if="draft.effect === 'tags'" v-model:value="draft.tags" size="small" />
+        <Button size="small" type="primary" :disabled="!draft.feature.trim() || (draft.effect === 'tags' && !draft.tags.length)" @click="addRule">
           {{ t('chatPermissions.addRule') }}
-        </NButton>
+        </Button>
       </div>
     </template>
 
-    <NModal
+    <Modal
       :show="!!editing"
-      preset="card"
       class="member-modal"
       :title="editing?.isNew ? t('chatPermissions.addMember') : t('chatPermissions.editMember', { user: editing?.user })"
       @update:show="(value: boolean) => !value && (editing = undefined)"
     >
-      <NForm v-if="editing" label-placement="top">
-        <NFormItem v-if="editing.isNew" :label="t('chatPermissions.user')">
-          <NInput v-model:value="editing.user" :placeholder="t('chatPermissions.userHint')" />
-        </NFormItem>
-        <NFormItem :label="t('chatPermissions.role')">
-          <NRadioGroup v-model:value="editing.role">
-            <NRadioButton value="member">{{ t('chatPermissions.member') }}</NRadioButton>
-            <NRadioButton value="admin">{{ t('chatPermissions.chatAdmin') }}</NRadioButton>
-          </NRadioGroup>
-        </NFormItem>
-        <NFormItem :label="t('chatPermissions.tags')">
-          <NDynamicTags v-model:value="editing.tags" />
-        </NFormItem>
-        <NFormItem :label="t('chatPermissions.blocked')">
+      <Form v-if="editing">
+        <FormItem v-if="editing.isNew" :label="t('chatPermissions.user')">
+          <Input v-model:value="editing.user" :placeholder="t('chatPermissions.userHint')" />
+        </FormItem>
+        <FormItem :label="t('chatPermissions.role')">
+          <RadioGroup v-model:value="editing.role">
+            <RadioButton value="member">{{ t('chatPermissions.member') }}</RadioButton>
+            <RadioButton value="admin">{{ t('chatPermissions.chatAdmin') }}</RadioButton>
+          </RadioGroup>
+        </FormItem>
+        <FormItem :label="t('chatPermissions.tags')">
+          <TagsInput v-model:value="editing.tags" />
+        </FormItem>
+        <FormItem :label="t('chatPermissions.blocked')">
           <Toggle v-model:value="editing.blocked" />
-        </NFormItem>
-        <NFormItem :label="t('chatPermissions.note')">
-          <NInput v-model:value="editing.note" />
-        </NFormItem>
-      </NForm>
-      <NAlert v-if="editing?.blocked" type="warning" :show-icon="false">{{ t('chatPermissions.blockedHint') }}</NAlert>
+        </FormItem>
+        <FormItem :label="t('chatPermissions.note')">
+          <Input v-model:value="editing.note" />
+        </FormItem>
+      </Form>
+      <Alert v-if="editing?.blocked" type="warning" :show-icon="false">{{ t('chatPermissions.blockedHint') }}</Alert>
       <template #footer>
-        <NSpace justify="end">
-          <NButton @click="editing = undefined">{{ t('common.cancel') }}</NButton>
-          <NButton type="primary" :loading="saving" :disabled="!editing?.user.trim()" @click="saveMember">{{ t('common.save') }}</NButton>
-        </NSpace>
+        <Button @click="editing = undefined">{{ t('common.cancel') }}</Button>
+        <Button type="primary" :loading="saving" :disabled="!editing?.user.trim()" @click="saveMember">{{ t('common.save') }}</Button>
       </template>
-    </NModal>
-  </NCard>
+    </Modal>
+  </Card>
 </template>
 
 <style scoped>

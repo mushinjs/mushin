@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { Toggle, useToast } from '@mushin/ui'
-import { NAlert, NButton, NCard, NDataTable, NDynamicTags, NForm, NFormItem, NInput, NSpace, NTag } from 'naive-ui'
+import { Alert, Button, Card, DataTable, type DataTableColumn, Form, FormItem, Input, Tag, TagsInput, Toggle, useToast } from '@mushin/ui'
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -87,49 +86,49 @@ const columns = computed(() => [
   {
     title: '',
     key: 'tags',
-    render: (row: CommandEntry) => h(NSpace, { size: 4 }, () => [
-      ...(row.permission === 'admin' || row.role === 'admin' ? [h(NTag, { size: 'small', type: 'warning', bordered: false }, () => t('bot.adminOnly'))] : []),
-      ...(row.permission === 'master' || row.role === 'master' ? [h(NTag, { size: 'small', type: 'error', bordered: false }, () => t('bot.masterOnly'))] : []),
-      ...(row.hidden ? [h(NTag, { size: 'small', bordered: false }, () => t('bot.hiddenFromHelp'))] : []),
+    render: (row: CommandEntry) => h('div', { class: 'flex flex-wrap gap-[4px] items-center' }, [
+      ...(row.permission === 'admin' || row.role === 'admin' ? [h(Tag, { size: 'small', type: 'warning' }, () => t('bot.adminOnly'))] : []),
+      ...(row.permission === 'master' || row.role === 'master' ? [h(Tag, { size: 'small', type: 'error' }, () => t('bot.masterOnly'))] : []),
+      ...(row.hidden ? [h(Tag, { size: 'small' }, () => t('bot.hiddenFromHelp'))] : []),
     ]),
   },
 ])
 </script>
 
 <template>
-  <NSpace vertical :size="16">
-    <NCard :title="t('bot.commandList')">
-      <NAlert v-for="item in list.conflicts" :key="item.name" type="warning" :show-icon="false" class="conflict">
+  <div class="flex flex-col gap-[16px]">
+    <Card :title="t('bot.commandList')">
+      <Alert v-for="item in list.conflicts" :key="item.name" type="warning" :show-icon="false" class="conflict">
         {{ t('bot.commandConflict', { name: `${prefix}${item.name}`, first: sourceLabel(item.sources[0]), sources: item.sources.slice(1).map(sourceLabel).join('、') }) }}
-      </NAlert>
-      <NDataTable :columns="columns" :data="list.commands" :bordered="false" size="small" :row-key="(row: CommandEntry) => `${row.source.kind}:${row.source.id}:${row.source.nodeId ?? ''}:${row.name}`" />
+      </Alert>
+      <DataTable :columns="columns" :data="list.commands" :bordered="false" size="small" :row-key="(row: CommandEntry) => `${row.source.kind}:${row.source.id}:${row.source.nodeId ?? ''}:${row.name}`" />
       <p class="muted small hint">{{ t('bot.commandListHint') }}</p>
-    </NCard>
+    </Card>
 
-    <NCard :title="t('bot.commandSettings')">
-      <NForm label-placement="top">
-        <NFormItem :label="t('bot.prefixes')" :feedback="t('bot.prefixesHint')">
-          <NDynamicTags v-model:value="prefixes" />
-        </NFormItem>
-        <NFormItem :label="t('bot.helpCommand')" :feedback="t('bot.helpCommandHint')" label-placement="left">
+    <Card :title="t('bot.commandSettings')">
+      <Form>
+        <FormItem :label="t('bot.prefixes')" :feedback="t('bot.prefixesHint')">
+          <TagsInput v-model:value="prefixes" />
+        </FormItem>
+        <FormItem :label="t('bot.helpCommand')" :feedback="t('bot.helpCommandHint')" label-placement="left">
           <Toggle v-model:value="help" />
-        </NFormItem>
-        <NFormItem v-if="help" :label="t('bot.helpTitle')">
-          <NInput v-model:value="helpTitle" :placeholder="t('bot.helpTitlePlaceholder')" />
-        </NFormItem>
-        <NFormItem v-if="help" :label="t('bot.helpByRole')" :feedback="t('bot.helpByRoleHint')" label-placement="left">
+        </FormItem>
+        <FormItem v-if="help" :label="t('bot.helpTitle')">
+          <Input v-model:value="helpTitle" :placeholder="t('bot.helpTitlePlaceholder')" />
+        </FormItem>
+        <FormItem v-if="help" :label="t('bot.helpByRole')" :feedback="t('bot.helpByRoleHint')" label-placement="left">
           <Toggle v-model:value="helpByRole" />
-        </NFormItem>
+        </FormItem>
         <p class="muted small">
           {{ t('bot.adminsMoved') }}
           <RouterLink :to="`/bots/${bot.id}/permissions`">{{ t('bot.openPermissions') }}</RouterLink>
         </p>
-      </NForm>
-      <NSpace justify="end">
-        <NButton type="primary" :loading="saving" @click="save">{{ t('common.save') }}</NButton>
-      </NSpace>
-    </NCard>
-  </NSpace>
+      </Form>
+      <div class="flex flex-wrap gap-x-3 gap-y-2 items-center justify-end">
+        <Button type="primary" :loading="saving" @click="save">{{ t('common.save') }}</Button>
+      </div>
+    </Card>
+  </div>
 </template>
 
 <style scoped>
