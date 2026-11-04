@@ -7,8 +7,7 @@
  * the conversation plays below. Types without an example show their inputs, outputs and branches.
  * With reduced motion the finished run shows at once, with every caption listed.
  */
-import { CheckmarkOutline } from '@vicons/ionicons5'
-import { NIcon, useThemeVars } from 'naive-ui'
+import { useThemeVars } from 'naive-ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { categoryColors, configSummary, portsOf, schemaDefaults, wholeRef } from '../../flow'
@@ -396,7 +395,7 @@ const style = computed(() => {
   <Teleport to="body">
     <div ref="card" class="guide-card" :style="style" role="tooltip" @mouseenter="emit('enter')" @mouseleave="emit('leave')">
       <header class="head">
-        <span class="icon"><NIcon :size="15"><component :is="nodeIcon(type.type, type.category)" /></NIcon></span>
+        <span class="icon"><span :class="nodeIcon(type.type, type.category)" :style="{ fontSize: '15px' }" /></span>
         <span class="title">{{ localize(type.title, locale) }}</span>
       </header>
       <p v-if="type.description" class="description">{{ localize(type.description, locale) }}</p>
@@ -417,9 +416,9 @@ const style = computed(() => {
             >
               <span v-if="node.id !== nodes[0].id" class="port-in" />
               <div class="mini-head">
-                <span class="mini-icon"><NIcon :size="11"><component :is="nodeIcon(node.type, node.category)" /></NIcon></span>
+                <span class="mini-icon"><span :class="nodeIcon(node.type, node.category)" :style="{ fontSize: '11px' }" /></span>
                 <span class="mini-title">{{ node.title }}</span>
-                <span v-if="done.has(node.id) && !stepOf(node.id)?.error" class="check"><NIcon :size="9"><CheckmarkOutline /></NIcon></span>
+                <span v-if="done.has(node.id) && !stepOf(node.id)?.error" class="check"><span class="i-lucide-check" :style="{ fontSize: '9px' }" /></span>
                 <span v-if="!node.branches.length" class="port-out" :class="{ on: done.has(node.id) }" />
               </div>
               <div v-if="node.rows.length" class="mini-rows">
@@ -448,7 +447,7 @@ const style = computed(() => {
           <TransitionGroup name="bubble">
             <div v-for="(line, index) in chat.slice(0, said)" :key="index" :class="line.who === 'note' ? 'note' : ['bubble', line.who]">
               <template v-if="line.who === 'note'">
-                <NIcon :size="11"><component :is="nodeIcon(type.type, type.category)" /></NIcon>
+                <span :class="nodeIcon(type.type, type.category)" :style="{ fontSize: '11px' }" />
                 <span>{{ line.text }}</span>
               </template>
               <template v-else>

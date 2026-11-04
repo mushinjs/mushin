@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ChevronDownOutline, ChevronUpOutline, OptionsOutline, PlayOutline, TrashOutline } from '@vicons/ionicons5'
-import { NButton, NCheckbox, NIcon, NInput, NPopover, NRadioButton, NRadioGroup, NSelect, NSpace, NTag } from 'naive-ui'
+import { Button, Checkbox, Input, Popover, RadioButton, RadioGroup, Select, Tag } from '@mushin/ui'
+import { NSpace } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { categoryColors, eventSamples } from '../../flow'
@@ -86,7 +86,7 @@ const runId = defineModel<string>('current')
 const stepIndex = ref(0)
 const side = ref<'input' | 'output'>('output')
 const view = ref<'table' | 'json'>('table')
-const input = ref<InstanceType<typeof NInput>>()
+const input = ref<InstanceType<typeof Input>>()
 
 const run = computed(() => props.runs.find((item) => item.id === runId.value) ?? props.runs[0])
 const step = computed<TraceStep | undefined>(() => run.value?.steps[stepIndex.value])
@@ -201,29 +201,29 @@ const iconOf = (nodeId: string) => {
   <section class="logs" :class="{ open }">
     <header class="logs-head">
       <button type="button" class="logs-toggle" :aria-label="open ? t('flowTests.collapse') : t('flowTests.expand')" @click="open = !open">
-        <NIcon :size="14"><ChevronDownOutline v-if="open" /><ChevronUpOutline v-else /></NIcon>
+        <span :class="open ? 'i-lucide-chevron-down' : 'i-lucide-chevron-up'" :style="{ fontSize: '14px' }" />
       </button>
       <div class="tabs" role="tablist">
         <button type="button" role="tab" class="tab" :class="{ active: tab === 'logs' }" :aria-selected="tab === 'logs'" @click="pickTab('logs')">
           <span class="logs-title">{{ t('flows.logs') }}</span>
-          <NTag v-if="run && tab === 'logs'" size="tiny" :bordered="false" :type="status(run).type">{{ status(run).text }}</NTag>
+          <Tag v-if="run && tab === 'logs'" size="tiny" :type="status(run).type">{{ status(run).text }}</Tag>
         </button>
         <button type="button" role="tab" class="tab" :class="{ active: tab === 'tests' }" :aria-selected="tab === 'tests'" data-agent-target="flows.tests" @click="pickTab('tests')">
           <span class="logs-title">{{ t('flowTests.tab') }}</span>
-          <NTag v-if="tests?.total" size="tiny" :bordered="false" :type="tests.failed ? 'error' : 'default'">
+          <Tag v-if="tests?.total" size="tiny" :type="tests.failed ? 'error' : 'default'">
             {{ tests.failed ? t('flowTests.failedCount', { n: tests.failed }) : tests.total }}
-          </NTag>
+          </Tag>
         </button>
       </div>
       <span class="spacer" />
       <template v-if="tab === 'logs'">
         <div v-if="test.mode === 'message' && sample && test.useSample" class="test-text sample-chip" :title="sample.text">
-          <NTag size="small" type="info" :bordered="false" closable @close="test.useSample = false">
+          <Tag size="small" type="info" closable @close="test.useSample = false">
             {{ t('flows.sampleRun', { user: sample.user }) }}
-          </NTag>
+          </Tag>
           <span class="sample-text">{{ sample.text }}</span>
         </div>
-        <NInput
+        <Input
           v-else-if="test.mode === 'message'"
           ref="input"
           v-model:value="test.text"
@@ -233,7 +233,7 @@ const iconOf = (nodeId: string) => {
           :placeholder="t('flows.testPlaceholder')"
           @keyup.enter="emit('run')"
         />
-        <NSelect
+        <Select
           v-else-if="test.mode === 'event'"
           :value="test.eventName || null"
           size="small"
@@ -244,7 +244,7 @@ const iconOf = (nodeId: string) => {
           :placeholder="t('flows.testEvent')"
           @update:value="pickEvent"
         />
-        <NSelect
+        <Select
           v-else
           v-model:value="test.schedule"
           size="small"
@@ -252,78 +252,73 @@ const iconOf = (nodeId: string) => {
           :options="scheduleOptions"
           :placeholder="schedules.length ? t('flows.testSchedule') : t('flows.testNoSchedule')"
         />
-        <NPopover trigger="click" placement="top-end">
+        <Popover placement="top" align="end">
           <template #trigger>
-            <NButton size="small" quaternary circle :aria-label="t('flows.testOptions')">
-              <template #icon><NIcon><OptionsOutline /></NIcon></template>
-            </NButton>
+            <Button size="small" quaternary circle :aria-label="t('flows.testOptions')" icon="i-lucide-sliders-horizontal" />
           </template>
           <NSpace vertical size="small" class="test-options">
-            <NCheckbox v-if="sample" v-model:checked="test.useSample">{{ t('flows.sampleUse') }}</NCheckbox>
+            <Checkbox v-if="sample" v-model:checked="test.useSample">{{ t('flows.sampleUse') }}</Checkbox>
             <template v-if="quick?.length">
               <span class="muted small">{{ t('flows.testQuick') }}</span>
               <div class="quick">
-                <NTag
+                <Tag
                   v-for="option in quick"
                   :key="quickKey(option)"
                   size="small"
                   checkable
                   :checked="quickActive(option)"
                   @update:checked="applyQuick(option)"
-                >{{ localize(option.label, locale) }}</NTag>
+                >{{ localize(option.label, locale) }}</Tag>
               </div>
             </template>
             <span class="muted small">{{ t('flows.testMode') }}</span>
-            <NRadioGroup v-model:value="test.mode" size="small">
-              <NRadioButton value="message">{{ t('flows.testModeMessage') }}</NRadioButton>
-              <NRadioButton value="event">{{ t('flows.testModeEvent') }}</NRadioButton>
-              <NRadioButton value="schedule">{{ t('flows.testModeSchedule') }}</NRadioButton>
-            </NRadioGroup>
+            <RadioGroup v-model:value="test.mode" size="small">
+              <RadioButton value="message">{{ t('flows.testModeMessage') }}</RadioButton>
+              <RadioButton value="event">{{ t('flows.testModeEvent') }}</RadioButton>
+              <RadioButton value="schedule">{{ t('flows.testModeSchedule') }}</RadioButton>
+            </RadioGroup>
             <template v-if="test.mode === 'message'">
               <div class="who">
-                <NInput v-model:value="test.userName" size="small" :placeholder="`${t('flows.testUser')}: Tester`" />
-                <NInput v-model:value="test.userId" size="small" :placeholder="`${t('flows.testUserId')}: 10000`" />
-                <NInput v-if="!test.private" v-model:value="test.groupId" size="small" :placeholder="`${t('flows.testGroupId')}: test`" />
+                <Input v-model:value="test.userName" size="small" :placeholder="`${t('flows.testUser')}: Tester`" />
+                <Input v-model:value="test.userId" size="small" :placeholder="`${t('flows.testUserId')}: 10000`" />
+                <Input v-if="!test.private" v-model:value="test.groupId" size="small" :placeholder="`${t('flows.testGroupId')}: test`" />
               </div>
-              <NCheckbox v-model:checked="test.private">{{ t('flows.testPrivate') }}</NCheckbox>
-              <NCheckbox v-model:checked="test.mentioned">{{ t('flows.testMentioned') }}</NCheckbox>
+              <Checkbox v-model:checked="test.private">{{ t('flows.testPrivate') }}</Checkbox>
+              <Checkbox v-model:checked="test.mentioned">{{ t('flows.testMentioned') }}</Checkbox>
               <span class="muted small">{{ t('flows.testRole') }}</span>
-              <NRadioGroup v-model:value="test.role" size="small">
-                <NRadioButton value="user">{{ t('flows.roleUser') }}</NRadioButton>
-                <NRadioButton value="admin">{{ t('flows.roleAdmin') }}</NRadioButton>
-                <NRadioButton value="master">{{ t('flows.roleMaster') }}</NRadioButton>
-              </NRadioGroup>
-              <NRadioGroup v-if="!test.private" v-model:value="test.groupRole" size="small">
-                <NRadioButton value="">{{ t('flows.groupRoleNone') }}</NRadioButton>
-                <NRadioButton value="member">{{ t('flows.groupRoleMember') }}</NRadioButton>
-                <NRadioButton value="admin">{{ t('flows.groupRoleAdmin') }}</NRadioButton>
-                <NRadioButton value="owner">{{ t('flows.groupRoleOwner') }}</NRadioButton>
-              </NRadioGroup>
+              <RadioGroup v-model:value="test.role" size="small">
+                <RadioButton value="user">{{ t('flows.roleUser') }}</RadioButton>
+                <RadioButton value="admin">{{ t('flows.roleAdmin') }}</RadioButton>
+                <RadioButton value="master">{{ t('flows.roleMaster') }}</RadioButton>
+              </RadioGroup>
+              <RadioGroup v-if="!test.private" v-model:value="test.groupRole" size="small">
+                <RadioButton value="">{{ t('flows.groupRoleNone') }}</RadioButton>
+                <RadioButton value="member">{{ t('flows.groupRoleMember') }}</RadioButton>
+                <RadioButton value="admin">{{ t('flows.groupRoleAdmin') }}</RadioButton>
+                <RadioButton value="owner">{{ t('flows.groupRoleOwner') }}</RadioButton>
+              </RadioGroup>
             </template>
             <template v-else-if="test.mode === 'event'">
               <span class="muted small">{{ t('flows.testEventData') }}</span>
-              <NInput v-model:value="test.eventData" type="textarea" size="small" class="mono" :autosize="{ minRows: 4, maxRows: 10 }" />
+              <Input v-model:value="test.eventData" type="textarea" size="small" class="mono" :autosize="{ minRows: 4, maxRows: 10 }" />
             </template>
             <span class="muted small">{{ t('flows.testReplyLines') }}</span>
-            <NInput v-model:value="test.replies" type="textarea" size="small" :autosize="{ minRows: 1, maxRows: 4 }" />
+            <Input v-model:value="test.replies" type="textarea" size="small" :autosize="{ minRows: 1, maxRows: 4 }" />
             <span class="muted small">{{ t('flows.testHint') }}</span>
           </NSpace>
-        </NPopover>
-        <NButton
+        </Popover>
+        <Button
           size="small"
           type="primary"
           :loading="testing"
           :disabled="!ready"
           data-agent-target="flows.test"
-          @click="emit('run')"
-        >
-          <template #icon><NIcon><PlayOutline /></NIcon></template>
+          @click="emit('run')" icon="i-lucide-play">
           {{ t('flows.runFlow') }}
-        </NButton>
-        <NButton size="small" quaternary :disabled="!runs.length" @click="emit('clear')">
-          <template #icon><NIcon><TrashOutline /></NIcon></template>
+        </Button>
+        <Button size="small" quaternary :disabled="!runs.length" @click="emit('clear')" icon="i-lucide-trash-2">
           <span class="clear-label">{{ t('flows.logsClear') }}</span>
-        </NButton>
+        </Button>
       </template>
     </header>
 
@@ -334,7 +329,7 @@ const iconOf = (nodeId: string) => {
       <p v-if="!run" class="logs-empty muted">{{ t('flows.logsEmpty') }}</p>
       <template v-else>
         <div class="logs-steps">
-          <NSelect :value="run.id" size="small" :options="runOptions" :consistent-menu-width="false" @update:value="selectRun" />
+          <Select :value="run.id" size="small" :options="runOptions" :consistent-menu-width="false" @update:value="selectRun" />
           <p v-if="run.stopAt" class="muted small stop-note">
             {{ run.steps.some((item) => item.nodeId === run!.stopAt) ? t('flows.logsStoppedAt', { node: nodeName(run.stopAt) }) : t('flows.logsNotReached', { node: nodeName(run.stopAt) }) }}
           </p>
@@ -347,7 +342,7 @@ const iconOf = (nodeId: string) => {
             :style="{ '--accent': accent(item.nodeId) }"
             @click="selectStep(index)"
           >
-            <span class="step-icon"><NIcon :size="13"><component :is="iconOf(item.nodeId)" /></NIcon></span>
+            <span class="step-icon"><span :class="iconOf(item.nodeId)" :style="{ fontSize: '13px' }" /></span>
             <span class="step-name">{{ nodeName(item.nodeId) }}</span>
             <span v-if="item.exec && item.exec !== 'next'" class="step-exec">{{ item.exec }}</span>
             <span v-if="item.skipped" class="step-ms">{{ t('flows.logsSkipped') }}</span>
@@ -370,20 +365,20 @@ const iconOf = (nodeId: string) => {
           <div v-if="run.error && !step" class="detail-error">{{ run.error }}</div>
           <template v-if="step">
             <div class="detail-head">
-              <span class="step-icon" :style="{ '--accent': accent(step.nodeId) }"><NIcon :size="14"><component :is="iconOf(step.nodeId)" /></NIcon></span>
+              <span class="step-icon" :style="{ '--accent': accent(step.nodeId) }"><span :class="iconOf(step.nodeId)" :style="{ fontSize: '14px' }" /></span>
               <strong class="detail-name">{{ nodeName(step.nodeId) }}</strong>
               <span class="muted small" :class="{ 'is-error': !!step.error }">
                 {{ step.error ? t('flows.runFailed') : t('flows.logsSuccessIn', { ms: step.ms }) }}
               </span>
               <span class="spacer" />
-              <NRadioGroup v-model:value="view" size="small">
-                <NRadioButton value="table">{{ t('flows.logsTable') }}</NRadioButton>
-                <NRadioButton value="json">JSON</NRadioButton>
-              </NRadioGroup>
-              <NRadioGroup v-model:value="side" size="small">
-                <NRadioButton value="input">{{ t('flows.logsInput') }}</NRadioButton>
-                <NRadioButton value="output">{{ t('flows.logsOutput') }}</NRadioButton>
-              </NRadioGroup>
+              <RadioGroup v-model:value="view" size="small">
+                <RadioButton value="table">{{ t('flows.logsTable') }}</RadioButton>
+                <RadioButton value="json">JSON</RadioButton>
+              </RadioGroup>
+              <RadioGroup v-model:value="side" size="small">
+                <RadioButton value="input">{{ t('flows.logsInput') }}</RadioButton>
+                <RadioButton value="output">{{ t('flows.logsOutput') }}</RadioButton>
+              </RadioGroup>
             </div>
             <div v-if="step.error" class="detail-error">{{ step.error }}</div>
             <div class="detail-label">

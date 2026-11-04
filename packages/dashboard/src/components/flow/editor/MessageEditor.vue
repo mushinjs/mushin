@@ -4,8 +4,7 @@
  * `[image:…]` and `[face:…]`, and a bubble shows the message as the chat will show it, with the
  * sample's values filled in where they are known.
  */
-import { AtOutline, HappyOutline, ImageOutline } from '@vicons/ionicons5'
-import { NButton, NIcon, NInput, NPopover } from 'naive-ui'
+import { Button, Input, Popover } from '@mushin/ui'
 import { computed, ref } from 'vue'
 import VarInput from '../VarInput.vue'
 import { useEditor } from './editor'
@@ -65,37 +64,37 @@ const isUrl = (url: string) => /^https?:\/\//.test(url)
     <div class="field-label">{{ label }}</div>
     <VarInput v-model="text" :groups="varGroups" multiline :placeholder="t('messageEditor.placeholder')" />
     <div class="parts" role="toolbar" :aria-label="t('messageEditor.parts')">
-      <NPopover trigger="click" placement="bottom-start">
+      <Popover placement="bottom" align="start">
         <template #trigger>
-          <NButton size="tiny" quaternary><template #icon><NIcon><AtOutline /></NIcon></template>{{ t('messageEditor.at') }}</NButton>
+          <Button size="tiny" quaternary icon="i-lucide-at-sign">{{ t('messageEditor.at') }}</Button>
         </template>
         <div class="part-form">
-          <NInput v-model:value="atTarget" size="small" :placeholder="t('messageEditor.atPlaceholder')" />
+          <Input v-model:value="atTarget" size="small" :placeholder="t('messageEditor.atPlaceholder')" />
           <div class="quick">
-            <NButton size="tiny" secondary @click="atTarget = '{{sys.userId}}'">{{ t('messageEditor.atSender') }}</NButton>
-            <NButton size="tiny" secondary @click="atTarget = 'all'">{{ t('messageEditor.atAll') }}</NButton>
+            <Button size="tiny" secondary @click="atTarget = '{{sys.userId}}'">{{ t('messageEditor.atSender') }}</Button>
+            <Button size="tiny" secondary @click="atTarget = 'all'">{{ t('messageEditor.atAll') }}</Button>
           </div>
-          <NButton size="small" type="primary" :disabled="!atTarget.trim()" @click="insert(`[at:${atTarget.trim()}]`)">{{ t('common.add') }}</NButton>
+          <Button size="small" type="primary" :disabled="!atTarget.trim()" @click="insert(`[at:${atTarget.trim()}]`)">{{ t('common.add') }}</Button>
         </div>
-      </NPopover>
-      <NPopover trigger="click" placement="bottom-start">
+      </Popover>
+      <Popover placement="bottom" align="start">
         <template #trigger>
-          <NButton size="tiny" quaternary><template #icon><NIcon><ImageOutline /></NIcon></template>{{ t('messageEditor.image') }}</NButton>
+          <Button size="tiny" quaternary icon="i-lucide-image">{{ t('messageEditor.image') }}</Button>
         </template>
         <div class="part-form">
-          <NInput v-model:value="imageUrl" size="small" :placeholder="t('messageEditor.imagePlaceholder')" />
-          <NButton size="small" type="primary" :disabled="!imageUrl.trim() || /\s/.test(imageUrl.trim())" @click="insert(`[image:${imageUrl.trim()}]`); imageUrl = ''">{{ t('common.add') }}</NButton>
+          <Input v-model:value="imageUrl" size="small" :placeholder="t('messageEditor.imagePlaceholder')" />
+          <Button size="small" type="primary" :disabled="!imageUrl.trim() || /\s/.test(imageUrl.trim())" @click="insert(`[image:${imageUrl.trim()}]`); imageUrl = ''">{{ t('common.add') }}</Button>
         </div>
-      </NPopover>
-      <NPopover trigger="click" placement="bottom-start">
+      </Popover>
+      <Popover placement="bottom" align="start">
         <template #trigger>
-          <NButton size="tiny" quaternary><template #icon><NIcon><HappyOutline /></NIcon></template>{{ t('messageEditor.face') }}</NButton>
+          <Button size="tiny" quaternary icon="i-lucide-smile">{{ t('messageEditor.face') }}</Button>
         </template>
         <div class="part-form">
-          <NInput v-model:value="faceId" size="small" :placeholder="t('messageEditor.facePlaceholder')" />
-          <NButton size="small" type="primary" :disabled="!faceId.trim()" @click="insert(`[face:${faceId.trim()}]`); faceId = ''">{{ t('common.add') }}</NButton>
+          <Input v-model:value="faceId" size="small" :placeholder="t('messageEditor.facePlaceholder')" />
+          <Button size="small" type="primary" :disabled="!faceId.trim()" @click="insert(`[face:${faceId.trim()}]`); faceId = ''">{{ t('common.add') }}</Button>
         </div>
-      </NPopover>
+      </Popover>
     </div>
     <div v-if="pieces.length" class="bubble-row" :aria-label="t('messageEditor.preview')">
       <div class="bubble">
@@ -121,6 +120,8 @@ const isUrl = (url: string) => /^https?:\/\//.test(url)
 
 .field-label {
   font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
   margin-bottom: 6px;
 }
 
@@ -151,7 +152,8 @@ const isUrl = (url: string) => /^https?:\/\//.test(url)
   max-width: 100%;
   padding: 8px 10px;
   border-radius: 12px 12px 4px 12px;
-  background: color-mix(in srgb, var(--primary, #18a058) 16%, transparent);
+  background: var(--primary-soft);
+  color: var(--fg);
   font-size: 13px;
   line-height: 1.55;
   white-space: pre-wrap;
@@ -162,22 +164,22 @@ const isUrl = (url: string) => /^https?:\/\//.test(url)
   font-size: 12px;
   padding: 2px 6px;
   margin-bottom: 4px;
-  border-left: 2px solid rgba(127, 127, 127, 0.5);
-  opacity: 0.8;
+  border-left: 2px solid var(--line-strong);
+  color: var(--fg2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .at {
-  color: var(--primary, #18a058);
+  color: var(--primary);
   font-weight: 500;
   margin-right: 2px;
 }
 
 .chip {
   font-size: 12px;
-  opacity: 0.75;
+  color: var(--fg2);
 }
 
 .image {
@@ -188,3 +190,5 @@ const isUrl = (url: string) => /^https?:\/\//.test(url)
   margin: 4px 0;
 }
 </style>
+
+<style scoped src="./panel.css"></style>

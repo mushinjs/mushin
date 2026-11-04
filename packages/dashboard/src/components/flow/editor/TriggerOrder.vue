@@ -3,8 +3,7 @@
  * A trigger's place among the triggers that compete for the same message on a bot: its priority,
  * whether it stops the message there, and the order list, which can be dragged to reorder.
  */
-import { ChevronDownOutline, ChevronUpOutline, InformationCircleOutline } from '@vicons/ionicons5'
-import { NButton, NForm, NFormItem, NIcon, NInputNumber, NRadioButton, NRadioGroup, NSelect, NTooltip } from 'naive-ui'
+import { Button, Form, FormItem, NumberInput, RadioButton, RadioGroup, Select, Tooltip } from '@mushin/ui'
 import type { Intercept } from '../../../types'
 import { useEditor } from './editor'
 import { intercepts } from './useTriggerOrder'
@@ -19,31 +18,31 @@ const interceptLabel = (value: Intercept) => t(`flows.intercept.${value}`)
 <template>
   <div v-if="selected" class="order" data-agent-target="flows.triggerOrder">
     <div class="inputs-title">{{ t('flows.triggerOrder') }}</div>
-    <NForm label-placement="top" size="small">
-      <NFormItem :show-feedback="false">
+    <Form label-placement="top" size="small">
+      <FormItem>
         <template #label>
           <span class="label-with-hint">
             {{ t('flows.priority') }}
-            <NTooltip :style="{ maxWidth: '280px' }">
-              <template #trigger><NIcon :size="14" class="type-hint"><InformationCircleOutline /></NIcon></template>
+            <Tooltip :max-width="280">
+              <template #trigger><span class="i-lucide-info type-hint" :style="{ fontSize: '14px' }" /></template>
               {{ t('flows.priorityHint') }} {{ t('flows.priorityWheel') }}
-            </NTooltip>
+            </Tooltip>
           </span>
         </template>
         <div class="priority-input" :title="t('flows.priorityWheel')" @wheel.prevent="onPriorityWheel">
-          <NInputNumber :value="selected.data!.priority ?? 0" :precision="0" @update:value="(value: number | null) => updateSelected({ priority: value || undefined })" />
+          <NumberInput :value="selected.data!.priority ?? 0" :precision="0" @update:value="(value: number | null) => updateSelected({ priority: value || undefined })" />
         </div>
-      </NFormItem>
-      <NFormItem :label="t('flows.interceptTitle')" :feedback="t(`flows.interceptHint.${selected.data!.intercept ?? 'none'}`)" data-agent-target="flows.intercept">
-        <NRadioGroup :value="selected.data!.intercept ?? 'none'" size="small" @update:value="(value: Intercept) => updateSelected({ intercept: value === 'none' ? undefined : value })">
-          <NRadioButton v-for="value in intercepts" :key="value" :value="value">{{ interceptLabel(value) }}</NRadioButton>
-        </NRadioGroup>
-      </NFormItem>
-    </NForm>
+      </FormItem>
+      <FormItem :label="t('flows.interceptTitle')" :feedback="t(`flows.interceptHint.${selected.data!.intercept ?? 'none'}`)" data-agent-target="flows.intercept">
+        <RadioGroup :value="selected.data!.intercept ?? 'none'" size="small" @update:value="(value: Intercept) => updateSelected({ intercept: value === 'none' ? undefined : value })">
+          <RadioButton v-for="value in intercepts" :key="value" :value="value">{{ interceptLabel(value) }}</RadioButton>
+        </RadioGroup>
+      </FormItem>
+    </Form>
     <template v-if="bots.length">
       <div class="order-head">
         <span class="muted small">{{ t('flows.competing') }}</span>
-        <NSelect v-if="bots.length > 1" v-model:value="orderBot" size="tiny" class="order-bot" :options="bots.map((id) => ({ label: botName(id), value: id }))" />
+        <Select v-if="bots.length > 1" v-model:value="orderBot" size="tiny" class="order-bot" :options="bots.map((id) => ({ label: botName(id), value: id }))" />
         <span v-else class="muted small">{{ botName(bots[0]) }}</span>
       </div>
       <ol v-if="competing.length" class="order-list">
@@ -65,12 +64,8 @@ const interceptLabel = (value: Intercept) => t(`flows.intercept.${value}`)
             <span v-if="slot.certain" class="order-tag">{{ t('flows.blockedTag') }}</span>
             <span v-else-if="slot.blockedBy" class="order-tag maybe">{{ t('flows.maybeBlocked') }}</span>
           </button>
-          <NButton quaternary circle size="tiny" :disabled="ordering || index === 0" :aria-label="t('flows.moveUp')" :title="t('flows.moveUp')" @click="moveTrigger(index, -1)">
-            <template #icon><NIcon><ChevronUpOutline /></NIcon></template>
-          </NButton>
-          <NButton quaternary circle size="tiny" :disabled="ordering || index === competing.length - 1" :aria-label="t('flows.moveDown')" :title="t('flows.moveDown')" @click="moveTrigger(index, 1)">
-            <template #icon><NIcon><ChevronDownOutline /></NIcon></template>
-          </NButton>
+          <Button quaternary circle size="tiny" :disabled="ordering || index === 0" :aria-label="t('flows.moveUp')" :title="t('flows.moveUp')" @click="moveTrigger(index, -1)" icon="i-lucide-chevron-up" />
+          <Button quaternary circle size="tiny" :disabled="ordering || index === competing.length - 1" :aria-label="t('flows.moveDown')" :title="t('flows.moveDown')" @click="moveTrigger(index, 1)" icon="i-lucide-chevron-down" />
         </li>
       </ol>
       <p class="muted small">
@@ -94,7 +89,7 @@ const interceptLabel = (value: Intercept) => t(`flows.intercept.${value}`)
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 6px;
+  margin: 16px 0 8px;
 }
 
 .order-bot {
@@ -114,9 +109,15 @@ const interceptLabel = (value: Intercept) => t(`flows.intercept.${value}`)
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 4px 6px;
-  border-radius: 6px;
-  border: 1px solid rgba(127, 127, 127, 0.2);
+  padding: 6px 4px 6px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--s1);
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.order-list li:hover {
+  border-color: var(--line-strong);
 }
 
 .order-list li.dragging {
@@ -130,7 +131,7 @@ const interceptLabel = (value: Intercept) => t(`flows.intercept.${value}`)
 .order-grip {
   flex: none;
   cursor: grab;
-  opacity: 0.45;
+  color: var(--fg3);
   font-size: 11px;
   letter-spacing: -2px;
   user-select: none;
@@ -138,9 +139,9 @@ const interceptLabel = (value: Intercept) => t(`flows.intercept.${value}`)
 
 .order-number {
   margin-right: 6px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--fg3);
+  font-family: var(--mono);
   font-size: 11px;
-  opacity: 0.6;
 }
 
 .priority-input {
@@ -149,6 +150,7 @@ const interceptLabel = (value: Intercept) => t(`flows.intercept.${value}`)
 
 .order-list li.current {
   border-color: var(--primary);
+  background: var(--primary-soft);
 }
 
 .order-list li.blocked {

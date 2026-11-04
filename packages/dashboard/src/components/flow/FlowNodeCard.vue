@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { CheckmarkOutline, CloseOutline, PauseOutline, PlayOutline } from '@vicons/ionicons5'
+import { Popover, Spin } from '@mushin/ui'
 import { Handle, Position } from '@vue-flow/core'
-import { NIcon, NPopover, NSpin } from 'naive-ui'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { categoryColors, configSummary, EXEC_IN, execOutHandle, portsOf, wholeRef } from '../../flow'
@@ -82,7 +81,7 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
 </script>
 
 <template>
-  <NPopover :show="showStep" placement="bottom" :show-arrow="false" :style="{ maxWidth: '340px' }">
+  <Popover :show="showStep" placement="bottom" keep-focus :style="{ maxWidth: '340px' }">
     <template #trigger>
   <div
     class="flow-node"
@@ -96,7 +95,7 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
     <Handle v-if="ports?.execIn" :id="EXEC_IN" type="target" :position="Position.Left" class="handle head-handle" />
     <button v-if="breakpoint" type="button" class="bp nodrag" :title="t('flows.breakpointHint')" :aria-label="t('flows.menuRemoveBreakpoint')" @click.stop="editor.toggleBreakpoint(id)" />
     <header class="flow-node-head">
-      <span class="icon"><NIcon :size="15"><component :is="icon" /></NIcon></span>
+      <span class="icon"><span :class="icon" :style="{ fontSize: '15px' }" /></span>
       <span class="name">{{ data.label || typeTitle }}</span>
       <span v-if="data.skip" class="off-tag">{{ t('flows.nodeSkipped') }}</span>
       <span v-else-if="skippedBy" class="off-tag">{{ t('flows.upstreamSkipped') }}</span>
@@ -111,10 +110,10 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
       <span v-if="data.priority" class="priority" :title="t('flows.priority')">{{ data.priority > 0 ? `+${data.priority}` : data.priority }}</span>
       <span class="number">{{ number }}</span>
       <span v-if="issueLevel" class="badge" :class="issueLevel">!</span>
-      <NSpin v-else-if="run === 'running'" :size="12" class="run-spin" />
-      <span v-else-if="run === 'paused'" class="run-mark paused"><NIcon :size="11"><PauseOutline /></NIcon></span>
+      <Spin v-else-if="run === 'running'" :size="12" class="run-spin" />
+      <span v-else-if="run === 'paused'" class="run-mark paused"><span class="i-lucide-pause" :style="{ fontSize: '11px' }" /></span>
       <span v-else-if="run && run !== 'skipped'" class="run-mark" :class="run">
-        <NIcon :size="11"><CheckmarkOutline v-if="run === 'ok'" /><CloseOutline v-else /></NIcon>
+        <span :class="run === 'ok' ? 'i-lucide-check' : 'i-lucide-x'" :style="{ fontSize: '11px' }" />
       </span>
       <button
         v-if="info"
@@ -124,8 +123,8 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
         :disabled="!!editor.executing.value"
         @click.stop="editor.execute(id)"
       >
-        <NSpin v-if="executing" :size="12" />
-        <NIcon v-else :size="13"><PlayOutline /></NIcon>
+        <Spin v-if="executing" :size="12" />
+        <span class="i-lucide-play" :style="{ fontSize: '13px' }" />
       </button>
     </header>
     <Handle v-if="execOut.length && !branches.length" :id="execOutHandle('next')" type="source" :position="Position.Right" class="handle head-handle" />
@@ -179,7 +178,7 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
       </template>
       <div v-else class="pop-muted">{{ t('runs.status.running') }}…</div>
     </div>
-  </NPopover>
+  </Popover>
 </template>
 
 <style scoped>

@@ -3,8 +3,7 @@
  * The inspector's node tab: the selected node's name, notes on why it may not run, its settings and
  * its wiring. Keyword and command triggers can be turned into each other from here.
  */
-import { BanOutline, InformationCircleOutline, TrashOutline } from '@vicons/ionicons5'
-import { NAlert, NButton, NEmpty, NForm, NFormItem, NIcon, NInput, NTabPane, NTabs, NTooltip } from 'naive-ui'
+import { Alert, Button, Empty, Form, FormItem, TabPane, Tabs, Tooltip } from '@mushin/ui'
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { categoryColors, portColors, schemaDefaults } from '../../../flow'
@@ -80,7 +79,7 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
 <template>
   <template v-if="selected && selectedInfo">
     <div class="node-head" :style="{ '--accent': selectedColor }">
-      <span class="node-icon"><NIcon :size="20"><component :is="selectedIcon" /></NIcon></span>
+      <span class="node-icon"><span :class="selectedIcon" :style="{ fontSize: '20px' }" /></span>
       <div class="node-title">
         <!-- The title is the node's name: type to rename it, clear it to use the type's name. -->
         <div class="node-name">
@@ -97,13 +96,13 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
         </div>
         <div class="muted small type-line">
           {{ selected.data!.label ? typeTitle(selected.data!.typeId) : selected.data!.typeId }}
-          <NTooltip v-if="selectedInfo.description" :style="{ maxWidth: '300px' }">
-            <template #trigger><NIcon :size="13" class="type-hint"><InformationCircleOutline /></NIcon></template>
+          <Tooltip v-if="selectedInfo.description" :max-width="300">
+            <template #trigger><span class="i-lucide-info type-hint" :style="{ fontSize: '13px' }" /></template>
             {{ localize(selectedInfo.description, locale) }}
-          </NTooltip>
+          </Tooltip>
         </div>
       </div>
-      <NButton
+      <Button
         quaternary
         circle
         size="small"
@@ -112,22 +111,17 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
         :aria-label="selected.data!.skip ? t('flows.unskipNode') : t('flows.skipNode')"
         :aria-pressed="!!selected.data!.skip"
         data-agent-target="flows.skipNode"
-        @click="toggleSkip([selected.id])"
-      >
-        <template #icon><NIcon><BanOutline /></NIcon></template>
-      </NButton>
-      <NButton quaternary circle size="small" type="error" :title="t('flows.deleteNode')" :aria-label="t('flows.deleteNode')" @click="deleteSelected">
-        <template #icon><NIcon><TrashOutline /></NIcon></template>
-      </NButton>
+        @click="toggleSkip([selected.id])" icon="i-lucide-ban" />
+      <Button quaternary circle size="small" type="error" :title="t('flows.deleteNode')" :aria-label="t('flows.deleteNode')" @click="deleteSelected" icon="i-lucide-trash-2" />
     </div>
 
-    <NAlert v-if="!selected.data!.skip && inheritedSkip.get(selected.id)" type="warning" :show-icon="false" class="skip-note">
+    <Alert v-if="!selected.data!.skip && inheritedSkip.get(selected.id)" type="warning" :show-icon="false" class="skip-note">
       {{ t('flows.inheritedSkip', { name: inheritedSkip.get(selected.id) }) }}
-    </NAlert>
-    <NAlert v-if="blockedNodes.get(selected.id)" type="warning" :show-icon="false" class="skip-note">
+    </Alert>
+    <Alert v-if="blockedNodes.get(selected.id)" type="warning" :show-icon="false" class="skip-note">
       {{ blockedNodes.get(selected.id)!.reason }}
       <template v-if="blockedNodes.get(selected.id)!.trigger">
-        <NButton
+        <Button
           v-for="slot in blockedSlots.filter((item) => item.nodeId === selected!.id && item.certain).slice(0, 1)"
           :key="slot.botId"
           size="tiny"
@@ -135,15 +129,15 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
           type="warning"
           class="note-action"
           @click="openTrigger(slot.blockedBy!)"
-        >{{ t('flows.goToBlocker') }}</NButton>
+        >{{ t('flows.goToBlocker') }}</Button>
       </template>
-    </NAlert>
-    <NTabs v-model:value="nodeTab" type="segment" size="small" class="node-tabs">
-      <NTabPane name="settings" :tab="t('flows.nodeSettings')">
+    </Alert>
+    <Tabs v-model:value="nodeTab" type="segment" size="small" class="node-tabs">
+      <TabPane name="settings" :tab="t('flows.nodeSettings')">
         <template v-if="wiring?.inputs.length">
-          <div class="inputs-title">{{ t('flows.ioInputs') }}</div>
-          <NForm label-placement="top" size="small">
-            <NFormItem v-for="item in wiring.inputs" :key="item.port.name">
+          <div class="inputs-title lead">{{ t('flows.ioInputs') }}</div>
+          <Form compact>
+            <FormItem v-for="item in wiring.inputs" :key="item.port.name">
               <template #label>
                 {{ portLabel(item.port) }}
                 <span class="port-type" :style="{ color: portColors[item.port.type] }">{{ item.port.type }}</span>
@@ -154,9 +148,10 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
                   {{ t('flows.sampleValue', { value: sampleValue(item.binding) || '""' }) }}
                 </span>
               </div>
-            </NFormItem>
-          </NForm>
+            </FormItem>
+          </Form>
           <p class="muted small vars-hint">{{ t('flows.varsHint', refExamples) }}</p>
+          <div v-if="selectedInfo.configSchema" class="inputs-title">{{ t('flows.nodeSettings') }}</div>
         </template>
         <CommandEditor
           v-if="selected.data!.typeId === COMMAND"
@@ -188,10 +183,10 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
               @update:model-value="(value: string) => setField(item.key, value)"
             />
           </template>
-          <NAlert v-if="commandLike" type="info" :show-icon="false" class="convert-hint">
+          <Alert v-if="commandLike" type="info" :show-icon="false" class="convert-hint">
             {{ t('flows.suggestCommand', { name: commandLike }) }}
-            <NButton size="tiny" secondary type="primary" @click="convertToCommand">{{ t('flows.convertToCommand') }}</NButton>
-          </NAlert>
+            <Button size="tiny" secondary type="primary" @click="convertToCommand">{{ t('flows.convertToCommand') }}</Button>
+          </Alert>
           <SchemaForm
             compact
             :model-value="selected.data!.config"
@@ -201,22 +196,22 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
           />
         </template>
         <TriggerOrder v-if="selectedIsTrigger" />
-        <NAlert v-for="(issue, index) in issuesByNode.get(selected.id) ?? []" :key="index" :type="issue.severity" :show-icon="false" class="issue">
+        <Alert v-for="(issue, index) in issuesByNode.get(selected.id) ?? []" :key="index" :type="issue.severity" :show-icon="false" class="issue">
           {{ issue.message }}
           <RouterLink v-if="issue.plugin" :to="`/plugins?highlight=${issue.plugin}`" class="issue-link">{{ t('flows.enablePlugin') }}</RouterLink>
-        </NAlert>
+        </Alert>
         <!-- The type's notes on what is easy to get wrong, under everything else. -->
         <ul v-if="selectedInfo.guide?.notes?.length" class="guide-notes muted small">
           <li v-for="(note, index) in selectedInfo.guide.notes.slice(0, 3)" :key="index">{{ localize(note, locale) }}</li>
         </ul>
-      </NTabPane>
+      </TabPane>
 
-      <NTabPane name="io" :tab="t('flows.nodeIO')">
+      <TabPane name="io" :tab="t('flows.nodeIO')">
         <NodeWiring />
-      </NTabPane>
-    </NTabs>
+      </TabPane>
+    </Tabs>
   </template>
-  <NEmpty v-else :description="t('flows.selectNode')" class="panel-empty" />
+  <Empty v-else :description="t('flows.selectNode')" class="panel-empty" />
 </template>
 
 <style scoped src="./panel.css"></style>
@@ -226,7 +221,11 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 10px 0 12px;
+  margin: 14px 0 12px;
+  padding: 10px 8px 10px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--s1);
 }
 
 .node-icon {
@@ -269,7 +268,7 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
 }
 
 .name-edit:hover {
-  border-color: rgba(127, 127, 127, 0.3);
+  border-color: var(--line-strong);
 }
 
 .name-edit:focus {
@@ -299,8 +298,8 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
   margin-bottom: 4px;
 }
 
-.node-tabs :deep(.n-tab-pane) {
-  padding-top: 14px;
+.node-tabs :deep(.mu-tab-pane) {
+  padding-top: 18px;
 }
 
 .port-type {
@@ -310,8 +309,7 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
 }
 
 .vars-hint {
-  margin: -6px 0 14px;
-  line-height: 1.6;
+  margin: 10px 0 0;
 }
 
 .note-action {
@@ -324,11 +322,10 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
 }
 
 .convert-hint {
-  margin: -6px 0 14px;
-  font-size: 13px;
+  margin: 0 0 14px;
 }
 
-.convert-hint :deep(.n-button) {
+.convert-hint :deep(.mu-btn) {
   margin-left: 6px;
 }
 
@@ -345,9 +342,9 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
 }
 
 .guide-notes {
-  margin: 14px 0 4px;
-  padding: 10px 0 0 18px;
-  border-top: 1px dashed rgba(127, 127, 127, 0.25);
+  margin: 18px 0 4px;
+  padding: 14px 0 0 18px;
+  border-top: 1px solid var(--line);
   line-height: 1.6;
 }
 

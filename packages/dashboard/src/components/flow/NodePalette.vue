@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ChevronDownOutline } from '@vicons/ionicons5'
-import { NIcon, NInput } from 'naive-ui'
+import { Input } from '@mushin/ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { categories, categoryColors, refOf, supports } from '../../flow'
@@ -90,7 +89,7 @@ function onClick(type: NodeTypeInfo) {
 
 <template>
   <aside ref="palette" class="palette">
-    <NInput v-model:value="query" size="small" clearable :placeholder="t('flows.searchNodes')" />
+    <Input v-model:value="query" size="small" clearable :placeholder="t('flows.searchNodes')" />
     <div v-for="group in groups" :key="group.category" class="group">
       <button
         type="button"
@@ -100,7 +99,7 @@ function onClick(type: NodeTypeInfo) {
         :aria-expanded="group.open"
         @click="toggle(group.category)"
       >
-        <NIcon :size="12" class="chevron"><ChevronDownOutline /></NIcon>
+        <span class="i-lucide-chevron-down chevron" :style="{ fontSize: '12px' }" />
         <span class="group-name">{{ t(`flows.category.${group.category}`) }}</span>
         <span class="group-count">{{ group.items.length }}</span>
       </button>
@@ -123,7 +122,7 @@ function onClick(type: NodeTypeInfo) {
           @focus="usable(type) && guide.enter(type, $event.currentTarget as Element)"
           @blur="guide.leave()"
         >
-          <span class="item-icon"><NIcon :size="14"><component :is="nodeIcon(type.type, type.category)" /></NIcon></span>
+          <span class="item-icon"><span :class="nodeIcon(type.type, type.category)" :style="{ fontSize: '14px' }" /></span>
           <span class="item-title">{{ localize(type.title, locale) }}</span>
         </button>
       </template>

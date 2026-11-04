@@ -3,8 +3,7 @@
  * The command node's head: its prefixes and name side by side, then its arguments as a list
  * (one row per argument), the usage line they make and a box to try a message against them.
  */
-import { AddOutline, ArrowDownOutline, ArrowUpOutline, ChevronDownOutline, TrashOutline } from '@vicons/ionicons5'
-import { NButton, NCheckbox, NDynamicTags, NIcon, NInput, NSelect, NTag } from 'naive-ui'
+import { Button, Checkbox, Input, Select, Tag, TagsInput } from '@mushin/ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../../api'
@@ -152,7 +151,7 @@ const shownValue = (value: unknown) => (value === true ? t('commandEditor.yes') 
   <div class="command-editor">
     <div class="field-label">{{ t('commandEditor.command') }}</div>
     <div class="name-row">
-      <NSelect
+      <Select
         class="prefix"
         size="small"
         multiple
@@ -165,7 +164,7 @@ const shownValue = (value: unknown) => (value === true ? t('commandEditor.yes') 
         :aria-label="t('commandEditor.prefixes')"
         @update:value="(next: string[]) => set({ prefixes: next.map((item) => item.trim()).filter(Boolean) })"
       />
-      <NInput
+      <Input
         class="name"
         size="small"
         :value="config.name ?? ''"
@@ -179,7 +178,7 @@ const shownValue = (value: unknown) => (value === true ? t('commandEditor.yes') 
     </p>
 
     <div class="field-label">{{ t('commandEditor.aliases') }}</div>
-    <NDynamicTags
+    <TagsInput
       size="small"
       :value="config.aliases ?? []"
       @update:value="(next: string[]) => set({ aliases: next.map((item) => item.trim().replace(/^[/#!！]+/, '')).filter(Boolean) })"
@@ -187,42 +186,41 @@ const shownValue = (value: unknown) => (value === true ? t('commandEditor.yes') 
 
     <div class="field-label args-title">
       {{ t('commandEditor.args') }}
-      <NButton size="tiny" quaternary @click="addArg">
-        <template #icon><NIcon><AddOutline /></NIcon></template>
+      <Button size="tiny" quaternary @click="addArg" icon="i-lucide-plus">
         {{ t('commandEditor.addArg') }}
-      </NButton>
+      </Button>
     </div>
     <p v-if="!args.length" class="muted small hint">{{ t('commandEditor.noArgs') }}</p>
     <div v-for="(arg, index) in args" :key="index" class="arg" :class="{ open: expanded === index, bad: result?.arg === arg.name }">
       <div class="arg-row">
-        <NInput class="arg-name" size="small" :value="arg.name" :aria-label="t('commandEditor.argNameLabel')" @update:value="(value: string) => setArg(index, { name: value.trim() })" />
-        <NSelect class="arg-type" size="small" :value="arg.type" :options="typeOptions" @update:value="(value: ArgType) => setArg(index, { type: value })" />
-        <NCheckbox size="small" :checked="!arg.optional" @update:checked="(value: boolean) => setArg(index, { optional: !value })">{{ t('commandEditor.required') }}</NCheckbox>
+        <Input class="arg-name" size="small" :value="arg.name" :aria-label="t('commandEditor.argNameLabel')" @update:value="(value: string) => setArg(index, { name: value.trim() })" />
+        <Select class="arg-type" size="small" :value="arg.type" :options="typeOptions" @update:value="(value: ArgType) => setArg(index, { type: value })" />
+        <Checkbox size="small" :checked="!arg.optional" @update:checked="(value: boolean) => setArg(index, { optional: !value })">{{ t('commandEditor.required') }}</Checkbox>
         <span class="arg-tools">
-          <NButton quaternary circle size="tiny" :disabled="index === 0" :aria-label="t('commandEditor.moveUp')" @click="moveArg(index, -1)"><template #icon><NIcon><ArrowUpOutline /></NIcon></template></NButton>
-          <NButton quaternary circle size="tiny" :disabled="index === args.length - 1" :aria-label="t('commandEditor.moveDown')" @click="moveArg(index, 1)"><template #icon><NIcon><ArrowDownOutline /></NIcon></template></NButton>
-          <NButton quaternary circle size="tiny" :aria-label="t('commandEditor.more')" :aria-expanded="expanded === index" @click="expanded = expanded === index ? undefined : index"><template #icon><NIcon class="chevron"><ChevronDownOutline /></NIcon></template></NButton>
-          <NButton quaternary circle size="tiny" type="error" :aria-label="t('common.delete')" @click="removeArg(index)"><template #icon><NIcon><TrashOutline /></NIcon></template></NButton>
+          <Button quaternary circle size="tiny" :disabled="index === 0" :aria-label="t('commandEditor.moveUp')" @click="moveArg(index, -1)" icon="i-lucide-arrow-up" />
+          <Button quaternary circle size="tiny" :disabled="index === args.length - 1" :aria-label="t('commandEditor.moveDown')" @click="moveArg(index, 1)" icon="i-lucide-arrow-down" />
+          <Button quaternary circle size="tiny" :aria-label="t('commandEditor.more')" :aria-expanded="expanded === index" @click="expanded = expanded === index ? undefined : index" icon="i-lucide-chevron-down" />
+          <Button quaternary circle size="tiny" type="error" :aria-label="t('common.delete')" @click="removeArg(index)" icon="i-lucide-trash-2" />
         </span>
       </div>
       <div v-if="expanded === index" class="arg-more">
-        <NDynamicTags
+        <TagsInput
           v-if="arg.type === 'choice'"
           size="small"
           :value="arg.choices ?? []"
           @update:value="(next: string[]) => setArg(index, { choices: next })"
         />
-        <NInput
+        <Input
           v-if="arg.optional && arg.type !== 'user'"
           size="small"
           :value="defaultText(arg)"
           :placeholder="t('commandEditor.defaultPlaceholder')"
           @update:value="(text: string) => setDefault(index, arg, text)"
         />
-        <NInput size="small" :value="arg.description ?? ''" :placeholder="t('commandEditor.notePlaceholder')" @update:value="(value: string) => setArg(index, { description: value })" />
-        <NCheckbox v-if="arg.type === 'text'" size="small" :checked="!!arg.rest" @update:checked="(value: boolean) => setArg(index, { rest: value })">
+        <Input size="small" :value="arg.description ?? ''" :placeholder="t('commandEditor.notePlaceholder')" @update:value="(value: string) => setArg(index, { description: value })" />
+        <Checkbox v-if="arg.type === 'text'" size="small" :checked="!!arg.rest" @update:checked="(value: boolean) => setArg(index, { rest: value })">
           {{ t('commandEditor.rest') }}
-        </NCheckbox>
+        </Checkbox>
       </div>
     </div>
 
@@ -232,22 +230,22 @@ const shownValue = (value: unknown) => (value === true ? t('commandEditor.yes') 
     </div>
 
     <div class="try">
-      <NInput v-model:value="sample" size="small" clearable :placeholder="t('commandEditor.tryPlaceholder')">
+      <Input v-model:value="sample" size="small" clearable :placeholder="t('commandEditor.tryPlaceholder')">
         <template #suffix>
-          <NButton v-if="!sample" text size="tiny" type="primary" @click="suggest">{{ t('commandEditor.suggest') }}</NButton>
+          <Button v-if="!sample" text size="tiny" type="primary" @click="suggest">{{ t('commandEditor.suggest') }}</Button>
         </template>
-      </NInput>
+      </Input>
       <div v-if="result" class="try-result" aria-live="polite">
         <template v-if="!result.matched">
-          <NTag size="small" :bordered="false">{{ t(`commandEditor.noMatch.${result.reason}`) }}</NTag>
+          <Tag size="small">{{ t(`commandEditor.noMatch.${result.reason}`) }}</Tag>
         </template>
         <template v-else-if="result.ok">
-          <NTag size="small" type="success" :bordered="false">{{ t('commandEditor.matched') }}</NTag>
+          <Tag size="small" type="success">{{ t('commandEditor.matched') }}</Tag>
           <span v-for="(value, name) in result.values" :key="name" class="value"><span class="muted">{{ name }} =</span> {{ shownValue(value) }}</span>
           <span v-if="!Object.keys(result.values ?? {}).length" class="muted small">{{ t('commandEditor.noValues') }}</span>
         </template>
         <template v-else>
-          <NTag size="small" type="warning" :bordered="false">{{ t('commandEditor.badArgs') }}</NTag>
+          <Tag size="small" type="warning">{{ t('commandEditor.badArgs') }}</Tag>
           <span class="small">{{ result.arg ? t('commandEditor.badArg', { name: result.arg }) : result.error }}</span>
           <span v-if="config.usageHint !== false" class="muted small">{{ t('commandEditor.repliesUsage') }}</span>
         </template>
@@ -263,6 +261,8 @@ const shownValue = (value: unknown) => (value === true ? t('commandEditor.yes') 
 
 .field-label {
   font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
   margin: 0 0 6px;
   display: flex;
   align-items: center;
@@ -293,7 +293,8 @@ const shownValue = (value: unknown) => (value === true ? t('commandEditor.yes') 
 }
 
 .arg {
-  border: 1px solid var(--n-border-color, rgba(127, 127, 127, 0.22));
+  border: 1px solid var(--line);
+  background: var(--s1);
   border-radius: 8px;
   padding: 6px;
   margin-bottom: 6px;
@@ -301,7 +302,7 @@ const shownValue = (value: unknown) => (value === true ? t('commandEditor.yes') 
 }
 
 .arg.bad {
-  border-color: var(--warning, #f0a020);
+  border-color: var(--warn);
 }
 
 .arg-row {
@@ -373,3 +374,5 @@ const shownValue = (value: unknown) => (value === true ? t('commandEditor.yes') 
   }
 }
 </style>
+
+<style scoped src="./panel.css"></style>

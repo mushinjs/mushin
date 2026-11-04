@@ -1,7 +1,6 @@
 <script setup lang="ts">
 /** Bars above the canvas: a test run paused at a breakpoint, and a run opened from a bot's run list. */
-import { CloseOutline, PlayOutline, StopCircleOutline } from '@vicons/ionicons5'
-import { NButton, NIcon } from 'naive-ui'
+import { Button } from '@mushin/ui'
 import { RouterLink } from 'vue-router'
 import { isLive } from '../../../stores/runs'
 import { runColors, useRunText } from '../../runs/useRunText'
@@ -16,15 +15,13 @@ const runText = useRunText()
     <span class="run-state"><span class="run-dot live" />{{ t('flows.pausedAt', { node: nodeName(paused.nodeId) }) }}</span>
     <span class="run-what muted">{{ t('flows.pausedHint') }}</span>
     <span class="spacer" />
-    <NButton size="small" type="primary" @click="debug('continue')">
-      <template #icon><NIcon><PlayOutline /></NIcon></template>
+    <Button size="small" type="primary" @click="debug('continue')" icon="i-lucide-play">
       {{ t('flows.debugContinue') }}
-    </NButton>
-    <NButton size="small" @click="debug('step')">{{ t('flows.debugStep') }}</NButton>
-    <NButton size="small" type="error" secondary @click="debug('stop')">
-      <template #icon><NIcon><StopCircleOutline /></NIcon></template>
+    </Button>
+    <Button size="small" @click="debug('step')">{{ t('flows.debugStep') }}</Button>
+    <Button size="small" type="error" secondary @click="debug('stop')" icon="i-lucide-circle-stop">
       {{ t('flows.debugStop') }}
-    </NButton>
+    </Button>
   </div>
 
   <div v-if="viewing" class="run-banner" :style="{ '--state': runColors[viewing.status] }" role="status">
@@ -34,14 +31,11 @@ const runText = useRunText()
     <span v-if="viewing.status === 'stopped'" class="run-error">{{ runText.stoppedByText(viewing) }}</span>
     <span v-else-if="viewing.error" class="run-error" :title="viewing.error">{{ viewing.error }}</span>
     <span class="spacer" />
-    <NButton v-if="isLive(viewing)" size="small" type="error" secondary @click="stopViewing">
-      <template #icon><NIcon><StopCircleOutline /></NIcon></template>
+    <Button v-if="isLive(viewing)" size="small" type="error" secondary @click="stopViewing" icon="i-lucide-circle-stop">
       {{ t('runs.stop') }}
-    </NButton>
+    </Button>
     <RouterLink :to="`/bots/${viewing.botId}/runs`" class="run-link">{{ t('runs.allRuns') }}</RouterLink>
-    <NButton size="small" quaternary circle :aria-label="t('common.close')" @click="closeRun">
-      <template #icon><NIcon><CloseOutline /></NIcon></template>
-    </NButton>
+    <Button size="small" quaternary circle :aria-label="t('common.close')" @click="closeRun" icon="i-lucide-x" />
   </div>
 </template>
 

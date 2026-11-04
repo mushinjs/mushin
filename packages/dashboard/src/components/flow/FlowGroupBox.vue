@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { AlbumsOutline, ExpandOutline } from '@vicons/ionicons5'
+import { Spin } from '@mushin/ui'
 import { Handle, Position } from '@vue-flow/core'
-import { NIcon, NSpin } from 'naive-ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { type CanvasNodeData, type RunStatus, useFlowEditor } from './context'
@@ -25,14 +24,14 @@ const run = computed<RunStatus | undefined>(() => {
 <template>
   <div class="group-box" :class="{ selected, [`run-${run}`]: !!run }" :title="t('flows.groupBoxHint')">
     <Handle id="exec" type="target" :position="Position.Left" :connectable="false" class="handle" />
-    <span class="icon"><NIcon :size="16"><AlbumsOutline /></NIcon></span>
+    <span class="icon"><span class="i-lucide-gallery-vertical-end" :style="{ fontSize: '16px' }" /></span>
     <div class="text">
       <div class="name">{{ group?.label || t('flows.groupDefault') }}</div>
       <div class="count">{{ t('flows.groupCount', group?.nodes.length ?? 0) }}</div>
     </div>
-    <NSpin v-if="run === 'running'" :size="12" />
+    <Spin v-if="run === 'running'" :size="12" />
     <button type="button" class="expand nodrag" :title="t('flows.menuExpand')" @click.stop="group && editor.toggleGroup(group.id)">
-      <NIcon :size="14"><ExpandOutline /></NIcon>
+      <span class="i-lucide-maximize-2" :style="{ fontSize: '14px' }" />
     </button>
     <Handle id="out" type="source" :position="Position.Right" :connectable="false" class="handle" />
   </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NButton, NDropdown, NInput } from 'naive-ui'
+import { Button, Dropdown, Input } from '@mushin/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { wholeRef } from '../../flow'
@@ -30,18 +30,18 @@ function insert(ref: string) {
 
 <template>
   <div v-if="multiline" class="multi">
-    <NInput v-model:value="value" size="small" type="textarea" :autosize="{ minRows: 2, maxRows: 10 }" :placeholder="placeholder ?? t('flows.varsPlaceholder')" />
-    <NDropdown trigger="click" :options="options" scrollable size="small" placement="bottom-end" style="max-height: 320px" @select="insert">
-      <NButton text size="tiny" class="var-button corner" :title="t('flows.varsInsert')">(x)</NButton>
-    </NDropdown>
+    <Input v-model:value="value" size="small" type="textarea" :autosize="{ minRows: 2, maxRows: 10 }" :placeholder="placeholder ?? t('flows.varsPlaceholder')" />
+    <Dropdown :options="options" placement="bottom" align="end" @select="insert">
+      <Button text size="tiny" class="var-button corner" :title="t('flows.varsInsert')">(x)</Button>
+    </Dropdown>
   </div>
-  <NInput v-else v-model:value="value" size="small" clearable :placeholder="placeholder ?? t('flows.varsPlaceholder')">
+  <Input v-else v-model:value="value" size="small" clearable :placeholder="placeholder ?? t('flows.varsPlaceholder')">
     <template #suffix>
-      <NDropdown trigger="click" :options="options" scrollable size="small" placement="bottom-end" style="max-height: 320px" @select="insert">
-        <NButton text size="tiny" class="var-button" :title="t('flows.varsInsert')">(x)</NButton>
-      </NDropdown>
+      <Dropdown :options="options" placement="bottom" align="end" @select="insert">
+        <Button text size="tiny" class="var-button" :title="t('flows.varsInsert')">(x)</Button>
+      </Dropdown>
     </template>
-  </NInput>
+  </Input>
 </template>
 
 <style scoped>

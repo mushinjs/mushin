@@ -3,8 +3,7 @@
  * Picks the editor's sample: a bot that is online, one of its recent chats, then a message
  * someone sent there. While one is picked the button shows who sent it.
  */
-import { ChatbubblesOutline, CloseOutline, PeopleOutline, PersonOutline, RefreshOutline } from '@vicons/ionicons5'
-import { NButton, NEmpty, NIcon, NPopover, NSelect, NSpin, NTag } from 'naive-ui'
+import { Button, Empty, Popover, Select, Spin, Tag } from '@mushin/ui'
 import { computed, ref, watch } from 'vue'
 import { call } from '../../../api'
 import type { ChannelSummary, MessageRecord } from '../../../types'
@@ -85,34 +84,32 @@ const matched = computed(() => sampleMatch.value?.triggers.filter((item) => item
 </script>
 
 <template>
-  <NPopover v-model:show="open" trigger="click" placement="bottom-end" :show-arrow="false" class="sample-pop">
+  <Popover v-model:show="open" placement="bottom" align="end" class="sample-pop">
     <template #trigger>
-      <NButton
+      <Button
         size="small"
         :secondary="!!sample"
         :quaternary="!sample"
         :type="sample ? (sampleError ? 'warning' : 'info') : 'default'"
         class="sample-button"
         :title="sample ? label : t('flows.sampleHint')"
-        data-agent-target="flows.sample"
-      >
-        <template #icon><NIcon><ChatbubblesOutline /></NIcon></template>
+        data-agent-target="flows.sample" icon="i-lucide-messages-square">
         <span class="sample-label">{{ sample ? label : t('flows.sample') }}</span>
-        <NTag v-if="sampleMatch" size="tiny" :bordered="false" round :type="matched ? 'success' : 'default'" class="count">
+        <Tag v-if="sampleMatch" size="tiny" round :type="matched ? 'success' : 'default'" class="count">
           {{ t('flows.sampleMatched', { n: matched }) }}
-        </NTag>
-      </NButton>
+        </Tag>
+      </Button>
     </template>
     <div class="picker">
       <p class="muted small intro">{{ t('flows.sampleIntro') }}</p>
-      <NEmpty v-if="!botOptions.length" size="small" :description="t('flows.sampleNoBot')" />
+      <Empty v-if="!botOptions.length" size="small" :description="t('flows.sampleNoBot')" />
       <template v-else>
         <div class="selects">
-          <NSelect v-model:value="bot" size="small" :options="botOptions" :aria-label="t('flows.sampleBot')" />
-          <NSelect v-model:value="channel" size="small" :options="channelOptions" :placeholder="t('flows.sampleNoChat')" :aria-label="t('flows.sampleChat')" filterable />
-          <NButton size="small" quaternary circle :aria-label="t('common.refresh')" @click="loadChannels"><template #icon><NIcon><RefreshOutline /></NIcon></template></NButton>
+          <Select v-model:value="bot" size="small" :options="botOptions" :aria-label="t('flows.sampleBot')" />
+          <Select v-model:value="channel" size="small" :options="channelOptions" :placeholder="t('flows.sampleNoChat')" :aria-label="t('flows.sampleChat')" filterable />
+          <Button size="small" quaternary circle :aria-label="t('common.refresh')" @click="loadChannels" icon="i-lucide-refresh-cw" />
         </div>
-        <NSpin :show="loading" size="small">
+        <Spin :show="loading" size="small">
           <ul class="messages" role="listbox" :aria-label="t('flows.sampleMessages')">
             <li v-if="!messages.length && !loading" class="muted small empty">{{ t('flows.sampleNoMessages') }}</li>
             <li
@@ -125,25 +122,24 @@ const matched = computed(() => sampleMatch.value?.triggers.filter((item) => item
               @click="pick(record)"
               @keydown.enter="pick(record)"
             >
-              <NIcon :size="13" class="who-icon"><PeopleOutline v-if="record.channel.type === 'group'" /><PersonOutline v-else /></NIcon>
+              <span class="who-icon" :class="record.channel.type === 'group' ? 'i-lucide-users' : 'i-lucide-user'" :style="{ fontSize: '13px' }" />
               <span class="who">{{ record.user.name ?? record.user.id }}</span>
               <span class="text">{{ segmentsText(record.segments) }}</span>
               <span class="time muted">{{ formatTime(record.timestamp) }}</span>
             </li>
           </ul>
-        </NSpin>
+        </Spin>
       </template>
       <div v-if="sample" class="foot">
         <span v-if="sampleError" class="small warn">{{ sampleError }}</span>
         <span v-else-if="matching" class="muted small">{{ t('flows.sampleChecking') }}</span>
         <span class="spacer" />
-        <NButton size="tiny" quaternary @click="clearSample(); open = false">
-          <template #icon><NIcon><CloseOutline /></NIcon></template>
+        <Button size="tiny" quaternary @click="clearSample(); open = false" icon="i-lucide-x">
           {{ t('flows.sampleClear') }}
-        </NButton>
+        </Button>
       </div>
     </div>
-  </NPopover>
+  </Popover>
 </template>
 
 <style scoped>

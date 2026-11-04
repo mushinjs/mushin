@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** The panel beside the canvas: the selected node's settings, or the flow's. */
-import { NTabPane, NTabs } from 'naive-ui'
+import { TabPane, Tabs } from '@mushin/ui'
 import { useEditor } from './editor'
 import FlowPanel from './FlowPanel.vue'
 import NodePanel from './NodePanel.vue'
@@ -10,14 +10,14 @@ const { t, tab } = useEditor()
 
 <template>
   <aside class="panel side">
-    <NTabs v-model:value="tab" type="line" size="small" justify-content="space-evenly" class="panel-tabs">
-      <NTabPane name="node" :tab="t('flows.tabNode')">
+    <Tabs v-model:value="tab" type="line" size="small" justify="stretch" class="panel-tabs">
+      <TabPane name="node" :tab="t('flows.tabNode')">
         <NodePanel />
-      </NTabPane>
-      <NTabPane name="flow" :tab="t('flows.tabFlow')">
+      </TabPane>
+      <TabPane name="flow" :tab="t('flows.tabFlow')">
         <FlowPanel />
-      </NTabPane>
-    </NTabs>
+      </TabPane>
+    </Tabs>
   </aside>
 </template>
 
@@ -27,8 +27,18 @@ const { t, tab } = useEditor()
   flex: none;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  padding: 4px 14px 0;
-  border-left: 1px solid rgba(127, 127, 127, 0.18);
+  padding: 0 16px 24px;
+  border-left: 1px solid var(--line);
+  background: var(--flow-node-bg);
+}
+
+/* The Node and Flow tabs stay in view while the settings scroll. */
+.panel-tabs :deep(.mu-tabs__bar) {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0 -16px;
+  padding: 0 16px;
   background: var(--flow-node-bg);
 }
 </style>

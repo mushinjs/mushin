@@ -1,7 +1,6 @@
 <script setup lang="ts">
 /** The editor's top bar: the flow's name, where it runs, whether it is on, the panels and saving. */
-import { ArrowBackOutline, ContractOutline, ExpandOutline } from '@vicons/ionicons5'
-import { NButton, NIcon, NInput, NSelect, NSwitch, NTag, NTooltip } from 'naive-ui'
+import { Button, Input, Select, Tag, Toggle, Tooltip } from '@mushin/ui'
 import { useEditor } from './editor'
 import PanelIcon from './PanelIcon.vue'
 import SamplePicker from './SamplePicker.vue'
@@ -14,11 +13,9 @@ const {
 
 <template>
   <header class="editor-head">
-    <NButton quaternary circle :aria-label="t('common.back')" @click="router.push('/flows')">
-      <template #icon><NIcon><ArrowBackOutline /></NIcon></template>
-    </NButton>
-    <NInput v-model:value="name" class="name-input" :placeholder="t('common.name')" />
-    <NSelect
+    <Button quaternary circle :aria-label="t('common.back')" @click="router.push('/flows')" icon="i-lucide-arrow-left" />
+    <Input v-model:value="name" class="name-input" :placeholder="t('common.name')" />
+    <Select
       :value="currentAdapter ?? null"
       class="adapter-select"
       :options="adapterOptions"
@@ -28,7 +25,7 @@ const {
       data-agent-target="flows.adapter"
       @update:value="setAdapter"
     />
-    <NSelect
+    <Select
       v-model:value="bots"
       class="bots-select"
       multiple
@@ -37,42 +34,39 @@ const {
       max-tag-count="responsive"
       data-agent-target="flows.bots"
     />
-    <NSwitch class="enabled" :value="enabled" :loading="toggling" :title="enabled ? t('flows.enabledHint') : t('flows.disabledHint')" data-agent-target="flows.enabled" @update:value="setEnabled">
-      <template #checked>{{ t('flows.on') }}</template>
-      <template #unchecked>{{ t('flows.off') }}</template>
-    </NSwitch>
-    <NTag v-if="errorCount" type="error" size="small" :bordered="false">{{ t('flows.errorCount', errorCount) }}</NTag>
-    <NTag v-else-if="warningCount" type="warning" size="small" :bordered="false">{{ t('flows.warningCount', warningCount) }}</NTag>
+    <Toggle class="enabled" variant="button" size="small" :value="enabled" :loading="toggling" :title="enabled ? t('flows.enabledHint') : t('flows.disabledHint')" data-agent-target="flows.enabled" @update:value="setEnabled" />
+    <Tag v-if="errorCount" type="error" size="small">{{ t('flows.errorCount', errorCount) }}</Tag>
+    <Tag v-else-if="warningCount" type="warning" size="small">{{ t('flows.warningCount', warningCount) }}</Tag>
     <span class="spacer" />
     <SamplePicker />
     <span class="save-state">{{ dirty ? t('flows.unsavedShort') : t('flows.savedShort') }}</span>
     <div class="view-tools" role="group" :aria-label="t('flows.layout')">
-      <NTooltip :show-arrow="false">
+      <Tooltip>
         <template #trigger>
-          <NButton quaternary size="small" :class="{ on: showPalette }" :aria-label="t('flows.palette')" :aria-pressed="showPalette" @click="togglePalette">
+          <Button quaternary size="small" :class="{ on: showPalette }" :aria-label="t('flows.palette')" :aria-pressed="showPalette" @click="togglePalette">
             <template #icon><PanelIcon side="left" :open="showPalette" /></template>
-          </NButton>
+          </Button>
         </template>
         {{ showPalette ? t('flows.hidePalette') : t('flows.showPalette') }}
-      </NTooltip>
-      <NTooltip :show-arrow="false">
+      </Tooltip>
+      <Tooltip>
         <template #trigger>
-          <NButton quaternary size="small" :class="{ on: showPanel }" :aria-label="t('flows.panel')" :aria-pressed="showPanel" @click="togglePanel">
+          <Button quaternary size="small" :class="{ on: showPanel }" :aria-label="t('flows.panel')" :aria-pressed="showPanel" @click="togglePanel">
             <template #icon><PanelIcon side="right" :open="showPanel" /></template>
-          </NButton>
+          </Button>
         </template>
         {{ showPanel ? t('flows.hidePanel') : t('flows.showPanel') }}
-      </NTooltip>
-      <NTooltip :show-arrow="false">
+      </Tooltip>
+      <Tooltip>
         <template #trigger>
-          <NButton quaternary size="small" :class="{ on: immersive }" :aria-label="immersive ? t('flows.exitFullscreen') : t('flows.fullscreen')" :aria-pressed="immersive" @click="toggleImmersive">
-            <template #icon><NIcon><ContractOutline v-if="immersive" /><ExpandOutline v-else /></NIcon></template>
-          </NButton>
+          <Button quaternary size="small" :class="{ on: immersive }" :aria-label="immersive ? t('flows.exitFullscreen') : t('flows.fullscreen')" :aria-pressed="immersive" @click="toggleImmersive">
+            <template #icon><span :class="immersive ? 'i-lucide-minimize-2' : 'i-lucide-maximize-2'" /></template>
+          </Button>
         </template>
         {{ immersive ? t('flows.exitFullscreenHint') : t('flows.fullscreenHint') }}
-      </NTooltip>
+      </Tooltip>
     </div>
-    <NButton type="primary" :loading="saving" :disabled="!dirty" data-agent-target="flows.save" @click="save">{{ t('common.save') }}</NButton>
+    <Button type="primary" :loading="saving" :disabled="!dirty" data-agent-target="flows.save" @click="save">{{ t('common.save') }}</Button>
   </header>
 </template>
 
@@ -125,13 +119,13 @@ const {
   background: rgba(127, 127, 127, 0.08);
 }
 
-.view-tools :deep(.n-button) {
+.view-tools :deep(.mu-btn) {
   width: 30px;
   padding: 0;
   color: var(--fg3);
 }
 
-.view-tools :deep(.n-button.on) {
+.view-tools :deep(.mu-btn.on) {
   color: var(--fg);
 }
 

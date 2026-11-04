@@ -3,9 +3,10 @@ import {
   AddOutline, AlertCircleOutline, AppsOutline, ChatbubblesOutline, CloseCircleOutline, ExtensionPuzzleOutline, FilterOutline, GitNetworkOutline,
   LayersOutline, ListOutline, NotificationsOutline, SearchOutline, SparklesOutline, SwapVerticalOutline, TimeOutline, TrashOutline,
 } from '@vicons/ionicons5'
+import { Toggle } from '@mushin/ui'
 import {
   type DataTableColumns, NBadge, NButton, NCard, NDataTable, NEmpty, NForm, NFormItem, NIcon, NInput, NModal, NPopover,
-  NRadioButton, NRadioGroup, NSelect, type SelectOption, NSwitch, NTag, useDialog, useMessage,
+  NRadioButton, NRadioGroup, NSelect, type SelectOption, NTag, useDialog, useMessage,
 } from 'naive-ui'
 import { type Component, computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -115,7 +116,10 @@ function adapterOf(flow: FlowSummary) {
   return used.size === 1 ? [...used][0]! : ''
 }
 
-const kindIcon = (kind: string): Component => (kind === 'event' ? NotificationsOutline : nodeIcon(`trigger.${kind}`, 'trigger'))
+// Node icons are class names now; this page still draws icon components until it moves to @mushin/ui.
+const classIcons = new Map<string, Component>()
+const classIcon = (name: string) => classIcons.get(name) ?? classIcons.set(name, () => h('span', { class: name })).get(name)!
+const kindIcon = (kind: string): Component => (kind === 'event' ? NotificationsOutline : classIcon(nodeIcon(`trigger.${kind}`, 'trigger')))
 const groupIcons: Record<Group, Component> = { none: AppsOutline, trigger: NotificationsOutline, adapter: ExtensionPuzzleOutline, bot: ChatbubblesOutline, recent: TimeOutline }
 const icon = (component: Component, size = 15) => h(NIcon, { size, style: { flex: 'none' } }, { default: () => h(component) })
 
@@ -315,8 +319,8 @@ const columns = computed<DataTableColumns<FlowSummary>>(() => [
   {
     title: t('flows.colEnabled'),
     key: 'enabled',
-    width: 80,
-    render: (flow) => h(NSwitch, { size: 'small', value: flow.enabled, onClick: (event: Event) => event.stopPropagation(), 'onUpdate:value': (value: boolean) => setEnabled(flow, value) }),
+    width: 104,
+    render: (flow) => h(Toggle, { size: 'small', variant: 'button', value: flow.enabled, onClick: (event: Event) => event.stopPropagation(), 'onUpdate:value': (value: boolean) => setEnabled(flow, value) }),
   },
   {
     title: '',
@@ -584,7 +588,7 @@ function remove(flow: FlowSummary) {
                 <span v-else-if="flow.source?.kind === 'agent'" class="source" :title="t('flows.sourceAgent')">
                   <NIcon :size="14"><SparklesOutline /></NIcon>{{ t('flows.sourceAgentShort') }}
                 </span>
-                <NSwitch size="small" :value="flow.enabled" :title="flow.enabled ? t('flows.enabledHint') : t('flows.disabledHint')" @update:value="(value: boolean) => setEnabled(flow, value)" />
+                <Toggle variant="button" size="small" :value="flow.enabled" :title="flow.enabled ? t('flows.enabledHint') : t('flows.disabledHint')" @update:value="(value: boolean) => setEnabled(flow, value)" />
                 <IconAction v-if="!ownedByPlugin(flow)" :icon="TrashOutline" :label="t('common.delete')" type="error" @click="remove(flow)" />
               </div>
             </article>

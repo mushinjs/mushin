@@ -1,7 +1,5 @@
 <script setup lang="ts">
 /** Dashed frames drawn behind grouped nodes on the canvas; the header moves, renames and folds the group. */
-import { ChevronDownOutline } from '@vicons/ionicons5'
-import { NIcon } from 'naive-ui'
 import { useEditor } from './editor'
 
 const { t, frames, renaming, startGroupDrag, renameGroup, openMenu, toggleGroup } = useEditor()
@@ -41,7 +39,7 @@ const { t, frames, renaming, startGroupDrag, renameGroup, openMenu, toggleGroup 
         @pointerdown.stop
         @click.stop="toggleGroup(frame.group.id)"
       >
-        <NIcon :size="13"><ChevronDownOutline /></NIcon>
+        <span class="i-lucide-chevron-down" :style="{ fontSize: '13px' }" />
       </button>
     </div>
   </div>

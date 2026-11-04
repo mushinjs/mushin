@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { NIcon, NInput, useThemeVars } from 'naive-ui'
+import { Input } from '@mushin/ui'
+import { useThemeVars } from 'naive-ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { categories, categoryColors, supports } from '../../flow'
@@ -26,7 +27,7 @@ const emit = defineEmits<{ pick: [typeId: string]; close: [] }>()
 const { t, locale } = useI18n()
 const query = ref('')
 const root = ref<HTMLElement>()
-const search = ref<InstanceType<typeof NInput>>()
+const search = ref<InstanceType<typeof Input>>()
 const active = ref(0)
 const theme = useThemeVars()
 const guide = useGuideHover()
@@ -101,7 +102,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onPointerDown, t
   <Teleport to="body">
     <div ref="root" class="picker" :style="style" @keydown="onKeydown" @contextmenu.prevent>
       <div v-if="title" class="picker-title">{{ title }}</div>
-      <NInput ref="search" v-model:value="query" size="small" clearable :placeholder="t('flows.searchNodes')" @update:value="active = 0" />
+      <Input ref="search" v-model:value="query" size="small" clearable :placeholder="t('flows.searchNodes')" @update:value="active = 0" />
       <div class="list">
         <template v-for="group in groups" :key="group.category">
           <div class="group-title" :style="{ color: categoryColors[group.category] }">{{ t(`flows.category.${group.category}`) }}</div>
@@ -118,7 +119,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onPointerDown, t
             @mouseleave="guide.leave()"
             @click="pick(type)"
           >
-            <span class="item-icon"><NIcon :size="13"><component :is="nodeIcon(type.type, type.category)" /></NIcon></span>
+            <span class="item-icon"><span :class="nodeIcon(type.type, type.category)" :style="{ fontSize: '13px' }" /></span>
             <span class="item-title">{{ localize(type.title, locale) }}</span>
           </button>
         </template>

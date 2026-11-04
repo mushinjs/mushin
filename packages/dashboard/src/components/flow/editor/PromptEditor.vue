@@ -4,8 +4,7 @@
  * message), and beside it the exact messages that go to the model, built by the server for the
  * test message or the editor's sample without calling the model.
  */
-import { AddOutline, ArrowDownOutline, ArrowUpOutline, EyeOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5'
-import { NButton, NDropdown, NIcon, NInput, NInputNumber, NRadioButton, NRadioGroup, NSpin, NTag } from 'naive-ui'
+import { Button, Dropdown, Input, NumberInput, RadioButton, RadioGroup, Spin, Tag } from '@mushin/ui'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { call } from '../../../api'
 import VarInput from '../VarInput.vue'
@@ -117,12 +116,11 @@ const highlighted = ref<number>()
   <div class="prompt-editor">
     <div class="field-label">
       {{ t('promptEditor.title') }}
-      <NDropdown trigger="click" :options="addOptions" @select="add">
-        <NButton size="tiny" quaternary>
-          <template #icon><NIcon><AddOutline /></NIcon></template>
+      <Dropdown :options="addOptions" @select="add">
+        <Button size="tiny" quaternary icon="i-lucide-plus">
           {{ t('promptEditor.add') }}
-        </NButton>
-      </NDropdown>
+        </Button>
+      </Dropdown>
     </div>
     <p class="muted small hint">{{ t('promptEditor.hint') }}</p>
 
@@ -138,9 +136,9 @@ const highlighted = ref<number>()
         <span class="kind">{{ t(`promptEditor.kinds.${block.kind}`) }}</span>
         <span class="muted small desc">{{ t(`promptEditor.about.${block.kind}`) }}</span>
         <span class="tools">
-          <NButton quaternary circle size="tiny" :disabled="index === 0" :aria-label="t('commandEditor.moveUp')" @click="moveBlock(index, -1)"><template #icon><NIcon><ArrowUpOutline /></NIcon></template></NButton>
-          <NButton quaternary circle size="tiny" :disabled="index === blocks.length - 1" :aria-label="t('commandEditor.moveDown')" @click="moveBlock(index, 1)"><template #icon><NIcon><ArrowDownOutline /></NIcon></template></NButton>
-          <NButton quaternary circle size="tiny" type="error" :aria-label="t('common.delete')" @click="removeBlock(index)"><template #icon><NIcon><TrashOutline /></NIcon></template></NButton>
+          <Button quaternary circle size="tiny" :disabled="index === 0" :aria-label="t('commandEditor.moveUp')" @click="moveBlock(index, -1)" icon="i-lucide-arrow-up" />
+          <Button quaternary circle size="tiny" :disabled="index === blocks.length - 1" :aria-label="t('commandEditor.moveDown')" @click="moveBlock(index, 1)" icon="i-lucide-arrow-down" />
+          <Button quaternary circle size="tiny" type="error" :aria-label="t('common.delete')" @click="removeBlock(index)" icon="i-lucide-trash-2" />
         </span>
       </div>
       <VarInput
@@ -152,17 +150,17 @@ const highlighted = ref<number>()
         @update:model-value="(value: string) => setBlock(index, { text: value })"
       />
       <template v-else-if="block.kind === 'example'">
-        <NInput size="small" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" :value="block.user" :placeholder="t('promptEditor.exampleUser')" @update:value="(value: string) => setBlock(index, { user: value })" />
-        <NInput size="small" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" :value="block.assistant" :placeholder="t('promptEditor.exampleAssistant')" class="second" @update:value="(value: string) => setBlock(index, { assistant: value })" />
+        <Input size="small" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" :value="block.user" :placeholder="t('promptEditor.exampleUser')" @update:value="(value: string) => setBlock(index, { user: value })" />
+        <Input size="small" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" :value="block.assistant" :placeholder="t('promptEditor.exampleAssistant')" class="second" @update:value="(value: string) => setBlock(index, { assistant: value })" />
       </template>
       <div v-else-if="block.kind === 'history'" class="history">
-        <NInputNumber size="small" :value="block.rounds" :min="1" :max="50" class="rounds" @update:value="(value: number | null) => setBlock(index, { rounds: value ?? 1 })">
+        <NumberInput size="small" :value="block.rounds" :min="1" :max="50" class="rounds" @update:value="(value: number | null) => setBlock(index, { rounds: value ?? 1 })">
           <template #suffix>{{ t('promptEditor.rounds') }}</template>
-        </NInputNumber>
-        <NRadioGroup size="small" :value="block.source" @update:value="(value: 'node' | 'chat') => setBlock(index, { source: value })">
-          <NRadioButton value="chat">{{ t('promptEditor.fromChat') }}</NRadioButton>
-          <NRadioButton value="node">{{ t('promptEditor.fromNode') }}</NRadioButton>
-        </NRadioGroup>
+        </NumberInput>
+        <RadioGroup size="small" :value="block.source" @update:value="(value: 'node' | 'chat') => setBlock(index, { source: value })">
+          <RadioButton value="chat">{{ t('promptEditor.fromChat') }}</RadioButton>
+          <RadioButton value="node">{{ t('promptEditor.fromNode') }}</RadioButton>
+        </RadioGroup>
       </div>
       <VarInput
         v-else-if="block.kind === 'message'"
@@ -175,15 +173,14 @@ const highlighted = ref<number>()
     <p v-if="!blocks.some((block) => block.kind === 'message')" class="small warn">{{ t('promptEditor.noMessage') }}</p>
 
     <div class="preview-head">
-      <NButton text size="small" @click="showPreview = !showPreview">
-        <template #icon><NIcon><EyeOutline /></NIcon></template>
+      <Button text size="small" @click="showPreview = !showPreview" icon="i-lucide-eye">
         {{ t('promptEditor.preview') }}
-      </NButton>
-      <NTag v-if="showPreview && lines.length" size="tiny" :bordered="false" round>{{ t('promptEditor.tokens', { n: total }) }}</NTag>
+      </Button>
+      <Tag v-if="showPreview && lines.length" size="tiny" round>{{ t('promptEditor.tokens', { n: total }) }}</Tag>
       <span class="muted small source">{{ sample && test.useSample ? t('promptEditor.fromSample') : test.text.trim() ? t('promptEditor.fromTest') : t('promptEditor.fromDefault') }}</span>
-      <NButton v-if="showPreview" quaternary circle size="tiny" :aria-label="t('common.refresh')" @click="refresh"><template #icon><NIcon><RefreshOutline /></NIcon></template></NButton>
+      <Button v-if="showPreview" quaternary circle size="tiny" :aria-label="t('common.refresh')" @click="refresh" icon="i-lucide-refresh-cw" />
     </div>
-    <NSpin v-if="showPreview" :show="previewing" size="small">
+    <Spin v-if="showPreview" :show="previewing" size="small">
       <p v-if="dirty" class="muted small note">{{ t('promptEditor.savedOthers') }}</p>
       <p v-if="previewError" class="small warn">{{ previewError }}</p>
       <p v-else-if="!reached" class="small warn">{{ t('promptEditor.notReached') }}</p>
@@ -203,7 +200,7 @@ const highlighted = ref<number>()
           <pre class="content">{{ line.content }}</pre>
         </li>
       </ol>
-    </NSpin>
+    </Spin>
   </div>
 </template>
 
@@ -214,6 +211,8 @@ const highlighted = ref<number>()
 
 .field-label {
   font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
   margin: 0 0 4px;
   display: flex;
   align-items: center;
@@ -221,14 +220,15 @@ const highlighted = ref<number>()
 }
 
 .hint {
-  margin: 0 0 8px;
+  margin: 0 0 10px;
   line-height: 1.5;
 }
 
 .block {
   --tone: 127, 127, 127;
-  border: 1px solid rgba(var(--tone), 0.28);
+  border: 1px solid var(--line);
   border-left: 3px solid rgba(var(--tone), 0.8);
+  background: var(--s1);
   border-radius: 8px;
   padding: 6px 8px 8px;
   margin-bottom: 6px;
@@ -236,7 +236,7 @@ const highlighted = ref<number>()
 }
 
 .block.lit {
-  background: rgba(var(--tone), 0.08);
+  background: rgba(var(--tone), 0.1);
 }
 
 .kind-persona { --tone: 166, 107, 214; }
@@ -302,7 +302,6 @@ const highlighted = ref<number>()
 }
 
 .warn {
-  color: var(--warning, #f0a020);
   margin: 4px 0;
 }
 
@@ -317,20 +316,20 @@ const highlighted = ref<number>()
 .lines li {
   border-radius: 8px;
   padding: 6px 8px;
-  background: rgba(127, 127, 127, 0.07);
+  background: var(--s2);
   transition: box-shadow 0.15s;
 }
 
 .lines li.role-system {
-  background: rgba(64, 128, 255, 0.08);
+  background: var(--primary-soft);
 }
 
 .lines li.role-assistant {
-  background: rgba(24, 160, 88, 0.08);
+  background: var(--ok-soft);
 }
 
 .lines li.lit {
-  box-shadow: inset 0 0 0 1px rgba(127, 127, 127, 0.45);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 
 .line-head {
@@ -365,3 +364,5 @@ const highlighted = ref<number>()
   }
 }
 </style>
+
+<style scoped src="./panel.css"></style>
