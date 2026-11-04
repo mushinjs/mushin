@@ -877,6 +877,77 @@ const senderRoleNode: NodeType = {
   },
 }
 
+/** Lowercase without spaces, so "Xiao Ming" and "xiaoming" compare equal. */
+const fold = (value: string) => value.toLowerCase().replace(/\s+/g, '')
+
+/** How well a name fits a query: 4 same, 3 starts with it, 2 contains it, 1 has its characters in order, 0 not at all. */
+function nameScore(name: string, query: string) {
+  const a = fold(name)
+  if (!a || !query) return 0
+  if (a === query) return 4
+  if (a.startsWith(query)) return 3
+  if (a.includes(query)) return 2
+  let at = 0
+  for (const char of a) if (char === query[at]) at++
+  return at === query.length ? 1 : 0
+}
+
+const findMemberNode: NodeType = {
+  kind: 'action',
+  type: 'onebot.findMember',
+  category: 'platform',
+  title: text('Find group member', '查找群成员'),
+  description: text(
+    'Finds who a command means by "someone": an @mention, a QQ number, or part of a group card or nickname (closest match wins); empty finds the sender. Feed it a text argument (a user argument only takes @ or numbers), then use userId in nodes such as Poke. In test runs there is no member list, so a name finds a stand-in member 10002.',
+    '找出指令里说的「某人」：可以是 @、QQ 号，或群名片/昵称的一部分（取最接近的）；留空则是发送者。把指令的文本参数接到这里（用户类型参数只接受 @ 和号码），再把 userId 用在戳一戳等节点里。测试运行拿不到成员列表，名字会匹配到替身成员 10002。',
+  ),
+  config: z.object({
+    query: z.string().default('').meta(field(
+      'Who',
+      'An @mention, a QQ number or part of a name; supports references such as {{cmd.target}}. Empty finds the sender.',
+      { 'zh-CN': { title: '找谁', description: '@、QQ 号或名字的一部分；支持 {{cmd.目标}} 这样的引用。留空则是发送者。' } },
+    )),
+    groupId: groupIdField,
+  }),
+  outputs: [
+    port('userId', 'text', 'QQ number', 'QQ 号'),
+    port('name', 'text', 'Display name (card or nickname)', '显示名（名片或昵称）'),
+    port('matches', 'number', 'Members that fit equally well', '同样匹配的成员数'),
+    port('candidates', 'text', 'Closest members, e.g. for "which one?"', '最接近的几位成员，可用于追问'),
+    errorPort,
+  ],
+  execOut: ['found', 'notFound', 'failed'],
+  async run(context) {
+    const { config, session } = context
+    const raw = str(config.query)
+    const query = raw.replace(/^@/, '').trim()
+    const found = (userId: string, name: string, matches = 1, candidates = '') => ({ exec: 'found', outputs: { userId, name, matches, candidates, error: '' } })
+    const none = (error = '') => ({ exec: error ? 'failed' : 'notFound', outputs: { userId: '', name: '', matches: 0, candidates: '', error } })
+    if (!query) return found(session.user.id, session.user.name ?? '')
+    // "@name" in the text stands for an @mention segment, which carries the id.
+    const mention = session.segments.find((segment) => segment.type === 'at' && segment.data.qq !== 'all'
+      && (str(segment.data.name) === query || str(segment.data.qq) === query))
+    if (mention) return found(str(mention.data.qq), str(mention.data.name))
+    if (/^\d{5,}$/.test(query)) return found(query, '')
+    if (session.channel.type !== 'group' && !str(config.groupId)) return none('Names can only be looked up in a group; set the group id')
+    const response = await callApi(context, 'get_group_member_list', { group_id: groupOf(config, session) })
+    if (!response.ok) return none(response.error)
+    if (response.data === null) return found('10002', query)
+    const wanted = fold(query)
+    const ranked = (Array.isArray(response.data) ? response.data : [])
+      .map((member: Record<string, unknown>) => {
+        const name = str(member.card) || str(member.nickname)
+        return { userId: str(member.user_id), name, score: Math.max(nameScore(str(member.card), wanted), nameScore(str(member.nickname), wanted)) }
+      })
+      .filter((member) => member.score > 0 && member.userId)
+      .sort((a, b) => b.score - a.score || a.name.length - b.name.length)
+    if (!ranked.length) return none()
+    const best = ranked[0]
+    const candidates = ranked.slice(0, 5).map((member) => `${member.name}(${member.userId})`).join('、')
+    return found(best.userId, best.name, ranked.filter((member) => member.score === best.score).length, candidates)
+  },
+}
+
 const callApiNode: NodeType = {
   kind: 'action',
   type: 'onebot.call',
@@ -915,5 +986,5 @@ export const onebotNodes: NodeType[] = ([
   memberJoin, memberLeave, poke, recall, groupBan, groupAdmin, groupUpload, friendAdd, friendRequest, groupRequest, groupChange, honor, anyEvent,
   muteNode, muteAllNode, kickNode, setAdminNode, setCardNode, setTitleNode, setGroupNameNode, groupNoticeNode, essenceNode, groupSignNode, leaveGroupNode,
   deleteMsgNode, getMsgNode, forwardNode, pokeNode, emojiLikeNode, likeNode, handleRequestNode,
-  memberInfoNode, userInfoNode, groupInfoNode, senderRoleNode, callApiNode,
+  memberInfoNode, userInfoNode, groupInfoNode, findMemberNode, senderRoleNode, callApiNode,
 ] as NodeType[]).map((node) => ({ ...node, platforms: ['onebot'] }))

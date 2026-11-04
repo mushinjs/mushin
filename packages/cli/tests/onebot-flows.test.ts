@@ -108,6 +108,36 @@ describe('OneBot flow nodes', () => {
     expect(callsOf('send_private_msg').at(-1)!.params.user_id).toBe(46)
   })
 
+  it('finds who a command means by @, QQ number or part of a name, and pokes them', async () => {
+    napcat.respond('get_group_member_list', [
+      { user_id: 61, nickname: 'Xiao Ming', card: '' },
+      { user_id: 62, nickname: 'ming', card: '小明同学' },
+      { user_id: 63, nickname: 'Alice', card: '' },
+    ])
+    await flow('Poke someone', [
+      { id: 'cmd', type: 'trigger.command', config: { name: 'pokeit', args: [{ name: 'who', type: 'text', optional: true }] } },
+      { id: 'find', type: 'onebot.findMember', config: { query: '{{cmd.who}}' } },
+      { id: 'poke', type: 'onebot.sendPoke', config: { userId: '{{find.userId}}' } },
+      { id: 'none', type: 'action.reply', config: { text: 'nobody called {{cmd.who}}' } },
+    ], [edge('cmd', 'next', 'find'), edge('find', 'found', 'poke'), edge('find', 'notFound', 'none')])
+    const pokes = () => callsOf('group_poke').filter((call) => call.params.group_id === 510).map((call) => call.params.user_id)
+
+    napcat.pushGroupMessage('510', '64', text('/pokeit'))
+    await waitFor(() => pokes().length === 1)
+    napcat.pushGroupMessage('510', '64', text('/pokeit 小明'))
+    await waitFor(() => pokes().length === 2)
+    napcat.pushGroupMessage('510', '64', text('/pokeit ali'))
+    await waitFor(() => pokes().length === 3)
+    napcat.pushGroupMessage('510', '64', text('/pokeit 123456'))
+    await waitFor(() => pokes().length === 4)
+    napcat.pushGroupMessage('510', '64', [{ type: 'text', data: { text: '/pokeit ' } }, { type: 'at', data: { qq: '65', name: 'Bob' } }])
+    await waitFor(() => pokes().length === 5)
+    expect(pokes()).toEqual([64, 62, 63, 123456, 65])
+
+    napcat.pushGroupMessage('510', '64', text('/pokeit zed'))
+    await waitFor(() => sentTexts('send_group_msg').includes('nobody called zed'))
+  })
+
   it('keeps the sender role and replies to temporary chats with their group', async () => {
     await flow('Role', [
       { id: 'k', type: 'trigger.keyword', config: { keywords: ['whoami'], mode: 'exact' } },
