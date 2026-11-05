@@ -224,6 +224,12 @@ watch(() => props.groups, () => requestAnimationFrame(() => apply(collapsed.valu
   outline-offset: -2px;
 }
 
+/* At rest when collapsed, the words stay hidden even on elements GSAP has not styled yet. */
+.side.collapsed [data-fade] {
+  visibility: hidden;
+  opacity: 0;
+}
+
 .item-icon {
   flex: none;
   font-size: 18px;

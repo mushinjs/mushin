@@ -20,9 +20,10 @@ withDefaults(defineProps<{
 </script>
 
 <template>
-  <slot v-if="disabled || (!content && !$slots.default)" name="trigger" />
+  <!-- `disabled` goes to the root rather than swapping branches, so toggling it keeps the trigger's DOM. -->
+  <slot v-if="!content && !$slots.default" name="trigger" />
   <TooltipProvider v-else :delay-duration="delay">
-    <TooltipRoot>
+    <TooltipRoot :disabled="disabled">
       <TooltipTrigger as-child>
         <slot name="trigger" />
       </TooltipTrigger>
