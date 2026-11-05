@@ -3,8 +3,7 @@
  * A bot at a glance: what it handled today, how it connects, where it is busiest and which flows
  * run on it. Each block links to the page that has the detail.
  */
-import { ArrowBackOutline, ArrowForwardOutline, ChevronForwardOutline, GitNetworkOutline } from '@vicons/ionicons5'
-import { NButton, NEmpty, NIcon } from 'naive-ui'
+import { Button, Empty } from '@mushin/ui'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../api'
@@ -81,13 +80,10 @@ const connection = computed(() => {
       <section class="panel">
         <header class="panel-head">
           <h2>{{ t('bot.connection') }}</h2>
-          <RouterLink :to="`/bots/${bot.id}/connection`" class="more">{{ t('botHome.edit') }}<NIcon :size="14"><ChevronForwardOutline /></NIcon></RouterLink>
+          <RouterLink :to="`/bots/${bot.id}/connection`" class="more">{{ t('botHome.edit') }}<span class="i-lucide-chevron-right text-[14px]" /></RouterLink>
         </header>
         <div class="conn">
-          <NIcon :size="16" class="conn-icon">
-            <ArrowBackOutline v-if="connection.mode === 'ws-reverse'" />
-            <ArrowForwardOutline v-else />
-          </NIcon>
+          <span class="conn-icon text-[16px]" :class="connection.mode === 'ws-reverse' ? 'i-lucide-arrow-left' : 'i-lucide-arrow-right'" />
           <span class="conn-mode">{{ connection.tag }}</span>
           <span class="mono conn-address" :title="connection.address">{{ connection.address }}</span>
         </div>
@@ -95,7 +91,7 @@ const connection = computed(() => {
         <p v-else-if="bot.status !== 'online'" class="conn-note">{{ bot.enabled ? t('botHome.notConnected') : t('bots.stoppedHint') }}</p>
         <RouterLink v-else :to="`/bots/${bot.id}/runs`" class="conn-note activity"><BotActivity :bot-id="bot.id" /></RouterLink>
         <RouterLink v-if="bot.status !== 'online' && bot.enabled" :to="`/bots/${bot.id}/connection`">
-          <NButton size="small" type="primary" secondary>{{ t('botHome.setUp') }}</NButton>
+          <Button size="small" type="primary" secondary>{{ t('botHome.setUp') }}</Button>
         </RouterLink>
       </section>
 
@@ -117,12 +113,12 @@ const connection = computed(() => {
       <section class="panel wide">
         <header class="panel-head">
           <h2>{{ t('botHome.flowsOnBot') }}</h2>
-          <RouterLink to="/flows" class="more">{{ t('nav.flows') }}<NIcon :size="14"><ChevronForwardOutline /></NIcon></RouterLink>
+          <RouterLink to="/flows" class="more">{{ t('nav.flows') }}<span class="i-lucide-chevron-right text-[14px]" /></RouterLink>
         </header>
         <ul v-if="flows.length" class="flows">
           <li v-for="flow in flows" :key="flow.id">
             <RouterLink :to="`/flows/${flow.id}`" class="flow hover-row" :class="{ off: !flow.enabled }">
-              <NIcon :size="16" class="flow-icon"><GitNetworkOutline /></NIcon>
+              <span class="i-lucide-network flow-icon text-[16px]" />
               <span class="flow-name">{{ flow.name }}</span>
               <span class="flow-triggers">{{ flow.triggers.filter((item) => !item.skip).map((item) => item.summary).filter(Boolean).join('、') }}</span>
               <span v-if="!flow.enabled" class="faint">{{ t('flows.disabledTag') }}</span>
@@ -130,7 +126,7 @@ const connection = computed(() => {
             </RouterLink>
           </li>
         </ul>
-        <NEmpty v-else :description="t('botHome.noFlows')" size="small" class="empty" />
+        <Empty v-else :description="t('botHome.noFlows')" size="small" class="empty" />
       </section>
     </div>
   </div>

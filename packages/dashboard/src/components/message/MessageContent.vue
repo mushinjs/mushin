@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { DocumentOutline, DownloadOutline, MicOutline } from '@vicons/ionicons5'
-import { NButton, NIcon, useMessage } from 'naive-ui'
+import { Button, useToast } from '@mushin/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { forwardedMessage, type ForwardedMessage, loadableUrl, type MediaChannel, resolveMedia, saveFile } from '../../media'
@@ -13,7 +12,7 @@ import VideoCard from './VideoCard.vue'
 /** A message's segments as QQ shows them: text inline; images, videos, files, cards and forwards as blocks. */
 const props = defineProps<{ segments: Segment[]; botId: string; channel?: MediaChannel }>()
 const { t, te } = useI18n()
-const message = useMessage()
+const message = useToast()
 
 type Item =
   | { kind: 'segment'; segment: Segment }
@@ -107,17 +106,12 @@ async function download(segment: Segment) {
       <MediaImage v-if="item.segment.type === 'image' || item.segment.type === 'mface'" :bot-id="botId" :segment="item.segment" :channel="channel" />
       <VideoCard v-else-if="item.segment.type === 'video'" :bot-id="botId" :segment="item.segment" :channel="channel" />
       <span v-else-if="item.segment.type === 'file' || item.segment.type === 'record'" class="file">
-        <NIcon :size="28" class="file-icon">
-          <MicOutline v-if="item.segment.type === 'record'" />
-          <DocumentOutline v-else />
-        </NIcon>
+        <span class="file-icon text-[28px]" :class="item.segment.type === 'record' ? 'i-lucide-mic' : 'i-lucide-file'" />
         <span class="file-body">
           <span class="file-name">{{ item.segment.type === 'record' ? label('record') : item.segment.data.name ?? item.segment.data.file ?? label('file') }}</span>
           <span v-if="Number(item.segment.data.file_size)" class="file-size">{{ formatBytes(Number(item.segment.data.file_size)) }}</span>
         </span>
-        <NButton circle size="small" quaternary :aria-label="t('segment.download')" :title="t('segment.download')" @click="download(item.segment)">
-          <template #icon><NIcon><DownloadOutline /></NIcon></template>
-        </NButton>
+        <Button circle size="small" quaternary :aria-label="t('segment.download')" :title="t('segment.download')" icon="i-lucide-download" @click="download(item.segment)" />
       </span>
       <template v-else-if="item.segment.type === 'json' && card(item.segment)">
         <component
@@ -152,9 +146,9 @@ async function download(segment: Segment) {
   width: min(280px, 100%);
   margin: 2px 0;
   padding: 10px 12px;
-  border: 1px solid rgba(127, 127, 127, 0.22);
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(127, 127, 127, 0.08);
+  background: var(--s2);
   white-space: normal;
 }
 
@@ -188,16 +182,16 @@ async function download(segment: Segment) {
   width: min(300px, 100%);
   margin: 2px 0;
   padding: 10px 12px 8px;
-  border: 1px solid rgba(127, 127, 127, 0.22);
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(127, 127, 127, 0.08);
+  background: var(--s2);
   color: inherit;
   white-space: normal;
   text-decoration: none;
 }
 
 a.card:hover {
-  background: rgba(127, 127, 127, 0.14);
+  background: var(--s3);
   text-decoration: none;
 }
 
@@ -231,7 +225,7 @@ a.card:hover {
 .card-foot {
   margin-top: 6px;
   padding-top: 6px;
-  border-top: 1px solid rgba(127, 127, 127, 0.2);
+  border-top: 1px solid var(--line);
   font-size: 12px;
   opacity: 0.6;
 }

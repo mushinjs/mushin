@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NModal, NSpin } from 'naive-ui'
+import { Modal, Spin } from '@mushin/ui'
 import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { type ForwardedMessage, loadForward, type MediaChannel } from '../../media'
@@ -68,8 +68,8 @@ function show() {
     <span class="foot">{{ list ? t('forward.view', { count: list.length }) : t('forward.viewAny') }}</span>
   </button>
 
-  <NModal v-model:show="open" preset="card" :title="title" :style="{ width: 'min(560px, calc(100vw - 32px))' }">
-    <NSpin :show="loading">
+  <Modal v-model:show="open" :title="title" :width="560">
+    <Spin :show="loading">
       <ol class="history">
         <li v-for="(item, index) in list ?? []" :key="index" class="entry">
           <div class="meta">
@@ -81,8 +81,8 @@ function show() {
           </div>
         </li>
       </ol>
-    </NSpin>
-  </NModal>
+    </Spin>
+  </Modal>
 </template>
 
 <style scoped>
@@ -92,9 +92,9 @@ function show() {
   gap: 2px;
   width: min(300px, 100%);
   padding: 10px 12px 8px;
-  border: 1px solid rgba(127, 127, 127, 0.22);
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(127, 127, 127, 0.08);
+  background: var(--s2);
   color: inherit;
   font: inherit;
   text-align: left;
@@ -103,7 +103,7 @@ function show() {
 }
 
 .forward:hover {
-  background: rgba(127, 127, 127, 0.14);
+  background: var(--s3);
 }
 
 .forward:focus-visible {
@@ -133,7 +133,7 @@ function show() {
 .foot {
   margin-top: 6px;
   padding-top: 6px;
-  border-top: 1px solid rgba(127, 127, 127, 0.2);
+  border-top: 1px solid var(--line);
   font-size: 12px;
   opacity: 0.6;
 }
@@ -162,7 +162,7 @@ function show() {
   max-width: 100%;
   padding: 8px 12px;
   border-radius: 4px 12px 12px 12px;
-  background: rgba(127, 127, 127, 0.1);
+  background: var(--s2);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;

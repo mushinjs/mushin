@@ -1,10 +1,6 @@
 <script setup lang="ts">
-import {
-  AlertCircleOutline, ArrowBackOutline, ChatbubbleEllipsesOutline, CodeSlashOutline, DocumentTextOutline, ExtensionPuzzleOutline,
-  GridOutline, LinkOutline, ListOutline, PersonCircleOutline, ShieldCheckmarkOutline, TrashOutline,
-} from '@vicons/ionicons5'
-import { NButton, NIcon, useDialog, useMessage } from 'naive-ui'
-import { type Component, computed, onMounted } from 'vue'
+import { Button, useConfirm, useToast } from '@mushin/ui'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { call } from '../api'
@@ -24,8 +20,8 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const data = useDataStore()
-const message = useMessage()
-const dialog = useDialog()
+const message = useToast()
+const dialog = useConfirm()
 
 const id = computed(() => String(route.params.id))
 const tab = computed(() => String(route.params.tab))
@@ -36,34 +32,34 @@ onMounted(() => {
 })
 
 // The bot's pages, grouped by what you do there: watch it, shape how it behaves, or set it up.
-interface Section { key: string, label: string, icon: Component, target: string, count?: number }
+interface Section { key: string, label: string, icon: string, target: string, count?: number }
 const sections = computed<{ key: string, label: string, items: Section[] }[]>(() => [
   {
     key: 'observe',
     label: t('bot.groupObserve'),
     items: [
-      { key: 'home', label: t('bot.home'), icon: GridOutline, target: 'bot.home' },
-      { key: 'live', label: t('bot.live'), icon: ChatbubbleEllipsesOutline, target: 'bot.live' },
-      { key: 'runs', label: t('runs.tab'), icon: ListOutline, target: 'bot.runs' },
-      { key: 'logs', label: t('bot.logs'), icon: DocumentTextOutline, target: 'bot.logs' },
+      { key: 'home', label: t('bot.home'), icon: 'i-lucide-layout-grid', target: 'bot.home' },
+      { key: 'live', label: t('bot.live'), icon: 'i-lucide-message-circle-more', target: 'bot.live' },
+      { key: 'runs', label: t('runs.tab'), icon: 'i-lucide-list', target: 'bot.runs' },
+      { key: 'logs', label: t('bot.logs'), icon: 'i-lucide-file-text', target: 'bot.logs' },
     ],
   },
   {
     key: 'behave',
     label: t('bot.groupBehavior'),
     items: [
-      { key: 'plugins', label: t('bot.plugins'), icon: ExtensionPuzzleOutline, target: 'bot.plugins', count: bot.value?.plugins.filter((plugin) => plugin.enabled).length },
-      { key: 'commands', label: t('bot.commands'), icon: CodeSlashOutline, target: 'bot.commands' },
-      { key: 'personas', label: t('bot.personas'), icon: PersonCircleOutline, target: 'bot.personas' },
+      { key: 'plugins', label: t('bot.plugins'), icon: 'i-lucide-puzzle', target: 'bot.plugins', count: bot.value?.plugins.filter((plugin) => plugin.enabled).length },
+      { key: 'commands', label: t('bot.commands'), icon: 'i-lucide-code', target: 'bot.commands' },
+      { key: 'personas', label: t('bot.personas'), icon: 'i-lucide-circle-user', target: 'bot.personas' },
     ],
   },
   {
     key: 'setup',
     label: t('bot.groupSettings'),
     items: [
-      { key: 'connection', label: t('bot.connection'), icon: LinkOutline, target: 'bot.connection' },
-      { key: 'permissions', label: t('bot.permissions'), icon: ShieldCheckmarkOutline, target: 'bot.permissions' },
-      { key: 'danger', label: t('bot.danger'), icon: TrashOutline, target: 'bot.danger' },
+      { key: 'connection', label: t('bot.connection'), icon: 'i-lucide-link', target: 'bot.connection' },
+      { key: 'permissions', label: t('bot.permissions'), icon: 'i-lucide-shield-check', target: 'bot.permissions' },
+      { key: 'danger', label: t('bot.danger'), icon: 'i-lucide-trash-2', target: 'bot.danger' },
     ],
   },
 ])
@@ -112,9 +108,7 @@ function remove() {
     <template v-if="bot">
       <PageHeader :title="bot.name" :lead="account">
         <template #before>
-          <NButton quaternary circle :aria-label="t('common.back')" class="back" @click="router.push('/bots')">
-            <template #icon><NIcon><ArrowBackOutline /></NIcon></template>
-          </NButton>
+          <Button quaternary circle :aria-label="t('common.back')" class="back" icon="i-lucide-arrow-left" @click="router.push('/bots')" />
         </template>
         <template #title>
           {{ bot.name }}
@@ -124,9 +118,9 @@ function remove() {
           {{ account }} · <span class="error">{{ bot.error }}</span>
           · <RouterLink :to="`/bots/${id}/logs`">{{ t('bot.viewLogs') }}</RouterLink>
         </template>
-        <NButton v-if="bot.enabled" @click="run('bots.start')">{{ t('bots.restart') }}</NButton>
-        <NButton v-if="bot.enabled" @click="run('bots.stop')">{{ t('common.stop') }}</NButton>
-        <NButton v-else type="primary" @click="run('bots.start')">{{ t('common.start') }}</NButton>
+        <Button v-if="bot.enabled" @click="run('bots.start')">{{ t('bots.restart') }}</Button>
+        <Button v-if="bot.enabled" @click="run('bots.stop')">{{ t('common.stop') }}</Button>
+        <Button v-else type="primary" @click="run('bots.start')">{{ t('common.start') }}</Button>
       </PageHeader>
 
       <div class="detail">
@@ -142,7 +136,7 @@ function remove() {
               :class="{ on: tab === item.key, danger: item.key === 'danger' }"
               :aria-current="tab === item.key ? 'page' : undefined"
             >
-              <NIcon :size="16"><component :is="item.icon" /></NIcon>
+              <span class="text-[16px]" :class="item.icon" />
               <span class="subnav-label">{{ item.label }}</span>
               <span v-if="item.count" class="subnav-count">{{ item.count }}</span>
             </RouterLink>
@@ -162,12 +156,12 @@ function remove() {
           <BotPermissions v-else-if="tab === 'permissions'" :bot="bot" />
           <div v-else-if="tab === 'danger'" class="danger-zone">
             <div class="danger-row">
-              <NIcon :size="20" class="danger-icon"><AlertCircleOutline /></NIcon>
+              <span class="i-lucide-circle-alert danger-icon text-[20px]" />
               <div class="danger-text">
                 <strong>{{ t('bot.deleteBot') }}</strong>
                 <p>{{ t('bots.deleteHint') }}</p>
               </div>
-              <NButton type="error" @click="remove">{{ t('common.delete') }}</NButton>
+              <Button type="error" @click="remove">{{ t('common.delete') }}</Button>
             </div>
           </div>
         </section>

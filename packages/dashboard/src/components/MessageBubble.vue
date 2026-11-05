@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NPopover, NTag } from 'naive-ui'
+import { Popover, Tag } from '@mushin/ui'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -65,7 +65,7 @@ const bare = computed(() => {
       <span class="who">{{ record.user.name ?? record.user.id }}</span>
       <span class="time">{{ formatTime(record.timestamp) }}</span>
     </div>
-    <NPopover trigger="manual" :show="open" :placement="outgoing ? 'left-start' : 'right-start'" :style="{ maxWidth: '300px' }">
+    <Popover :show="open" :placement="outgoing ? 'left' : 'right'" align="start" keep-focus :style="{ maxWidth: '300px' }">
       <template #trigger>
         <div
           class="bubble"
@@ -86,15 +86,15 @@ const bare = computed(() => {
         <dt>{{ t('hover.platforms') }}</dt>
         <dd>
           <template v-if="record.platforms.length">
-            <NTag v-for="platform in record.platforms" :key="platform" size="tiny" :bordered="false">{{ platform }}</NTag>
+            <Tag v-for="platform in record.platforms" :key="platform" size="tiny">{{ platform }}</Tag>
           </template>
           <span v-else>{{ t('hover.noPlatform') }}</span>
         </dd>
         <dt>{{ t('hover.source') }}</dt>
         <dd>
-          <NTag size="tiny" :type="source.kind === 'llm' ? 'info' : source.kind === 'plugin' ? 'success' : 'default'" :bordered="false">
+          <Tag size="tiny" :type="source.kind === 'llm' ? 'info' : source.kind === 'plugin' ? 'success' : 'default'">
             {{ sourceLabel }}
-          </NTag>
+          </Tag>
         </dd>
         <template v-for="[key, value] in sourceDetail" :key="key">
           <dt class="sub">{{ key }}</dt>
@@ -107,7 +107,7 @@ const bare = computed(() => {
           </dd>
         </template>
       </dl>
-    </NPopover>
+    </Popover>
   </div>
 </template>
 
@@ -142,7 +142,7 @@ const bare = computed(() => {
   padding: 8px 12px;
   border-radius: 12px;
   border-top-left-radius: 4px;
-  background: rgba(127, 127, 127, 0.12);
+  background: var(--s3);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
@@ -154,12 +154,12 @@ const bare = computed(() => {
 .out .bubble {
   border-top-left-radius: 12px;
   border-top-right-radius: 4px;
-  background: rgba(59, 74, 140, 0.14);
+  background: var(--primary-soft);
 }
 
 .bubble:hover,
 .bubble:focus-visible {
-  border-color: rgba(124, 139, 217, 0.6);
+  border-color: var(--primary);
 }
 
 .bubble.bare,
@@ -169,11 +169,11 @@ const bare = computed(() => {
 }
 
 .out .bubble.source-llm {
-  background: rgba(32, 128, 240, 0.14);
+  background: var(--info-soft);
 }
 
 .out .bubble.source-plugin {
-  background: rgba(24, 160, 88, 0.14);
+  background: var(--ok-soft);
 }
 
 .info {

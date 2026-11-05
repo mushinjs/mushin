@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NImage } from 'naive-ui'
+import { Image } from '@mushin/ui'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { loadableUrl, type MediaChannel, resolveMedia } from '../../media'
@@ -45,10 +45,11 @@ watch(() => props.segment, reset)
       QQ's image servers answer requests that carry another site's address as the referrer with an
       anti-hotlinking placeholder, so images are fetched without one.
     -->
-    <NImage
+    <Image
       v-if="src && state !== 'failed'"
       :src="src"
-      :img-props="{ referrerpolicy: 'no-referrer', alt: '' }"
+      referrerpolicy="no-referrer"
+      alt=""
       :preview-disabled="segment.type === 'mface'"
       object-fit="contain"
       class="image"
@@ -67,18 +68,15 @@ watch(() => props.segment, reset)
   margin: 2px 0;
 }
 
-.image :deep(img) {
-  display: block;
+.image {
   max-width: min(320px, 100%);
   max-height: 320px;
   border-radius: 8px;
-  cursor: zoom-in;
 }
 
-.sticker .image :deep(img) {
+.sticker .image {
   max-width: 140px;
   max-height: 140px;
-  cursor: default;
 }
 
 .placeholder {
@@ -86,7 +84,7 @@ watch(() => props.segment, reset)
   width: 160px;
   height: 120px;
   border-radius: 8px;
-  background: rgba(127, 127, 127, 0.14);
+  background: var(--s2);
 }
 
 .missing {

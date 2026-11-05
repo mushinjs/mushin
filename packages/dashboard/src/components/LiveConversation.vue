@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { EllipsisHorizontal, PeopleOutline, PersonOutline, SendOutline } from '@vicons/ionicons5'
-import { NButton, NCard, NDropdown, NEmpty, NIcon, NInput, NModal, NSpin, NTag, useMessage } from 'naive-ui'
+import { Button, Card, Dropdown, Empty, Input, Modal, Spin, Tag, useToast } from '@mushin/ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -13,7 +12,7 @@ import MessageBubble from './MessageBubble.vue'
 
 const props = defineProps<{ botId: string }>()
 const { t } = useI18n()
-const message = useMessage()
+const message = useToast()
 const data = useDataStore()
 const router = useRouter()
 const agent = useAgentStore()
@@ -170,7 +169,7 @@ async function send() {
 </script>
 
 <template>
-  <NCard content-style="padding: 0">
+  <Card class="live-card">
     <div class="live">
       <nav class="channels" :aria-label="t('live.channels')">
         <div v-if="!channels.length" class="channels-empty">{{ t('live.noChannels') }}</div>
@@ -182,10 +181,7 @@ async function send() {
           :class="{ active: key(channel) === selected }"
           @click="selected = key(channel)"
         >
-          <NIcon size="18" class="channel-icon">
-            <PeopleOutline v-if="channel.type === 'group'" />
-            <PersonOutline v-else />
-          </NIcon>
+          <span class="channel-icon text-[18px]" :class="channel.type === 'group' ? 'i-lucide-users' : 'i-lucide-user'" />
           <span class="channel-body">
             <span class="channel-name">{{ channel.name ?? channel.id }}</span>
             <span class="channel-last">{{ channel.lastText }}</span>
@@ -201,56 +197,56 @@ async function send() {
           <span class="sub hover-hint">{{ t('live.hoverHint') }}</span>
         </header>
         <div ref="list" class="messages">
-          <NEmpty v-if="!records.length" :description="t('live.empty')" class="messages-empty" />
+          <Empty v-if="!records.length" :description="t('live.empty')" class="messages-empty" />
           <div v-for="record in records" :key="record.id" class="message-row" :class="{ out: record.direction === 'out' }">
             <MessageBubble :record="record" />
-            <NDropdown v-if="record.direction === 'in'" trigger="click" :options="actionOptions" size="small" @select="(key: string) => onAction(key, record)">
-              <NButton quaternary circle size="tiny" class="message-actions" :aria-label="t('live.actions')">
-                <template #icon><NIcon><EllipsisHorizontal /></NIcon></template>
-              </NButton>
-            </NDropdown>
+            <Dropdown v-if="record.direction === 'in'" :options="actionOptions" @select="(key: string) => onAction(key, record)">
+              <Button quaternary circle size="tiny" class="message-actions" :aria-label="t('live.actions')" icon="i-lucide-ellipsis" />
+            </Dropdown>
           </div>
         </div>
         <footer v-if="current" class="composer">
-          <NInput
+          <Input
             v-model:value="draft"
             :placeholder="bot?.status === 'online' ? t('live.sendAs', { name: bot?.selfName ?? bot?.name }) : t('live.offline')"
             :disabled="bot?.status !== 'online'"
             @keyup.enter="send"
           />
-          <NButton type="primary" :loading="sending" :disabled="!draft.trim() || bot?.status !== 'online'" :aria-label="t('live.send')" @click="send">
-            <template #icon><NIcon><SendOutline /></NIcon></template>
-          </NButton>
+          <Button type="primary" :loading="sending" :disabled="!draft.trim() || bot?.status !== 'online'" :aria-label="t('live.send')" icon="i-lucide-send" @click="send" />
         </footer>
       </section>
     </div>
-  </NCard>
+  </Card>
 
-  <NModal :show="!!runsFor" preset="card" :title="t('live.runsTitle')" :style="{ width: 'min(520px, calc(100vw - 32px))' }" @update:show="(show: boolean) => { if (!show) runsFor = undefined }">
+  <Modal :show="!!runsFor" :title="t('live.runsTitle')" :width="520" @update:show="(show: boolean) => { if (!show) runsFor = undefined }">
     <template v-if="runsFor">
       <p class="muted quoted">{{ runsFor.user.name ?? runsFor.user.id }}：{{ segmentsText(runsFor.segments) }}</p>
-      <NSpin :show="loadingRuns">
+      <Spin :show="loadingRuns">
         <p v-if="!runRows.length && !loadingRuns" class="muted small">{{ t('live.noRuns') }}</p>
         <ul class="run-list">
           <li v-for="row in runRows" :key="row.id">
             <button type="button" class="run-row" @click="openRun(row)">
               <strong>{{ row.flowName }}</strong>
-              <NTag size="small" :bordered="false" :type="row.status === 'ok' ? 'success' : row.status === 'error' ? 'error' : 'default'">{{ t(`runs.status.${row.status}`) }}</NTag>
+              <Tag size="small" :type="row.status === 'ok' ? 'success' : row.status === 'error' ? 'error' : 'default'">{{ t(`runs.status.${row.status}`) }}</Tag>
               <span class="muted small">{{ formatTime(row.startedAt) }}</span>
               <span v-if="row.error" class="small run-error">{{ row.error }}</span>
             </button>
           </li>
         </ul>
-      </NSpin>
+      </Spin>
       <div class="run-actions">
-        <NButton size="small" @click="newFlow(runsFor!); runsFor = undefined">{{ t('live.actionNewFlow') }}</NButton>
-        <NButton size="small" @click="quoteToAgent(runsFor!); runsFor = undefined">{{ t('live.actionAgent') }}</NButton>
+        <Button size="small" @click="newFlow(runsFor!); runsFor = undefined">{{ t('live.actionNewFlow') }}</Button>
+        <Button size="small" @click="quoteToAgent(runsFor!); runsFor = undefined">{{ t('live.actionAgent') }}</Button>
       </div>
     </template>
-  </NModal>
+  </Modal>
 </template>
 
 <style scoped>
+.live-card :deep(.mu-card__body) {
+  padding: 0;
+}
+
 .message-row {
   display: flex;
   align-items: flex-start;
@@ -296,7 +292,7 @@ async function send() {
   gap: 8px;
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid rgba(127, 127, 127, 0.2);
+  border: 1px solid var(--line);
   border-radius: 8px;
   background: transparent;
   color: inherit;
@@ -306,11 +302,11 @@ async function send() {
 }
 
 .run-row:hover {
-  background: rgba(127, 127, 127, 0.08);
+  background: var(--s2);
 }
 
 .run-error {
-  color: var(--error, #d03050);
+  color: var(--bad);
   width: 100%;
 }
 
@@ -335,7 +331,7 @@ async function send() {
 .channels {
   width: 260px;
   flex: none;
-  border-right: 1px solid rgba(127, 127, 127, 0.18);
+  border-right: 1px solid var(--line);
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
@@ -361,11 +357,11 @@ async function send() {
 }
 
 .channel:hover {
-  background: rgba(127, 127, 127, 0.08);
+  background: var(--s2);
 }
 
 .channel.active {
-  background: rgba(59, 74, 140, 0.12);
+  background: var(--primary-soft);
 }
 
 .channel-icon {
@@ -411,7 +407,7 @@ async function send() {
   gap: 10px;
   flex-wrap: wrap;
   padding: 12px 16px;
-  border-bottom: 1px solid rgba(127, 127, 127, 0.18);
+  border-bottom: 1px solid var(--line);
 }
 
 .hover-hint {
@@ -437,7 +433,7 @@ async function send() {
   display: flex;
   gap: 8px;
   padding: 12px 16px;
-  border-top: 1px solid rgba(127, 127, 127, 0.18);
+  border-top: 1px solid var(--line);
 }
 
 @media (max-width: 720px) {
@@ -450,7 +446,7 @@ async function send() {
     width: auto;
     max-height: 180px;
     border-right: none;
-    border-bottom: 1px solid rgba(127, 127, 127, 0.18);
+    border-bottom: 1px solid var(--line);
   }
 
   .messages {

@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { DownloadOutline, Play } from '@vicons/ionicons5'
-import { NButton, NIcon, useMessage } from 'naive-ui'
+import { Button, useToast } from '@mushin/ui'
 import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { loadableUrl, type MediaChannel, resolveMedia, saveFile } from '../../media'
@@ -9,7 +8,7 @@ import { formatBytes } from '../../utils'
 
 const props = defineProps<{ botId: string; segment: Segment; channel?: MediaChannel }>()
 const { t } = useI18n()
-const message = useMessage()
+const message = useToast()
 
 const src = ref(loadableUrl(props.segment.data.url))
 const playing = ref(false)
@@ -81,38 +80,43 @@ async function download() {
     />
     <div v-else class="video blank" />
     <button v-if="!playing" type="button" class="play" :aria-label="t('segment.play')" @click="play">
-      <NIcon :size="26"><Play /></NIcon>
+      <span class="i-ph-play-fill text-[26px]" />
     </button>
     <div class="bar">
       <span v-if="size" class="size">{{ formatBytes(size) }}</span>
-      <NButton circle size="small" secondary :loading="downloading" :aria-label="t('segment.download')" :title="t('segment.download')" @click.stop="download">
-        <template #icon><NIcon><DownloadOutline /></NIcon></template>
-      </NButton>
+      <Button circle size="small" secondary :loading="downloading" :aria-label="t('segment.download')" :title="t('segment.download')" icon="i-lucide-download" @click.stop="download" />
     </div>
   </div>
 </template>
 
 <style scoped>
+/* Video stays dark in both themes, like any player; its colors are named once here. */
 .video-card {
+  --video-bg: #000;
+  --video-fg: #fff;
+  --video-ring: rgba(255, 255, 255, 0.85);
+  --video-scrim: rgba(0, 0, 0, 0.45);
+  --video-scrim-strong: rgba(0, 0, 0, 0.6);
+  --video-blank: linear-gradient(135deg, #3c405a, #141620);
   position: relative;
   display: block;
   width: min(320px, 100%);
   margin: 2px 0;
   border-radius: 8px;
   overflow: hidden;
-  background: #000;
+  background: var(--video-bg);
 }
 
 .video {
   display: block;
   width: 100%;
   max-height: 360px;
-  background: #000;
+  background: var(--video-bg);
 }
 
 .blank {
   aspect-ratio: 16 / 9;
-  background: linear-gradient(135deg, rgba(60, 64, 90, 0.9), rgba(20, 22, 32, 0.95));
+  background: var(--video-blank);
 }
 
 .play {
@@ -123,15 +127,15 @@ async function download() {
   height: 54px;
   display: grid;
   place-items: center;
-  border: 2px solid rgba(255, 255, 255, 0.85);
+  border: 2px solid var(--video-ring);
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.45);
-  color: #fff;
+  background: var(--video-scrim);
+  color: var(--video-fg);
   cursor: pointer;
 }
 
 .play:hover {
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--video-scrim-strong);
 }
 
 .play:focus-visible {
@@ -151,8 +155,8 @@ async function download() {
 .size {
   padding: 1px 6px;
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.5);
-  color: #fff;
+  background: var(--video-scrim);
+  color: var(--video-fg);
   font-size: 12px;
 }
 </style>
