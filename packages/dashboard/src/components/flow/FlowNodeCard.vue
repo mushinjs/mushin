@@ -41,6 +41,24 @@ const sampleMark = computed(() => editor.sampleTriggers.value.get(props.id))
 const execOut = computed(() => ports.value?.execOut ?? [])
 const branches = computed(() => (execOut.value.length === 1 && execOut.value[0] === 'next' ? [] : execOut.value))
 
+// Hovering a handle lights up its connections and the handles at their other ends. The edges are
+// left alone while a button is down, so a connection being drawn or moved keeps its edges as they are.
+const linked = (handle: string) => editor.linkedHandles.value.has(`${props.id}:${handle}`)
+function hoverHandle(handle: string, event: PointerEvent) {
+  if (!event.buttons) editor.hoveredHandle.value = { node: props.id, handle }
+}
+function clearHover() {
+  if (editor.hoveredHandle.value?.node === props.id) editor.hoveredHandle.value = undefined
+}
+function leaveHandle(event: PointerEvent) {
+  if (event.buttons) window.addEventListener('pointerup', clearHover, { once: true })
+  else clearHover()
+}
+onBeforeUnmount(() => {
+  window.removeEventListener('pointerup', clearHover)
+  clearHover()
+})
+
 const portLabel = (port: PortDef) => localize(port.title, locale.value) || port.name
 
 /** Bound inputs: a lone reference shows as a variable chip, anything else as text. */
@@ -92,7 +110,16 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
     @mouseleave="leave"
     @pointerdown="leave"
   >
-    <Handle v-if="ports?.execIn" :id="EXEC_IN" type="target" :position="Position.Left" class="handle head-handle" />
+    <Handle
+      v-if="ports?.execIn"
+      :id="EXEC_IN"
+      type="target"
+      :position="Position.Left"
+      class="handle head-handle"
+      :class="{ linked: linked(EXEC_IN) }"
+      @pointerenter="hoverHandle(EXEC_IN, $event)"
+      @pointerleave="leaveHandle"
+    />
     <button v-if="breakpoint" type="button" class="bp nodrag" :title="t('flows.breakpointHint')" :aria-label="t('flows.menuRemoveBreakpoint')" @click.stop="editor.toggleBreakpoint(id)" />
     <header class="flow-node-head">
       <span class="icon"><span :class="icon" :style="{ fontSize: '15px' }" /></span>
@@ -127,7 +154,16 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
         <span class="i-lucide-play" :style="{ fontSize: '13px' }" />
       </button>
     </header>
-    <Handle v-if="execOut.length && !branches.length" :id="execOutHandle('next')" type="source" :position="Position.Right" class="handle head-handle" />
+    <Handle
+      v-if="execOut.length && !branches.length"
+      :id="execOutHandle('next')"
+      type="source"
+      :position="Position.Right"
+      class="handle head-handle"
+      :class="{ linked: linked(execOutHandle('next')) }"
+      @pointerenter="hoverHandle(execOutHandle('next'), $event)"
+      @pointerleave="leaveHandle"
+    />
 
     <div v-if="!info" class="unknown">{{ t('flows.unknownType', { type: data.typeId }) }}</div>
 
@@ -150,7 +186,15 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
     <div v-if="branches.length" class="branches">
       <div v-for="name in branches" :key="name" class="branch">
         <span class="branch-name">{{ name }}</span>
-        <Handle :id="execOutHandle(name)" type="source" :position="Position.Right" class="handle branch-handle" />
+        <Handle
+          :id="execOutHandle(name)"
+          type="source"
+          :position="Position.Right"
+          class="handle branch-handle"
+          :class="{ linked: linked(execOutHandle(name)) }"
+          @pointerenter="hoverHandle(execOutHandle(name), $event)"
+          @pointerleave="leaveHandle"
+        />
       </div>
     </div>
   </div>
@@ -582,9 +626,18 @@ const rowsOf = (values: Record<string, unknown> | undefined) => Object.entries(v
   transition: background 0.15s, transform 0.15s;
 }
 
-.handle:hover {
+/* Vue Flow centres a handle on the card's edge with a translate; the scale comes after it, so the dot grows round its own centre. */
+.handle:hover,
+.handle.linked {
   background: var(--accent);
-  transform: translateY(-50%) scale(1.3);
+}
+
+.handle.vue-flow__handle-left:is(:hover, .linked) {
+  transform: translate(-50%, -50%) scale(1.3);
+}
+
+.handle.vue-flow__handle-right:is(:hover, .linked) {
+  transform: translate(50%, -50%) scale(1.3);
 }
 
 .head-handle {

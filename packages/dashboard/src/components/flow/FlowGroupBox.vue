@@ -23,7 +23,7 @@ const run = computed<RunStatus | undefined>(() => {
 
 <template>
   <div class="group-box" :class="{ selected, [`run-${run}`]: !!run }" :title="t('flows.groupBoxHint')">
-    <Handle id="exec" type="target" :position="Position.Left" :connectable="false" class="handle" />
+    <Handle id="exec" type="target" :position="Position.Left" :connectable="false" class="handle" :class="{ linked: editor.linkedHandles.value.has(`${id}:exec`) }" />
     <span class="icon"><span class="i-lucide-gallery-vertical-end" :style="{ fontSize: '16px' }" /></span>
     <div class="text">
       <div class="name">{{ group?.label || t('flows.groupDefault') }}</div>
@@ -33,7 +33,7 @@ const run = computed<RunStatus | undefined>(() => {
     <button type="button" class="expand nodrag" :title="t('flows.menuExpand')" @click.stop="group && editor.toggleGroup(group.id)">
       <span class="i-lucide-maximize-2" :style="{ fontSize: '14px' }" />
     </button>
-    <Handle id="out" type="source" :position="Position.Right" :connectable="false" class="handle" />
+    <Handle id="out" type="source" :position="Position.Right" :connectable="false" class="handle" :class="{ linked: editor.linkedHandles.value.has(`${id}:out`) }" />
   </div>
 </template>
 
@@ -123,5 +123,19 @@ const run = computed<RunStatus | undefined>(() => {
   height: 9px;
   background: #8c8c8c;
   border: none;
+  transition: background 0.15s, transform 0.15s;
+}
+
+/* Lit while a handle connected through the group is hovered; grows round its centre like the node cards' handles. */
+.handle.linked {
+  background: var(--primary);
+}
+
+.handle.vue-flow__handle-left.linked {
+  transform: translate(-50%, -50%) scale(1.3);
+}
+
+.handle.vue-flow__handle-right.linked {
+  transform: translate(50%, -50%) scale(1.3);
 }
 </style>

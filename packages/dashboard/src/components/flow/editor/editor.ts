@@ -61,6 +61,14 @@ export function createFlowEditor() {
     breakpoints: s.breakpoints,
     toggleBreakpoint: runs.toggleBreakpoint,
     sampleTriggers: sample.sampleTriggers,
+    hoveredHandle: s.hoveredHandle,
+    linkedHandles: computed(() => s.linked.value.handles),
+  })
+  // Only the edges whose look changes are replaced, so hovering does not rebuild the whole canvas.
+  // Replacing the edges recomputes the set, so nothing is written once every edge already matches it.
+  watch(() => s.linked.value.edges, (now, before) => {
+    if (![...now, ...before].some((id) => now.has(id) !== before.has(id))) return
+    s.edges.value = s.edges.value.map((edge) => (now.has(edge.id) !== before.has(edge.id) ? { ...edge, ...s.edgeLook(edge) } : edge))
   })
   const nodeTypes = { mushin: markRaw(FlowNodeCard), [BOX]: markRaw(FlowGroupBox) } as any
 

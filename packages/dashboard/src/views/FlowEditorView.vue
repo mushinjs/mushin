@@ -182,6 +182,12 @@ const {
   stroke-width: 3 !important;
 }
 
+/* The connections of the handle under the pointer. */
+.canvas :deep(.vue-flow__edge.edge-linked path.vue-flow__edge-path) {
+  stroke: var(--primary) !important;
+  stroke-width: 3 !important;
+}
+
 /* The path a run takes round a skipped step. */
 .canvas :deep(.vue-flow__edge.edge-bypass) {
   pointer-events: none;

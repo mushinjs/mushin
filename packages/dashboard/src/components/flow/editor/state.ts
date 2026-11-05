@@ -70,6 +70,23 @@ export function createEditorState() {
   /** Test case count and failures of the last run, shown on the tests tab. */
   const testStatus = ref({ failed: 0, total: 0 })
   const uncovered = ref(new Set<string>())
+  /** The handle under the pointer; its connections and the handles at their other ends light up. */
+  const hoveredHandle = ref<{ node: string; handle: string }>()
+  /** What the hovered handle is connected to: those edges, and the handles at their other ends as `node:handle`. */
+  const linked = computed(() => {
+    const result = { edges: new Set<string>(), handles: new Set<string>() }
+    const hovered = hoveredHandle.value
+    if (!hovered) return result
+    for (const edge of edges.value) {
+      const [from, to] = [[edge.source, edge.sourceHandle], [edge.target, edge.targetHandle]]
+      const other = from[0] === hovered.node && from[1] === hovered.handle ? to
+        : to[0] === hovered.node && to[1] === hovered.handle ? from : undefined
+      if (!other) continue
+      result.edges.add(edge.id)
+      result.handles.add(`${other[0]}:${other[1]}`)
+    }
+    return result
+  })
 
   const loaded = ref(false)
   const saving = ref(false)
@@ -175,7 +192,7 @@ export function createEditorState() {
       type: 'default',
       animated: status === 'running',
       updatable: !edge.id.startsWith('virt:'),
-      class: [status ? `edge-${status}` : '', skipped ? 'edge-skipped' : '', bypass ? 'edge-bypass' : ''].filter(Boolean).join(' ') || undefined,
+      class: [status ? `edge-${status}` : '', skipped ? 'edge-skipped' : '', bypass ? 'edge-bypass' : '', linked.value.edges.has(edge.id) ? 'edge-linked' : ''].filter(Boolean).join(' ') || undefined,
       style: { stroke: color, strokeWidth: status ? 2.5 : 2, ...(dashed ? { strokeDasharray: skipped ? '6 5' : '4 4' } : {}), ...(skipped && !status ? { opacity: 0.6 } : {}) },
     }
   }
@@ -205,7 +222,7 @@ export function createEditorState() {
   return {
     t, locale, route, router, message, dialog, data, flow, flowId,
     types, nodes, edges, groups, name, description, bots, enabled, toggling, adapter, issues, blockedSlots,
-    runs, logsRun, viewing, breakpoints, paused, testing, executing, highlight, testStatus, uncovered,
+    runs, logsRun, viewing, breakpoints, paused, testing, executing, highlight, testStatus, uncovered, hoveredHandle, linked,
     loaded, saving, savedSignature, selectedId, tab, nodeTab,
     canvas, root, logs, width, narrow, showPalette, showPanel, showLogs, logsTab, immersive,
     realNodes, order, issuesByNode, errorCount, warningCount, selected, selectedInfo, selectedIsTrigger,

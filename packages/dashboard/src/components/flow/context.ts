@@ -39,6 +39,10 @@ export interface FlowEditorContext {
   toggleBreakpoint(nodeId: string): void
   /** How the picked sample message takes each trigger, while one is picked. */
   sampleTriggers: ComputedRef<Map<string, { matched: boolean; reply?: string }>>
+  /** The handle under the pointer, set by the node cards. */
+  hoveredHandle: Ref<{ node: string; handle: string } | undefined>
+  /** Handles at the other end of the hovered handle's connections, as `node:handle`. */
+  linkedHandles: ComputedRef<Set<string>>
 }
 
 export const flowEditorKey: InjectionKey<FlowEditorContext> = Symbol('flow-editor')
