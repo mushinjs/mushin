@@ -72,18 +72,22 @@ export function createEditorState() {
   const uncovered = ref(new Set<string>())
   /** The handle under the pointer; its connections and the handles at their other ends light up. */
   const hoveredHandle = ref<{ node: string; handle: string }>()
-  /** What the hovered handle is connected to: those edges, and the handles at their other ends as `node:handle`. */
+  /** The edge under the pointer; it and the handles at both its ends light up. */
+  const hoveredEdge = ref<string>()
+  /** What lights up for the hovered handle or edge: those edges, and the handles they join as `node:handle`. */
   const linked = computed(() => {
     const result = { edges: new Set<string>(), handles: new Set<string>() }
-    const hovered = hoveredHandle.value
-    if (!hovered) return result
+    const handle = hoveredHandle.value
+    const edgeId = hoveredEdge.value
+    if (!handle && !edgeId) return result
     for (const edge of edges.value) {
       const [from, to] = [[edge.source, edge.sourceHandle], [edge.target, edge.targetHandle]]
-      const other = from[0] === hovered.node && from[1] === hovered.handle ? to
-        : to[0] === hovered.node && to[1] === hovered.handle ? from : undefined
-      if (!other) continue
+      const ends = edge.id === edgeId ? [from, to]
+        : handle && from[0] === handle.node && from[1] === handle.handle ? [to]
+          : handle && to[0] === handle.node && to[1] === handle.handle ? [from] : []
+      if (!ends.length) continue
       result.edges.add(edge.id)
-      result.handles.add(`${other[0]}:${other[1]}`)
+      for (const [node, port] of ends) result.handles.add(`${node}:${port}`)
     }
     return result
   })
@@ -222,7 +226,7 @@ export function createEditorState() {
   return {
     t, locale, route, router, message, dialog, data, flow, flowId,
     types, nodes, edges, groups, name, description, bots, enabled, toggling, adapter, issues, blockedSlots,
-    runs, logsRun, viewing, breakpoints, paused, testing, executing, highlight, testStatus, uncovered, hoveredHandle, linked,
+    runs, logsRun, viewing, breakpoints, paused, testing, executing, highlight, testStatus, uncovered, hoveredHandle, hoveredEdge, linked,
     loaded, saving, savedSignature, selectedId, tab, nodeTab,
     canvas, root, logs, width, narrow, showPalette, showPanel, showLogs, logsTab, immersive,
     realNodes, order, issuesByNode, errorCount, warningCount, selected, selectedInfo, selectedIsTrigger,

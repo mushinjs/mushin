@@ -25,7 +25,7 @@ import { useTheme } from '../theme'
 
 const { isDark } = useTheme()
 const {
-  t, flowId, root, canvas, logs, narrow, immersive, loaded, types, nodes, edges, realNodes, selectedId,
+  t, flowId, root, canvas, logs, narrow, immersive, loaded, types, nodes, edges, realNodes, selectedId, hoveredEdge,
   showPalette, showPanel, showLogs, logsTab, logsRun, runs, testing, testStatus, currentAdapter, adapterName, nodeName, nodeType,
   nodeTypes, extent, minimapColor, addNode, onDrop, trackPointer,
   isValidConnection, onEdgeUpdateStart, onEdgeUpdate, onEdgeUpdateEnd, onConnect, onConnectStart, onConnectEnd,
@@ -84,6 +84,8 @@ const {
             @node-context-menu="onNodeContextMenu"
             @selection-context-menu="({ event, nodes: picked }) => openMenu(event, 'selection', undefined, picked.map((node) => node.id))"
             @edge-context-menu="({ event, edge }) => openMenu(event, 'edge', edge.id)"
+            @edge-mouse-enter="({ event, edge }) => ('buttons' in event && event.buttons) || (hoveredEdge = edge.id)"
+            @edge-mouse-leave="hoveredEdge = undefined"
           >
             <template #zoom-pane>
               <GroupFrames />
@@ -182,7 +184,7 @@ const {
   stroke-width: 3 !important;
 }
 
-/* The connections of the handle under the pointer. */
+/* The edge under the pointer, or the connections of the handle under it. */
 .canvas :deep(.vue-flow__edge.edge-linked path.vue-flow__edge-path) {
   stroke: var(--primary) !important;
   stroke-width: 3 !important;
