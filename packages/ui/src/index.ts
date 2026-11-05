@@ -17,6 +17,7 @@ export { default as Dropdown, type DropdownOption } from './components/Dropdown.
 export { default as Empty } from './components/Empty.vue'
 export { default as Form } from './components/Form.vue'
 export { default as FormItem } from './components/FormItem.vue'
+export { default as Image } from './components/Image.vue'
 export { default as Input } from './components/Input.vue'
 export { default as KeyValueInput, type KeyValue } from './components/KeyValueInput.vue'
 export { default as Modal } from './components/Modal.vue'

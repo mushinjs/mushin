@@ -18,6 +18,7 @@ const zhCN: typeof en = {
     previous: '上一页',
     next: '下一页',
     perPage: '{n} 条/页',
+    preview: '查看大图',
   },
   app: {
     tagline: '描述你想要的，得到你所设想的。',

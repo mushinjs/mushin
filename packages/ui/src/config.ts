@@ -20,6 +20,8 @@ export interface UiText {
   next: string
   /** A page size choice; `{n}` is the number of rows. */
   perPage: string
+  /** Opens an image at full size. */
+  preview: string
 }
 
 export const defaultText: UiText = {
@@ -39,6 +41,7 @@ export const defaultText: UiText = {
   previous: 'Previous',
   next: 'Next',
   perPage: '{n} / page',
+  preview: 'View full size',
 }
 
 const TEXT: InjectionKey<ComputedRef<UiText>> = Symbol('mushin-ui-text')

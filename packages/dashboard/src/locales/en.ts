@@ -17,6 +17,7 @@ export default {
     previous: 'Previous page',
     next: 'Next page',
     perPage: '{n} / page',
+    preview: 'View full size',
   },
   app: {
     tagline: 'Describe what you want. Get what you envision.',

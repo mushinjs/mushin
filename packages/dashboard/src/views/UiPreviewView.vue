@@ -4,7 +4,7 @@
  * builds only, at /dev/ui (registered in main.ts).
  */
 import {
-  Alert, Button, Card, Checkbox, Dropdown, Empty, Form, FormItem, Input, Modal, NumberInput, Popover, RadioButton, RadioGroup, Select, Spin,
+  Alert, Button, Card, Checkbox, Dropdown, Empty, Form, FormItem, Image, Input, Modal, NumberInput, Popover, RadioButton, RadioGroup, Select, Spin,
   TabPane, Tabs, Tag, TagsInput, Toggle, Tooltip, useConfirm, useToast,
 } from '@mushin/ui'
 import { ref } from 'vue'
@@ -198,6 +198,7 @@ const tones = ['default', 'primary', 'info', 'success', 'warning', 'error'] as c
           <Spin size="small" />
           <Spin :show="true" description="Loading"><div class="h-16 w-40 rounded bg-s2" /></Spin>
           <Empty size="small" description="No flows yet" />
+          <Image src="/logo.png" alt="Logo" class="h-16 w-16 rounded" />
         </div>
       </Card>
     </div>
