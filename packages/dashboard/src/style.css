@@ -1,4 +1,4 @@
-/* Design tokens (--bg, --s1, --primary, …) come from @mushin/ui/theme.css; theme.ts gives Naive UI the same palette. */
+/* Design tokens (--bg, --s1, --primary, …) come from @mushin/ui/theme.css. */
 
 html,
 body,
@@ -8,13 +8,13 @@ body,
 }
 
 body {
-  font-family: v-sans, system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   -webkit-font-smoothing: antialiased;
   background: var(--bg);
   color: var(--fg);
 }
 
-/* Links in page text. Naive UI buttons and menu items style their own. */
+/* Links in page text. Buttons and menu items style their own. */
 a {
   color: var(--primary);
   text-decoration: none;

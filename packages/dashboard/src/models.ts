@@ -42,7 +42,7 @@ export function modelOptions(models: string[]): SelectOption[] {
 
 export const isProfile = (profiles: ModelProfile[], id?: string | null) => !!id && profiles.some((profile) => profile.id === id)
 
-/** A heading in a provider select; also accepted by the Naive UI selects not yet moved over. */
+/** A heading in a provider select. */
 type ChoiceGroup = SelectGroup & Record<string, unknown>
 
 /** Providers and, unless left out, profiles under their own headings, for every provider select. */

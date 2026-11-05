@@ -228,7 +228,7 @@ const botNames = (ids: string[]) => ids.map((bot) => data.bots.find((item) => it
 }
 
 .icon {
-  color: var(--n-color-target, var(--ok));
+  color: var(--ok);
   margin-top: 2px;
 }
 

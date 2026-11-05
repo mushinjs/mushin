@@ -15,7 +15,6 @@
   "dependencies": {
     "@mushin/ui": "workspace:*",
     "@tanstack/vue-virtual": "catalog:",
-    "@vicons/ionicons5": "catalog:",
     "ansi_up": "catalog:",
     "@vue-flow/background": "catalog:",
     "@vue-flow/controls": "catalog:",
@@ -26,7 +25,6 @@
     "highlight.js": "catalog:",
     "markdown-it": "catalog:",
     "mermaid": "catalog:",
-    "naive-ui": "catalog:",
     "pinia": "catalog:",
     "vue": "catalog:",
     "vue-i18n": "catalog:",

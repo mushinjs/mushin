@@ -60,7 +60,7 @@ function update(name: string, next: any) {
 </template>
 
 <style scoped>
-/* Space before whatever follows, as a Naive UI form leaves under its last field. */
+/* Space before whatever follows the last field. */
 .schema-form:not(.compact) {
   margin-bottom: 24px;
 }

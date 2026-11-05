@@ -17,7 +17,7 @@ Mushin.js is built on [Cordis](https://github.com/cordiverse/cordis). The MVP sh
 | OneBot adapter | OneBot v11 over WebSocket, in forward mode (Mushin dials NapCat) or reverse mode (NapCat dials Mushin), or over HTTP (API calls plus signed event reports). |
 | Conversation flows | A visual editor for bot behavior: wire triggers, conditions, variables, LLM calls and replies into a graph, test it with a made-up message, and watch live runs light up the path. The Agent can build flows too. |
 | Live conversation view | Messages appear as they arrive. Hover a message to see its type, supported platforms and what generated it (an LLM with provider and model, a plugin, or a flow). |
-| Dashboard | Vue 3 + Naive UI, English and Simplified Chinese, light and dark themes, works on phones. |
+| Dashboard | Vue 3 + Reka UI + UnoCSS, English and Simplified Chinese, light and dark themes, works on phones. |
 
 The plugin marketplace is designed but not built yet; see [docs/architecture.md](docs/architecture.md).
 

@@ -1,4 +1,3 @@
-import { darkTheme, type GlobalThemeOverrides, useOsTheme } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 
 export type ThemeMode = 'auto' | 'light' | 'dark'
@@ -22,15 +21,9 @@ watch(themeMode, (mode) => {
   } catch {}
 })
 
-// Field descriptions wrap onto several lines; keep them clear of the next field's label.
-const form: GlobalThemeOverrides['Form'] = {
-  feedbackPadding: '4px 0 14px 2px',
-  feedbackFontSizeMedium: '13px',
-}
-
 /**
- * The palette behind both themes. @mushin/ui/theme.css declares the same values as CSS variables
- * (--bg, --s1, --primary, …) for the dashboard's own markup; keep the two in step.
+ * The palette behind both themes, for what draws on a canvas (charts, graphs) and cannot read CSS
+ * variables. @mushin/ui/theme.css declares the same values as --bg, --s1, --primary, …; keep the two in step.
  */
 export const palettes = {
   light: {
@@ -47,58 +40,6 @@ export const palettes = {
   },
 }
 
-function overridesFor(c: typeof palettes.light): GlobalThemeOverrides {
-  return {
-    Form: form,
-    common: {
-      primaryColor: c.primary,
-      primaryColorHover: c.hover,
-      primaryColorPressed: c.pressed,
-      primaryColorSuppl: c.hover,
-      successColor: c.ok,
-      successColorHover: c.ok,
-      successColorSuppl: c.ok,
-      warningColor: c.warn,
-      warningColorHover: c.warn,
-      warningColorSuppl: c.warn,
-      errorColor: c.bad,
-      errorColorHover: c.bad,
-      errorColorSuppl: c.bad,
-      bodyColor: c.bg,
-      cardColor: c.s1,
-      modalColor: c.s1,
-      popoverColor: c.s1,
-      tableColor: c.s1,
-      inputColor: c.s2,
-      inputColorDisabled: c.s2,
-      borderColor: c.line,
-      dividerColor: c.line,
-      textColor1: c.fg,
-      textColor2: c.fg,
-      textColor3: c.fg2,
-      placeholderColor: c.fg3,
-      borderRadius: '8px',
-      fontFamily: "system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
-      fontFamilyMono: "ui-monospace, 'Cascadia Code', Consolas, monospace",
-    },
-    Layout: { color: c.bg, siderColor: c.s1, headerColor: c.s1, siderBorderColor: c.line, headerBorderColor: c.line },
-    Card: { borderColor: c.line, borderRadius: '10px' },
-    // White text on the primary colour in both themes; the dark theme's default is near-black.
-    Button: {
-      textColorPrimary: '#FFFFFF',
-      textColorHoverPrimary: '#FFFFFF',
-      textColorPressedPrimary: '#FFFFFF',
-      textColorFocusPrimary: '#FFFFFF',
-      fontWeight: '500',
-    },
-    // Inputs are filled surfaces; the border shows on hover and focus only.
-    Input: { border: '1px solid transparent', borderHover: `1px solid ${c.line}` },
-  }
-}
-
-const lightOverrides = overridesFor(palettes.light)
-const darkOverrides = overridesFor(palettes.dark)
-
 /**
  * Series colours for charts, in a fixed order (series 1 is always the first colour). Five slots,
  * checked for colour-blind separation on each theme's card surface; a sixth series and beyond are
@@ -109,12 +50,15 @@ export const chartColors = {
   dark: ['#6874EA', '#1FA593', '#CF7029', '#C65A96', '#4E9AD8'],
 }
 
+// The system's light or dark preference, for the 'auto' mode.
+const query = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : undefined
+const osDark = ref(query?.matches ?? false)
+query?.addEventListener('change', (event) => {
+  osDark.value = event.matches
+})
+
+const isDark = computed(() => themeMode.value === 'dark' || (themeMode.value === 'auto' && osDark.value))
+
 export function useTheme() {
-  const os = useOsTheme()
-  const isDark = computed(() => themeMode.value === 'dark' || (themeMode.value === 'auto' && os.value === 'dark'))
-  return {
-    isDark,
-    theme: computed(() => (isDark.value ? darkTheme : null)),
-    overrides: computed(() => (isDark.value ? darkOverrides : lightOverrides)),
-  }
+  return { isDark }
 }

@@ -583,7 +583,7 @@ function onClick(event: MouseEvent) {
   opacity: 0.5;
   padding: 48px 16px;
   text-align: center;
-  font-family: v-sans, system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
 }
 
 .latest {
