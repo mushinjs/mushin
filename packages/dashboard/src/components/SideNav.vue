@@ -1,84 +1,46 @@
 <script setup lang="ts">
 /**
  * The sidebar. Collapsing only narrows it: every icon, group and the footer keep their place, so
- * nothing jumps. Labels and group titles fade out before the width closes, and fade back in after
- * it opens. GSAP drives the timeline so the two halves stay in step and can be reversed midway.
+ * nothing jumps. It moves in two steps driven by two flags, so no word is ever seen half cut:
+ * closing, the words fade out first (`quiet`) and only then the panel narrows (`narrow`); opening,
+ * the panel widens first and the words fade in once there is room for them. Both steps are CSS
+ * transitions on classes, so they hold whatever Vue re-renders in between.
  */
 import { Tooltip } from '@mushin/ui'
-import { gsap } from 'gsap'
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { NavGroup } from './nav'
 
-const props = defineProps<{ groups: NavGroup[], active: string }>()
+defineProps<{ groups: NavGroup[], active: string }>()
 const collapsed = defineModel<boolean>('collapsed', { required: true })
 const { t } = useI18n()
 
-const EXPANDED = 224
-const COLLAPSED = 64
-// Set once: after the first render GSAP owns the width, and Vue must not snap it to the end value.
-const initialWidth = `${collapsed.value ? COLLAPSED : EXPANDED}px`
+// Keep in step with the transition times in the styles below.
+const FADE_OUT = 120
+const OPEN = 220
 
-const root = ref<HTMLElement>()
+const narrow = ref(collapsed.value)
+const quiet = ref(collapsed.value)
 const logoFailed = ref(false)
-let ctx: gsap.Context | undefined
-let timeline: gsap.core.Timeline | undefined
-let reduced = false
+let timer: ReturnType<typeof setTimeout> | undefined
 
-/** Everything that fades: item labels, the brand name and group titles. */
-const fading = () => root.value!.querySelectorAll<HTMLElement>('[data-fade]')
-
-function apply(next: boolean, animate: boolean) {
-  const el = root.value
-  if (!el || !ctx) return
-  ctx.add(() => {
-    timeline?.kill()
-    const labels = fading()
-    const dividers = el.querySelectorAll<HTMLElement>('[data-divider]')
-    const chevron = el.querySelector<HTMLElement>('[data-chevron]')
-    const width = next ? COLLAPSED : EXPANDED
-    if (!animate || reduced) {
-      gsap.set(el, { width })
-      gsap.set(labels, { autoAlpha: next ? 0 : 1, x: 0 })
-      gsap.set(dividers, { autoAlpha: next ? 1 : 0, scaleX: 1 })
-      gsap.set(chevron, { rotation: next ? 180 : 0 })
-      return
-    }
-    timeline = gsap.timeline({ defaults: { overwrite: 'auto' } })
-    if (next) {
-      // Closing: the words leave first, then the panel narrows under the icons.
-      timeline
-        .to(labels, { autoAlpha: 0, x: -6, duration: 0.16, ease: 'power1.in', stagger: 0.008 })
-        .to(el, { width, duration: 0.42, ease: 'power2.inOut' }, 0.06)
-        .fromTo(dividers, { autoAlpha: 0, scaleX: 0.3 }, { autoAlpha: 1, scaleX: 1, duration: 0.24, ease: 'power2.out' }, 0.24)
-        .to(chevron, { rotation: 180, duration: 0.42, ease: 'power2.inOut' }, 0.06)
-    } else {
-      // Opening: the panel widens, and the words follow it in.
-      timeline
-        .to(dividers, { autoAlpha: 0, duration: 0.12, ease: 'power1.in' })
-        // A gentle ease over a longer span: the panel should not outrun the words that follow it.
-        .to(el, { width, duration: 0.56, ease: 'power2.inOut' }, 0)
-        .fromTo(labels, { autoAlpha: 0, x: -8 }, { autoAlpha: 1, x: 0, duration: 0.3, ease: 'power2.out', stagger: 0.014 }, 0.24)
-        .to(chevron, { rotation: 0, duration: 0.56, ease: 'power2.inOut' }, 0)
-    }
-  })
-}
-
-onMounted(() => {
-  ctx = gsap.context(() => {}, root.value)
-  reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  apply(collapsed.value, false)
+watch(collapsed, (next) => {
+  clearTimeout(timer)
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (next) {
+    quiet.value = true
+    timer = setTimeout(() => (narrow.value = true), reduced ? 0 : FADE_OUT)
+  } else {
+    narrow.value = false
+    timer = setTimeout(() => (quiet.value = false), reduced ? 0 : OPEN)
+  }
 })
-onBeforeUnmount(() => ctx?.revert())
-
-watch(collapsed, (next) => apply(next, true))
-// Pages added or hidden while collapsed must start out hidden as well.
-watch(() => props.groups, () => requestAnimationFrame(() => apply(collapsed.value, false)), { deep: true, flush: 'post' })
+onBeforeUnmount(() => clearTimeout(timer))
 </script>
 
 <template>
-  <aside ref="root" class="side" :class="{ collapsed }" :style="{ width: initialWidth }">
+  <aside class="side" :class="{ narrow, quiet }">
     <div class="brand">
       <img v-if="!logoFailed" src="/logo.png" alt="" class="brand-logo" @error="logoFailed = true">
       <span class="brand-name" data-fade>Mushin.js <span class="brand-kanji">無心</span></span>
@@ -88,7 +50,7 @@ watch(() => props.groups, () => requestAnimationFrame(() => apply(collapsed.valu
       <div v-for="group in groups" :key="group.key" class="group">
         <div v-if="group.label" class="group-title">
           <span data-fade>{{ group.label }}</span>
-          <i class="divider" data-divider aria-hidden="true" />
+          <i class="divider" aria-hidden="true" />
         </div>
         <Tooltip v-for="item in group.items" :key="item.key" placement="right" :disabled="!collapsed" :show-arrow="false">
           <template #trigger>
@@ -106,7 +68,7 @@ watch(() => props.groups, () => requestAnimationFrame(() => apply(collapsed.valu
       <Tooltip placement="right" :disabled="!collapsed" :show-arrow="false">
         <template #trigger>
           <button type="button" class="toggle" :aria-label="collapsed ? t('layout.expand') : t('layout.collapse')" :aria-expanded="!collapsed" @click="collapsed = !collapsed">
-            <span class="i-lucide-chevron-left toggle-icon" data-chevron />
+            <span class="i-lucide-chevron-left toggle-icon" />
           </button>
         </template>
         {{ t('layout.expand') }}
@@ -121,14 +83,32 @@ watch(() => props.groups, () => requestAnimationFrame(() => apply(collapsed.valu
  * (centred in the 64px rail), rows keep their height, and group titles keep theirs as a divider.
  */
 .side {
+  --side-ease: cubic-bezier(0.4, 0, 0.2, 1);
   flex: none;
   display: flex;
   flex-direction: column;
+  width: 224px;
   height: 100%;
   overflow: hidden;
   background: var(--s1);
   border-right: 1px solid var(--line);
-  will-change: width;
+  transition: width 0.26s var(--side-ease);
+}
+
+.side.narrow {
+  width: 64px;
+}
+
+/* Words: fade in with a short slide; fade out quicker, then leave the layout's hit testing. */
+[data-fade] {
+  transition: opacity 0.18s ease-out, transform 0.18s ease-out, visibility 0s;
+}
+
+.side.quiet [data-fade] {
+  opacity: 0;
+  transform: translateX(-6px);
+  visibility: hidden;
+  transition: opacity 0.12s ease-in, transform 0.12s ease-in, visibility 0s 0.12s;
 }
 
 .brand {
@@ -182,6 +162,7 @@ watch(() => props.groups, () => requestAnimationFrame(() => apply(collapsed.valu
   white-space: nowrap;
 }
 
+/* In the rail a group title becomes a short line under the icons. */
 .divider {
   position: absolute;
   left: 12px;
@@ -189,7 +170,15 @@ watch(() => props.groups, () => requestAnimationFrame(() => apply(collapsed.valu
   bottom: 12px;
   height: 1px;
   background: var(--line);
-  visibility: hidden;
+  opacity: 0;
+  transform: scaleX(0.3);
+  transition: opacity 0.12s, transform 0.12s;
+}
+
+.side.narrow .divider {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.2s 0.1s, transform 0.2s 0.1s var(--side-ease);
 }
 
 .item {
@@ -202,6 +191,7 @@ watch(() => props.groups, () => requestAnimationFrame(() => apply(collapsed.valu
   border-radius: 8px;
   color: var(--fg2);
   white-space: nowrap;
+  overflow: hidden;
   text-decoration: none;
   transition: background-color 0.15s, color 0.15s;
 }
@@ -224,12 +214,6 @@ watch(() => props.groups, () => requestAnimationFrame(() => apply(collapsed.valu
   outline-offset: -2px;
 }
 
-/* At rest when collapsed, the words stay hidden even on elements GSAP has not styled yet. */
-.side.collapsed [data-fade] {
-  visibility: hidden;
-  opacity: 0;
-}
-
 .item-icon {
   flex: none;
   font-size: 18px;
@@ -237,6 +221,11 @@ watch(() => props.groups, () => requestAnimationFrame(() => apply(collapsed.valu
 
 .toggle-icon {
   font-size: 16px;
+  transition: transform 0.26s var(--side-ease);
+}
+
+.side.narrow .toggle-icon {
+  transform: rotate(180deg);
 }
 
 .foot {
@@ -265,5 +254,16 @@ watch(() => props.groups, () => requestAnimationFrame(() => apply(collapsed.valu
 .toggle:hover {
   background: var(--s2);
   color: var(--fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side,
+  [data-fade],
+  .side.quiet [data-fade],
+  .divider,
+  .side.narrow .divider,
+  .toggle-icon {
+    transition: none;
+  }
 }
 </style>
