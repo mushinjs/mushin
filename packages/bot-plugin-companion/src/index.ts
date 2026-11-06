@@ -5,6 +5,7 @@ import { Config } from './config'
 
 export * from './config'
 export * from './scope'
+export * from './transcript'
 
 export const name = 'companion'
 export const inject = ['bot', 'llm']
