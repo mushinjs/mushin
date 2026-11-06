@@ -79,6 +79,46 @@ export interface EmbedResponse {
   usage?: { inputTokens: number }
 }
 
+/**
+ * A question for a decision model. `noul` asks for a probability that a statement holds;
+ * `choice` picks one of the named options; `score` grades on an ordered scale whose index is the
+ * score; `box` locates something in an image asset.
+ */
+export type DecisionQuestion =
+  | { type: 'noul'; instructions?: string; criteria?: { true?: string; false?: string } }
+  | { type: 'choice'; instructions?: string; criteria: Record<string, string> }
+  | { type: 'score'; instructions?: string; criteria: string[] }
+  | { type: 'box'; instructions?: string }
+
+/** An image the state refers to by its placeholder name. */
+export interface DecisionAsset {
+  type: 'image'
+  format: 'png' | 'jpg' | 'jpeg'
+  /** Base64 data without a `data:` prefix. */
+  data: string
+}
+
+export interface DecisionRequest {
+  model: string
+  /** What to decide about: text, or any JSON value. */
+  state: string | Record<string, unknown> | unknown[]
+  questions: Record<string, DecisionQuestion>
+  assets?: Record<string, DecisionAsset>
+  signal?: AbortSignal
+}
+
+export type DecisionAnswer =
+  | { type: 'noul'; noul: number }
+  | { type: 'choice'; choice: string; confidence: number; probabilities: Record<string, number> }
+  | { type: 'score'; score: number; confidence: number; legend: Record<string, string>; probabilities: Record<string, number> }
+  | { type: 'box'; box: { top: number; bottom: number; left: number; right: number }; confidence: number | null }
+
+export interface DecisionResponse {
+  /** One answer per question name. */
+  answers: Record<string, DecisionAnswer>
+  usage?: Usage
+}
+
 export interface ProviderClient {
   chat(request: ChatRequest): Promise<ChatResponse>
   /** Optional token streaming; callers fall back to `chat` when it is missing. */
@@ -86,7 +126,12 @@ export interface ProviderClient {
   /** Optional text embeddings, for knowledge bases; providers without them (such as Anthropic) leave it out. */
   embed?(request: EmbedRequest): Promise<EmbedResponse>
   listModels?(signal?: AbortSignal): Promise<string[]>
+  /** Optional structured decisions, for decision models that do not chat. */
+  decide?(request: DecisionRequest): Promise<DecisionResponse>
 }
+
+/** What a provider type can do; `chat` covers `chat`, `stream` and `embed`. */
+export type ProviderCapability = 'chat' | 'decision'
 
 export interface ProviderPreset {
   id: string
@@ -103,6 +148,8 @@ export interface ProviderType<C = any> {
   /** Config keys that hold secrets; they are masked in every API response. */
   secrets?: string[]
   presets?: ProviderPreset[]
+  /** Defaults to `['chat']`. A type without `chat` is never picked for chat requests. */
+  capabilities?: ProviderCapability[]
   create(config: C): ProviderClient
 }
 
@@ -166,6 +213,20 @@ export interface LlmEmbedResult {
   /** Length of each vector. */
   dimension: number
   tokens?: number
+}
+
+export interface LlmDecideOptions extends Omit<DecisionRequest, 'model'> {
+  /** Provider record id; the default decision provider when omitted. */
+  provider?: string
+  /** Model name; the provider's default model when omitted. */
+  model?: string
+}
+
+export interface LlmDecideResult extends DecisionResponse {
+  provider: string
+  providerName: string
+  model: string
+  latencyMs: number
 }
 
 /** A chat result that remembers where it came from, so a bot reply can show its source. */

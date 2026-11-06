@@ -1,7 +1,8 @@
 import { Context, isMasked, mask, MushinError, randomId, Service, toJsonSchema, z } from '@mushin/core'
 import type {} from '@mushin/plugin-storage'
 import type {
-  ChatRequest, LlmChatOptions, LlmEmbedOptions, LlmEmbedResult, LlmResult, ModelProfile, ProviderClient, ProviderRecord, ProviderTest, ProviderType, StreamEvent,
+  ChatRequest, DecisionQuestion, LlmChatOptions, LlmDecideOptions, LlmDecideResult, LlmEmbedOptions, LlmEmbedResult, LlmResult, ModelProfile,
+  ProviderCapability, ProviderClient, ProviderRecord, ProviderTest, ProviderType, StreamEvent,
 } from './types'
 
 export * from './types'
@@ -61,6 +62,43 @@ const profileInput = z.object({
   })).min(1).describe('The first model answers; each later one is tried when the one before it fails'),
 })
 
+const questionInput = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('noul'),
+    instructions: z.string().optional(),
+    criteria: z.object({ true: z.string().optional(), false: z.string().optional() }).optional().describe('What true and false mean'),
+  }),
+  z.object({
+    type: z.literal('choice'),
+    instructions: z.string().optional(),
+    criteria: z.record(z.string(), z.string()).describe('Option name to description'),
+  }),
+  z.object({
+    type: z.literal('score'),
+    instructions: z.string().optional(),
+    criteria: z.array(z.string()).min(1).describe('Ordered levels; the index is the score'),
+  }),
+  z.object({ type: z.literal('box'), instructions: z.string().optional() }),
+]) satisfies z.ZodType<DecisionQuestion>
+
+const decideInput = z.object({
+  provider: z.string().optional().describe('Provider id of a decision provider; the default decision provider when omitted'),
+  model: z.string().optional().describe('Model name; the provider default model when omitted'),
+  state: z.union([z.string(), z.record(z.string(), z.unknown()), z.array(z.unknown())]).describe('What to decide about: text or any JSON value'),
+  questions: z.record(z.string(), questionInput).describe('Questions by name; each answer comes back under the same name'),
+  assets: z.record(z.string(), z.object({
+    type: z.literal('image'),
+    format: z.enum(['png', 'jpg', 'jpeg']),
+    data: z.string().describe('Base64 image data'),
+  })).optional().describe('Images the state refers to by placeholder name'),
+})
+
+/** The question a decision-only provider answers in its connection test. */
+const TEST_DECISION = {
+  state: 'The sky on a clear day is blue.',
+  questions: { ok: { type: 'noul', instructions: 'Is the statement true?' } },
+} satisfies Omit<LlmDecideOptions, 'provider' | 'model'>
+
 /**
  * Owns provider records and exposes one `chat` entry point.
  * Provider types (OpenAI-compatible, Anthropic, ...) are registered by other plugins.
@@ -118,6 +156,7 @@ export class LlmService extends Service {
       configSchema: toJsonSchema(type.config),
       secrets: type.secrets ?? [],
       presets: type.presets ?? [],
+      capabilities: type.capabilities ?? ['chat'],
     }))
   }
 
@@ -131,14 +170,24 @@ export class LlmService extends Service {
     return record
   }
 
-  /** The default provider, or the first one if none is marked default. */
-  defaultProvider() {
-    return this.records.find((record) => record.isDefault) ?? this.records[0]
+  /** What a saved provider can do. A record whose type is not loaded counts as a chat provider. */
+  capabilities(record: ProviderRecord): ProviderCapability[] {
+    return this.typeStore.get(record.type)?.capabilities ?? ['chat']
   }
 
-  /** True when at least one provider has passed its connection test. */
+  supports(record: ProviderRecord, capability: ProviderCapability) {
+    return this.capabilities(record).includes(capability)
+  }
+
+  /** The default provider that can do `capability`, or the first such one if none is marked default. */
+  defaultProvider(capability: ProviderCapability = 'chat') {
+    const able = this.records.filter((record) => this.supports(record, capability))
+    return able.find((record) => record.isDefault) ?? able[0]
+  }
+
+  /** True when at least one chat provider has passed its connection test. */
   isReady() {
-    return this.records.some((record) => record.lastTest?.ok)
+    return this.records.some((record) => record.lastTest?.ok && this.supports(record, 'chat'))
   }
 
   private redact(record: ProviderRecord) {
@@ -147,7 +196,7 @@ export class LlmService extends Service {
     for (const key of secrets) {
       if (typeof config[key] === 'string') config[key] = mask(config[key])
     }
-    return { ...record, config, typeAvailable: this.typeStore.has(record.type) }
+    return { ...record, config, typeAvailable: this.typeStore.has(record.type), capabilities: this.capabilities(record) }
   }
 
   private requireType(id: string) {
@@ -181,7 +230,9 @@ export class LlmService extends Service {
       defaultModel: input.defaultModel || input.models?.[0],
       createdAt: Date.now(),
     }
-    if (input.isDefault || !this.records.length) this.markDefault(record)
+    // The first chat provider becomes the default; a decision-only one never takes it on its own.
+    const chat = type.capabilities?.includes('chat') ?? true
+    if (input.isDefault || (chat && !this.defaultProvider('chat'))) this.markDefault(record)
     this.records.push(record)
     await this.save()
     this.logger.info('created provider %s', this.label(record))
@@ -214,7 +265,8 @@ export class LlmService extends Service {
   async delete(id: string) {
     const record = this.get(id)
     this.records = this.records.filter((item) => item !== record)
-    if (record.isDefault && this.records[0]) this.markDefault(this.records[0])
+    const next = this.defaultProvider('chat') ?? this.records[0]
+    if (record.isDefault && next) this.markDefault(next)
     this.clients.delete(id)
     // Profiles keep their other models; a profile left with none stays so its users see why it fails.
     for (const profile of this.profileRecords) profile.models = profile.models.filter((item) => item.provider !== id)
@@ -255,7 +307,10 @@ export class LlmService extends Service {
   }
 
   private checkProfileModels(models: z.infer<typeof profileInput>['models']) {
-    for (const item of models) this.get(item.provider)
+    for (const item of models) {
+      const record = this.get(item.provider)
+      if (!this.supports(record, 'chat')) throw new MushinError('invalid_input', `Provider "${record.name}" does not chat, so it cannot be in a profile`)
+    }
     return models.map((item) => ({ provider: item.provider, model: item.model.trim() }))
   }
 
@@ -287,7 +342,7 @@ export class LlmService extends Service {
   /** Providers and profiles as `{ value, label }`, for fields that take either. */
   choices() {
     return [
-      ...this.records.map((record) => ({ value: record.id, label: record.name, group: 'providers' })),
+      ...this.records.filter((record) => this.supports(record, 'chat')).map((record) => ({ value: record.id, label: record.name, group: 'providers' })),
       ...this.profileRecords.map((profile) => ({ value: profile.id, label: profile.name, group: 'profiles' })),
     ]
   }
@@ -304,9 +359,18 @@ export class LlmService extends Service {
     return client
   }
 
-  private resolve(options: { provider?: string; model?: string }) {
-    const record = options.provider ? this.get(options.provider) : this.defaultProvider()
-    if (!record) throw new MushinError('unavailable', 'No LLM provider is configured. Add one in Providers first.')
+  private resolve(options: { provider?: string; model?: string }, capability: ProviderCapability = 'chat') {
+    const record = options.provider ? this.get(options.provider) : this.defaultProvider(capability)
+    if (!record) {
+      throw new MushinError('unavailable', capability === 'chat'
+        ? 'No LLM provider is configured. Add one in Providers first.'
+        : 'No decision provider is configured. Add one in Providers first.')
+    }
+    if (!this.supports(record, capability)) {
+      throw new MushinError('invalid_input', capability === 'chat'
+        ? `Provider "${record.name}" only answers decisions; use providers.decide`
+        : `Provider "${record.name}" cannot answer decisions`)
+    }
     const model = options.model ?? record.defaultModel ?? record.models[0]
     if (!model) throw new MushinError('invalid_input', `Provider "${record.name}" has no model set`)
     return { record, model, client: this.client(record) }
@@ -416,7 +480,7 @@ export class LlmService extends Service {
 
   /** Embeds texts through a provider, `EMBED_BATCH` at a time; each batch is retried once. */
   async embed(options: LlmEmbedOptions): Promise<LlmEmbedResult> {
-    const record = options.provider ? this.get(options.provider) : this.defaultProvider()
+    const record = options.provider ? this.get(options.provider) : this.defaultProvider('chat')
     if (!record) throw new MushinError('unavailable', 'No LLM provider is configured. Add one in Providers first.')
     const client = this.client(record)
     if (!client.embed) throw new MushinError('unavailable', `Provider "${record.name}" cannot embed text`)
@@ -443,6 +507,31 @@ export class LlmService extends Service {
     return { vectors, provider: record.id, model: options.model, dimension: vectors[0]?.length ?? 0, ...(tokens ? { tokens } : {}) }
   }
 
+  /** Asks a decision provider structured questions about a state. */
+  async decide(options: LlmDecideOptions): Promise<LlmDecideResult> {
+    const { record, model, client } = this.resolve(options, 'decision')
+    if (!client.decide) throw new MushinError('unavailable', `Provider "${record.name}" cannot answer decisions`)
+    const start = Date.now()
+    let response
+    try {
+      response = await client.decide({ model, state: options.state, questions: options.questions, assets: options.assets, signal: options.signal })
+    } catch (error) {
+      this.logRequestError(record, model, error, start)
+      throw error
+    }
+    const latencyMs = Date.now() - start
+    this.home.emit('llm/called', {
+      provider: record.id,
+      providerName: record.name,
+      model,
+      ok: true,
+      inputTokens: response.usage?.inputTokens,
+      outputTokens: response.usage?.outputTokens,
+      latencyMs,
+    })
+    return { ...response, provider: record.id, providerName: record.name, model, latencyMs }
+  }
+
   private logRequestError(record: ProviderRecord, model: string, error: unknown, start: number) {
     // A caller that gave up (timeout, user stop) is not the provider's fault.
     if (error instanceof Error && error.name === 'AbortError') return
@@ -455,8 +544,17 @@ export class LlmService extends Service {
     const start = Date.now()
     let test: ProviderTest
     try {
-      const { model, client } = this.resolve({ provider: id })
-      await client.chat({ model, messages: [{ role: 'user', content: 'Reply with OK.' }], maxTokens: 256, signal: AbortSignal.timeout(60_000) })
+      // A decision-only provider answers a small true-or-false question instead of chatting.
+      const capability = this.supports(record, 'chat') ? 'chat' : 'decision'
+      const { model, client } = this.resolve({ provider: id }, capability)
+      const signal = AbortSignal.timeout(60_000)
+      if (capability === 'chat') {
+        await client.chat({ model, messages: [{ role: 'user', content: 'Reply with OK.' }], maxTokens: 256, signal })
+      } else {
+        if (!client.decide) throw new MushinError('unavailable', `Provider "${record.name}" cannot answer decisions`)
+        const response = await client.decide({ model, ...TEST_DECISION, signal })
+        if (response.answers.ok?.type !== 'noul') throw new MushinError('unavailable', 'The provider did not answer the test question')
+      }
       test = { ok: true, at: Date.now(), latencyMs: Date.now() - start, model }
     } catch (error) {
       test = { ok: false, at: Date.now(), error: error instanceof Error ? error.message : String(error) }
@@ -571,6 +669,22 @@ export class LlmService extends Service {
       risk: 'write',
       input: idInput,
       handler: ({ id }) => this.setDefault(id),
+    })
+
+    yield actions.define({
+      name: 'providers.decide',
+      description: 'Ask a decision provider (such as TypeSafe Jev) structured questions about a state: noul (probability a statement holds), choice (pick a named option), score (grade on an ordered scale) or box (locate something in an image asset). Returns one answer per question name.',
+      risk: 'read',
+      input: decideInput,
+      handler: (input) => this.decide(input),
+    })
+
+    yield actions.define({
+      name: 'providers.decideChoices',
+      description: 'Providers that answer decisions, as ids and names.',
+      risk: 'read',
+      input: z.object({}),
+      handler: () => this.records.filter((record) => this.supports(record, 'decision')).map((record) => ({ value: record.id, label: record.name })),
     })
 
     yield actions.define({
