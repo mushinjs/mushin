@@ -5,12 +5,14 @@ import type {} from '@mushin/plugin-personas'
 import type {} from '@mushin/plugin-providers'
 import { Config } from './config'
 import { DatabaseStore, defineTables } from './database'
-import { logDecision, shareDecisionsAction } from './log'
+import { shareActions } from './actions'
+import { logDecision } from './log'
 import { Memory } from './memory'
 import { ChatMind, type PersonaInfo } from './mind'
 import { inScope, remembers } from './scope'
 import { InMemoryStore, type MemoryStore } from './store'
 
+export * from './actions'
 export * from './config'
 export * from './database'
 export * from './digest'
@@ -159,7 +161,7 @@ export function apply(ctx: Context, config: Config) {
       && inScope(config, session.channel) && !config.ignoreUsers.includes(session.user.id))
   })
 
-  shareDecisionsAction(ctx)
+  shareActions(ctx, () => store)
 
   ctx.effect(() => () => {
     for (const mind of minds.values()) mind.dispose()
