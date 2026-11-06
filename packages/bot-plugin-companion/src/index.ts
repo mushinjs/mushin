@@ -4,9 +4,12 @@ import type {} from '@mushin/plugin-flows'
 import type {} from '@mushin/plugin-personas'
 import type {} from '@mushin/plugin-providers'
 import { Config } from './config'
-import { ChatMind, type PersonaInfo } from './mind'
+import { DatabaseStore, defineTables } from './database'
 import { logDecision, shareDecisionsAction } from './log'
-import { inScope } from './scope'
+import { Memory } from './memory'
+import { ChatMind, type PersonaInfo } from './mind'
+import { inScope, remembers } from './scope'
+import { InMemoryStore, type MemoryStore } from './store'
 
 export * from './config'
 export * from './database'
@@ -41,6 +44,17 @@ export function apply(ctx: Context, config: Config) {
   const logger = ctx.logger('companion')
   const minds = new Map<string, ChatMind>()
 
+  // Memories live in the database when there is one, else only until the plugin stops.
+  const fallback = new InMemoryStore()
+  let store: MemoryStore = fallback
+  ctx.inject(['model', 'database'], (ctx) => {
+    defineTables(ctx)
+    store = new DatabaseStore(ctx)
+    ctx.effect(() => () => {
+      store = fallback
+    }, 'companion database store')
+  })
+
   const ignored = (record: MessageRecord) => record.direction !== 'in'
     || record.user.id === bot.selfId
     || config.ignoreUsers.includes(record.user.id)
@@ -56,6 +70,33 @@ export function apply(ctx: Context, config: Config) {
     return found && { name: found.name, prompt: found.prompt, examples: found.examples, provider: found.provider, model: found.model }
   }
 
+  const memory = new Memory({
+    bot: bot.id,
+    get store() {
+      return store
+    },
+    get selfId() {
+      return bot.selfId
+    },
+    get selfName() {
+      return bot.selfName ?? bot.record.name
+    },
+    ask: async (messages) => {
+      const result = await ctx.llm.chat({
+        provider: config.utilityProvider || config.plannerProvider || bot.record.provider,
+        model: (config.utilityProvider ? config.utilityModel : config.utilityModel || config.plannerModel) || undefined,
+        maxTokens: 1200,
+        messages,
+        signal: AbortSignal.timeout(90_000),
+      })
+      return result.text
+    },
+    embed: config.embedProvider && config.embedModel
+      ? async (texts) => (await ctx.llm.embed({ provider: config.embedProvider, model: config.embedModel!, texts, signal: AbortSignal.timeout(30_000) })).vectors
+      : undefined,
+    onError: (error, chat) => logger.warn('memory of %s: %s', chat, (error as Error)?.message ?? error),
+  })
+
   const mindOf = (channel: ChannelInfo) => {
     const key = keyOf(channel)
     let mind = minds.get(key)
@@ -70,6 +111,7 @@ export function apply(ctx: Context, config: Config) {
         },
         history: (limit) => history(channel, limit),
         persona,
+        recall: async (records) => remembers(config, channel) ? memory.recall(key, records) : undefined,
         chat: async (role, messages, persona) => {
           const planner = role === 'planner'
           const result = await ctx.llm.chat({
@@ -101,6 +143,7 @@ export function apply(ctx: Context, config: Config) {
     const arrived = Date.now()
     await next()
     if (ignored(record) || session.command?.entry) return
+    if (remembers(config, record.channel)) memory.observe(keyOf(record.channel), (limit) => history(record.channel, limit))
     // Something else (a keyword flow, a command) already answered this message.
     const recent = await ctx.bots.messages(bot.id, { channel: record.channel.id, limit: 5 }).catch(() => [])
     const answered = recent.some((item) => item.direction === 'out' && item.channel.type === record.channel.type && item.timestamp >= arrived
