@@ -4,7 +4,7 @@ import { cleanReply, reactionDelay, splitReply, typingDelay } from './express'
 import { type Interest, interestOf, Willingness } from './interest'
 import { parsePlan, type Plan, plannerPrompt, plannerSystem } from './planner'
 import { type Recollection, recollectionText } from './memory'
-import { asleep, Mood, SLEEPY } from './mood'
+import { asleep, CALM, Mood, SLEEPY } from './mood'
 import { replierPrompt, replierSystem } from './replier'
 import { buildTranscript, type Transcript } from './transcript'
 
@@ -172,7 +172,7 @@ export class ChatMind {
     const fresh = transcript.lines.filter((line) => batchIds.has(line.record.id)).map((line) => line.ref)
     const persona = this.deps.persona(latest)
     const memory = recollectionText(await this.deps.recall?.(history).catch(() => undefined))
-    const mood = sleeping ? SLEEPY : this.mood.current(this.now())
+    const mood = this.moodNow(sleeping)
     let plan: Plan
     try {
       plan = isPrivate
@@ -198,7 +198,7 @@ export class ChatMind {
     try {
       reply = await this.deps.chat('reply', [
         { role: 'system', content: replierSystem({ name: this.deps.name, persona, maxParts: config.maxParts, isPrivate }) },
-        { role: 'user', content: replierPrompt({ transcript, plan, name: this.deps.name, persona, maxParts: config.maxParts, isPrivate, memory, mood: sleeping ? SLEEPY : this.mood.current(this.now()) }) },
+        { role: 'user', content: replierPrompt({ transcript, plan, name: this.deps.name, persona, maxParts: config.maxParts, isPrivate, memory, mood: this.moodNow(sleeping) }) },
       ], persona)
     } catch (error) {
       return this.log({ action: 'failed', interest, plan, error: String((error as Error)?.message ?? error) })
@@ -234,6 +234,12 @@ export class ChatMind {
       { role: 'user', content: plannerPrompt(request) },
     ])
     return parsePlan(answer.text, request)
+  }
+
+  /** The mood worth telling the models; calm goes without saying. */
+  private moodNow(sleeping: boolean) {
+    const mood = sleeping ? SLEEPY : this.mood.current(this.now())
+    return mood === CALM ? undefined : mood
   }
 
   private sleep(ms: number) {

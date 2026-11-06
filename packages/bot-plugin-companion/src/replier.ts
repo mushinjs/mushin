@@ -40,7 +40,7 @@ export function replierPrompt(request: ReplyRequest) {
     `<chat>\n${request.transcript.text}\n</chat>`,
     target ? `你要回复 ${target.ref}（${who}：${target.text}）。` : '你要接着大家的话说一句。',
     request.plan.intent ? `你的想法：${request.plan.intent}` : '',
-    request.mood && request.mood !== '平静' ? `你现在的心情：${request.mood}，语气带一点出来。` : '',
+    request.mood ? `你现在的心情：${request.mood}，语气带一点出来。` : '',
     '直接写出你要发的消息：',
   ].filter(Boolean).join('\n')
 }
