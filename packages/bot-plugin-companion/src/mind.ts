@@ -4,6 +4,7 @@ import { cleanReply, reactionDelay, splitReply, typingDelay } from './express'
 import { type Interest, interestOf, Willingness } from './interest'
 import { parsePlan, type Plan, plannerPrompt, plannerSystem } from './planner'
 import { type Recollection, recollectionText } from './memory'
+import { asleep, Mood, SLEEPY } from './mood'
 import { replierPrompt, replierSystem } from './replier'
 import { buildTranscript, type Transcript } from './transcript'
 
@@ -69,6 +70,7 @@ const MAX_REPLANS = 1
  */
 export class ChatMind {
   readonly willingness = new Willingness(1)
+  readonly mood = new Mood()
   private pending: MessageRecord[] = []
   private timer?: ReturnType<typeof setTimeout>
   private firstPendingAt = 0
@@ -161,6 +163,8 @@ export class ChatMind {
     const batchIds = new Set(batch.map((record) => record.id))
     const before = history.filter((record) => !batchIds.has(record.id))
     const interest = interestOf(batch, { selfId: this.deps.selfId, aliases: config.aliases, interests: config.interests, talkValue: config.talkValue, before, now: this.now() })
+    const sleeping = asleep(config.quietHours, this.now())
+    if (sleeping && !interest.addressed) return this.log({ action: 'skipped', interest: { ...interest, reasons: [...interest.reasons, 'asleep'] } })
     if (!this.willingness.add(interest, this.now())) return this.log({ action: 'skipped', interest })
     if (this.limited()) return this.log({ action: 'limited', interest })
 
@@ -168,14 +172,16 @@ export class ChatMind {
     const fresh = transcript.lines.filter((line) => batchIds.has(line.record.id)).map((line) => line.ref)
     const persona = this.deps.persona(latest)
     const memory = recollectionText(await this.deps.recall?.(history).catch(() => undefined))
+    const mood = sleeping ? SLEEPY : this.mood.current(this.now())
     let plan: Plan
     try {
       plan = isPrivate
         ? { action: 'reply', target: fresh.at(-1), reason: 'private chat' }
-        : await this.plan(transcript, fresh, interest.addressed, persona, memory)
+        : await this.plan(transcript, fresh, interest.addressed, persona, memory, mood)
     } catch (error) {
       return this.log({ action: 'failed', interest, error: String((error as Error)?.message ?? error) })
     }
+    if (!sleeping) this.mood.set(plan.mood, this.now())
 
     if (plan.action === 'wait') {
       // Put the batch back in front and look again after the wait, with whatever came meanwhile.
@@ -192,7 +198,7 @@ export class ChatMind {
     try {
       reply = await this.deps.chat('reply', [
         { role: 'system', content: replierSystem({ name: this.deps.name, persona, maxParts: config.maxParts, isPrivate }) },
-        { role: 'user', content: replierPrompt({ transcript, plan, name: this.deps.name, persona, maxParts: config.maxParts, isPrivate, memory }) },
+        { role: 'user', content: replierPrompt({ transcript, plan, name: this.deps.name, persona, maxParts: config.maxParts, isPrivate, memory, mood: sleeping ? SLEEPY : this.mood.current(this.now()) }) },
       ], persona)
     } catch (error) {
       return this.log({ action: 'failed', interest, plan, error: String((error as Error)?.message ?? error) })
@@ -221,8 +227,8 @@ export class ChatMind {
     this.log({ action: 'reply', interest, plan, sent: parts })
   }
 
-  private async plan(transcript: Transcript, fresh: string[], addressed: boolean, persona?: PersonaInfo, memory?: string) {
-    const request = { transcript, fresh, addressed, name: this.deps.name, persona: persona?.prompt, isPrivate: false, memory }
+  private async plan(transcript: Transcript, fresh: string[], addressed: boolean, persona?: PersonaInfo, memory?: string, mood?: string) {
+    const request = { transcript, fresh, addressed, name: this.deps.name, persona: persona?.prompt, isPrivate: false, memory, mood }
     const answer = await this.deps.chat('planner', [
       { role: 'system', content: plannerSystem(request) },
       { role: 'user', content: plannerPrompt(request) },

@@ -25,6 +25,11 @@ describe('parsePlan', () => {
     expect(plan).toEqual({ action: 'reply', target: '#3', intent: '装穷', reason: '在问我' })
   })
 
+  it('reads the mood the planner names', () => {
+    expect(parsePlan('{"action":"no_reply","mood":"无聊","reason":"没意思"}', request)).toEqual({ action: 'no_reply', mood: '无聊', reason: '没意思' })
+    expect(plannerPrompt({ ...request, mood: '开心', memory: '<memory>\n之前聊过的：吃饭\n</memory>' })).toMatch(/^<memory>[\s\S]*你现在的心情：开心/)
+  })
+
   it('never targets the bot\'s own message and keeps waits between 3 and 20 seconds', () => {
     expect(parsePlan('{"action":"reply","target":"#2"}', request).target).toBe('#3')
     expect(parsePlan('{"action":"wait","seconds":99}', request)).toMatchObject({ action: 'wait', seconds: 20 })

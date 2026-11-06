@@ -12,6 +12,8 @@ export interface Plan {
   /** For `wait`: seconds to wait for more messages. */
   seconds?: number
   reason: string
+  /** How the bot feels now, in a word or two. */
+  mood?: string
   /** True when the model's answer could not be read and this plan is the fallback. */
   fallback?: boolean
 }
@@ -27,6 +29,8 @@ export interface PlanRequest {
   isPrivate: boolean
   /** What the bot remembers about the chat and the people in it, as a prompt block. */
   memory?: string
+  /** The bot's mood before this look. */
+  mood?: string
 }
 
 const PERSONA_CHARS = 600
@@ -47,7 +51,7 @@ export function plannerSystem(request: Pick<PlanRequest, 'name' | 'persona'>) {
     ].join('\n'),
     [
       '只输出一个 JSON 对象，不要别的文字：',
-      '{"action":"reply|wait|no_reply","target":"#编号","intent":"想说什么、什么语气，一句话","seconds":等待秒数,"reason":"为什么，一句话"}',
+      '{"action":"reply|wait|no_reply","target":"#编号","intent":"想说什么、什么语气，一句话","seconds":等待秒数,"mood":"看完这些你的心情，两三个字","reason":"为什么，一句话"}',
       'no_reply 时 target 和 intent 可以省略；wait 时给 seconds（3 到 20）。',
     ].join('\n'),
   ].filter(Boolean).join('\n\n')
@@ -60,6 +64,7 @@ export function plannerPrompt(request: PlanRequest) {
     `<chat>\n${request.transcript.text}\n</chat>`,
     `新消息：${request.fresh.join('、') || '无'}${request.addressed ? '（其中有人在找你）' : ''}`,
     request.isPrivate ? '这是私聊，对方说话一般都要回。' : '',
+    request.mood ? `你现在的心情：${request.mood}` : '',
     '现在你要怎么做？',
   ].filter(Boolean).join('\n')
 }
@@ -85,17 +90,19 @@ export function parsePlan(answer: string, request: PlanRequest): Plan {
       : { action: 'no_reply', reason: 'planner answer unreadable', fallback: true }
   }
   const reason = typeof data.reason === 'string' ? data.reason.slice(0, 200) : ''
+  const mood = typeof data.mood === 'string' && data.mood.trim() ? { mood: data.mood.trim() } : {}
   if (action === 'wait') {
     const seconds = Math.min(20, Math.max(3, Number(data.seconds) || 5))
-    return { action, seconds, reason }
+    return { action, seconds, reason, ...mood }
   }
-  if (action === 'no_reply') return { action, reason }
+  if (action === 'no_reply') return { action, reason, ...mood }
   const rawTarget = typeof data.target === 'string' || typeof data.target === 'number' ? String(data.target) : ''
   const line = rawTarget ? request.transcript.find(rawTarget) : undefined
   return {
     action,
     target: line && !line.self ? line.ref : fallbackTarget(request),
     ...(typeof data.intent === 'string' && data.intent.trim() ? { intent: data.intent.trim().slice(0, 200) } : {}),
+    ...mood,
     reason,
   }
 }

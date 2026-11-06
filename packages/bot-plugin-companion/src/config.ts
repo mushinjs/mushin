@@ -69,6 +69,9 @@ export const Config = z.object({
   embedModel: z.string().optional().meta(field('Embedding model', 'e.g. text-embedding-3-small or bge-m3', {
     'zh-CN': { title: '嵌入模型', description: '例如 text-embedding-3-small 或 bge-m3' },
   })),
+  quietHours: z.string().regex(/^(?:([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d)?$/).optional().meta(field('Sleep', 'HH:MM-HH:MM, e.g. 01:00-08:00: asleep then, it only answers when someone calls it, and sleepily. Empty never sleeps', {
+    'zh-CN': { title: '作息（睡觉时间）', description: '格式 HH:MM-HH:MM，例如 01:00-08:00：这段时间在睡觉，只有被叫才会迷迷糊糊地回。留空表示不睡' },
+  })),
   maxParts: z.number().int().min(1).max(6).default(3).meta(field('Most messages per reply', 'A reply is split into at most this many messages', {
     'zh-CN': { title: '每次最多几条', description: '一次回复最多拆成几条消息' },
   })),
