@@ -151,6 +151,24 @@ importers:
         specifier: 'catalog:'
         version: 5.0.4(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
 
+  packages/bot-plugin-companion:
+    dependencies:
+      '@mushin/core':
+        specifier: workspace:*
+        version: link:../core
+      '@mushin/plugin-bots':
+        specifier: workspace:*
+        version: link:../plugin-bots
+      '@mushin/plugin-flows':
+        specifier: workspace:*
+        version: link:../plugin-flows
+      '@mushin/plugin-personas':
+        specifier: workspace:*
+        version: link:../plugin-personas
+      '@mushin/plugin-providers':
+        specifier: workspace:*
+        version: link:../plugin-providers
+
   packages/bot-plugin-echo:
     dependencies:
       '@mushin/core':
@@ -195,6 +213,9 @@ importers:
       '@cordisjs/plugin-server':
         specifier: 'catalog:'
         version: 1.7.0(cordis@4.0.0-rc.11)
+      '@mushin/bot-plugin-companion':
+        specifier: workspace:*
+        version: link:../bot-plugin-companion
       '@mushin/bot-plugin-echo':
         specifier: workspace:*
         version: link:../bot-plugin-echo

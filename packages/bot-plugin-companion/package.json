@@ -1,0 +1,48 @@
+{
+  "name": "@mushin/bot-plugin-companion",
+  "version": "0.1.0",
+  "description": "Companion bot plugin: chats in groups like a member, deciding for itself when to speak",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "bot",
+    "platforms": [
+      "onebot"
+    ],
+    "category": "ai",
+    "displayName": {
+      "en": "Companion chat",
+      "zh-CN": "拟人群聊"
+    },
+    "description": {
+      "en": "Reads the group like a member: waits for people to finish, decides whether to speak, and replies in a few short messages",
+      "zh-CN": "像群友一样看群聊：等对方说完，自己判断要不要说话，分几条短消息回复"
+    },
+    "requires": {
+      "plugins": {
+        "@mushin/plugin-bots": "*",
+        "@mushin/plugin-providers": "*"
+      }
+    },
+    "optional": {
+      "plugins": {
+        "@mushin/plugin-flows": "*",
+        "@mushin/plugin-personas": "*"
+      }
+    }
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-bots": "workspace:*",
+    "@mushin/plugin-flows": "workspace:*",
+    "@mushin/plugin-personas": "workspace:*",
+    "@mushin/plugin-providers": "workspace:*"
+  }
+}
