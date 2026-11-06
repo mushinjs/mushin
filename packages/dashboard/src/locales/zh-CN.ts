@@ -262,6 +262,8 @@ const zhCN: typeof en = {
     testFailed: '测试失败：{error}',
     makeDefault: '设为默认',
     typeMissing: '类型未加载',
+    decisionOnly: '仅决策',
+    decisionOnlyHint: '只回答 providers.decide 的问题，不会用于聊天。',
     deleteHint: '使用此提供商的机器人和智能体将改用默认提供商。',
   },
   profiles: {

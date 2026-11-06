@@ -195,6 +195,7 @@ const initial = (provider: Provider) => [...provider.name.trim()][0]?.toUpperCas
             <strong>{{ provider.name }}</strong>
             <span v-if="provider.isDefault" class="tag primary"><span class="i-ph-star-fill text-[12px]" />{{ t('common.default') }}</span>
             <span v-if="!provider.typeAvailable" class="tag warn">{{ t('providers.typeMissing') }}</span>
+            <span v-if="!provider.capabilities?.includes('chat')" class="tag info" :title="t('providers.decisionOnlyHint')">{{ t('providers.decisionOnly') }}</span>
           </div>
           <div class="sub">
             <span>{{ typeName(provider.type) }}</span>
@@ -373,6 +374,7 @@ const initial = (provider: Provider) => [...provider.name.trim()][0]?.toUpperCas
 
 .tag.primary { color: var(--primary); background: var(--primary-soft); }
 .tag.warn { color: var(--warn); background: var(--warn-soft); }
+.tag.info { color: var(--info); background: var(--info-soft); }
 
 .sub {
   display: flex;

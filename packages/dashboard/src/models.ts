@@ -52,7 +52,8 @@ export function providerOptions(
   t: (key: string) => string,
   options: { profiles?: boolean; markDefault?: boolean } = {},
 ): (SelectOption | ChoiceGroup)[] {
-  const list = providers.map((provider) => ({
+  // Decision-only providers cannot chat, so chat pickers leave them out.
+  const list = providers.filter((provider) => provider.capabilities?.includes('chat') ?? true).map((provider) => ({
     label: options.markDefault && provider.isDefault ? `${provider.name} (${t('common.default')})` : provider.name,
     value: provider.id,
   }))

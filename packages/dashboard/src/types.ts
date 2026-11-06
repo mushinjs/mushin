@@ -107,6 +107,8 @@ export interface ProviderType {
   configSchema: JsonSchema
   secrets: string[]
   presets: ProviderPreset[]
+  /** What providers of this type can do; `decision` types answer providers.decide and never chat. */
+  capabilities: ('chat' | 'decision')[]
 }
 
 export interface ProviderTest {
@@ -149,6 +151,7 @@ export interface Provider {
   isDefault?: boolean
   lastTest?: ProviderTest
   typeAvailable: boolean
+  capabilities: ('chat' | 'decision')[]
   createdAt: number
 }
 

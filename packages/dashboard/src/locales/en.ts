@@ -261,6 +261,8 @@ export default {
     testFailed: 'Test failed: {error}',
     makeDefault: 'Make default',
     typeMissing: 'Type not loaded',
+    decisionOnly: 'Decisions only',
+    decisionOnlyHint: 'Answers providers.decide questions; never used for chat.',
     deleteHint: 'Bots and the Agent using this provider will fall back to the default provider.',
   },
   profiles: {
