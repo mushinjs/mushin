@@ -34,15 +34,18 @@
     "optional": {
       "plugins": {
         "@mushin/plugin-flows": "*",
-        "@mushin/plugin-personas": "*"
+        "@mushin/plugin-personas": "*",
+        "@mushin/plugin-database": "*"
       }
     }
   },
   "dependencies": {
     "@mushin/core": "workspace:*",
     "@mushin/plugin-bots": "workspace:*",
+    "@mushin/plugin-database": "workspace:*",
     "@mushin/plugin-flows": "workspace:*",
     "@mushin/plugin-personas": "workspace:*",
-    "@mushin/plugin-providers": "workspace:*"
+    "@mushin/plugin-providers": "workspace:*",
+    "minato": "catalog:"
   }
 }
