@@ -44,18 +44,18 @@ describe('plugin tree', () => {
 
   it('disables, re-enables and reloads an app plugin, and saves the change', async () => {
     const typeIds = async () => (await app.call<any[]>('providers.types')).map((type) => type.id).sort()
-    expect(await typeIds()).toEqual(['anthropic', 'azure-openai', 'openai'])
+    expect(await typeIds()).toEqual(['anthropic', 'azure-openai', 'gemini', 'openai', 'typesafe'])
 
     expect(await app.call('plugins.disable', { id: 'provider-anthropic' })).toMatchObject({ enabled: false, status: 'disabled' })
-    expect(await typeIds()).toEqual(['azure-openai', 'openai'])
+    expect(await typeIds()).toEqual(['azure-openai', 'gemini', 'openai', 'typesafe'])
     const saved = JSON.parse(await readFile(join(app.baseDir, 'mushin.config.json'), 'utf8'))
     expect(saved.plugins.find((entry: any) => entry.id === 'provider-anthropic').enabled).toBe(false)
 
     await app.call('plugins.enable', { package: '@mushin/plugin-provider-anthropic' })
-    await waitFor(async () => (await typeIds()).length === 3)
+    await waitFor(async () => (await typeIds()).length === 5)
     await app.call('plugins.reload', { id: 'provider-anthropic' })
     await waitFor(async () => (await app.call<any[]>('plugins.list')).find((p) => p.id === 'provider-anthropic').status === 'active')
-    expect(await typeIds()).toEqual(['anthropic', 'azure-openai', 'openai'])
+    expect(await typeIds()).toEqual(['anthropic', 'azure-openai', 'gemini', 'openai', 'typesafe'])
   })
 
   it('lists bot plugins in the catalog', async () => {

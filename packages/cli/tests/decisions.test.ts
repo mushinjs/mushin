@@ -31,6 +31,14 @@ afterAll(async () => {
   await llm?.close()
 })
 
+describe('built-in provider types', () => {
+  it('include Gemini, Azure OpenAI and TypeSafe Jev with their capabilities', async () => {
+    const types = await app.call<any[]>('providers.types')
+    const byId = Object.fromEntries(types.map((type) => [type.id, type.capabilities]))
+    expect(byId).toMatchObject({ openai: ['chat'], 'azure-openai': ['chat'], anthropic: ['chat'], gemini: ['chat'], typesafe: ['decision'] })
+  })
+})
+
 describe('decision providers', () => {
   let decider: string
   let chat: string

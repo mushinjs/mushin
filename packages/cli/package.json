@@ -24,6 +24,8 @@
     "@mushin/plugin-providers": "workspace:*",
     "@mushin/plugin-provider-openai": "workspace:*",
     "@mushin/plugin-provider-anthropic": "workspace:*",
+    "@mushin/plugin-provider-gemini": "workspace:*",
+    "@mushin/plugin-provider-typesafe": "workspace:*",
     "@mushin/plugin-bots": "workspace:*",
     "@mushin/plugin-adapter-onebot": "workspace:*",
     "@mushin/plugin-agent": "workspace:*",

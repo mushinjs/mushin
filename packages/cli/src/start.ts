@@ -16,6 +16,8 @@ export function defaultConfig(): InstanceConfig {
       { id: 'providers', package: '@mushin/plugin-providers', config: {} },
       { id: 'provider-openai', package: '@mushin/plugin-provider-openai', config: {} },
       { id: 'provider-anthropic', package: '@mushin/plugin-provider-anthropic', config: {} },
+      { id: 'provider-gemini', package: '@mushin/plugin-provider-gemini', config: {} },
+      { id: 'provider-typesafe', package: '@mushin/plugin-provider-typesafe', config: {} },
       { id: 'bots', package: '@mushin/plugin-bots', config: {} },
       { id: 'permissions', package: '@mushin/plugin-permissions', config: {} },
       { id: 'personas', package: '@mushin/plugin-personas', config: {} },
