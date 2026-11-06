@@ -5,8 +5,10 @@ import { Config } from './config'
 
 export * from './config'
 export * from './scope'
+export * from './express'
 export * from './interest'
 export * from './planner'
+export * from './replier'
 export * from './transcript'
 
 export const name = 'companion'
