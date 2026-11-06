@@ -8,6 +8,8 @@ export interface ReplyRequest {
   persona?: { prompt: string; examples?: { user: string; assistant: string }[] }
   maxParts: number
   isPrivate: boolean
+  /** What the bot remembers about the chat and the people in it, as a prompt block. */
+  memory?: string
 }
 
 const DEFAULT_PERSONA = '你是一个普通的年轻群友，说话随意，有自己的想法。'
@@ -32,6 +34,7 @@ export function replierPrompt(request: ReplyRequest) {
   const target = request.plan.target ? request.transcript.find(request.plan.target) : undefined
   const who = target ? target.record.user.name || target.record.user.id : undefined
   return [
+    request.memory ? `${request.memory}\n记得的事自然地用上就好，不要刻意提起，也不要说“我记得”。` : '',
     `<chat>\n${request.transcript.text}\n</chat>`,
     target ? `你要回复 ${target.ref}（${who}：${target.text}）。` : '你要接着大家的话说一句。',
     request.plan.intent ? `你的想法：${request.plan.intent}` : '',

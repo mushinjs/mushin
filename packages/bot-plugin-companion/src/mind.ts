@@ -3,6 +3,7 @@ import { type Config, DEBOUNCE } from './config'
 import { cleanReply, reactionDelay, splitReply, typingDelay } from './express'
 import { type Interest, interestOf, Willingness } from './interest'
 import { parsePlan, type Plan, plannerPrompt, plannerSystem } from './planner'
+import { type Recollection, recollectionText } from './memory'
 import { replierPrompt, replierSystem } from './replier'
 import { buildTranscript, type Transcript } from './transcript'
 
@@ -33,6 +34,8 @@ export interface MindDeps {
   chat(role: 'planner' | 'reply', messages: ChatMessage[], persona?: PersonaInfo): Promise<{ text: string; source?: Provenance }>
   /** Sends one message, quoting a message id when given. */
   send(text: string, options: { quote?: string; source?: Provenance }): Promise<void>
+  /** What the bot remembers that fits the recent chat; left out when memory is off. */
+  recall?(records: MessageRecord[]): Promise<Recollection | undefined>
   onDecision?(decision: Decision): void
   now?(): number
   random?(): number
@@ -164,11 +167,12 @@ export class ChatMind {
     const transcript = buildTranscript(history.slice(-TRANSCRIPT_SIZE), { selfId: this.deps.selfId, selfName: this.deps.name })
     const fresh = transcript.lines.filter((line) => batchIds.has(line.record.id)).map((line) => line.ref)
     const persona = this.deps.persona(latest)
+    const memory = recollectionText(await this.deps.recall?.(history).catch(() => undefined))
     let plan: Plan
     try {
       plan = isPrivate
         ? { action: 'reply', target: fresh.at(-1), reason: 'private chat' }
-        : await this.plan(transcript, fresh, interest.addressed, persona)
+        : await this.plan(transcript, fresh, interest.addressed, persona, memory)
     } catch (error) {
       return this.log({ action: 'failed', interest, error: String((error as Error)?.message ?? error) })
     }
@@ -188,7 +192,7 @@ export class ChatMind {
     try {
       reply = await this.deps.chat('reply', [
         { role: 'system', content: replierSystem({ name: this.deps.name, persona, maxParts: config.maxParts, isPrivate }) },
-        { role: 'user', content: replierPrompt({ transcript, plan, name: this.deps.name, persona, maxParts: config.maxParts, isPrivate }) },
+        { role: 'user', content: replierPrompt({ transcript, plan, name: this.deps.name, persona, maxParts: config.maxParts, isPrivate, memory }) },
       ], persona)
     } catch (error) {
       return this.log({ action: 'failed', interest, plan, error: String((error as Error)?.message ?? error) })
@@ -217,8 +221,8 @@ export class ChatMind {
     this.log({ action: 'reply', interest, plan, sent: parts })
   }
 
-  private async plan(transcript: Transcript, fresh: string[], addressed: boolean, persona?: PersonaInfo) {
-    const request = { transcript, fresh, addressed, name: this.deps.name, persona: persona?.prompt, isPrivate: false }
+  private async plan(transcript: Transcript, fresh: string[], addressed: boolean, persona?: PersonaInfo, memory?: string) {
+    const request = { transcript, fresh, addressed, name: this.deps.name, persona: persona?.prompt, isPrivate: false, memory }
     const answer = await this.deps.chat('planner', [
       { role: 'system', content: plannerSystem(request) },
       { role: 'user', content: plannerPrompt(request) },

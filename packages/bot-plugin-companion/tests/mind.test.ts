@@ -133,4 +133,25 @@ describe('ChatMind', () => {
     expect(decisions.at(-1)).toMatchObject({ action: 'failed', error: 'model down' })
     expect(chat.idle).toBe(true)
   })
+
+  it('puts what it remembers into both prompts', async () => {
+    const recall = vi.fn(async () => ({ summary: '大家在聊考研', people: [], memories: [] }))
+    const chat = mind({}, { recall })
+    answers.planner.push('{"action":"reply","target":"#1","reason":"在叫我"}')
+    answers.reply.push('加油')
+    say(chat, '小喵我考研好难', { segments: [mention, text('考研好难')] })
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(recall).toHaveBeenCalledOnce()
+    expect(calls.map((call) => call.content.includes('<memory>\n之前聊过的：大家在聊考研'))).toEqual([true, true])
+  })
+
+  it('still answers when recalling fails', async () => {
+    const chat = mind({}, { recall: async () => { throw new Error('db down') } })
+    answers.planner.push('{"action":"reply","target":"#1","reason":"在叫我"}')
+    answers.reply.push('在')
+    say(chat, '小喵在吗', { segments: [mention, text('在吗')] })
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(sent.map((item) => item.text)).toEqual(['在'])
+    expect(calls[0].content).not.toContain('<memory>')
+  })
 })

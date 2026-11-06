@@ -25,6 +25,8 @@ export interface PlanRequest {
   /** The persona's prompt, or a short description of the bot. */
   persona?: string
   isPrivate: boolean
+  /** What the bot remembers about the chat and the people in it, as a prompt block. */
+  memory?: string
 }
 
 const PERSONA_CHARS = 600
@@ -54,6 +56,7 @@ export function plannerSystem(request: Pick<PlanRequest, 'name' | 'persona'>) {
 /** The planner's user message: the chat and what is new in it. */
 export function plannerPrompt(request: PlanRequest) {
   return [
+    request.memory || '',
     `<chat>\n${request.transcript.text}\n</chat>`,
     `新消息：${request.fresh.join('、') || '无'}${request.addressed ? '（其中有人在找你）' : ''}`,
     request.isPrivate ? '这是私聊，对方说话一般都要回。' : '',
