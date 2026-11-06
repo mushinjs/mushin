@@ -32,4 +32,9 @@ describe('buildTranscript', () => {
     expect(transcript.lines[0].text).toBe(`${'啊'.repeat(10)}…`)
     expect(transcript.text).toContain('[#2 ')
   })
+
+  it('can show user ids, for the memory digest', () => {
+    const transcript = buildTranscript([record({ id: '42', name: 'A' }, [text('hi')])], { userIds: true })
+    expect(transcript.text).toMatch(/A\[42\]：hi$/)
+  })
 })

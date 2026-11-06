@@ -48,7 +48,7 @@ const ROLE: Record<string, string> = { owner: '群主', admin: '管理员' }
  * Turns a chat's recent messages, oldest first, into a transcript: who said what and when, with
  * short ids and the message each one replies to.
  */
-export function buildTranscript(records: MessageRecord[], options: { selfId?: string; selfName?: string; maxChars?: number } = {}): Transcript {
+export function buildTranscript(records: MessageRecord[], options: { selfId?: string; selfName?: string; maxChars?: number; userIds?: boolean } = {}): Transcript {
   const maxChars = options.maxChars ?? 300
   const lines: TranscriptLine[] = []
   const byMessageId = new Map<string, TranscriptLine>()
@@ -64,7 +64,8 @@ export function buildTranscript(records: MessageRecord[], options: { selfId?: st
   const rendered = lines.map((line) => {
     const { record } = line
     const role = !line.self && record.user.role ? ROLE[record.user.role] : undefined
-    const who = line.self ? `你（${options.selfName ?? record.user.name ?? '机器人'}）` : `${record.user.name || record.user.id}${role ? `（${role}）` : ''}`
+    const id = options.userIds && !line.self && record.user.name ? `[${record.user.id}]` : ''
+    const who = line.self ? `你（${options.selfName ?? record.user.name ?? '机器人'}）` : `${record.user.name || record.user.id}${id}${role ? `（${role}）` : ''}`
     const quoted = record.segments.find((segment) => segment.type === 'reply')
     const target = quoted ? byMessageId.get(String(quoted.data.id)) : undefined
     return `[${line.ref} ${clock(record.timestamp)}] ${who}：${line.text}${target ? `（回复 ${target.ref}）` : ''}`

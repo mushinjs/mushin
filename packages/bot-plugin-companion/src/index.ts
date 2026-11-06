@@ -10,6 +10,7 @@ import { inScope } from './scope'
 
 export * from './config'
 export * from './database'
+export * from './digest'
 export * from './express'
 export * from './interest'
 export * from './log'
