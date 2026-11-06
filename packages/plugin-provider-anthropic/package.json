@@ -18,8 +18,8 @@
       "zh-CN": "Anthropic 提供商"
     },
     "description": {
-      "en": "Claude models through the Anthropic Messages API",
-      "zh-CN": "通过 Anthropic Messages API 使用 Claude 模型"
+      "en": "Claude models through the Anthropic Messages API, plus the Anthropic-compatible endpoints of DeepSeek, Kimi, Zhipu and MiniMax",
+      "zh-CN": "通过 Anthropic Messages API 使用 Claude 模型，也支持 DeepSeek、Kimi、智谱、MiniMax 的 Anthropic 兼容接口"
     },
     "requires": {
       "plugins": {

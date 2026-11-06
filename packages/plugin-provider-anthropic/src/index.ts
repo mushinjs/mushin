@@ -13,8 +13,8 @@ export const ProviderConfig = z.object({
   apiKey: z.string().min(1).meta(field('API key', 'Anthropic API key', {
     'zh-CN': { title: 'API 密钥', description: 'Anthropic API 密钥' },
   })),
-  baseURL: z.url().default(OFFICIAL_BASE_URL).meta(field('Base URL', 'Change only when routing through a proxy', {
-    'zh-CN': { title: '接口地址', description: '仅在使用代理时修改' },
+  baseURL: z.url().default(OFFICIAL_BASE_URL).meta(field('Base URL', 'Change only for a proxy or an Anthropic-compatible endpoint of another vendor', {
+    'zh-CN': { title: '接口地址', description: '仅在使用代理或其他厂商的 Anthropic 兼容接口时修改' },
   })),
   effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional().meta(field('Effort', 'How much the model thinks; empty means the model default', {
     'zh-CN': { title: '思考强度', description: '模型思考的程度；留空使用模型默认值' },
@@ -225,12 +225,20 @@ export function apply(ctx: Context) {
     displayName: 'Anthropic',
     config: ProviderConfig,
     secrets: ['apiKey'],
-    presets: [{
-      id: 'anthropic',
-      label: 'Anthropic (Claude)',
-      config: { baseURL: OFFICIAL_BASE_URL },
-      models: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-1'],
-    }],
+    presets: [
+      {
+        id: 'anthropic',
+        label: 'Anthropic (Claude)',
+        config: { baseURL: OFFICIAL_BASE_URL },
+        models: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-1'],
+      },
+      // Other vendors' Anthropic-compatible endpoints. As non-official base URLs they never get the
+      // refusal-fallback beta or eager tool input streaming.
+      { id: 'deepseek-anthropic', label: { en: 'DeepSeek (Anthropic API)', 'zh-CN': 'DeepSeek（Anthropic 接口）' }, config: { baseURL: 'https://api.deepseek.com/anthropic', refusalFallback: false } },
+      { id: 'moonshot-anthropic', label: { en: 'Moonshot Kimi (Anthropic API)', 'zh-CN': '月之暗面 Kimi（Anthropic 接口）' }, config: { baseURL: 'https://api.moonshot.cn/anthropic', refusalFallback: false } },
+      { id: 'zhipu-anthropic', label: { en: 'Zhipu GLM (Anthropic API)', 'zh-CN': '智谱 GLM（Anthropic 接口）' }, config: { baseURL: 'https://open.bigmodel.cn/api/anthropic', refusalFallback: false } },
+      { id: 'minimax-anthropic', label: { en: 'MiniMax (Anthropic API)', 'zh-CN': 'MiniMax（Anthropic 接口）' }, config: { baseURL: 'https://api.minimaxi.com/anthropic', refusalFallback: false } },
+    ],
     create: (config) => new AnthropicClient(config),
   })
 }
