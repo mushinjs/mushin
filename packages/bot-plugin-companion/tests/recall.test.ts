@@ -25,6 +25,10 @@ describe('recall', () => {
     expect(recall(items, { text: '你家猫怎么样了，生病好了吗', people: [], now }).map((item) => item.id)).toEqual(['cat'])
   })
 
+  it('matches single characters where pairs miss', () => {
+    expect(recall(items, { text: '我家猫今天还是不吃饭', people: [], now }).map((item) => item.id)).toEqual(['cat'])
+  })
+
   it('leaves out memories with nothing in common', () => {
     expect(recall(items, { text: '今天天气不错', people: ['1'], now })).toEqual([])
   })
