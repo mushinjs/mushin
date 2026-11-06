@@ -1,26 +1,6 @@
-import type { MessageRecord, Segment } from '@mushin/core'
 import { describe, expect, it } from 'vitest'
 import { buildTranscript } from '../src/transcript'
-
-let counter = 0
-function record(user: { id: string; name?: string; role?: 'owner' | 'admin' | 'member' }, segments: Segment[], patch: Partial<MessageRecord> = {}): MessageRecord {
-  counter++
-  return {
-    id: `r${counter}`,
-    botId: 'b',
-    messageId: `m${counter}`,
-    direction: 'in',
-    channel: { type: 'group', id: '500' },
-    user,
-    segments,
-    timestamp: Date.UTC(2026, 10, 6, 12, counter),
-    type: 'text',
-    platforms: [],
-    source: { kind: 'user' },
-    ...patch,
-  }
-}
-const text = (value: string): Segment => ({ type: 'text', data: { text: value } })
+import { record, text } from './helpers'
 
 describe('buildTranscript', () => {
   it('numbers messages and says who wrote them, marking the bot and group roles', () => {
