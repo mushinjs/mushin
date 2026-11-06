@@ -6,6 +6,7 @@ import { Config } from './config'
 export * from './config'
 export * from './scope'
 export * from './interest'
+export * from './planner'
 export * from './transcript'
 
 export const name = 'companion'
