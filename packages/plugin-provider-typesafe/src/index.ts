@@ -151,6 +151,8 @@ export function apply(ctx: Context) {
     config: ProviderConfig,
     secrets: ['apiKey'],
     capabilities: ['decision'],
+    // API reference: https://docs.typesafe.ai. jev-latest and jev-preview both point at jev-1.14.0;
+    // box questions and image assets need 1.14 or later.
     presets: [
       {
         id: 'typesafe',

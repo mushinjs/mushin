@@ -72,6 +72,17 @@ describe('decision providers', () => {
     await expect(app.call('providers.decide', { provider: chat, state: 'x', questions: { ok: { type: 'noul' } } })).rejects.toMatchObject({ code: 'invalid_input' })
   })
 
+  it('take JSON instructions and check option and level counts', async () => {
+    await app.call('providers.decide', {
+      state: ['a', 'b'],
+      questions: { pick: { type: 'choice', instructions: { goal: 'pick one' }, criteria: { a: null, b: 'The second' } } },
+    })
+    expect(decisions.at(-1)?.questions.pick).toEqual({ type: 'choice', instructions: { goal: 'pick one' }, criteria: { a: null, b: 'The second' } })
+    await expect(app.call('providers.decide', { state: 'x', questions: { pick: { type: 'choice', criteria: {} } } })).rejects.toMatchObject({ code: 'invalid_input' })
+    const levels = Array.from({ length: 11 }, (_, index) => `level ${index}`)
+    await expect(app.call('providers.decide', { state: 'x', questions: { grade: { type: 'score', criteria: levels } } })).rejects.toMatchObject({ code: 'invalid_input' })
+  })
+
   it('are tested with a true-or-false question', async () => {
     const test = await app.call('providers.test', { id: decider })
     expect(test).toMatchObject({ ok: true, model: 'jev-latest' })

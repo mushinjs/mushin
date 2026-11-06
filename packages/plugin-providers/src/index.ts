@@ -62,23 +62,27 @@ const profileInput = z.object({
   })).min(1).describe('The first model answers; each later one is tried when the one before it fails'),
 })
 
+const decisionText = z.union([z.string(), z.record(z.string(), z.unknown()), z.array(z.unknown()), z.null()])
+
 const questionInput = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('noul'),
-    instructions: z.string().optional(),
-    criteria: z.object({ true: z.string().optional(), false: z.string().optional() }).optional().describe('What true and false mean'),
+    instructions: decisionText.optional(),
+    criteria: z.object({ true: decisionText.optional(), false: decisionText.optional() }).optional().describe('What true and false mean'),
   }),
   z.object({
     type: z.literal('choice'),
-    instructions: z.string().optional(),
-    criteria: z.record(z.string(), z.string()).describe('Option name to description'),
+    instructions: decisionText.optional(),
+    criteria: z.record(z.string(), decisionText)
+      .refine((value) => { const count = Object.keys(value).length; return count >= 1 && count <= 255 }, 'Give 1 to 255 options')
+      .describe('Option name to description (1 to 255 options; null to go by the name alone)'),
   }),
   z.object({
     type: z.literal('score'),
-    instructions: z.string().optional(),
-    criteria: z.array(z.string()).min(1).describe('Ordered levels; the index is the score'),
+    instructions: decisionText.optional(),
+    criteria: z.array(decisionText).min(1).max(10).describe('1 to 10 ordered levels; the index is the score'),
   }),
-  z.object({ type: z.literal('box'), instructions: z.string().optional() }),
+  z.object({ type: z.literal('box'), instructions: decisionText.optional() }),
 ]) satisfies z.ZodType<DecisionQuestion>
 
 const decideInput = z.object({
@@ -673,7 +677,7 @@ export class LlmService extends Service {
 
     yield actions.define({
       name: 'providers.decide',
-      description: 'Ask a decision provider (such as TypeSafe Jev) structured questions about a state: noul (probability a statement holds), choice (pick a named option), score (grade on an ordered scale) or box (locate something in an image asset). Returns one answer per question name.',
+      description: 'Ask a decision provider (such as TypeSafe Jev) structured questions about a state: noul (probability a statement holds), choice (pick a named option), score (grade on an ordered scale) or box (locate something in an image asset; edges come back as 0-1 fractions of the image). Instructions and criteria may be text or JSON. Returns one answer per question name.',
       risk: 'read',
       input: decideInput,
       handler: (input) => this.decide(input),

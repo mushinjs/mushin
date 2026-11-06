@@ -85,10 +85,15 @@ export interface EmbedResponse {
  * score; `box` locates something in an image asset.
  */
 export type DecisionQuestion =
-  | { type: 'noul'; instructions?: string; criteria?: { true?: string; false?: string } }
-  | { type: 'choice'; instructions?: string; criteria: Record<string, string> }
-  | { type: 'score'; instructions?: string; criteria: string[] }
-  | { type: 'box'; instructions?: string }
+  | { type: 'noul'; instructions?: DecisionText; criteria?: { true?: DecisionText; false?: DecisionText } }
+  /** 1 to 255 options; a null description means the option name speaks for itself. */
+  | { type: 'choice'; instructions?: DecisionText; criteria: Record<string, DecisionText> }
+  /** 1 to 10 ordered levels; the score is the probability-weighted mean of the level indexes. */
+  | { type: 'score'; instructions?: DecisionText; criteria: DecisionText[] }
+  | { type: 'box'; instructions?: DecisionText }
+
+/** Instructions and criteria may be text or any JSON value; null means none. */
+export type DecisionText = string | Record<string, unknown> | unknown[] | null
 
 /** An image the state refers to by its placeholder name. */
 export interface DecisionAsset {
@@ -111,6 +116,7 @@ export type DecisionAnswer =
   | { type: 'noul'; noul: number }
   | { type: 'choice'; choice: string; confidence: number; probabilities: Record<string, number> }
   | { type: 'score'; score: number; confidence: number; legend: Record<string, string>; probabilities: Record<string, number> }
+  /** Edges as fractions from 0 to 1: top and bottom of the image height, left and right of its width. */
   | { type: 'box'; box: { top: number; bottom: number; left: number; right: number }; confidence: number | null }
 
 export interface DecisionResponse {
