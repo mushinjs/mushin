@@ -66,4 +66,23 @@ describe('companion chat', () => {
     await waitFor(() => groupTexts('700').length >= 1, 8000)
     expect(groupTexts('700')).toEqual(['LLM chat answered'])
   })
+
+  it('logs its decisions, newest first, and keeps the log action while any bot runs it', async () => {
+    const decisions = await app.call<any[]>('companion.decisions', { bot: botId, channel: '500' })
+    expect(decisions.map((item) => item.action).slice(0, 2)).toEqual(['skipped', 'reply'])
+    expect(decisions[1]).toMatchObject({ interest: { addressed: true }, plan: { target: '#1', intent: '装傻' }, sent: ['啊？', '叫我干嘛'] })
+
+    const other = await createMockNapCat()
+    const second = await app.call('bots.create', {
+      name: 'Second',
+      adapter: { type: 'onebot', config: { mode: 'forward', url: other.url } },
+      plugins: [{ package: '@mushin/bot-plugin-companion' }],
+    })
+    await waitFor(async () => (await app.call<any[]>('bots.plugins.list', { id: second.id })).find((plugin) => plugin.package === '@mushin/bot-plugin-companion')?.status === 'active')
+    await app.call('bots.stop', { id: botId })
+    expect(await app.call('companion.decisions', { bot: second.id })).toEqual([])
+    await app.call('bots.stop', { id: second.id })
+    await expect(app.call('companion.decisions', { bot: second.id })).rejects.toThrow(/Unknown action/)
+    await other.close()
+  })
 })

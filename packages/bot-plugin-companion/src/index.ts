@@ -5,11 +5,13 @@ import type {} from '@mushin/plugin-personas'
 import type {} from '@mushin/plugin-providers'
 import { Config } from './config'
 import { ChatMind, type PersonaInfo } from './mind'
+import { logDecision, shareDecisionsAction } from './log'
 import { inScope } from './scope'
 
 export * from './config'
 export * from './express'
 export * from './interest'
+export * from './log'
 export * from './mind'
 export * from './planner'
 export * from './replier'
@@ -17,7 +19,7 @@ export * from './scope'
 export * from './transcript'
 
 export const name = 'companion'
-export const inject = ['bot', 'llm']
+export const inject = ['bot', 'llm', 'actions']
 
 export const PACKAGE = '@mushin/bot-plugin-companion'
 const LLM_CHAT = '@mushin/bot-plugin-llm-chat'
@@ -78,7 +80,10 @@ export function apply(ctx: Context, config: Config) {
           const segments: Segment[] = [...(options.quote ? [{ type: 'reply', data: { id: options.quote } }] : []), { type: 'text', data: { text } }]
           await bot.deliver(channel, { segments, text, source: options.source }, { plugin: PACKAGE })
         },
-        onDecision: (decision) => logger.debug('%s: %s (%s)', key, decision.action, decision.plan?.reason ?? decision.interest.reasons.join(' ')),
+        onDecision: (decision) => {
+          logDecision(bot.id, { ...decision, channel: { type: channel.type, id: channel.id } })
+          logger.debug('%s: %s (%s)', key, decision.action, decision.plan?.reason ?? decision.interest.reasons.join(' '))
+        },
       })
       minds.set(key, mind)
     }
@@ -87,12 +92,15 @@ export function apply(ctx: Context, config: Config) {
 
   ctx.bot.middleware(async (session, next) => {
     const record = session.record
+    // Platforms often give whole seconds, so time the message by its arrival, not its timestamp.
+    const arrived = Date.now()
     await next()
     if (ignored(record) || session.command?.entry) return
     // Something else (a keyword flow, a command) already answered this message.
-    const recent = await ctx.bots.messages(bot.id, { channel: record.channel.id, limit: 10 }).catch(() => [])
-    const index = recent.findIndex((item) => item.id === record.id)
-    if (index >= 0 && recent.slice(index + 1).some((item) => item.direction === 'out' && item.channel.type === record.channel.type)) return
+    const recent = await ctx.bots.messages(bot.id, { channel: record.channel.id, limit: 5 }).catch(() => [])
+    const answered = recent.some((item) => item.direction === 'out' && item.channel.type === record.channel.type && item.timestamp >= arrived
+      && !('plugin' in item.source && item.source.plugin === PACKAGE))
+    if (answered) return
     mindOf(record.channel).push(record)
   }, { priority: PRIORITY })
 
@@ -102,6 +110,8 @@ export function apply(ctx: Context, config: Config) {
       && flow.source?.kind === 'plugin' && flow.source.plugin === LLM_CHAT
       && inScope(config, session.channel) && !config.ignoreUsers.includes(session.user.id))
   })
+
+  shareDecisionsAction(ctx)
 
   ctx.effect(() => () => {
     for (const mind of minds.values()) mind.dispose()
