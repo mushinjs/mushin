@@ -52,6 +52,23 @@ export const Config = z.object({
   typingSpeed: z.number().min(1).max(50).default(8).meta(field('Typing speed', 'Characters per second when it "types" a reply', {
     'zh-CN': { title: '打字速度', description: '模拟打字时每秒的字数' },
   })),
+  memory: z.boolean().default(false).meta(field('Memory', 'Remember what people talk about and an impression of each of them. Only things said in the chat are kept; anyone can clear theirs with /忘掉我', {
+    'zh-CN': { title: '记忆', description: '记住聊过的事和对每个人的印象。只记聊天里自己说过的事；任何人都能用 /忘掉我 清除自己的' },
+  })),
+  memoryGroups: z.array(z.string()).default([]).meta(field('Remember in these groups', 'Empty means every group the companion chats in', {
+    'zh-CN': { title: '只在这些群记忆', description: '留空表示拟人群聊生效的所有群' },
+  })),
+  memoryPrivate: z.boolean().default(true).meta(field('Remember private chats', undefined, {
+    'zh-CN': { title: '私聊也记忆' },
+  })),
+  utilityProvider: providerField('Provider for summaries', '摘要与记忆用的提供商'),
+  utilityModel: modelField('Model for summaries', '摘要与记忆用的模型'),
+  embedProvider: z.string().optional().meta(field('Embedding provider', 'Recalls memories by meaning; empty recalls them by words', {
+    'zh-CN': { title: '嵌入提供商', description: '按意思召回记忆；留空按字词召回' },
+  }, { choices: 'providers.embedChoices' })),
+  embedModel: z.string().optional().meta(field('Embedding model', 'e.g. text-embedding-3-small or bge-m3', {
+    'zh-CN': { title: '嵌入模型', description: '例如 text-embedding-3-small 或 bge-m3' },
+  })),
   maxParts: z.number().int().min(1).max(6).default(3).meta(field('Most messages per reply', 'A reply is split into at most this many messages', {
     'zh-CN': { title: '每次最多几条', description: '一次回复最多拆成几条消息' },
   })),

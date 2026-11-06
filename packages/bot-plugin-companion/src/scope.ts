@@ -7,3 +7,10 @@ export function inScope(config: Pick<Config, 'groups' | 'excludeGroups' | 'priva
   if (config.excludeGroups.includes(channel.id)) return false
   return !config.groups.length || config.groups.includes(channel.id)
 }
+
+/** Whether the companion keeps memories of a channel, by the memory settings. */
+export function remembers(config: Pick<Config, 'memory' | 'memoryGroups' | 'memoryPrivate'>, channel: Pick<ChannelInfo, 'type' | 'id'>) {
+  if (!config.memory) return false
+  if (channel.type === 'private') return config.memoryPrivate
+  return !config.memoryGroups.length || config.memoryGroups.includes(channel.id)
+}
