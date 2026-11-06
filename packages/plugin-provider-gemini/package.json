@@ -1,0 +1,34 @@
+{
+  "name": "@mushin/plugin-provider-gemini",
+  "version": "0.1.0",
+  "description": "Google Gemini provider type",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "displayName": {
+      "en": "Gemini provider",
+      "zh-CN": "Gemini 提供商"
+    },
+    "description": {
+      "en": "Google Gemini models through the native Gemini API, with tools, images and embeddings",
+      "zh-CN": "通过 Gemini 原生 API 使用 Google Gemini 模型，支持工具调用、图片与向量嵌入"
+    },
+    "requires": {
+      "plugins": {
+        "@mushin/plugin-providers": "*"
+      }
+    }
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-providers": "workspace:*"
+  }
+}
