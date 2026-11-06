@@ -270,9 +270,15 @@ importers:
       '@mushin/plugin-provider-anthropic':
         specifier: workspace:*
         version: link:../plugin-provider-anthropic
+      '@mushin/plugin-provider-gemini':
+        specifier: workspace:*
+        version: link:../plugin-provider-gemini
       '@mushin/plugin-provider-openai':
         specifier: workspace:*
         version: link:../plugin-provider-openai
+      '@mushin/plugin-provider-typesafe':
+        specifier: workspace:*
+        version: link:../plugin-provider-typesafe
       '@mushin/plugin-providers':
         specifier: workspace:*
         version: link:../plugin-providers
@@ -595,6 +601,15 @@ importers:
         specifier: workspace:*
         version: link:../plugin-providers
 
+  packages/plugin-provider-gemini:
+    dependencies:
+      '@mushin/core':
+        specifier: workspace:*
+        version: link:../core
+      '@mushin/plugin-providers':
+        specifier: workspace:*
+        version: link:../plugin-providers
+
   packages/plugin-provider-openai:
     dependencies:
       '@mushin/core':
@@ -606,6 +621,15 @@ importers:
       openai:
         specifier: 'catalog:'
         version: 7.34.0(ws@8.22.0)(zod@4.6.7)
+
+  packages/plugin-provider-typesafe:
+    dependencies:
+      '@mushin/core':
+        specifier: workspace:*
+        version: link:../core
+      '@mushin/plugin-providers':
+        specifier: workspace:*
+        version: link:../plugin-providers
 
   packages/plugin-providers:
     dependencies:
