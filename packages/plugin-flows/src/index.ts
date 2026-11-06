@@ -13,7 +13,7 @@ import { ResourceLocks } from './locks'
 import { english, titleOf, unknownTypeMessage } from './suggest'
 import { KEEP_DAYS, type RunInfo, type RunStatus, RunStore, stopRunsNode } from './runs'
 import { VariableStore } from './variables'
-import type { ChatLine, DailyCounter, FlowBot, FlowDocument, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, FlowSource, Intercept, FlowSession, LlmLike, NodeType, PersonaResolver, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
+import type { ChatLine, DailyCounter, FlowBot, FlowDocument, FlowFilter, FlowEdge, FlowEvent, FlowGroup, FlowIssue, FlowNode, FlowSource, Intercept, FlowSession, LlmLike, NodeType, PersonaResolver, RunStep, RunTrace, Variables, VariableScope, WaitOptions } from './types'
 
 export * from './engine'
 export * from './graph'
@@ -306,6 +306,7 @@ export class FlowService extends Service {
   private fired = new Map<string, number>()
   private watched = new Map<string, number>()
   private personas?: PersonaResolver
+  private flowFilters = new Set<FlowFilter>()
   /** Where test runs are recorded, when the database plugin runs. */
   private testRuns?: Context['database']
   private saveUsageTimer?: ReturnType<typeof setTimeout>
@@ -410,6 +411,31 @@ export class FlowService extends Service {
         if (this.personas === resolver) this.personas = undefined
       }
     }, 'flows.usePersonas()')
+  }
+
+  /**
+   * Lets a plugin keep some flows from answering a message, e.g. the companion plugin taking over
+   * the chats where the LLM chat flow would otherwise reply. A flow is skipped when any filter
+   * returns true. Only messages are filtered, not events or schedules. Removed when the caller unloads.
+   */
+  useFlowFilter(filter: FlowFilter) {
+    return this.ctx.effect(() => {
+      this.flowFilters.add(filter)
+      return () => {
+        this.flowFilters.delete(filter)
+      }
+    }, 'flows.useFlowFilter()')
+  }
+
+  private skipped(doc: FlowDocument, botId: string, session: FlowSession) {
+    for (const filter of this.flowFilters) {
+      try {
+        if (filter(doc, { botId, session })) return true
+      } catch (error) {
+        this.ctx.logger('flows').warn('a flow filter failed: %s', error)
+      }
+    }
+    return false
   }
 
   private personaFor(botId: string | undefined, session: FlowSession) {
@@ -997,7 +1023,9 @@ export class FlowService extends Service {
   async dispatch(ctx: Context, session: FlowSession) {
     const botId = ctx.bot.id
     if (this.deliverToWaiter(botId, session)) return { consumed: true }
-    const runs = this.flowsOf(botId).map((compiled) => ({ compiled, env: this.environment(ctx, compiled.doc.id, session) }))
+    const runs = this.flowsOf(botId)
+      .filter((compiled) => !this.skipped(compiled.doc, botId, session))
+      .map((compiled) => ({ compiled, env: this.environment(ctx, compiled.doc.id, session) }))
     return this.runOrdered(runs)
   }
 

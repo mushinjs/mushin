@@ -454,3 +454,6 @@ export interface RunStep {
   /** `paused`: waiting at a breakpoint before it runs (test runs only). */
   status: 'running' | 'ok' | 'error' | 'skipped' | 'paused'
 }
+
+/** Says whether a flow should sit out an incoming message; see `Flows.useFlowFilter()`. */
+export type FlowFilter = (flow: FlowDocument, target: { botId: string; session: FlowSession }) => boolean

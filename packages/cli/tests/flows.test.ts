@@ -130,6 +130,15 @@ describe('flows', () => {
     expect(groupReplies().at(-1)).toBe('pong, user42')
   })
 
+  it('lets a plugin keep a flow from answering a message', async () => {
+    const dispose = app.ctx.flows.useFlowFilter((flow, { session }) => flow.id === flowId && session.text === 'ping')
+    await say('ping')
+    expect(groupReplies().at(-1)).toBe('LLM chat answered')
+    dispose()
+    await say('ping')
+    expect(groupReplies().at(-1)).toBe('pong, user42')
+  })
+
   it('keeps node groups, dropping missing nodes and groups left with one node', async () => {
     const flow = await app.call('flows.create', {
       ...pingPong,
