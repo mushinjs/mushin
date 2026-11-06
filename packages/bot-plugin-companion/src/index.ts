@@ -163,6 +163,13 @@ export function apply(ctx: Context, config: Config) {
 
   shareActions(ctx, () => store)
 
+  if (config.memory) {
+    ctx.bot.command({ name: '忘掉我', aliases: ['forget-me'], description: '让机器人忘掉关于你的印象和记忆' }, async (session) => {
+      const count = await store.forget(bot.id, session.user.id)
+      await session.reply(count ? `好，关于你的事我都忘了（${count} 条）` : '好，关于你的印象我都忘了')
+    })
+  }
+
   ctx.effect(() => () => {
     for (const mind of minds.values()) mind.dispose()
     minds.clear()
