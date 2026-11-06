@@ -1,0 +1,34 @@
+{
+  "name": "@mushin/plugin-provider-typesafe",
+  "version": "0.1.0",
+  "description": "TypeSafe Jev decision provider type",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "displayName": {
+      "en": "TypeSafe provider",
+      "zh-CN": "TypeSafe 提供商"
+    },
+    "description": {
+      "en": "TypeSafe Jev decision models: probabilities, choices, scores and image boxes through providers.decide",
+      "zh-CN": "TypeSafe Jev 决策模型：通过 providers.decide 得到判断概率、选项、评分与图像定位框"
+    },
+    "requires": {
+      "plugins": {
+        "@mushin/plugin-providers": "*"
+      }
+    }
+  },
+  "dependencies": {
+    "@mushin/core": "workspace:*",
+    "@mushin/plugin-providers": "workspace:*"
+  }
+}
