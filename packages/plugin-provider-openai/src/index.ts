@@ -1,4 +1,4 @@
-import OpenAI from 'openai'
+import OpenAI, { AzureOpenAI } from 'openai'
 import { type Context, field, z } from '@mushin/core'
 import type {
   ChatRequest, ChatResponse, EmbedRequest, EmbedResponse, FinishReason, LlmMessage, ProviderClient, StreamEvent, ToolCall,
@@ -20,6 +20,23 @@ export const ProviderConfig = z.object({
 })
 
 export type ProviderConfig = z.infer<typeof ProviderConfig>
+
+export const AzureConfig = z.object({
+  endpoint: z.url().meta(field('Endpoint', 'Resource endpoint, such as https://my-resource.openai.azure.com', {
+    'zh-CN': { title: '终结点', description: '资源终结点，例如 https://my-resource.openai.azure.com' },
+  })),
+  apiKey: z.string().min(1).meta(field('API key', 'Key of the Azure OpenAI resource', {
+    'zh-CN': { title: 'API 密钥', description: 'Azure OpenAI 资源的密钥' },
+  })),
+  apiVersion: z.string().min(1).default('2024-10-21').meta(field('API version', 'The api-version query parameter', {
+    'zh-CN': { title: 'API 版本', description: '请求的 api-version 参数' },
+  })),
+  deployment: z.string().optional().meta(field('Deployment', 'Send every request to this deployment; when empty, the model name is used as the deployment name', {
+    'zh-CN': { title: '部署名称', description: '所有请求都发往此部署；留空时把模型名当作部署名' },
+  })),
+})
+
+export type AzureConfig = z.infer<typeof AzureConfig>
 
 type Params = OpenAI.Chat.Completions.ChatCompletionCreateParams
 
@@ -67,22 +84,43 @@ function toOpenAIMessages(messages: LlmMessage[]): Params['messages'] {
   })
 }
 
-export class OpenAIClient implements ProviderClient {
-  private sdk: OpenAI
+export interface OpenAIClientOptions {
+  /** Send the token limit as `max_completion_tokens` rather than the older `max_tokens`. */
+  completionTokens?: boolean
+}
 
-  constructor(private config: ProviderConfig) {
-    this.sdk = new OpenAI({
+/** Chat, streaming, embeddings and model lists over any OpenAI SDK client, plain or Azure. */
+export class OpenAIClient implements ProviderClient {
+  constructor(private sdk: OpenAI, private options: OpenAIClientOptions = {}) {}
+
+  static fromConfig(config: ProviderConfig) {
+    const sdk = new OpenAI({
       baseURL: config.baseURL,
       // The SDK refuses an empty key; local servers ignore it.
       apiKey: config.apiKey || 'not-needed',
       defaultHeaders: config.headers,
       maxRetries: 1,
     })
+    // OpenAI's own API wants max_completion_tokens; compatible services still expect max_tokens.
+    return new OpenAIClient(sdk, { completionTokens: new URL(config.baseURL).hostname === 'api.openai.com' })
   }
 
-  private params(request: ChatRequest) {
-    // OpenAI's own API wants max_completion_tokens; compatible services still expect max_tokens.
-    const official = new URL(this.config.baseURL).hostname === 'api.openai.com'
+  /** `fetch` replaces the SDK's HTTP client, for tests. */
+  static fromAzure(config: AzureConfig, fetch?: typeof globalThis.fetch) {
+    const sdk = new AzureOpenAI({
+      ...(fetch ? { fetch } : {}),
+      endpoint: config.endpoint,
+      apiKey: config.apiKey,
+      apiVersion: config.apiVersion,
+      ...(config.deployment ? { deployment: config.deployment } : {}),
+      maxRetries: 1,
+    })
+    // Azure takes max_completion_tokens on every current API version, and reasoning models require it.
+    return new OpenAIClient(sdk, { completionTokens: true })
+  }
+
+  /** Request body without `stream`; exposed for tests. */
+  params(request: ChatRequest) {
     return {
       model: request.model,
       messages: toOpenAIMessages(request.messages),
@@ -94,7 +132,7 @@ export class OpenAIClient implements ProviderClient {
       } : {}),
       ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
       ...(request.maxTokens !== undefined
-        ? official ? { max_completion_tokens: request.maxTokens } : { max_tokens: request.maxTokens }
+        ? this.options.completionTokens ? { max_completion_tokens: request.maxTokens } : { max_tokens: request.maxTokens }
         : {}),
     }
   }
@@ -195,6 +233,14 @@ export function apply(ctx: Context) {
       { id: 'lmstudio', label: { en: 'LM Studio (local)', 'zh-CN': 'LM Studio（本地）' }, config: { baseURL: 'http://127.0.0.1:1234/v1', apiKey: '' } },
       { id: 'vllm', label: { en: 'vLLM (local)', 'zh-CN': 'vLLM（本地）' }, config: { baseURL: 'http://127.0.0.1:8000/v1', apiKey: '' } },
     ],
-    create: (config) => new OpenAIClient(config),
+    create: (config) => OpenAIClient.fromConfig(config),
+  })
+
+  ctx.llm.defineType({
+    id: 'azure-openai',
+    displayName: 'Azure OpenAI',
+    config: AzureConfig,
+    secrets: ['apiKey'],
+    create: (config) => OpenAIClient.fromAzure(config),
   })
 }
