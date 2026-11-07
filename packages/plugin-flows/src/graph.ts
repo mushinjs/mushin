@@ -1,5 +1,5 @@
 import { z } from '@mushin/core'
-import { refsIn, SCOPES } from './refs'
+import { refsIn, SCOPES, splitName } from './refs'
 import { similarHint } from './suggest'
 import type { FlowDocument, FlowIssue, FlowNode, Intercept, NodeType, PortDef, PortType } from './types'
 
@@ -220,12 +220,14 @@ export function compile(doc: FlowDocument, types: Map<string, NodeType>): Compil
         issues.push({ severity: 'warning', nodeId: id, message: `"${name}" has no input "${port}"` })
       }
     }
-    for (const [head, output] of stringsOf([entry.node.config, entry.node.inputs]).flatMap(refsIn)) {
+    for (const [head, ref] of stringsOf([entry.node.config, entry.node.inputs]).flatMap(refsIn)) {
       if (head === 'sys' || (SCOPES as string[]).includes(head)) continue
+      // Names after the first read into the output's value, which is only known at run time.
+      const output = splitName(ref).first
       const source = nodes.get(head)
-      if (!source) issues.push({ severity: 'error', nodeId: id, message: `"${name}" references {{${head}.${output}}}, but there is no node "${head}"` })
+      if (!source) issues.push({ severity: 'error', nodeId: id, message: `"${name}" references {{${head}.${ref}}}, but there is no node "${head}"` })
       else if (source.ports && !source.ports.outputs.some((port) => port.name === output)) {
-        issues.push({ severity: 'error', nodeId: id, message: `"${name}" references {{${head}.${output}}}, but "${source.node.label ?? source.node.type}" has no output "${output}"` })
+        issues.push({ severity: 'error', nodeId: id, message: `"${name}" references {{${head}.${ref}}}, but "${source.node.label ?? source.node.type}" has no output "${output}"` })
       }
     }
   }

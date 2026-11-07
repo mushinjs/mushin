@@ -134,6 +134,30 @@ describe('runFlow', () => {
     expect(result.trace.steps[2].inputs).toEqual({ value: 1 })
   })
 
+  it('reads into object outputs with a path after the output name', async () => {
+    const lookupNode: NodeType = {
+      kind: 'action',
+      type: 'x.lookup',
+      category: 'data',
+      title: 'Lookup',
+      outputs: [{ name: 'data', type: 'any' }],
+      run: () => ({ outputs: { data: { group_id: 7, members: [{ name: 'Ann' }] } } }),
+    }
+    const withLookup = new Map([...types, [lookupNode.type, lookupNode]])
+    const doc = flow([
+      { type: 'trigger.keyword', config: { keywords: ['who'] } },
+      { type: 'x.lookup' },
+      { type: 'action.reply', config: { text: '{{n2.data.group_id}}: {{n2.data.members.0.name}} {{n2.data.nope.deeper}}' } },
+    ], [['n1', 'exec:next', 'n2', 'exec'], ['n2', 'exec:next', 'n3', 'exec']])
+    expect(compile(doc, withLookup).issues).toEqual([])
+    const { value, sent } = session('who')
+    await runFlow(compile(doc, withLookup), { session: value, vars: memoryVars().forChat('c'), logger })
+    expect(replyText(sent)).toEqual(['7: Ann '])
+    // Only the output name is checked when saving; the rest is read at run time.
+    const broken = flow([...doc.nodes.slice(0, 2), { ...doc.nodes[2], config: { text: '{{n2.nothing.group_id}}' } }], [['n1', 'exec:next', 'n2', 'exec'], ['n2', 'exec:next', 'n3', 'exec']])
+    expect(compile(broken, withLookup).issues.map((issue) => issue.message)).toEqual(['"action.reply" references {{n2.nothing.group_id}}, but "x.lookup" has no output "nothing"'])
+  })
+
   it('records step values and stops after a chosen node', async () => {
     const doc = flow([
       { type: 'trigger.keyword', config: { keywords: ['echo'], mode: 'startsWith' } },

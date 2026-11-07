@@ -5,7 +5,7 @@
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { call } from '../../../api'
-import { refsIn } from '../../../flow'
+import { readPath, REF, refsIn, splitName } from '../../../flow'
 import type { ChannelInfo, MessageRecord } from '../../../types'
 import type { EditorState } from './state'
 
@@ -95,14 +95,15 @@ export function useSample(s: EditorState) {
   function sampleValue(binding: string | undefined) {
     if (!binding || !match.value) return
     const values = (head: string, name: string) => {
-      if (head === 'sys') return match.value!.sys[name]
+      const { first, path } = splitName(name)
+      if (head === 'sys') return readPath(match.value!.sys[first], path)
       const trigger = sampleTriggers.value.get(head)
-      return trigger?.outputs?.[name]
+      return readPath(trigger?.outputs?.[first], path)
     }
     const refs = refsIn(binding)
     if (!refs.length) return
     let missing = false
-    const text = binding.replace(/\{\{\s*([\w-]+)\.([\p{L}\p{N}_-]+)\s*\}\}/gu, (_, head: string, name: string) => {
+    const text = binding.replace(REF, (_, head: string, name: string) => {
       const value = values(head, name)
       if (value === undefined) missing = true
       return value === undefined ? '' : typeof value === 'string' ? value : JSON.stringify(value)

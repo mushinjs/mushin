@@ -1,6 +1,6 @@
 /** How the selected node is wired: its inputs, its exits, its outputs and who reads them. */
 import { computed } from 'vue'
-import { portsOf, refOf, refsIn, sysPorts } from '../../../flow'
+import { portsOf, refOf, refsIn, splitName, sysPorts } from '../../../flow'
 import { useEditor } from './editor'
 
 // Literal braces cannot go in i18n messages or template expressions, so the examples are passed in.
@@ -16,7 +16,7 @@ export function useNodeWiring() {
     if (!node || !info) return undefined
     const ports = portsOf(info, node.data!.config)
     const readers = (port: string) => nodes.value
-      .filter((item) => refsIn(JSON.stringify([item.data!.config, item.data!.inputs ?? {}])).some((ref) => ref.head === node.id && ref.name === port))
+      .filter((item) => refsIn(JSON.stringify([item.data!.config, item.data!.inputs ?? {}])).some((ref) => ref.head === node.id && splitName(ref.name).first === port))
       .map((item) => nodeName(item.id))
     return {
       inputs: ports.inputs.map((port) => ({ port, binding: node.data!.inputs?.[port.name] ?? '' })),

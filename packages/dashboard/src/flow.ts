@@ -49,8 +49,9 @@ export function parseHandle(handle: string | null | undefined) {
 }
 
 // Same syntax as the server: `{{<node id>.<output>}}`, `{{sys.<name>}}`, `{{chat|user|flow|run.<variable>}}`.
-const REF = /\{\{\s*([\w-]+)\.([\p{L}\p{N}_-]+)\s*\}\}/gu
-const WHOLE_REF = /^\s*\{\{\s*([\w-]+)\.([\p{L}\p{N}_-]+)\s*\}\}\s*$/u
+// More names after the first read into the value, as in `{{n2.data.group_id}}`.
+export const REF = /\{\{\s*([\w-]+)\.([\p{L}\p{N}_-]+(?:\.[\p{L}\p{N}_-]+)*)\s*\}\}/gu
+const WHOLE_REF = /^\s*\{\{\s*([\w-]+)\.([\p{L}\p{N}_-]+(?:\.[\p{L}\p{N}_-]+)*)\s*\}\}\s*$/u
 export const SCOPES = ['chat', 'user', 'flow', 'run']
 
 export const refOf = (head: string, name: string) => `{{${head}.${name}}}`
@@ -59,6 +60,22 @@ export const wholeRef = (text: string) => {
   return match ? { head: match[1], name: match[2] } : undefined
 }
 export const refsIn = (text: string) => [...text.matchAll(REF)].map((match) => ({ head: match[1], name: match[2] }))
+
+/** The output or variable a reference names, and the path into its value: `data.group_id` → `data`, `['group_id']`. */
+export function splitName(name: string) {
+  const [first, ...path] = name.split('.')
+  return { first, path }
+}
+
+/** Reads `path` into a value, as the server does: object keys and array indexes. */
+export function readPath(value: unknown, path: readonly string[]): unknown {
+  let current = value
+  for (const key of path) {
+    if (current === null || current === undefined || typeof current !== 'object') return undefined
+    current = (current as Record<string, unknown>)[key]
+  }
+  return current
+}
 
 /** Values of the incoming message, readable anywhere as `{{sys.<name>}}`. */
 export const sysPorts: PortDef[] = [

@@ -1,7 +1,7 @@
 import { type Logger, randomId, seg } from '@mushin/core'
 import { type CompiledFlow, interceptOf, triggerPriority } from './graph'
 import type { ResourceLocks } from './locks'
-import { interpolate, interpolateConfig, REF_PATTERN, SCOPES, sysValues, toText } from './refs'
+import { interpolate, interpolateConfig, readPath, REF_PATTERN, SCOPES, splitName, sysValues, toText } from './refs'
 import type { DailyCounter, FlowBot, FlowEvent, FlowSession, LlmLike, NodeResult, PersonaLike, PortType, RunState, RunStep, RunTrace, TriggerSource, UsageStore, Variables, VariableScope, WaitOptions } from './types'
 
 export const MAX_STEPS = 200
@@ -307,9 +307,10 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
   let stopped = false
 
   const lookup = (head: string, name: string): unknown => {
-    if (outputs.has(head)) return outputs.get(head)![name]
-    if (head === 'sys') return sys[name]
-    if ((SCOPES as string[]).includes(head)) return vars.get(head as VariableScope, name)
+    const { first, path } = splitName(name)
+    if (outputs.has(head)) return readPath(outputs.get(head)![first], path)
+    if (head === 'sys') return readPath(sys[first], path)
+    if ((SCOPES as string[]).includes(head)) return readPath(vars.get(head as VariableScope, first), path)
     return undefined
   }
 

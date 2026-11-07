@@ -4,10 +4,11 @@ import type { FlowEdge, FlowNode, FlowSession, NodeType, PortDef, VariableScope 
 /**
  * Variable references: `{{<node id>.<output>}}` reads an output of a node that ran earlier,
  * `{{sys.<name>}}` the incoming message, and `{{chat|user|flow|run.<name>}}` a stored variable.
- * Output and variable names may be in any script, e.g. a command argument `{{n1.分数}}`.
+ * Output and variable names may be in any script, e.g. a command argument `{{n1.分数}}`. More
+ * names after the first read into the value: `{{n2.data.group_id}}`, `{{n3.list.0}}`.
  */
-export const REF_PATTERN = /\{\{\s*([\w-]+)\.([\p{L}\p{N}_-]+)\s*\}\}/gu
-const WHOLE_REF = /^\s*\{\{\s*([\w-]+)\.([\p{L}\p{N}_-]+)\s*\}\}\s*$/u
+export const REF_PATTERN = /\{\{\s*([\w-]+)\.([\p{L}\p{N}_-]+(?:\.[\p{L}\p{N}_-]+)*)\s*\}\}/gu
+const WHOLE_REF = /^\s*\{\{\s*([\w-]+)\.([\p{L}\p{N}_-]+(?:\.[\p{L}\p{N}_-]+)*)\s*\}\}\s*$/u
 
 export const SCOPES: VariableScope[] = ['chat', 'user', 'flow', 'run']
 
@@ -33,7 +34,23 @@ export function sysValues(session: FlowSession): Record<string, unknown> {
   }
 }
 
-/** Every reference in a string, as `[head, name]` pairs. */
+/** The output or variable a reference names, and the path into its value: `data.group_id` → `data`, `['group_id']`. */
+export function splitName(name: string) {
+  const [first, ...path] = name.split('.')
+  return { first, path }
+}
+
+/** Reads `path` into a value: object keys, and array indexes. Undefined when a step is missing. */
+export function readPath(value: unknown, path: readonly string[]): unknown {
+  let current = value
+  for (const key of path) {
+    if (current === null || current === undefined || typeof current !== 'object') return undefined
+    current = (current as Record<string, unknown>)[key]
+  }
+  return current
+}
+
+/** Every reference in a string, as `[head, name]` pairs; `name` may carry a path, as in `data.group_id`. */
 export function refsIn(text: string) {
   return [...text.matchAll(REF_PATTERN)].map((match) => [match[1], match[2]] as const)
 }
