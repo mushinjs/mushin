@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { Alert, Button, DataTable, type DataTableColumn, type DataTableSortState, Dropdown, Empty, Input, Modal, Pagination, Select, Spin, Tag, useConfirm, useToast } from '@mushin/ui'
+import { Alert, Button, DataTable, type DataTableColumn, type DataTableSortState, Dropdown, Empty, Input, Modal, Pagination, Select, Spin, TabPane, Tabs, Tag, useConfirm, useToast } from '@mushin/ui'
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { call, on } from '../api'
+import BrowserStorage from '../components/BrowserStorage.vue'
 import PageHeader from '../components/PageHeader.vue'
 import IconAction from '../components/IconAction.vue'
 import { useAgentSceneStore } from '../stores/agentScene'
@@ -16,6 +17,13 @@ const dialog = useConfirm()
 const route = useRoute()
 const router = useRouter()
 const scene = useAgentSceneStore()
+
+/** `server` for the plugins' tables, `browser` for what this browser keeps. */
+const source = computed(() => (route.query.source === 'browser' ? 'browser' : 'server'))
+
+function setSource(next: string) {
+  void router.replace({ query: next === 'browser' ? { source: 'browser' } : { table: route.query.table } })
+}
 
 const available = ref<boolean>()
 const status = ref<DatabaseStatus>()
@@ -79,8 +87,8 @@ watch(selected, () => {
   void loadRows()
 })
 
-watch(table, (value) => {
-  scene.publish(value ? { label: value.name, state: { table: value.name, rows: value.count }, resource: `table:${value.name}` } : undefined)
+watch([table, source], ([value]) => {
+  scene.publish(value && source.value === 'server' ? { label: value.name, state: { table: value.name, rows: value.count }, resource: `table:${value.name}` } : undefined)
 }, { immediate: true })
 
 async function loadRows() {
@@ -352,8 +360,8 @@ async function backup() {
 
 <template>
   <div class="page">
-    <PageHeader :title="t('nav.database')" :lead="t('database.lead')">
-      <div v-if="available" class="flex flex-wrap gap-x-3 gap-y-2 items-center">
+    <PageHeader :title="t('nav.database')" :lead="source === 'browser' ? t('database.browser.lead') : t('database.lead')">
+      <div v-if="available && source === 'server'" class="flex flex-wrap gap-x-3 gap-y-2 items-center">
         <Button icon="i-lucide-plus" @click="newFlowTable">
           {{ t('database.newFlowTable') }}
         </Button>
@@ -367,76 +375,83 @@ async function backup() {
       </div>
     </PageHeader>
 
-    <Spin :show="loading">
-      <Alert v-if="available === false" type="warning" :title="t('database.unavailable')">
-        {{ t('database.unavailableHint') }}
-        <RouterLink to="/plugins">{{ t('nav.plugins') }}</RouterLink>
-      </Alert>
-      <Empty v-else-if="available && !tables.length" :description="t('database.noTables')" />
-      <div v-else-if="available" class="layout">
-        <nav class="tables">
-          <div v-for="[group, list] in groups" :key="group" class="group">
-            <div class="group-name muted">{{ group }}</div>
-            <a
-              v-for="item in list"
-              :key="item.name"
-              class="table-link hover-row"
-              :class="{ active: item.name === selected }"
-              @click="selectTable(item.name)"
-            >
-              <span class="mono">{{ item.name }}</span>
-              <span class="muted count">{{ item.count }}</span>
-            </a>
-          </div>
-        </nav>
+    <Tabs :value="source" type="line" @update:value="setSource">
+      <TabPane name="server" :tab="t('database.server')">
+        <Spin :show="loading">
+          <Alert v-if="available === false" type="warning" :title="t('database.unavailable')">
+            {{ t('database.unavailableHint') }}
+            <RouterLink to="/plugins">{{ t('nav.plugins') }}</RouterLink>
+          </Alert>
+          <Empty v-else-if="available && !tables.length" :description="t('database.noTables')" />
+          <div v-else-if="available" class="layout">
+            <nav class="tables">
+              <div v-for="[group, list] in groups" :key="group" class="group">
+                <div class="group-name muted">{{ group }}</div>
+                <a
+                  v-for="item in list"
+                  :key="item.name"
+                  class="table-link hover-row"
+                  :class="{ active: item.name === selected }"
+                  @click="selectTable(item.name)"
+                >
+                  <span class="mono">{{ item.name }}</span>
+                  <span class="muted count">{{ item.count }}</span>
+                </a>
+              </div>
+            </nav>
 
-        <section v-if="table" class="rows">
-          <div class="toolbar">
-            <Select v-model:value="filterColumn" :options="filterOptions" :placeholder="t('database.column')" size="small" class="filter-column" clearable />
-            <Input v-model:value="filterText" size="small" :placeholder="t('database.value')" :title="t('database.filterHint')" class="filter-text" @keyup.enter="addFilter" />
-            <Button size="small" :disabled="!filterColumn || filterText === ''" @click="addFilter">{{ t('database.filter') }}</Button>
-            <Tag v-for="(value, name) in filters" :key="name" size="small" closable @close="removeFilter(String(name))">
-              <span class="mono">{{ name }}</span>: {{ value }}
-            </Tag>
-            <div class="spacer" />
-            <span class="muted">{{ t('database.total', { count: total }) }}</span>
-            <IconAction icon="i-lucide-refresh-cw" :label="t('common.reload')" @click="loadRows" />
-            <template v-if="flowTable">
-              <Button size="small" icon="i-lucide-plus" @click="addFields">
-                {{ t('database.addFields') }}
-              </Button>
-              <IconAction icon="i-lucide-trash-2" :label="t('database.dropTable')" type="error" @click="dropFlowTable" />
-            </template>
-            <Dropdown :options="exportOptions" @select="exportTable">
-              <Button size="small" icon="i-lucide-download">
-                {{ t('database.export') }}
-              </Button>
-            </Dropdown>
+            <section v-if="table" class="rows">
+              <div class="toolbar">
+                <Select v-model:value="filterColumn" :options="filterOptions" :placeholder="t('database.column')" size="small" class="filter-column" clearable />
+                <Input v-model:value="filterText" size="small" :placeholder="t('database.value')" :title="t('database.filterHint')" class="filter-text" @keyup.enter="addFilter" />
+                <Button size="small" :disabled="!filterColumn || filterText === ''" @click="addFilter">{{ t('database.filter') }}</Button>
+                <Tag v-for="(value, name) in filters" :key="name" size="small" closable @close="removeFilter(String(name))">
+                  <span class="mono">{{ name }}</span>: {{ value }}
+                </Tag>
+                <div class="spacer" />
+                <span class="muted">{{ t('database.total', { count: total }) }}</span>
+                <IconAction icon="i-lucide-refresh-cw" :label="t('common.reload')" @click="loadRows" />
+                <template v-if="flowTable">
+                  <Button size="small" icon="i-lucide-plus" @click="addFields">
+                    {{ t('database.addFields') }}
+                  </Button>
+                  <IconAction icon="i-lucide-trash-2" :label="t('database.dropTable')" type="error" @click="dropFlowTable" />
+                </template>
+                <Dropdown :options="exportOptions" @select="exportTable">
+                  <Button size="small" icon="i-lucide-download">
+                    {{ t('database.export') }}
+                  </Button>
+                </Dropdown>
+              </div>
+              <DataTable
+                size="small"
+                :columns="columns"
+                :data="rows"
+                :loading="loadingRows"
+                :row-key="(row: Record<string, unknown>) => JSON.stringify(keyOf(row))"
+                :scroll-x="Math.max(600, (table.columns.length + 1) * 140)"
+                :max-height="'calc(100vh - 300px)'"
+                @update:sorter="onSort"
+              />
+              <Pagination
+                v-if="total > PAGE_SIZES[0]"
+                :page="page"
+                :page-size="pageSize"
+                :page-sizes="PAGE_SIZES"
+                :item-count="total"
+                size="small"
+                class="pager"
+                @update:page="setPage"
+                @update:page-size="setPageSize"
+              />
+            </section>
           </div>
-          <DataTable
-            size="small"
-            :columns="columns"
-            :data="rows"
-            :loading="loadingRows"
-            :row-key="(row: Record<string, unknown>) => JSON.stringify(keyOf(row))"
-            :scroll-x="Math.max(600, (table.columns.length + 1) * 140)"
-            :max-height="'calc(100vh - 300px)'"
-            @update:sorter="onSort"
-          />
-          <Pagination
-            v-if="total > PAGE_SIZES[0]"
-            :page="page"
-            :page-size="pageSize"
-            :page-sizes="PAGE_SIZES"
-            :item-count="total"
-            size="small"
-            class="pager"
-            @update:page="setPage"
-            @update:page-size="setPageSize"
-          />
-        </section>
-      </div>
-    </Spin>
+        </Spin>
+      </TabPane>
+      <TabPane name="browser" :tab="t('database.browser.tab')">
+        <BrowserStorage v-if="source === 'browser'" />
+      </TabPane>
+    </Tabs>
 
     <Modal
       :show="!!designing"
