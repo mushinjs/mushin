@@ -58,7 +58,6 @@ function when(at: number) {
             </button>
           </li>
         </ol>
-        <p class="history-foot muted">{{ t('flows.history.hint') }}</p>
       </div>
     </Popover>
   </div>
@@ -174,11 +173,5 @@ function when(at: number) {
   font-size: 11px;
   opacity: 0.55;
   font-variant-numeric: tabular-nums;
-}
-
-.history-foot {
-  margin: 0;
-  padding: 8px 12px 10px;
-  border-top: 1px solid var(--line);
 }
 </style>

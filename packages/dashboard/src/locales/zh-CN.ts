@@ -795,7 +795,6 @@ const zhCN: typeof en = {
       nothingToRedo: '没有可重做的操作',
       kept: '最多保留 {count} 步',
       clear: '清空',
-      hint: '点一步回到那时的样子。历史保存在这个浏览器里，按流程分开；撤回不会自动保存。',
       untitledGroup: '未命名分组',
       steps: {
         opened: '打开流程',

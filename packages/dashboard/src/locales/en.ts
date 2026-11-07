@@ -794,7 +794,6 @@ export default {
       nothingToRedo: 'Nothing to redo',
       kept: 'Keeps up to {count} steps',
       clear: 'Clear',
-      hint: 'Click a step to go back to it. History is kept in this browser for each flow; undoing does not save.',
       untitledGroup: 'Untitled group',
       steps: {
         opened: 'Opened the flow',
