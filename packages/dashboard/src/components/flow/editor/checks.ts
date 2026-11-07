@@ -52,8 +52,11 @@ export function upstreamOf(id: string, edges: readonly { source: string; target:
 
 const isEmpty = (value: unknown) => value === undefined || value === null || value === '' || (Array.isArray(value) && !value.length)
 
-/** References stand for values of any type; in JSON text they are replaced by a placeholder before parsing. */
-const REF_MARK = '\u0000ref'
+/**
+ * References stand for values of any type; in JSON text they are replaced by a placeholder before
+ * parsing. An invisible separator, which JSON leaves as it is and nobody types.
+ */
+const REF_MARK = '⁣ref'
 
 /**
  * Parses JSON that may hold references, quoted (`"{{n1.id}}"`) or not (`{{n1.id}}`). Values that
@@ -152,13 +155,13 @@ function checkApi(apis: ApiInfo[], actionField: string, paramsField: string | un
     const value = params[param.name]
     if (isRefValue(value)) continue
     if (isEmpty(value) || (typeof value === 'string' && !value.trim())) {
-      if (param.required) out.push({ severity: 'error', field: paramsField, code: 'apiParamMissing', params: { api: api.action, param: param.name } })
+      if (param.required) out.push({ severity: 'error', field: `${paramsField}.${param.name}`, code: 'apiParamMissing', params: { api: api.action, param: param.name } })
     } else if (!suits(param.type, value)) {
-      out.push({ severity: 'error', field: paramsField, code: 'apiParamType', params: { api: api.action, param: param.name, type: param.type } })
+      out.push({ severity: 'error', field: `${paramsField}.${param.name}`, code: 'apiParamType', params: { api: api.action, param: param.name, type: param.type } })
     }
   }
   for (const name of Object.keys(params)) {
-    if (!api.params.some((param) => param.name === name)) out.push({ severity: 'warning', field: paramsField, code: 'apiParamUnknown', params: { api: api.action, param: name } })
+    if (!api.params.some((param) => param.name === name)) out.push({ severity: 'warning', field: `${paramsField}.${name}`, code: 'apiParamUnknown', params: { api: api.action, param: name } })
   }
 }
 
@@ -195,4 +198,55 @@ export function checkNode(node: CheckNode, info: NodeTypeInfo, context: CheckCon
     }
   }
   return out
+}
+
+// ---- API params as fields ----
+
+/**
+ * The params JSON as one text per param, for editing them as fields: text stays as written
+ * (references in it too), a reference outside quotes becomes the reference, numbers and booleans
+ * their text, objects and lists their JSON. Nothing when the text is not a JSON object.
+ */
+export function readParams(text: string): Record<string, string> | undefined {
+  const refs: string[] = []
+  const filled = (text.trim() || '{}').replace(/"(?:[^"\\]|\\.)*"|\{\{[^{}]*\}\}/g, (part) => {
+    if (part.startsWith('"')) return part
+    refs.push(part)
+    return JSON.stringify(`${REF_MARK}${refs.length - 1}`)
+  })
+  let value: unknown
+  try {
+    value = JSON.parse(filled)
+  } catch {
+    return undefined
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const restore = (part: string) => part.replace(new RegExp(`"?${REF_MARK}(\\d+)"?`, 'g'), (_, index: string) => refs[Number(index)])
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+    key,
+    typeof item === 'string' ? restore(item) : item !== null && typeof item === 'object' ? restore(JSON.stringify(item)) : String(item),
+  ]))
+}
+
+const LONE_REF = /^\s*\{\{[^{}]*\}\}\s*$/
+
+/**
+ * Params written back as JSON, in the table's order with any others after. Empty ones are left
+ * out. Numbers and booleans are written bare; references and text are quoted (the API node
+ * escapes and converts them as it runs); lists and objects are written as their JSON.
+ */
+export function writeParams(values: Record<string, string>, api?: ApiInfo) {
+  const order = [...(api?.params.map((param) => param.name) ?? []), ...Object.keys(values)]
+  const parts: string[] = []
+  for (const name of new Set(order)) {
+    const text = values[name]
+    if (text === undefined || text === '') continue
+    const type = api?.params.find((param) => param.name === name)?.type
+    let written = JSON.stringify(text)
+    if ((type === 'id' || type === 'number') && /^-?\d+(\.\d+)?$/.test(text.trim())) written = text.trim()
+    else if (type === 'boolean' && (text === 'true' || text === 'false')) written = text
+    else if ((type === 'array' || type === 'object') && (LONE_REF.test(text) || !parseTemplateJson(text).error)) written = text.trim()
+    parts.push(`${JSON.stringify(name)}: ${written}`)
+  }
+  return `{${parts.join(', ')}}`
 }

@@ -401,6 +401,12 @@ describe('param checks', () => {
     expect(error).toBe('Setting groupId is empty (from {{v.text}}: "data.text" (v) gave an empty text)')
   })
 
+  it('escapes values filled into quoted params, keeping unquoted ones as they are', async () => {
+    const { calls, error } = await runAfterText('say "hi" \\ C:\\ok\n', { type: 'onebot.call', config: { action: 'send_group_msg', params: '{"group_id": {{sys.groupId}}, "message": "{{v.text}}"}' } })
+    expect(error).toBeUndefined()
+    expect(calls).toEqual([{ action: 'send_group_msg', params: { group_id: 500, message: 'say "hi" \\ C:\\ok\n' } }])
+  })
+
   it('checks settings again once references are filled in', async () => {
     const { error } = await runAfterText('', { type: 'onebot.call', config: { action: '{{v.text}}', params: '{}' } })
     expect(error).toBe('Setting action is empty (from {{v.text}}: "data.text" (v) gave an empty text)')

@@ -365,7 +365,7 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
   }
 
   /** The node's config with references filled in; keys with an escape get each value escaped. */
-  const configFor = (config: Record<string, any>, escape?: Record<string, (value: string, config: any) => string>) => {
+  const configFor = (config: Record<string, any>, escape?: Record<string, (value: string, config: any, at: { text: string; offset: number }) => string>) => {
     if (!escape) return interpolateConfig(config, lookup)
     const plain = Object.fromEntries(Object.entries(config).filter(([key]) => !(key in escape)))
     const filled: Record<string, any> = interpolateConfig(plain, lookup)
@@ -373,7 +373,7 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
       const value = config[key]
       if (value === undefined) continue
       filled[key] = typeof value === 'string'
-        ? value.replace(REF_PATTERN, (_, head: string, name: string) => quote(toText(lookup(head, name)), config))
+        ? value.replace(REF_PATTERN, (_, head: string, name: string, offset: number, text: string) => quote(toText(lookup(head, name)), config, { text, offset }))
         : value
     }
     return filled

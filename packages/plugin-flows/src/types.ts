@@ -50,9 +50,9 @@ interface NodeTypeBase<C> {
   /**
    * Config strings whose references are escaped as they are filled in, by config key: a shell
    * command quotes each value, so a chat message cannot add commands of its own. Gets each value
-   * as text and the node's config as saved.
+   * as text, the node's config as saved, and where the reference sits in the string.
    */
-  escapeConfig?: Record<string, (value: string, config: C) => string>
+  escapeConfig?: Record<string, (value: string, config: C, at: { text: string; offset: number }) => string>
   /**
    * Only people in the flow editor may add these nodes or change their config and inputs; the
    * Agent cannot. For nodes that reach outside the chat, such as running commands.

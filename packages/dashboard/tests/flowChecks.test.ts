@@ -5,7 +5,7 @@ vi.hoisted(() => {
   ;(globalThis as any).location ??= { pathname: '/', search: '', host: 'localhost', protocol: 'http:' }
 })
 
-import { checkNode, type CheckNode, parseTemplateJson, upstreamOf } from '../src/components/flow/editor/checks'
+import { type ApiInfo, checkNode, type CheckNode, parseTemplateJson, readParams, upstreamOf, writeParams } from '../src/components/flow/editor/checks'
 import type { NodeTypeInfo } from '../src/types'
 
 const exec = (source: string, target: string) => ({ source, sourceHandle: 'exec:next', target, targetHandle: 'exec' })
@@ -67,9 +67,9 @@ describe('checkNode', () => {
 
   it('checks API params: required, types and unknown names', () => {
     expect(check({ action: 'send_poke', params: '{"group_id": "abc", "usr_id": 1}' })).toEqual([
-      'error params apiParamMissing send_poke,user_id',
-      'error params apiParamType send_poke,group_id,id',
-      'warning params apiParamUnknown send_poke,usr_id',
+      'error params.user_id apiParamMissing send_poke,user_id',
+      'error params.group_id apiParamType send_poke,group_id,id',
+      'warning params.usr_id apiParamUnknown send_poke,usr_id',
     ])
     expect(check({ action: 'set_something', params: '{}' })).toEqual(['warning action apiUnknown set_something'])
   })
@@ -83,5 +83,37 @@ describe('checkNode', () => {
       'warning params refNotBefore z,data,z.data',
       'error params refNoOutput sys,nothing,sys.nothing',
     ])
+  })
+})
+
+describe('API params as fields', () => {
+  const api: ApiInfo = {
+    action: 'x',
+    title: 'X',
+    params: [
+      { name: 'group_id', type: 'id', title: 'Group' },
+      { name: 'enable', type: 'boolean', title: 'On' },
+      { name: 'message', type: 'message', title: 'Text' },
+      { name: 'messages', type: 'array', title: 'Nodes' },
+    ],
+  }
+
+  it('reads each param as text, references in or out of quotes', () => {
+    expect(readParams('{"group_id": {{sys.groupId}}, "enable": true, "message": "say \\"{{n1.text}}\\"", "messages": [{"a": {{n2.data}}}]}')).toEqual({
+      group_id: '{{sys.groupId}}', enable: 'true', message: 'say "{{n1.text}}"', messages: '[{"a":{{n2.data}}}]',
+    })
+    expect(readParams('')).toEqual({})
+    expect(readParams('[1]')).toBeUndefined()
+    expect(readParams('{"a": ')).toBeUndefined()
+  })
+
+  it('writes fields back as JSON in the table order, numbers and yes/no bare', () => {
+    expect(writeParams({ message: 'say "hi"', group_id: '500', enable: 'false', extra: '{{n1.x}}' }, api)).toBe('{"group_id": 500, "enable": false, "message": "say \\"hi\\"", "extra": "{{n1.x}}"}')
+    expect(writeParams({ group_id: '{{sys.groupId}}', messages: '{{n2.data}}', message: '' }, api)).toBe('{"group_id": "{{sys.groupId}}", "messages": {{n2.data}}}')
+  })
+
+  it('round-trips what it writes', () => {
+    const values = { group_id: '{{sys.groupId}}', enable: 'true', message: 'a "b" {{n1.text}}', messages: '[{"type": "node"}]' }
+    expect(readParams(writeParams(values, api))).toEqual({ ...values, messages: '[{"type":"node"}]' })
   })
 })

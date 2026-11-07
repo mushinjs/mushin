@@ -4,13 +4,15 @@
  * its wiring. Keyword and command triggers can be turned into each other from here.
  */
 import { Alert, Button, Empty, Form, FormItem, TabPane, Tabs, Tooltip } from '@mushin/ui'
-import { computed, provide } from 'vue'
+import { computed, provide, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { categoryColors, portColors, schemaDefaults } from '../../../flow'
 import { clone, localize } from '../../../utils'
 import SchemaForm from '../../SchemaForm.vue'
 import { schemaFieldHooks } from '../../schemaHooks'
 import { nodeIcon } from '../icons'
+import ApiParams from './ApiParams.vue'
+import { type ApiInfo, readParams, writeParams } from './checks'
 import VarInput from '../VarInput.vue'
 import { useEditor } from './editor'
 import CommandEditor from './CommandEditor.vue'
@@ -37,7 +39,48 @@ const problems = computed(() => {
 })
 const generalIssues = computed(() => (issuesByNode.value.get(selectedId.value ?? '') ?? []).filter((issue) => !issue.field))
 // Text settings take references with the same editor as the inputs, and show their problems below.
-provide(schemaFieldHooks, { textEditor: VarInput, problemOf: (name: string) => problems.value.get(name) })
+// A setting's own problem, else the first about a part of it (`params.user_id` for `params`).
+const problemOf = (name: string) => problems.value.get(name) ?? [...problems.value].find(([key]) => key.startsWith(`${name}.`))?.[1]
+provide(schemaFieldHooks, { textEditor: VarInput, problemOf })
+
+// ---- API params as fields ----
+
+/** For nodes that call a platform API (`x-apis`): the API picked, and the setting that holds its params as JSON. */
+const apiSetup = computed(() => {
+  const properties = Object.entries<Record<string, any>>(selectedInfo.value?.configSchema?.properties ?? {})
+  const actionField = properties.find(([, field]) => Array.isArray(field['x-apis']))
+  const paramsField = properties.find(([, field]) => field['x-widget'] === 'json')?.[0]
+  if (!actionField || !paramsField || !selected.value) return
+  const config = selected.value.data!.config
+  const apis = actionField[1]['x-apis'] as ApiInfo[]
+  const api = apis.find((item) => item.action === String(config[actionField[0]] ?? '').trim())
+  const text = String(config[paramsField] ?? '{}')
+  const values = readParams(text)
+  /** Params the table does not list for this API, which only the JSON box can hold. */
+  const extra = values && api ? Object.keys(values).filter((name) => !api.params.some((param) => param.name === name)) : []
+  return { actionField: actionField[0], paramsField, apis, api, text, values, extra }
+})
+/** Nodes whose params are edited as JSON by choice. */
+const rawParams = ref(new Set<string>())
+/** Whether the params show as fields: a known API, and JSON that holds only its params. */
+const paramForm = computed(() => {
+  const setup = apiSetup.value
+  return !!setup?.api && !!setup.values && !setup.extra.length && !rawParams.value.has(selectedId.value ?? '')
+})
+const setRaw = (raw: boolean) => {
+  const next = new Set(rawParams.value)
+  if (raw) next.add(selectedId.value!)
+  else next.delete(selectedId.value!)
+  rawParams.value = next
+}
+
+// Picking another API keeps the params both have, and drops the rest.
+watch(() => [selectedId.value, apiSetup.value?.api?.action] as const, ([id, action], [before, previous]) => {
+  const setup = apiSetup.value
+  if (id !== before || !action || !previous || action === previous || !setup?.api || !setup.values || rawParams.value.has(id ?? '')) return
+  const kept = Object.fromEntries(Object.entries(setup.values).filter(([name]) => setup.api!.params.some((param) => param.name === name)))
+  if (Object.keys(kept).length !== Object.keys(setup.values).length) setField(setup.paramsField, writeParams(kept, setup.api))
+})
 
 const selectedNumber = computed(() => String((order.value.get(selectedId.value ?? '') ?? 0) + 1).padStart(2, '0'))
 const selectedColor = computed(() => (selectedInfo.value ? categoryColors[selectedInfo.value.category] : '#8c8c8c'))
@@ -82,6 +125,7 @@ const widgetFields = computed(() => Object.entries<Record<string, any>>(selected
 const hiddenFields = computed(() => [
   ...(selected.value?.data!.typeId === COMMAND ? COMMAND_FIELDS : leadFields.value),
   ...widgetFields.value.map((item) => item.key),
+  ...(paramForm.value ? [apiSetup.value!.paramsField] : []),
 ])
 const setField = (key: string, value: unknown) => updateSelected({ config: clone({ ...selected.value!.data!.config, [key]: value }) })
 
@@ -213,6 +257,19 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
             :hidden="hiddenFields"
             @update:model-value="(config: Record<string, any>) => updateSelected({ config: clone(config) })"
           />
+          <ApiParams
+            v-if="paramForm"
+            :key="`${selected.id}:${apiSetup!.api!.action}`"
+            :api="apiSetup!.api!"
+            :text="apiSetup!.text"
+            :problem-of="(name: string) => problems.get(`${apiSetup!.paramsField}.${name}`)"
+            @update="(text: string) => setField(apiSetup!.paramsField, text)"
+            @raw="setRaw(true)"
+          />
+          <p v-else-if="apiSetup?.api" class="muted small params-note">
+            <template v-if="apiSetup.extra.length">{{ t('flows.apiParams.extra', { names: apiSetup.extra.join(', ') }) }}</template>
+            <Button v-else-if="apiSetup.values" text size="tiny" @click="setRaw(false)">{{ t('flows.apiParams.form') }}</Button>
+          </p>
         </template>
         <TriggerOrder v-if="selectedIsTrigger" />
         <Alert v-for="(issue, index) in generalIssues" :key="index" :type="issue.severity" :show-icon="false" class="issue">
@@ -365,6 +422,10 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
   padding: 14px 0 0 18px;
   border-top: 1px solid var(--line);
   line-height: 1.6;
+}
+
+.params-note {
+  margin: -6px 0 14px;
 }
 
 .panel-empty {

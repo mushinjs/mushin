@@ -972,6 +972,16 @@ function paramTemplate(template: string, param: string) {
   return new RegExp(`"${param}"\\s*:\\s*("(?:[^"\\\\]|\\\\.)*"|\\{\\{[^}]*\\}\\})`).exec(template)?.[1] ?? ''
 }
 
+/** Whether `offset` in JSON text is inside a string: an odd number of unescaped quotes come before it. */
+function inJsonString(text: string, offset: number) {
+  let inside = false
+  for (let index = 0; index < offset; index++) {
+    if (text[index] === '\\') index++
+    else if (text[index] === '"') inside = !inside
+  }
+  return inside
+}
+
 const callApiNode: NodeType = {
   kind: 'action',
   type: 'onebot.call',
@@ -993,6 +1003,8 @@ const callApiNode: NodeType = {
   }),
   outputs: [port('data', 'any', 'Response data', '返回数据'), port('json', 'text', 'Response (JSON)', '返回 JSON'), errorPort],
   execOut: ['ok', 'failed'],
+  // A value filled into a quoted param is escaped, so quotes or line breaks in it keep the JSON whole.
+  escapeConfig: { params: (value, _config, at) => (inJsonString(at.text, at.offset) ? JSON.stringify(value).slice(1, -1) : value) },
   async run(context) {
     const { config } = context
     let params: Record<string, any>
