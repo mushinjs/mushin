@@ -585,7 +585,7 @@ export default {
   },
   botLogs: {
     failed: 'Could not load the bot\'s log: {error}',
-    empty: 'Nothing logged yet. Connection attempts, adapter errors, plugin warnings and why LLM chat skipped a message show up here.',
+    empty: 'Nothing logged yet. Messages received and sent, the flows and model requests each message started, connection attempts, adapter errors and plugin warnings show up here.',
   },
   flows: {
     sample: 'Sample message',
@@ -1032,6 +1032,7 @@ export default {
     },
     tagsLabel: 'Sources',
     tags: {
+      message: 'Messages',
       plugin: 'Plugins',
       bot: 'Bots',
       adapter: 'Adapters',

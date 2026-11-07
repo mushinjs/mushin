@@ -1,6 +1,6 @@
 import {
   type ChannelInfo, type Content, Context, type MessageRecord, type Provenance, type Segment, segmentsToText,
-  randomId, Service, seg, toSegments, usage, type UsageScope,
+  randomId, Service, seg, toSegments, usage, type UsageEvent, type UsageScope, type UserInfo,
 } from '@mushin/core'
 import {
   type ArgValue, type CommandDef, type CommandEntry, commandMatches, DEFAULT_PREFIXES, parseArgs, type ParsedCommand, requiredRole, splitCommand,
@@ -410,6 +410,7 @@ export class Bot extends Service {
 
   /** Called by adapters for each incoming message: records it, then runs the middleware chain. */
   async receive(message: IncomingMessage, options: { source?: Provenance } = {}) {
+    const started = Date.now()
     const record = this.hooks.record({
       botId: this.id,
       messageId: message.messageId,
@@ -420,6 +421,7 @@ export class Bot extends Service {
       timestamp: message.timestamp ?? Date.now(),
       source: options.source ?? { kind: 'user' },
     })
+    this.ctx.logger('message').info('received from %s%s: %s', who(record.user), record.channel.type === 'group' ? ` in ${chat(record.channel)}` : '', preview(record.segments))
     const session = new Session(this, record)
     const entry = session.command?.entry
     if (entry) {
@@ -447,18 +449,45 @@ export class Bot extends Service {
       const index = chain.findIndex((item) => item.priority < builtin.priority)
       chain.splice(index < 0 ? chain.length : index, 0, builtin)
     }
+    /** The plugin that kept the message from the ones after it, if one did. */
+    let stoppedAt: string | undefined
     const run = async (index: number): Promise<void> => {
       const entry = chain[index]
       if (!entry) return
+      let passed = false
       try {
-        await entry.callback(session.as(entry.plugin), () => run(index + 1))
+        await entry.callback(session.as(entry.plugin), () => {
+          passed = true
+          return run(index + 1)
+        })
+        if (!passed && index < chain.length - 1) stoppedAt ??= entry.plugin
       } catch (error) {
         this.ctx.logger('bot').warn('middleware of %s failed: %s', entry.plugin, error)
       }
     }
-    const scope = this.hooks.usageScope?.(this, record)
-    await (scope ? usage.run(scope, () => run(0)) : run(0))
+    const outer = this.hooks.usageScope?.(this, record)
+    const scope: UsageScope = {
+      botId: this.id,
+      messageId: record.id,
+      report: (event) => {
+        outer?.report(event)
+        this.logUsage(event)
+      },
+    }
+    await usage.run(scope, () => run(0))
+    this.ctx.logger('bot').info('processed in %s%s', duration(Date.now() - started), stoppedAt ? `; ${stoppedAt} kept it from the plugins after it` : '')
     return session
+  }
+
+  /** A model request or a plugin's own work made while handling a message, as a line in the bot's log. */
+  private logUsage(event: UsageEvent) {
+    const logger = this.ctx.logger('llm')
+    const target = [event.model, event.provider && `via ${event.provider}`, event.plugin && `for ${event.plugin}`].filter(Boolean).join(' ')
+    const tokens = event.inputTokens !== undefined || event.outputTokens !== undefined
+      ? `${event.inputTokens ?? '?'} → ${event.outputTokens ?? 0} tokens` : ''
+    const details = [tokens, event.note, event.latencyMs !== undefined && duration(event.latencyMs)].filter(Boolean).join(', ')
+    if (event.ok === false) logger.warn('%s %s failed%s', event.kind, target, event.latencyMs !== undefined ? ` after ${duration(event.latencyMs)}` : '')
+    else logger.info('%s %s%s', event.kind, target, details ? `: ${details}` : '')
   }
 
   /** Sends a message from a plugin; the reply is attributed to the calling plugin. */
@@ -493,8 +522,18 @@ export class Bot extends Service {
       return
     }
     const started = Date.now()
-    const { messageId } = sandbox ? { messageId: randomId(6) } : await this.transport!.send(channel, segments)
+    const logger = this.ctx.logger('message')
+    const sender = source.kind === 'flow' ? `flow ${source.flow}` : source.kind === 'plugin' || source.kind === 'llm' ? source.plugin : undefined
+    let messageId: string | undefined
+    try {
+      ;({ messageId } = sandbox ? { messageId: randomId(6) } : await this.transport!.send(channel, segments))
+    } catch (error) {
+      logger.warn('sending to %s failed: %s', chat(channel), error instanceof Error ? error.message : error)
+      throw error
+    }
     const ms = Date.now() - started
+    const bytes = byteSize(segments)
+    logger.info('sent to %s%s: %s (%s%s)', chat(channel), sender ? ` by ${sender}` : '', preview(segments), size(bytes), sandbox ? '' : `, ${duration(ms)}`)
     const record = this.hooks.record({
       botId: this.id,
       messageId,
@@ -506,7 +545,7 @@ export class Bot extends Service {
       replyTo: options.replyTo,
       source,
     })
-    this.hooks.sent?.(this, record, { bytes: byteSize(segments), ...(sandbox ? {} : { ms }), cause: usage.current()?.messageId })
+    this.hooks.sent?.(this, record, { bytes, ...(sandbox ? {} : { ms }), cause: usage.current()?.messageId })
     return record
   }
 }
@@ -514,4 +553,29 @@ export class Bot extends Service {
 /** How big a message is on the wire, roughly: its segments as JSON. Inline images count in full. */
 export function byteSize(segments: Segment[]) {
   return Buffer.byteLength(JSON.stringify(segments))
+}
+
+/** A message on one line for the bot's log, cut to a readable length. */
+function preview(segments: Segment[]) {
+  const text = segmentsToText(segments).replace(/\s+/g, ' ').trim()
+  return text.length > 200 ? `${text.slice(0, 200)}…` : text || '(empty)'
+}
+
+/** A chat for the bot's log: `group Tea room (500)`, a person for a private chat, or the sandbox. */
+function chat(channel: ChannelInfo) {
+  if (isSandbox(channel)) return 'the sandbox'
+  const name = channel.name ? `${channel.name} (${channel.id})` : channel.id
+  return channel.type === 'group' ? `group ${name}` : name
+}
+
+function who(user: UserInfo) {
+  return user.name ? `${user.name} (${user.id})` : user.id
+}
+
+function duration(ms: number) {
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(ms < 10000 ? 2 : 1)}s`
+}
+
+function size(bytes: number) {
+  return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`
 }

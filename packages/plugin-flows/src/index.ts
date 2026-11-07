@@ -1077,6 +1077,8 @@ export class FlowService extends Service {
       },
       onStart: (trace) => {
         runId = trace.id
+        const trigger = compiled.nodes.get(env.matched?.nodeId ?? '')?.node
+        env.logger.info('flow "%s" (%s) started%s', compiled.doc.name, compiled.doc.id, trigger ? ` by ${trigger.label ?? trigger.type}` : '')
         this.runs.start({
           id: trace.id,
           flowId: compiled.doc.id,
@@ -1107,6 +1109,11 @@ export class FlowService extends Service {
         : {}),
     })
     if (runId) this.runs.finish(runId)
+    if (result.matched && !result.trace.error) {
+      const steps = result.trace.steps.length
+      env.logger.info('flow "%s" (%s) finished in %dms, %d step(s)%s', compiled.doc.name, compiled.doc.id, Date.now() - result.trace.at, steps,
+        result.trace.replies.length ? `, ${result.trace.replies.length} repl${result.trace.replies.length === 1 ? 'y' : 'ies'}` : '')
+    }
     if (result.matched) this.record(result.trace)
     return result
   }

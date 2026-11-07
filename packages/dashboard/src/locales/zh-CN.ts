@@ -586,7 +586,7 @@ const zhCN: typeof en = {
   },
   botLogs: {
     failed: '无法加载机器人日志：{error}',
-    empty: '暂无日志。连接尝试、适配器错误、插件警告以及大模型对话跳过消息的原因都会显示在这里。',
+    empty: '暂无日志。收到和发出的消息、每条消息触发的流程和模型调用、连接尝试、适配器错误、插件警告都会显示在这里。',
   },
   flows: {
     sample: '样本消息',
@@ -1033,6 +1033,7 @@ const zhCN: typeof en = {
     },
     tagsLabel: '来源',
     tags: {
+      message: '收发消息',
       plugin: '插件',
       bot: '机器人',
       adapter: '适配器',

@@ -104,4 +104,23 @@ describe('live conversation view', () => {
     expect(sent).toMatchObject({ cause: asked.id, causeEvents: cost.events })
     expect(sent.sendMs).toBeGreaterThanOrEqual(0)
   })
+
+  it('logs each message in the bot\'s log: received, the flow and model request it started, and the reply sent', async () => {
+    llm.setFallback({ text: 'six' })
+    napcat.pushPrivateMessage('42', text('ask three plus three'))
+    const find = (lines: any[]) => {
+      const received = lines.findIndex((line) => line.tag === 'message' && line.text.startsWith('received from') && line.text.endsWith('ask three plus three'))
+      return received < 0 ? [] : lines.slice(received)
+    }
+    let lines: any[] = []
+    await waitFor(async () => (lines = find(await app.call<any[]>('bots.logs', { id: botId, limit: 200 }))).some((line) => line.text.startsWith('processed in')))
+    const texts = lines.map((line) => `${line.tag} ${line.text}`)
+    const at = (pattern: RegExp) => texts.findIndex((text) => pattern.test(text))
+    expect(at(/^message received from \S+ \(42\): ask three plus three$/)).toBe(0)
+    expect(at(/^flow flow "Ask" \([\w-]+\) started by trigger\.keyword$/)).toBeGreaterThan(0)
+    expect(at(/^provider chat mock-model via Mock for \S+: 10 → 5 tokens, \d+ms$/)).toBeGreaterThan(at(/started by/))
+    expect(at(/^message sent to \S+ \(42\) by flow [^:]+: six \(\d+ B, \d+ms\)$/)).toBeGreaterThan(at(/^provider chat/))
+    expect(at(/^flow flow "Ask" \([\w-]+\) finished in \d+ms, \d+ step\(s\), 1 reply$/)).toBeGreaterThan(at(/^message sent/))
+    expect(at(/^bot processed in \d+(ms|\.\d+s)$/)).toBeGreaterThan(at(/finished in/))
+  })
 })

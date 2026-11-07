@@ -110,7 +110,7 @@ export function field(title: string, description?: string, translations: Record<
 }
 
 /** Source category of a log line, for quick filters in the dashboard. */
-export const LOG_TAGS = ['plugin', 'bot', 'adapter', 'flow', 'provider', 'agent', 'system', 'other'] as const
+export const LOG_TAGS = ['message', 'plugin', 'bot', 'adapter', 'flow', 'provider', 'agent', 'system', 'other'] as const
 
 export type LogTag = typeof LOG_TAGS[number]
 
@@ -118,6 +118,7 @@ const logTags: Record<string, LogTag> = {
   plugin: 'plugin',
   manager: 'plugin',
   'llm-chat': 'plugin',
+  message: 'message',
   bot: 'bot',
   bots: 'bot',
   onebot: 'adapter',
