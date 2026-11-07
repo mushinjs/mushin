@@ -8,6 +8,7 @@ import { clone, localize } from '../../../utils'
 import type { EditorState } from './state'
 import type { useEditing } from './useEditing'
 import type { useGroups } from './useGroups'
+import type { useHistory } from './useHistory'
 import type { useRuns } from './useRuns'
 import type { useTriggerOrder } from './useTriggerOrder'
 
@@ -18,6 +19,7 @@ export function useDocument(
     editing: ReturnType<typeof useEditing>
     runs: ReturnType<typeof useRuns>
     order: ReturnType<typeof useTriggerOrder>
+    history: ReturnType<typeof useHistory>
   },
 ) {
   const { t, locale, message, flowId, data, nodes, edges, types, loaded, saving, dirty, adapter, bots, issues, blockedSlots } = s
@@ -89,6 +91,7 @@ export function useDocument(
     types.value = new Map(typeList.map((type) => [type.type, type]))
     s.runs.value = [...recent].reverse()
     apply(flow, true)
+    parts.history.beginHistory()
     parts.runs.loadBreakpoints()
     if (typeof s.route.query.run === 'string') void parts.runs.openRun(s.route.query.run)
     // A link such as /flows/<id>?node=<node id> opens with that node selected.
@@ -120,7 +123,10 @@ export function useDocument(
     if (!loaded.value || dirty.value || saving.value) return
     try {
       const flow = await call<FlowDoc>('flows.get', { id: flowId.value })
-      if (flow.updatedAt !== savedAt && !dirty.value) apply(flow, false)
+      if (flow.updatedAt !== savedAt && !dirty.value) {
+        apply(flow, false)
+        parts.history.beginHistory(true)
+      }
     } catch {}
   })
   onBeforeUnmount(offChanged)
@@ -138,6 +144,7 @@ export function useDocument(
       parts.order.loadCompeting()
       savedAt = result.updatedAt
       s.savedSignature.value = s.signature()
+      parts.history.settleHistory()
       const errors = result.issues.filter((issue) => issue.severity === 'error').length
       if (errors) message.warning(t('flows.savedWithErrors', errors))
       else message.success(t('common.saved'))

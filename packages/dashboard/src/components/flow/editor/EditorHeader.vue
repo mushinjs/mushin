@@ -3,6 +3,7 @@
 import { Button, Input, Select, Tag, Toggle, Tooltip } from '@mushin/ui'
 import { computed } from 'vue'
 import { useEditor } from './editor'
+import HistoryTools from './HistoryTools.vue'
 import PanelIcon from './PanelIcon.vue'
 import SamplePicker from './SamplePicker.vue'
 
@@ -58,6 +59,7 @@ function nextProblem() {
     <Tag v-else-if="warningCount" type="warning" size="small">{{ t('flows.warningCount', warningCount) }}</Tag>
     <span class="spacer" />
     <SamplePicker />
+    <HistoryTools />
     <span class="save-state">{{ dirty ? t('flows.unsavedShort') : t('flows.savedShort') }}</span>
     <div class="view-tools" role="group" :aria-label="t('flows.layout')">
       <Tooltip>

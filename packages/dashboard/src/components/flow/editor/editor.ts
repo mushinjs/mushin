@@ -13,6 +13,7 @@ import { BOX, createEditorState } from './state'
 import { useDocument } from './useDocument'
 import { useEditing } from './useEditing'
 import { useGroups } from './useGroups'
+import { useHistory } from './useHistory'
 import { useMenu } from './useMenu'
 import { useRuns } from './useRuns'
 import { useSample } from './useSample'
@@ -41,7 +42,8 @@ export function createFlowEditor() {
   const runs = useRuns(s, { save: () => doc.save(), sample: sample.samplePayload })
   const menu = useMenu(s, groups, editing, runs)
   const order = useTriggerOrder(s, editing)
-  const doc = useDocument(s, { groups, editing, runs, order })
+  const history = useHistory(s, { groups })
+  const doc = useDocument(s, { groups, editing, runs, order, history })
 
   // Node cards read these.
   provide(flowEditorKey, {
@@ -149,8 +151,14 @@ export function createFlowEditor() {
       doc.save()
       return
     }
-    // Canvas shortcuts leave text fields alone.
+    // Canvas shortcuts leave text fields alone; there undo is the field's own.
     if (inTextField(event.target)) return
+    if (key === 'z' || key === 'y') {
+      event.preventDefault()
+      if (key === 'y' || event.shiftKey) history.redo()
+      else history.undo()
+      return
+    }
     const ids = groups.selectionIds()
     if (key === 'c' && ids.length) menu.copyNodes(ids)
     else if (key === 'v' && menu.hasClipboard()) menu.pasteNodes(editing.pointerFlowPosition())
@@ -186,7 +194,7 @@ export function createFlowEditor() {
   onBeforeRouteLeave(() => !s.dirty.value || window.confirm(s.t('flows.unsaved')))
 
   const editor = {
-    ...s, ...groups, ...editing, ...sample, ...runs, ...menu, ...order, ...doc,
+    ...s, ...groups, ...editing, ...sample, ...runs, ...menu, ...order, ...history, ...doc,
     nodeTypes, extent, minimapColor, togglePalette, togglePanel, toggleImmersive,
   }
   provide(editorKey, editor)
