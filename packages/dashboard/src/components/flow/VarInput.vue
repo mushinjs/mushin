@@ -3,12 +3,14 @@
  * Text with references to earlier nodes' outputs. References show as chips that read
  * `节点名.字段` (hover for the latest value; red when they point at nothing that runs before
  * this node). Typing `{{` lists what can be referenced, as does the (x) button; picking inserts
- * `{{<node id>.<field>}}`. The value stays plain text, so the server reads it as before.
+ * `{{<node id>.<field>}}`. The value stays plain text, so the server reads it as before. Anything
+ * can be typed in as well; the menu only opens on `{{` or the button.
  */
 import { Button } from '@mushin/ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { REF } from '../../flow'
+import { type ApiParam, paramFit } from './editor/checks'
 import { type RefItem, useRefs } from './editor/useRefs'
 
 const props = defineProps<{
@@ -17,6 +19,10 @@ const props = defineProps<{
   /** Monospace, for JSON. */
   mono?: boolean
   status?: 'error' | 'warning'
+  /** Holds one value: a picked reference replaces what is there instead of joining it. */
+  single?: boolean
+  /** What the value must be, such as a whole number: references of another type are marked in the menu and listed last. */
+  accept?: Pick<ApiParam, 'type' | 'options'>
 }>()
 const value = defineModel<string>({ default: '' })
 const { t } = useI18n()
@@ -212,11 +218,17 @@ const active = ref(0)
 const list = ref<HTMLElement>()
 
 const flat = computed(() => filtered.value.flatMap((group) => group.items))
+const fitOf = (item: RefItem) => (props.accept ? paramFit(props.accept, item.type, item.value) : 'ok')
 const filtered = computed(() => {
   const query = menu.value?.query.trim().toLowerCase() ?? ''
-  if (!query) return groups.value
+  const rank = { ok: 0, maybe: 1, bad: 2 }
   return groups.value
-    .map((group) => ({ ...group, items: group.items.filter((item) => `${item.node} ${item.field} ${item.ref}`.toLowerCase().includes(query)) }))
+    .map((group) => ({
+      ...group,
+      items: group.items
+        .filter((item) => !query || `${item.node} ${item.field} ${item.ref}`.toLowerCase().includes(query))
+        .sort((a, b) => rank[fitOf(a)] - rank[fitOf(b)]),
+    }))
     .filter((group) => group.items.length)
 })
 watch(() => menu.value?.query, () => (active.value = 0))
@@ -256,7 +268,8 @@ function pick(item: RefItem) {
   if (!menu.value) return
   const { start, end } = menu.value
   menu.value = undefined
-  replace(start, end, item.ref)
+  if (props.single) replace(0, shown.length, item.ref)
+  else replace(start, end, item.ref)
 }
 
 function scrollActive() {
@@ -320,14 +333,15 @@ onBeforeUnmount(() => {
             v-for="item in group.items"
             :key="item.ref"
             class="ref-item"
-            :class="{ active: flat[active] === item }"
+            :class="{ active: flat[active] === item, [`fit-${fitOf(item)}`]: true }"
+            :title="fitOf(item) === 'bad' ? t('flows.refMismatch') : undefined"
             role="option"
             :aria-selected="flat[active] === item"
             @mouseenter="active = flat.indexOf(item)"
             @click="pick(item)"
           >
             <span class="ref-name">{{ item.node }} <span class="ref-sep">›</span> {{ item.field }}</span>
-            <span class="ref-type">{{ item.type }}</span>
+            <span class="ref-type">{{ fitOf(item) === 'bad' ? t('flows.refMismatchShort') : item.type }}</span>
             <span v-if="item.sample !== undefined" class="ref-sample" :title="item.sample">{{ item.sample || '""' }}</span>
           </div>
         </template>
@@ -463,6 +477,14 @@ onBeforeUnmount(() => {
   padding: 4px 8px;
   border-radius: 5px;
   cursor: pointer;
+}
+
+.ref-item.fit-bad {
+  opacity: 0.5;
+}
+
+.ref-item.fit-bad .ref-type {
+  color: var(--bad);
 }
 
 .ref-item.active {

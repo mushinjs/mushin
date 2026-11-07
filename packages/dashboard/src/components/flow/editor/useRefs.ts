@@ -18,6 +18,8 @@ export interface RefItem {
   type: string
   /** The value in the latest run, shortened. */
   sample?: string
+  /** That value as it is, for telling whether it suits a setting. */
+  value?: unknown
 }
 
 export interface RefGroup {
@@ -67,7 +69,7 @@ export function useRefs() {
       if (!/^[\p{L}\p{N}_-]+$/u.test(key)) return []
       const name = `${base}.${key}`
       return [
-        { ref: refOf(head, name), node, field: name, type: typeOf(item), sample: short(item) },
+        { ref: refOf(head, name), node, field: name, type: typeOf(item), sample: short(item), value: item },
         ...nested(head, node, name, item, depth + 1),
       ]
     })
@@ -83,7 +85,7 @@ export function useRefs() {
       const latest = latestOutputs(id)
       const declared = portsOf(info, node.data!.config).outputs
       const items: RefItem[] = declared.flatMap((port) => [
-        { ref: refOf(id, port.name), node: label, field: port.name, type: port.type, ...(latest && port.name in latest ? { sample: short(latest[port.name]) } : {}) },
+        { ref: refOf(id, port.name), node: label, field: port.name, type: port.type, ...(latest && port.name in latest ? { sample: short(latest[port.name]), value: latest[port.name] } : {}) },
         ...nested(id, label, port.name, latest?.[port.name], 1),
       ])
       if (items.length) out.push({ key: id, label, items })
@@ -93,7 +95,7 @@ export function useRefs() {
     out.push({
       key: 'sys',
       label: message,
-      items: sysPorts.map((port) => ({ ref: refOf('sys', port.name), node: message, field: port.name, type: port.type, ...(sys && port.name in sys ? { sample: short(sys[port.name]) } : {}) })),
+      items: sysPorts.map((port) => ({ ref: refOf('sys', port.name), node: message, field: port.name, type: port.type, ...(sys && port.name in sys ? { sample: short(sys[port.name]), value: sys[port.name] } : {}) })),
     })
     return out
   })

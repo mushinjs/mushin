@@ -17,6 +17,7 @@ export type CheckCode =
   | 'required' | 'notNumber' | 'json' | 'jsonObject'
   | 'refNoNode' | 'refNoOutput' | 'refNotBefore' | 'refSelf'
   | 'apiUnknown' | 'apiParamMissing' | 'apiParamType' | 'apiParamUnknown'
+  | 'apiParamSingle' | 'apiParamRange' | 'apiParamOption' | 'apiRefType' | 'apiRefMaybe'
 
 export interface NodeCheck {
   severity: 'error' | 'warning'
@@ -26,14 +27,81 @@ export interface NodeCheck {
   params: Record<string, string>
 }
 
+/** One API param as the platform plugin lists it; see the OneBot adapter's `apis.ts`. */
+export interface ApiParam {
+  name: string
+  type: ApiParamType
+  required?: boolean
+  title: Record<string, string> | string
+  default?: string | number | boolean
+  options?: string[]
+  min?: number
+  max?: number
+}
+
 /** One API as the platform plugin lists it under `x-apis`. */
 export interface ApiInfo {
   action: string
   title: Record<string, string> | string
-  params: { name: string; type: ApiParamType; required?: boolean; title: Record<string, string> | string }[]
+  source?: string
+  note?: Record<string, string> | string
+  params: ApiParam[]
 }
 
-export type ApiParamType = 'id' | 'number' | 'boolean' | 'string' | 'message' | 'array' | 'object'
+/** Same as the server: `int` is a whole number (ids, counts, seconds). */
+export type ApiParamType = 'int' | 'boolean' | 'string' | 'message' | 'array' | 'object'
+
+/** Params that hold one value, a literal or a reference: whole numbers, yes/no, and ones with options. */
+export const singleValued = (param: Pick<ApiParam, 'type' | 'options'>) => param.type === 'int' || param.type === 'boolean' || !!param.options
+
+const typeOfValue = (value: unknown) => (Array.isArray(value) ? 'list' : value === null ? 'any' : typeof value === 'object' ? 'object' : typeof value === 'string' ? 'text' : typeof value)
+
+/**
+ * How well a reference's value suits a param: `bad` when its type cannot work (yes/no into a
+ * number), `maybe` when only its value can tell (text into a number), else `ok`. `sample` is its
+ * latest value, when known, and settles `maybe` either way.
+ */
+export function paramFit(param: Pick<ApiParam, 'type' | 'options'>, refType: string | undefined, sample?: unknown): 'ok' | 'maybe' | 'bad' {
+  const known = sample !== undefined && sample !== null
+  const text = typeof sample === 'string' ? sample.trim() : typeof sample === 'number' || typeof sample === 'boolean' ? String(sample) : undefined
+  const settle = (fits: (value: string) => boolean): 'ok' | 'maybe' | 'bad' => (known ? (text !== undefined && fits(text) ? 'ok' : 'bad') : 'maybe')
+  const structured = refType === 'message' || refType === 'list' || refType === 'object'
+  if (param.options) return structured ? 'bad' : settle((value) => param.options!.includes(value))
+  switch (param.type) {
+    case 'int':
+      if (refType === 'boolean' || structured) return 'bad'
+      return refType === 'number' && !known ? 'ok' : settle((value) => /^-?\d+$/.test(value))
+    case 'boolean':
+      if (refType === 'boolean') return 'ok'
+      return structured ? 'bad' : settle((value) => value === 'true' || value === 'false')
+    case 'array':
+      return refType === 'list' || refType === 'any' || refType === 'message' ? 'ok' : refType === 'boolean' || refType === 'number' ? 'bad' : 'maybe'
+    case 'object':
+      return refType === 'object' || refType === 'any' ? 'ok' : refType === 'boolean' || refType === 'number' || refType === 'list' ? 'bad' : 'maybe'
+    default:
+      return 'ok'
+  }
+}
+
+/** What is wrong with a param's value as written, references aside; see the server's `checkParams`. */
+function literalProblem(param: ApiParam, value: string): { code: CheckCode; params?: Record<string, string> } | undefined {
+  const text = value.trim()
+  if (param.type === 'int') {
+    if (!/^-?\d+$/.test(text)) return { code: 'apiParamType', params: { type: 'int' } }
+    const number = Number(text)
+    if ((param.min !== undefined && number < param.min) || (param.max !== undefined && number > param.max)) {
+      return { code: 'apiParamRange', params: { min: param.min === undefined ? '-∞' : String(param.min), max: param.max === undefined ? '∞' : String(param.max) } }
+    }
+  }
+  if (param.type === 'boolean' && text !== 'true' && text !== 'false') return { code: 'apiParamType', params: { type: 'boolean' } }
+  if (param.type === 'array' || param.type === 'object') {
+    const parsed = parseTemplateJson(text)
+    if (parsed.error || (param.type === 'array' ? !Array.isArray(parsed.value) : !parsed.value || typeof parsed.value !== 'object' || Array.isArray(parsed.value))) {
+      return { code: 'apiParamType', params: { type: param.type } }
+    }
+  }
+  if (param.options && !param.options.includes(text)) return { code: 'apiParamOption', params: { options: param.options.join(', ') } }
+}
 
 /** Nodes that run before `id`: every node an edge path leads from. */
 export function upstreamOf(id: string, edges: readonly { source: string; target: string }[]) {
@@ -71,27 +139,6 @@ export function parseTemplateJson(text: string): { value?: unknown; error?: 'jso
   }
 }
 
-const isRefValue = (value: unknown) => value === REF_MARK || (typeof value === 'string' && value.includes('{{'))
-
-/** Whether a written value suits an API param; references are only known at run time. */
-function suits(type: ApiParamType, value: unknown) {
-  switch (type) {
-    case 'id':
-    case 'number':
-      return typeof value === 'number' || (typeof value === 'string' && !!value.trim() && Number.isFinite(Number(value)))
-    case 'boolean':
-      return typeof value === 'boolean' || value === 'true' || value === 'false'
-    case 'string':
-      return typeof value !== 'object' || value === null
-    case 'message':
-      return typeof value === 'string' || Array.isArray(value)
-    case 'array':
-      return Array.isArray(value)
-    case 'object':
-      return !!value && typeof value === 'object' && !Array.isArray(value)
-  }
-}
-
 /** Every string in a value, for references. */
 function stringsOf(value: unknown): string[] {
   if (typeof value === 'string') return [value]
@@ -105,6 +152,22 @@ export interface CheckContext {
   types: Map<string, NodeTypeInfo>
   /** Nodes that run before this one; see `upstreamOf`. */
   upstream: Set<string>
+  /** The latest value a reference gave, if a run gave one. */
+  sampleOf?(head: string, name: string): unknown
+}
+
+/** The type of what a reference reads: its output's declared type, or for a path into it, its latest value's. */
+export function refTypeOf(head: string, name: string, context: Pick<CheckContext, 'nodes' | 'types' | 'sampleOf'>) {
+  const { first, path } = splitName(name)
+  if (!path.length && head === 'sys') return sysPorts.find((port) => port.name === first)?.type
+  if (!path.length && !SCOPES.includes(head)) {
+    const source = context.nodes.get(head)
+    const info = source && context.types.get(source.typeId)
+    const type = info && portsOf(info, source.config).outputs.find((port) => port.name === first)?.type
+    if (type && type !== 'any') return type
+  }
+  const sample = context.sampleOf?.(head, name)
+  return sample === undefined ? undefined : typeOfValue(sample)
 }
 
 function checkRefs(node: CheckNode, field: string, value: unknown, context: CheckContext, out: NodeCheck[]) {
@@ -139,7 +202,7 @@ function checkRefs(node: CheckNode, field: string, value: unknown, context: Chec
 }
 
 /** The params of an API call written as JSON, against the API's table. */
-function checkApi(apis: ApiInfo[], actionField: string, paramsField: string | undefined, config: Record<string, any>, out: NodeCheck[]) {
+function checkApi(apis: ApiInfo[], actionField: string, paramsField: string | undefined, config: Record<string, any>, context: CheckContext, out: NodeCheck[]) {
   const action = config[actionField]
   if (typeof action !== 'string' || !action.trim() || refsIn(action).length) return
   const api = apis.find((item) => item.action === action.trim())
@@ -148,19 +211,38 @@ function checkApi(apis: ApiInfo[], actionField: string, paramsField: string | un
     return
   }
   if (!paramsField) return
-  const parsed = parseTemplateJson(String(config[paramsField] ?? '{}'))
-  if (!parsed.value || typeof parsed.value !== 'object' || Array.isArray(parsed.value)) return
-  const params = parsed.value as Record<string, unknown>
+  const values = readParams(String(config[paramsField] ?? '{}'))
+  if (!values) return
   for (const param of api.params) {
-    const value = params[param.name]
-    if (isRefValue(value)) continue
-    if (isEmpty(value) || (typeof value === 'string' && !value.trim())) {
-      if (param.required) out.push({ severity: 'error', field: `${paramsField}.${param.name}`, code: 'apiParamMissing', params: { api: api.action, param: param.name } })
-    } else if (!suits(param.type, value)) {
-      out.push({ severity: 'error', field: `${paramsField}.${param.name}`, code: 'apiParamType', params: { api: api.action, param: param.name, type: param.type } })
+    const field = `${paramsField}.${param.name}`
+    const add = (severity: NodeCheck['severity'], code: CheckCode, extra: Record<string, string> = {}) => out.push({ severity, field, code, params: { api: api.action, param: param.name, ...extra } })
+    const value = values[param.name] ?? ''
+    if (!value.trim()) {
+      if (param.required) add('error', 'apiParamMissing')
+      continue
     }
+    const refs = refsIn(value)
+    if (!refs.length) {
+      const problem = literalProblem(param, value)
+      if (problem) add('error', problem.code, problem.params)
+      continue
+    }
+    if (!singleValued(param)) continue
+    // One value only: a lone reference, not two, and not a reference with text around it.
+    if (refs.length > 1 || value.replace(/\{\{[^{}]*\}\}/g, '').trim()) {
+      add('error', 'apiParamSingle', { type: param.options ? 'options' : param.type })
+      continue
+    }
+    const [ref] = refs
+    const refType = refTypeOf(ref.head, ref.name, context)
+    const sample = context.sampleOf?.(ref.head, ref.name)
+    if (paramFit(param, refType, sample) !== 'bad') continue
+    const extra = { type: param.options ? 'options' : param.type, node: ref.head, output: ref.name, refType: refType ?? 'any', value: JSON.stringify(sample) ?? '' }
+    // A type that cannot work is an error; a latest value that does not fit may change in the next run.
+    if (sample === undefined || refType === 'boolean' || refType === 'message' || refType === 'list' || refType === 'object') add('error', 'apiRefType', extra)
+    else add('warning', 'apiRefMaybe', extra)
   }
-  for (const name of Object.keys(params)) {
+  for (const name of Object.keys(values)) {
     if (!api.params.some((param) => param.name === name)) out.push({ severity: 'warning', field: `${paramsField}.${name}`, code: 'apiParamUnknown', params: { api: api.action, param: name } })
   }
 }
@@ -194,7 +276,7 @@ export function checkNode(node: CheckNode, info: NodeTypeInfo, context: CheckCon
   if (apiField) {
     const paramsField = properties.find(([, field]) => field['x-widget'] === 'json')?.[0]
     if (!out.some((check) => check.field === paramsField && check.severity === 'error')) {
-      checkApi(apiField[1]['x-apis'] as ApiInfo[], apiField[0], paramsField, node.config ?? {}, out)
+      checkApi(apiField[1]['x-apis'] as ApiInfo[], apiField[0], paramsField, node.config ?? {}, context, out)
     }
   }
   return out
@@ -243,7 +325,7 @@ export function writeParams(values: Record<string, string>, api?: ApiInfo) {
     if (text === undefined || text === '') continue
     const type = api?.params.find((param) => param.name === name)?.type
     let written = JSON.stringify(text)
-    if ((type === 'id' || type === 'number') && /^-?\d+(\.\d+)?$/.test(text.trim())) written = text.trim()
+    if (type === 'int' && /^-?\d+$/.test(text.trim()) && Number.isSafeInteger(Number(text.trim()))) written = text.trim()
     else if (type === 'boolean' && (text === 'true' || text === 'false')) written = text
     else if ((type === 'array' || type === 'object') && (LONE_REF.test(text) || !parseTemplateJson(text).error)) written = text.trim()
     parts.push(`${JSON.stringify(name)}: ${written}`)

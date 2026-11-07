@@ -5,7 +5,7 @@ vi.hoisted(() => {
   ;(globalThis as any).location ??= { pathname: '/', search: '', host: 'localhost', protocol: 'http:' }
 })
 
-import { type ApiInfo, checkNode, type CheckNode, parseTemplateJson, readParams, upstreamOf, writeParams } from '../src/components/flow/editor/checks'
+import { type ApiInfo, checkNode, type CheckNode, paramFit, parseTemplateJson, readParams, upstreamOf, writeParams } from '../src/components/flow/editor/checks'
 import type { NodeTypeInfo } from '../src/types'
 
 const exec = (source: string, target: string) => ({ source, sourceHandle: 'exec:next', target, targetHandle: 'exec' })
@@ -14,11 +14,15 @@ const type = (id: string, extra: Partial<NodeTypeInfo> = {}): NodeTypeInfo => ({
   type: id, kind: 'action', category: 'action', title: id, plugin: 'test', inputs: [], outputs: [], execIn: true, execOut: ['next'], ...extra,
 })
 
-const apis = [{ action: 'send_poke', title: 'Poke', params: [{ name: 'user_id', type: 'id', required: true, title: 'QQ' }, { name: 'group_id', type: 'id', title: 'Group' }] }]
+const apis = [
+  { action: 'send_poke', title: 'Poke', params: [{ name: 'user_id', type: 'int', required: true, title: 'QQ' }, { name: 'group_id', type: 'int', title: 'Group' }] },
+  { action: 'send_like', title: 'Like', params: [{ name: 'user_id', type: 'int', required: true, title: 'QQ' }, { name: 'times', type: 'int', title: 'Times', min: 1, max: 10 }] },
+  { action: 'honor', title: 'Honor', params: [{ name: 'type', type: 'string', required: true, title: 'Type', options: ['talkative', 'all'] }] },
+]
 
 const types = new Map<string, NodeTypeInfo>([
   ['trigger', type('trigger', { kind: 'trigger', outputs: [{ name: 'text', type: 'text' }] })],
-  ['read', type('read', { outputs: [{ name: 'data', type: 'any' }, { name: 'group_id', type: 'text' }] })],
+  ['read', type('read', { outputs: [{ name: 'data', type: 'any' }, { name: 'group_id', type: 'text' }, { name: 'private', type: 'boolean' }] })],
   ['call', type('call', {
     configSchema: {
       type: 'object',
@@ -30,14 +34,14 @@ const types = new Map<string, NodeTypeInfo>([
   })],
 ])
 
-function check(config: Record<string, any>, edges = [exec('t', 'r'), exec('r', 'c')], others: CheckNode[] = []) {
+function check(config: Record<string, any>, edges = [exec('t', 'r'), exec('r', 'c')], others: CheckNode[] = [], sampleOf?: (head: string, name: string) => unknown) {
   const nodes = new Map<string, CheckNode>([
     ['t', { id: 't', typeId: 'trigger', config: {} }],
     ['r', { id: 'r', typeId: 'read', config: {} }],
     ['c', { id: 'c', typeId: 'call', config }],
     ...others.map((node) => [node.id, node] as const),
   ])
-  return checkNode(nodes.get('c')!, types.get('call')!, { nodes, types, upstream: upstreamOf('c', edges) })
+  return checkNode(nodes.get('c')!, types.get('call')!, { nodes, types, upstream: upstreamOf('c', edges), sampleOf })
     .map((item) => `${item.severity} ${item.field} ${item.code} ${Object.values(item.params).join(',')}`)
 }
 
@@ -68,10 +72,32 @@ describe('checkNode', () => {
   it('checks API params: required, types and unknown names', () => {
     expect(check({ action: 'send_poke', params: '{"group_id": "abc", "usr_id": 1}' })).toEqual([
       'error params.user_id apiParamMissing send_poke,user_id',
-      'error params.group_id apiParamType send_poke,group_id,id',
+      'error params.group_id apiParamType send_poke,group_id,int',
       'warning params.usr_id apiParamUnknown send_poke,usr_id',
     ])
     expect(check({ action: 'set_something', params: '{}' })).toEqual(['warning action apiUnknown set_something'])
+  })
+
+  it('takes one value in number params: one literal or one reference, never both', () => {
+    expect(check({ action: 'send_poke', params: '{"user_id": "{{r.group_id}}{{r.data.id}}"}' })).toEqual(['error params.user_id apiParamSingle send_poke,user_id,int'])
+    expect(check({ action: 'send_poke', params: '{"user_id": "QQ {{r.group_id}}"}' })).toEqual(['error params.user_id apiParamSingle send_poke,user_id,int'])
+    expect(check({ action: 'send_poke', params: '{"user_id": "10086"}' })).toEqual([])
+    expect(check({ action: 'send_poke', params: '{"user_id": 1.5}' })).toEqual(['error params.user_id apiParamType send_poke,user_id,int'])
+  })
+
+  it('checks ranges and listed values of literals', () => {
+    expect(check({ action: 'send_like', params: '{"user_id": 1, "times": 11}' })).toEqual(['error params.times apiParamRange send_like,times,1,10'])
+    expect(check({ action: 'honor', params: '{"type": "weekly"}' })).toEqual(['error params.type apiParamOption honor,type,talkative, all'])
+    expect(check({ action: 'honor', params: '{"type": "all"}' })).toEqual([])
+  })
+
+  it('checks the type of a referenced output against the param', () => {
+    // A yes/no output can never be a QQ number.
+    expect(check({ action: 'send_poke', params: '{"user_id": "{{r.private}}"}' })).toEqual(['error params.user_id apiRefType send_poke,user_id,int,r,private,boolean,'])
+    // Text may hold a number; its latest value tells.
+    expect(check({ action: 'send_poke', params: '{"user_id": "{{r.group_id}}"}' })).toEqual([])
+    expect(check({ action: 'send_poke', params: '{"user_id": "{{r.group_id}}"}' }, undefined, [], () => '10086')).toEqual([])
+    expect(check({ action: 'send_poke', params: '{"user_id": "{{r.group_id}}"}' }, undefined, [], () => 'Ann')).toEqual(['warning params.user_id apiRefMaybe send_poke,user_id,int,r,group_id,text,"Ann"'])
   })
 
   it('flags references to missing nodes and outputs, to itself, and to nodes that do not run first', () => {
@@ -86,12 +112,21 @@ describe('checkNode', () => {
   })
 })
 
+describe('paramFit', () => {
+  it('marks outputs that cannot fill a param, and lets latest values settle text', () => {
+    const int = { type: 'int' as const }
+    expect([paramFit(int, 'number'), paramFit(int, 'boolean'), paramFit(int, 'text'), paramFit(int, 'text', '42'), paramFit(int, 'text', 'x')]).toEqual(['ok', 'bad', 'maybe', 'ok', 'bad'])
+    expect(paramFit({ type: 'string', options: ['a'] }, 'text', 'a')).toBe('ok')
+    expect(paramFit({ type: 'boolean' }, 'boolean')).toBe('ok')
+  })
+})
+
 describe('API params as fields', () => {
   const api: ApiInfo = {
     action: 'x',
     title: 'X',
     params: [
-      { name: 'group_id', type: 'id', title: 'Group' },
+      { name: 'group_id', type: 'int', title: 'Group' },
       { name: 'enable', type: 'boolean', title: 'On' },
       { name: 'message', type: 'message', title: 'Text' },
       { name: 'messages', type: 'array', title: 'Nodes' },

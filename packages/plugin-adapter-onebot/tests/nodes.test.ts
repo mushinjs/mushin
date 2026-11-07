@@ -389,7 +389,7 @@ describe('param checks', () => {
 
   it('fails on missing and mistyped params, and passes unknown APIs as written', async () => {
     const missing = await runAfterText('x', { type: 'onebot.call', config: { action: 'set_group_ban', params: '{"group_id": "abc", "duration": 60}' } })
-    expect(missing.error).toBe('set_group_ban: param group_id should be a number, not "abc"; param user_id is missing')
+    expect(missing.error).toBe('set_group_ban: param group_id should be a whole number, not "abc"; param user_id is missing')
     const unknown = await runAfterText('x', { type: 'onebot.call', config: { action: 'some_napcat_api', params: '{"anything": "{{v.text}}"}' } })
     expect(unknown.error).toBeUndefined()
     expect(unknown.calls).toEqual([{ action: 'some_napcat_api', params: { anything: 'x' } }])
@@ -405,6 +405,15 @@ describe('param checks', () => {
     const { calls, error } = await runAfterText('say "hi" \\ C:\\ok\n', { type: 'onebot.call', config: { action: 'send_group_msg', params: '{"group_id": {{sys.groupId}}, "message": "{{v.text}}"}' } })
     expect(error).toBeUndefined()
     expect(calls).toEqual([{ action: 'send_group_msg', params: { group_id: 500, message: 'say "hi" \\ C:\\ok\n' } }])
+  })
+
+  it('takes only whole numbers for ids, within range, and documented options', async () => {
+    const mixed = await runAfterText('true', { type: 'onebot.call', config: { action: 'send_poke', params: '{"user_id": "10086{{v.text}}"}' } })
+    expect(mixed.error).toBe('send_poke: param user_id should be a whole number, not "10086true" (from {{v.text}})')
+    const range = await runAfterText('x', { type: 'onebot.call', config: { action: 'send_like', params: '{"user_id": 1, "times": 11}' } })
+    expect(range.error).toBe('send_like: param times should be at most 10, not 11')
+    const option = await runAfterText('weekly', { type: 'onebot.call', config: { action: 'get_group_honor_info', params: '{"group_id": 1, "type": "{{v.text}}"}' } })
+    expect(option.error).toBe('get_group_honor_info: param type should be one of talkative, performer, legend, strong_newbie, emotion, all, not "weekly" (from {{v.text}})')
   })
 
   it('checks settings again once references are filled in', async () => {

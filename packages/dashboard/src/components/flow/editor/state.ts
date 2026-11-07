@@ -10,6 +10,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useDataStore } from '../../../stores/data'
 import type { FlowDoc, FlowGroupDoc, FlowIssue, FlowPause, FlowRunInfo, NodeTypeInfo, RunTrace } from '../../../types'
+import { readPath, splitName } from '../../../flow'
 import { localize } from '../../../utils'
 import type { CanvasNodeData, FlowHighlight, RunStatus } from '../context'
 import type RunLogs from '../RunLogs.vue'
@@ -125,6 +126,16 @@ export function createEditorState() {
     return schema?.['x-i18n']?.[locale.value]?.title ?? schema?.title ?? field
   }
 
+  /** The latest value a reference gave in a run, for checking it against what a setting needs. */
+  function sampleOf(head: string, name: string) {
+    const { first, path } = splitName(name)
+    for (const run of runs.value) {
+      const step = run.steps.findLast((item) => item.nodeId === head)
+      if (step?.outputs && first in step.outputs) return readPath(step.outputs[first], path)
+    }
+    return undefined
+  }
+
   /** Problems in each node's settings as they are typed, before saving; see `checks.ts`. */
   const checks = computed<FlowIssue[]>(() => {
     const all = new Map(realNodes.value.map((node) => [node.id, { id: node.id, typeId: node.data!.typeId, config: node.data!.config, inputs: node.data!.inputs }]))
@@ -132,11 +143,12 @@ export function createEditorState() {
     for (const node of all.values()) {
       const info = types.value.get(node.typeId)
       if (!info) continue
-      for (const check of checkNode(node, info, { nodes: all, types: types.value, upstream: upstreamOf(node.id, edges.value) })) {
+      for (const check of checkNode(node, info, { nodes: all, types: types.value, upstream: upstreamOf(node.id, edges.value), sampleOf })) {
         const params: Record<string, string> = { ...check.params }
         if (params.node) params.node = params.node === 'sys' ? t('flows.varsMessage') : nodeName(params.node)
         if (params.field) params.field = fieldLabel(info, params.field)
         if (params.type) params.type = t(`flows.check.types.${params.type}`)
+        if (params.refType) params.refType = t(`flows.check.types.${params.refType}`)
         out.push({ severity: check.severity, nodeId: node.id, field: check.field, message: t(`flows.check.${check.code}`, params) })
       }
     }
