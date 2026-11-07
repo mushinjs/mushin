@@ -6,6 +6,7 @@ import { call } from '../api'
 import type { ProviderDraft, ProviderType } from '../types'
 import { modelOptions as toOptions } from '../models'
 import ModelCaps from './ModelCaps.vue'
+import PresetGrid from './PresetGrid.vue'
 import { localize } from '../utils'
 import SchemaForm from './SchemaForm.vue'
 
@@ -26,17 +27,18 @@ const fetched = ref<string[]>([])
 
 const type = computed(() => props.types.find((item) => item.id === draft.value.type))
 
-const presetOptions = computed(() => props.types.flatMap((item) => item.presets.map((preset) => ({
-  label: localize(preset.label, locale.value),
-  value: `${item.id}:${preset.id}`,
-}))))
-
 const typeOptions = computed(() => props.types.map((item) => ({ label: localize(item.displayName, locale.value), value: item.id })))
 
 const modelOptions = computed(() => toOptions([...new Set([...draft.value.models, ...fetched.value])]))
 
 function applyPreset(value: string) {
   presetId.value = value
+  if (value === 'custom') {
+    // Start from scratch on the current type, so its fields stay in view.
+    draft.value = { name: '', type: draft.value.type || props.types[0]?.id || '', config: {}, models: [] }
+    fetched.value = []
+    return
+  }
   const [typeId, id] = value.split(':')
   const preset = props.types.find((item) => item.id === typeId)?.presets.find((item) => item.id === id)
   if (!preset) return
@@ -90,7 +92,7 @@ function clearModels() {
   <div class="provider-form">
     <Form>
       <FormItem v-if="!providerId" :label="t('providers.preset')">
-        <Select :value="presetId" :options="presetOptions" :placeholder="t('providers.presetHint')" filterable @update:value="applyPreset" />
+        <PresetGrid :types="types" :value="presetId" @select="applyPreset" />
       </FormItem>
       <FormItem :label="t('common.name')" required>
         <Input v-model:value="draft.name" />
