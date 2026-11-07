@@ -123,4 +123,10 @@ describe('live conversation view', () => {
     expect(at(/^flow flow "Ask" \([\w-]+\) finished in \d+ms, \d+ step\(s\), 1 reply$/)).toBeGreaterThan(at(/^message sent/))
     expect(at(/^bot processed in \d+(ms|\.\d+s)$/)).toBeGreaterThan(at(/finished in/))
   })
+
+  it('logs platform events such as a poke in the bot\'s log', async () => {
+    napcat.push({ post_type: 'notice', notice_type: 'notify', sub_type: 'poke', group_id: 500, user_id: 46, target_id: 777 })
+    await waitFor(async () => (await app.call<any[]>('bots.logs', { id: botId, limit: 200 }))
+      .some((line) => line.tag === 'message' && line.text === 'event notify.poke from 46 in group 500 to 777'))
+  })
 })

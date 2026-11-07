@@ -399,6 +399,7 @@ export class Bot extends Service {
 
   /** Called by adapters for non-message events. */
   dispatchEvent(event: BotEvent) {
+    this.logEvent(event)
     for (const handler of this.eventHandlers) {
       try {
         handler(event)
@@ -477,6 +478,23 @@ export class Bot extends Service {
     await usage.run(scope, () => run(0))
     this.ctx.logger('bot').info('processed in %s%s', duration(Date.now() - started), stoppedAt ? `; ${stoppedAt} kept it from the plugins after it` : '')
     return session
+  }
+
+  /**
+   * A notice or request from the platform (a poke, a member joining, a recall…) as a line in the
+   * bot's log. Typing indicators come often and say little, so they and unnamed events are debug lines.
+   */
+  private logEvent(event: BotEvent) {
+    const name = event.name ?? event.type
+    const target = event.data?.target_id ?? undefined
+    const parts = [
+      event.user && `from ${who(event.user)}`,
+      event.channel?.type === 'group' && `in ${chat(event.channel)}`,
+      target !== undefined && target !== null && `to ${target}`,
+      event.message?.text && `: ${preview(event.message.segments)}`,
+    ].filter(Boolean).join(' ').replace(' :', ':')
+    const quiet = !event.name || event.name === 'notify.input_status'
+    this.ctx.logger('message')[quiet ? 'debug' : 'info']('event %s%s', name, parts ? ` ${parts}` : '')
   }
 
   /** A model request or a plugin's own work made while handling a message, as a line in the bot's log. */
