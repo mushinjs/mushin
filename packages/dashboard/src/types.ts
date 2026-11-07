@@ -228,6 +228,9 @@ export interface AdapterType {
   configSchema: JsonSchema
   secrets: string[]
   segments: string[]
+  groupRoles?: boolean
+  /** Picture addresses with `{id}` for the user or group id. */
+  avatars?: { user?: string; group?: string }
 }
 
 export interface BotPluginInfo {
@@ -288,6 +291,12 @@ export interface MessageRecord {
 export interface ChannelSummary extends ChannelInfo {
   lastAt: number
   lastText: string
+}
+
+/** A friend or group of a bot's account, from `bots.contacts`. */
+export interface Contact extends ChannelInfo {
+  remark?: string
+  members?: number
 }
 
 export interface ToolCall {

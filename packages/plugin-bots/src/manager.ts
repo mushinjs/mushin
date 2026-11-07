@@ -7,7 +7,7 @@ import type {} from '@mushin/plugin-storage'
 import { MessageArchive } from './archive'
 import { Bot, type BotHooks, type Session } from './bot'
 import { type CommandArg, type CommandDef, type CommandEntry, commandConflicts, type CommandSettings, commandMatches, commandUsage, DEFAULT_PREFIXES, helpText, parseArgs, requiredRole, splitCommand } from './commands'
-import { type AdapterType, type BotPluginEntry, type BotRecord, type BotStatus, type PermissionProvider, roleAtLeast } from './types'
+import { type AdapterType, type BotPluginEntry, type BotRecord, type BotStatus, isSandbox, type PermissionProvider, roleAtLeast } from './types'
 
 declare module '@mushin/core' {
   interface Context {
@@ -214,6 +214,7 @@ export class BotManager extends Service {
       secrets: adapter.secrets ?? [],
       segments: adapter.segments,
       groupRoles: !!adapter.groupRoles,
+      avatars: adapter.avatars ?? {},
     }))
   }
 
@@ -815,7 +816,7 @@ export class BotManager extends Service {
     for (const record of this.records) {
       for (const message of await this.messages(record.id, { limit: BUFFER_SIZE }).catch(() => [])) {
         const id = kind === 'user' ? (message.direction === 'in' ? message.user.id : '') : message.channel.type === 'group' ? message.channel.id : ''
-        if (!id) continue
+        if (!id || isSandbox(message.channel)) continue
         const name = kind === 'user' ? message.user.name : message.channel.name
         const previous = found.get(id)
         const label = name || (previous?.label.endsWith(`(${id})`) ? previous.label : '')
@@ -823,6 +824,21 @@ export class BotManager extends Service {
       }
     }
     return [...found.values()].sort((a, b) => b.at - a.at).map(({ at: _, ...choice }) => choice)
+  }
+
+  /** The account's friends and groups, from the platform; empty when the bot is offline or the adapter cannot tell. */
+  async contacts(id: string) {
+    const bot = this.bot(id)
+    if (!bot || bot.status !== 'online') return []
+    return bot.contacts()
+  }
+
+  /** The sandbox's test user writes to the bot; see `Bot.sandbox`. */
+  sandbox(id: string, text: string) {
+    const bot = this.bot(id)
+    if (!bot) throw new MushinError('unavailable', 'The bot is not running')
+    bot.sandbox(text)
+    return { ok: true }
   }
 
   async sendManual(id: string, channel: ChannelInfo, text: string) {
@@ -1068,6 +1084,22 @@ export class BotManager extends Service {
       risk: 'read',
       input: z.object({}),
       handler: () => this.seen('group'),
+    })
+
+    yield actions.define({
+      name: 'bots.contacts',
+      description: 'The friends and groups of a bot\'s account, from the platform (OneBot: get_friend_list and get_group_list). Empty when the bot is offline.',
+      risk: 'read',
+      input: idInput,
+      handler: ({ id }) => this.contacts(id),
+    })
+
+    yield actions.define({
+      name: 'bots.sandbox',
+      description: 'Write to a bot as the test user of its sandbox conversation: a private chat that only exists in Mushin. The bot answers through its flows and plugins; nothing reaches the platform. Start with "@" to mention the bot.',
+      risk: 'write',
+      input: idInput.extend({ text: z.string().min(1) }),
+      handler: ({ id, text }) => this.sandbox(id, text),
     })
 
     yield actions.define({

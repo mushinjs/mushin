@@ -44,6 +44,11 @@ export interface AdapterType<C = any> {
    */
   describe?(config: C, botId: string): BotConnectionInfo
   /**
+   * Addresses of people's and groups' pictures, with `{id}` standing for the user or group id,
+   * for the dashboard's live conversation view. Left out when the platform has no such addresses.
+   */
+  avatars?: { user?: string; group?: string }
+  /**
    * Loaded inside each bot's isolated context with the bot's adapter config.
    * It injects `bot`, opens the connection and registers a transport.
    */
@@ -112,6 +117,26 @@ export interface MediaResolver {
   media?(segment: Segment, options: { channel?: ChannelInfo; inline: boolean }): Promise<ResolvedMedia | undefined>
   forward?(id: string): Promise<ForwardedMessage[]>
 }
+
+/** A friend or group the bot's account has, from the platform. */
+export interface Contact extends ChannelInfo {
+  /** The name the account gave a friend, when it differs from the friend's own. */
+  remark?: string
+  /** How many members a group has. */
+  members?: number
+}
+
+/** Lists the account's friends and groups; registered per bot by adapters that can. */
+export type ContactResolver = () => Promise<Contact[]>
+
+/**
+ * The sandbox conversation every bot has in the live view: the dashboard plays a test user in a
+ * private chat, the bot answers through its flows and plugins, and nothing reaches the platform.
+ */
+export const SANDBOX_CHANNEL: ChannelInfo = { type: 'private', id: '@sandbox', name: 'Sandbox' }
+export const SANDBOX_USER = { id: '@sandbox', name: 'Sandbox tester' }
+
+export const isSandbox = (channel: { id: string } | undefined) => channel?.id === SANDBOX_CHANNEL.id
 
 /** Content plus an explicit source, e.g. an LLM result (`{ text, source }`). */
 export interface SourcedContent {

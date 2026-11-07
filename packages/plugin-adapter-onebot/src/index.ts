@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { WebSocket } from 'ws'
 import { type Context, field, z } from '@mushin/core'
-import type { GroupRole } from '@mushin/plugin-bots'
+import type { Contact, GroupRole } from '@mushin/plugin-bots'
 import type {} from '@cordisjs/plugin-server'
 import type {} from '@mushin/plugin-flows'
 import { onebotMedia } from './media'
@@ -340,7 +340,38 @@ const Connection = {
     ctx.plugin(config.mode === 'reverse' ? Reverse : config.mode === 'http' ? Http : Forward, config)
     ctx.bot.useRoleResolver(groupRoleResolver(ctx))
     ctx.bot.useMediaResolver(onebotMedia(ctx))
+    ctx.bot.useContacts(contactList(ctx))
   },
+}
+
+const CONTACTS_CACHE_MS = 60_000
+
+/** Friends and groups from NapCat, kept a minute so switching back to the live view is quick. */
+function contactList(ctx: Context) {
+  let cache: { at: number; list: Contact[] } | undefined
+  return async () => {
+    if (cache && Date.now() - cache.at < CONTACTS_CACHE_MS) return cache.list
+    const [friends, groups] = await Promise.all([
+      ctx.bot.call('get_friend_list', {}).catch(() => []),
+      ctx.bot.call('get_group_list', {}).catch(() => []),
+    ])
+    const list: Contact[] = [
+      ...(Array.isArray(groups) ? groups : []).map((group: any): Contact => ({
+        type: 'group',
+        id: String(group.group_id),
+        name: group.group_name || undefined,
+        ...(group.member_count ? { members: Number(group.member_count) } : {}),
+      })),
+      ...(Array.isArray(friends) ? friends : []).map((friend: any): Contact => ({
+        type: 'private',
+        id: String(friend.user_id),
+        name: friend.nickname || friend.remark || undefined,
+        ...(friend.remark && friend.nickname && friend.remark !== friend.nickname ? { remark: friend.remark } : {}),
+      })),
+    ]
+    cache = { at: Date.now(), list }
+    return list
+  }
 }
 
 const ROLE_CACHE_MS = 5 * 60_000
@@ -378,6 +409,7 @@ export function apply(ctx: Context) {
     secrets: ['token', 'secret'],
     segments: ONEBOT_SEGMENTS,
     groupRoles: true,
+    avatars: { user: 'https://q1.qlogo.cn/g?b=qq&nk={id}&s=100', group: 'https://p.qlogo.cn/gh/{id}/{id}/100' },
     plugin: Connection,
     describe: (config, botId) => describeConnection(AdapterConfig.parse(config), botId),
   })

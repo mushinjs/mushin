@@ -1,18 +1,70 @@
 <script setup lang="ts">
-import { Popover, Tag } from '@mushin/ui'
-import { computed, ref } from 'vue'
+import { Avatar, Popover, Tag } from '@mushin/ui'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
+import { call } from '../api'
+import { avatarColor, initial } from '../botAvatar'
 import type { MessageRecord } from '../types'
 import { formatTime } from '../utils'
 import MessageContent from './message/MessageContent.vue'
 
-const props = defineProps<{ record: MessageRecord }>()
+const props = defineProps<{ record: MessageRecord; avatar?: string; name?: string }>()
+const emit = defineEmits<{ newFlow: []; quote: [] }>()
 const { t, te } = useI18n()
+const router = useRouter()
 
 const outgoing = computed(() => props.record.direction === 'out')
-// Opens on hover and on keyboard focus, so the details are reachable without a mouse.
+const who = computed(() => props.name ?? props.record.user.name ?? props.record.user.id)
+
+// Opens on hover and on keyboard focus, so the details are reachable without a mouse. Closing waits
+// a moment, so the pointer can move from the bubble into the panel to click a flow or an action.
 const open = ref(false)
+let closeTimer: ReturnType<typeof setTimeout> | undefined
+function show() {
+  clearTimeout(closeTimer)
+  open.value = true
+}
+function hide(delay = 180) {
+  clearTimeout(closeTimer)
+  closeTimer = setTimeout(() => (open.value = false), delay)
+}
+onBeforeUnmount(() => clearTimeout(closeTimer))
+
+// ---- the flows an incoming message started, read the first time its panel opens ----
+
+interface RunRow {
+  id: string
+  flowId: string
+  flowName: string
+  status: string
+  startedAt: number
+  error?: string
+}
+
+const runs = ref<RunRow[]>()
+const runsError = ref(false)
+const loadingRuns = ref(false)
+
+async function loadRuns() {
+  if (outgoing.value || loadingRuns.value) return
+  loadingRuns.value = true
+  try {
+    runs.value = (await call<{ runs: RunRow[] }>('flows.history', { bot: props.record.botId, message: props.record.id, limit: 20 })).runs
+    runsError.value = false
+  } catch {
+    runsError.value = true
+  } finally {
+    loadingRuns.value = false
+  }
+}
+
+// Read again on each open while none were found: a flow may still be starting when the pointer arrives.
+watch(open, (value) => {
+  if (value && !runs.value?.length) void loadRuns()
+})
+
+const openRun = (row: RunRow) => router.push({ path: `/flows/${row.flowId}`, query: { run: row.id } })
 const source = computed(() => props.record.source)
 
 const sourceLabel = computed(() => t(`source.${source.value.kind}`))
@@ -61,53 +113,88 @@ const bare = computed(() => {
 
 <template>
   <div class="row" :class="{ out: outgoing }">
-    <div class="meta">
-      <span class="who">{{ record.user.name ?? record.user.id }}</span>
-      <span class="time">{{ formatTime(record.timestamp) }}</span>
-    </div>
-    <Popover :show="open" :placement="outgoing ? 'left' : 'right'" align="start" keep-focus :style="{ maxWidth: '300px' }">
-      <template #trigger>
-        <div
-          class="bubble"
-          :class="[`source-${source.kind}`, { bare }]"
-          tabindex="0"
-          :data-message-id="record.id"
-          @mouseenter="open = true"
-          @mouseleave="open = false"
-          @focus="open = true"
-          @blur="open = false"
-        >
-          <MessageContent :segments="record.segments" :bot-id="record.botId" :channel="record.channel" />
-        </div>
-      </template>
-      <dl class="info">
-        <dt>{{ t('hover.type') }}</dt>
-        <dd>{{ typeLabel }}</dd>
-        <dt>{{ t('hover.platforms') }}</dt>
-        <dd>
-          <template v-if="record.platforms.length">
-            <Tag v-for="platform in record.platforms" :key="platform" size="tiny">{{ platform }}</Tag>
-          </template>
-          <span v-else>{{ t('hover.noPlatform') }}</span>
-        </dd>
-        <dt>{{ t('hover.source') }}</dt>
-        <dd>
-          <Tag size="tiny" :type="source.kind === 'llm' ? 'info' : source.kind === 'plugin' ? 'success' : 'default'">
-            {{ sourceLabel }}
-          </Tag>
-        </dd>
-        <template v-for="[key, value] in sourceDetail" :key="key">
-          <dt class="sub">{{ key }}</dt>
-          <dd class="mono">{{ value }}</dd>
+    <Avatar class="avatar" :src="avatar" :size="34" :color="avatarColor(record.user.id)">{{ initial(who) }}</Avatar>
+    <div class="body">
+      <div class="meta">
+        <span class="who">{{ who }}</span>
+        <span class="time">{{ formatTime(record.timestamp) }}</span>
+      </div>
+      <Popover
+        :show="open"
+        :placement="outgoing ? 'left' : 'right'"
+        align="start"
+        keep-focus
+        :style="{ maxWidth: '320px' }"
+        @update:show="(value: boolean) => { if (!value) open = false }"
+        @mouseenter="show"
+        @mouseleave="hide()"
+      >
+        <template #trigger>
+          <div
+            class="bubble"
+            :class="[`source-${source.kind}`, { bare }]"
+            tabindex="0"
+            :data-message-id="record.id"
+            @mouseenter="show"
+            @mouseleave="hide()"
+            @focus="show"
+            @blur="hide(0)"
+          >
+            <MessageContent :segments="record.segments" :bot-id="record.botId" :channel="record.channel" />
+          </div>
         </template>
-        <template v-if="knowledge.length">
-          <dt>{{ t('hover.knowledge') }}</dt>
-          <dd class="sources">
-            <RouterLink v-for="(item, index) in knowledge" :key="item.chunk" :to="`/knowledge/${item.base}/chunks?doc=${item.doc}&chunk=${item.chunk}`">[{{ index + 1 }}] {{ item.title }}</RouterLink>
+        <dl class="info">
+          <dt>{{ t('hover.type') }}</dt>
+          <dd>{{ typeLabel }}</dd>
+          <dt>{{ t('hover.platforms') }}</dt>
+          <dd>
+            <template v-if="record.platforms.length">
+              <Tag v-for="platform in record.platforms" :key="platform" size="tiny">{{ platform }}</Tag>
+            </template>
+            <span v-else>{{ t('hover.noPlatform') }}</span>
           </dd>
+          <dt>{{ t('hover.source') }}</dt>
+          <dd>
+            <Tag size="tiny" :type="source.kind === 'llm' ? 'info' : source.kind === 'plugin' ? 'success' : 'default'">
+              {{ sourceLabel }}
+            </Tag>
+          </dd>
+          <template v-for="[key, value] in sourceDetail" :key="key">
+            <dt class="sub">{{ key }}</dt>
+            <dd class="mono">{{ value }}</dd>
+          </template>
+          <template v-if="knowledge.length">
+            <dt>{{ t('hover.knowledge') }}</dt>
+            <dd class="sources">
+              <RouterLink v-for="(item, index) in knowledge" :key="item.chunk" :to="`/knowledge/${item.base}/chunks?doc=${item.doc}&chunk=${item.chunk}`">[{{ index + 1 }}] {{ item.title }}</RouterLink>
+            </dd>
+          </template>
+        </dl>
+        <template v-if="!outgoing">
+          <div class="section-title">{{ t('live.runs') }}</div>
+          <p v-if="runsError" class="muted-line">{{ t('live.runsUnavailable') }}</p>
+          <p v-else-if="!runs && loadingRuns" class="muted-line">{{ t('live.runsLoading') }}</p>
+          <p v-else-if="!runs?.length" class="muted-line">{{ t('live.noRuns') }}</p>
+          <ul v-else class="runs">
+            <li v-for="row in runs" :key="row.id">
+              <button type="button" class="run" :title="row.error" @click="openRun(row)">
+                <span class="run-name">{{ row.flowName }}</span>
+                <Tag size="tiny" :type="row.status === 'ok' ? 'success' : row.status === 'error' ? 'error' : 'default'">{{ t(`runs.status.${row.status}`) }}</Tag>
+                <span class="run-time">{{ formatTime(row.startedAt) }}</span>
+              </button>
+            </li>
+          </ul>
+          <div class="actions">
+            <button type="button" class="link" @click="open = false; emit('newFlow')">
+              <span class="i-lucide-network" />{{ t('live.actionNewFlow') }}
+            </button>
+            <button type="button" class="link" @click="open = false; emit('quote')">
+              <span class="i-lucide-quote" />{{ t('live.actionAgent') }}
+            </button>
+          </div>
         </template>
-      </dl>
-    </Popover>
+      </Popover>
+    </div>
   </div>
 </template>
 
@@ -120,14 +207,112 @@ const bare = computed(() => {
 
 .row {
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: 10px;
   max-width: 100%;
 }
 
 .row.out {
+  flex-direction: row-reverse;
+}
+
+.avatar {
+  margin-top: 2px;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.out .body {
   align-items: flex-end;
+}
+
+.section-title {
+  margin: 12px 0 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.muted-line {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.6;
+}
+
+.runs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.run {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.run:hover,
+.run:focus-visible {
+  background: var(--s2);
+}
+
+.run-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-time {
+  font-size: 12px;
+  opacity: 0.55;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.link:hover {
+  text-decoration: underline;
 }
 
 .meta {

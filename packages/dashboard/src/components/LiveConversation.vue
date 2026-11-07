@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { Button, Card, Dropdown, Empty, Input, Modal, Spin, Tag, useToast } from '@mushin/ui'
+import { Avatar, Button, Card, Empty, Input, RadioGroup, useToast } from '@mushin/ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { call, on } from '../api'
+import { avatarColor, initial } from '../botAvatar'
 import { useAgentStore } from '../stores/agent'
 import { useDataStore } from '../stores/data'
-import type { ChannelSummary, MessageRecord } from '../types'
+import type { ChannelSummary, Contact, MessageRecord, Segment } from '../types'
 import { formatTime, segmentsText } from '../utils'
 import MessageBubble from './MessageBubble.vue'
 
@@ -17,61 +18,54 @@ const data = useDataStore()
 const router = useRouter()
 const agent = useAgentStore()
 
-// ---- what to do with a message: the flows it started, a new flow from it, or quote it to the Agent ----
+/** The chat that only exists in Mushin, where the dashboard plays a test user; see `bots.sandbox`. */
+const SANDBOX_ID = '@sandbox'
+const SANDBOX_KEY = `private:${SANDBOX_ID}`
 
-interface RunRow {
-  id: string
-  flowId: string
-  flowName: string
-  status: string
-  startedAt: number
-  error?: string
-  node?: { label?: string; type: string }
+const bot = computed(() => data.bots.find((item) => item.id === props.botId))
+const adapter = computed(() => data.adapters.find((item) => item.id === bot.value?.adapter.type))
+
+function key(channel: { type: string; id: string }) {
+  return `${channel.type}:${channel.id}`
 }
 
-const actionOptions = computed(() => [
-  { key: 'runs', label: t('live.actionRuns') },
-  { key: 'newFlow', label: t('live.actionNewFlow') },
-  { key: 'agent', label: t('live.actionAgent') },
-])
-
-const runsFor = ref<MessageRecord>()
-const runRows = ref<RunRow[]>([])
-const loadingRuns = ref(false)
-
-async function showRuns(record: MessageRecord) {
-  runsFor.value = record
-  runRows.value = []
-  loadingRuns.value = true
-  try {
-    runRows.value = (await call<{ runs: RunRow[] }>('flows.history', { bot: props.botId, message: record.id, limit: 20 })).runs
-  } catch (error) {
-    message.error((error as Error).message)
-  } finally {
-    loadingRuns.value = false
-  }
+/** A person's or group's picture from the adapter's address template; nothing for the sandbox. */
+function avatarOf(kind: 'user' | 'group', id: string) {
+  const template = adapter.value?.avatars?.[kind]
+  if (!template || !id || id === SANDBOX_ID) return
+  return template.replaceAll('{id}', encodeURIComponent(id))
 }
 
-const openRun = (row: RunRow) => router.push({ path: `/flows/${row.flowId}`, query: { run: row.id } })
+// ---- what to do with a message: a new flow from it, or quote it to the Agent ----
+
 const sampleQuery = (record: MessageRecord) => `${record.botId}:${record.channel.id}:${record.id}`
 
-/** A trigger guessed from the message: a command when it starts with one of the bot's prefixes, else a keyword. */
-function guessTrigger(text: string) {
+const mentionsSelf = (segment: Segment) => segment.type === 'at' && !!bot.value?.selfId && String(segment.data.qq) === bot.value.selfId
+
+/**
+ * A trigger guessed from the message: a command when it starts with one of the bot's prefixes, else
+ * a keyword. An @ of the bot is not part of the text (flows never see it there); in a group it
+ * becomes the trigger's "@ me" condition instead.
+ */
+function guessTrigger(record: MessageRecord) {
+  const mentioned = record.segments.some(mentionsSelf)
+  const text = segmentsText(record.segments.filter((segment) => !mentionsSelf(segment))).trim()
   const prefixes = bot.value?.commands?.prefixes?.filter(Boolean).length ? bot.value.commands!.prefixes! : ['/']
   const prefix = [...prefixes].sort((a, b) => b.length - a.length).find((item) => text.startsWith(item))
   const word = (prefix ? text.slice(prefix.length) : text).trim().split(/\s+/)[0] ?? ''
-  if (prefix && word) return { id: 'trigger', type: 'trigger.command', config: { name: word } }
-  return { id: 'trigger', type: 'trigger.keyword', config: { keywords: [word.slice(0, 20) || text.slice(0, 20)], mode: 'contains' } }
+  if (prefix && word) return { text, node: { id: 'trigger', type: 'trigger.command', config: { name: word } } }
+  const when = mentioned && record.channel.type === 'group' ? { when: 'mention' } : {}
+  return { text, node: { id: 'trigger', type: 'trigger.keyword', config: { keywords: [word.slice(0, 20) || text.slice(0, 20)], mode: 'contains', ...when } } }
 }
 
 async function newFlow(record: MessageRecord) {
-  const text = segmentsText(record.segments).trim()
+  const { text, node } = guessTrigger(record)
   try {
     const flow = await call<{ id: string }>('flows.create', {
       name: t('live.newFlowName', { text: text.slice(0, 12) }),
       bots: [props.botId],
       nodes: [
-        { ...guessTrigger(text), position: { x: 80, y: 120 } },
+        { ...node, position: { x: 80, y: 120 } },
         { id: 'reply', type: 'action.reply', config: { text: t('live.newFlowReply') }, position: { x: 400, y: 120 } },
       ],
       edges: [{ source: 'trigger', sourceHandle: 'exec:next', target: 'reply', targetHandle: 'exec' }],
@@ -87,35 +81,93 @@ function quoteToAgent(record: MessageRecord) {
     bot: props.botId,
     channel: record.channel.id,
     id: record.id,
-    label: `${record.user.name ?? record.user.id}：${segmentsText(record.segments).slice(0, 40)}`,
+    label: `${senderName(record)}：${segmentsText(record.segments).slice(0, 40)}`,
   }
   agent.open = true
 }
 
-function onAction(key: string, record: MessageRecord) {
-  if (key === 'runs') void showRuns(record)
-  else if (key === 'newFlow') void newFlow(record)
-  else if (key === 'agent') quoteToAgent(record)
+// ---- the channel list: the sandbox on top, then chats with messages, then the account's other friends and groups ----
+
+interface Entry {
+  key: string
+  type: 'group' | 'private'
+  id: string
+  name?: string
+  remark?: string
+  members?: number
+  lastAt?: number
+  lastText?: string
+  sandbox?: boolean
 }
 
 const channels = ref<ChannelSummary[]>([])
+const contacts = ref<Contact[]>([])
 const selected = ref<string>()
 const records = ref<MessageRecord[]>([])
 const list = ref<HTMLElement>()
 const draft = ref('')
 const sending = ref(false)
+const search = ref('')
+const filter = ref<'all' | 'private' | 'group'>('all')
 
-const bot = computed(() => data.bots.find((item) => item.id === props.botId))
-const current = computed(() => channels.value.find((channel) => key(channel) === selected.value))
+const filterOptions = computed(() => [
+  { value: 'all', label: t('live.filterAll') },
+  { value: 'private', label: t('live.filterFriends') },
+  { value: 'group', label: t('live.filterGroups') },
+])
 
-function key(channel: { type: string; id: string }) {
-  return `${channel.type}:${channel.id}`
+const sandboxEntry = computed<Entry>(() => {
+  const seen = channels.value.find((channel) => key(channel) === SANDBOX_KEY)
+  return { key: SANDBOX_KEY, type: 'private', id: SANDBOX_ID, name: t('live.sandbox'), lastAt: seen?.lastAt, lastText: seen?.lastText ?? t('live.sandboxLast'), sandbox: true }
+})
+
+const contactByKey = computed(() => new Map(contacts.value.map((contact) => [key(contact), contact])))
+
+const entries = computed<Entry[]>(() => {
+  const recent = channels.value
+    .filter((channel) => key(channel) !== SANDBOX_KEY)
+    .map((channel): Entry => {
+      const contact = contactByKey.value.get(key(channel))
+      return { ...contact, ...channel, key: key(channel), name: channel.name ?? contact?.name }
+    })
+  const seen = new Set(recent.map((entry) => entry.key))
+  const rest = contacts.value.filter((contact) => !seen.has(key(contact))).map((contact): Entry => ({ ...contact, key: key(contact) }))
+  return [...recent, ...rest]
+})
+
+const shown = computed(() => {
+  const words = search.value.trim().toLowerCase()
+  return entries.value.filter((entry) => {
+    if (filter.value !== 'all' && entry.type !== filter.value) return false
+    if (!words) return true
+    return [entry.name, entry.remark, entry.id].some((value) => value?.toLowerCase().includes(words))
+  })
+})
+
+const current = computed(() => (selected.value === SANDBOX_KEY ? sandboxEntry.value : entries.value.find((entry) => entry.key === selected.value)))
+
+const label = (entry: Entry) => entry.remark ?? entry.name ?? entry.id
+const entryAvatar = (entry: Entry) => avatarOf(entry.type === 'group' ? 'group' : 'user', entry.id)
+
+function senderName(record: MessageRecord) {
+  if (record.direction === 'in' && record.user.id === SANDBOX_ID) return t('live.sandboxUser')
+  return record.user.name ?? record.user.id
+}
+
+function senderAvatar(record: MessageRecord) {
+  if (record.direction === 'out') return bot.value?.selfAvatar
+  return avatarOf('user', record.user.id)
 }
 
 async function loadChannels() {
   // Only what the bot received or sent since Mushin started; older history is not shown here.
   channels.value = await call<ChannelSummary[]>('bots.channels', { id: props.botId, sinceStart: true })
-  if (!selected.value && channels.value[0]) selected.value = key(channels.value[0])
+  const first = channels.value.find((channel) => key(channel) !== SANDBOX_KEY)
+  if (!selected.value) selected.value = first ? key(first) : SANDBOX_KEY
+}
+
+async function loadContacts() {
+  contacts.value = bot.value?.status === 'online' ? await call<Contact[]>('bots.contacts', { id: props.botId }).catch(() => []) : []
 }
 
 async function loadMessages() {
@@ -133,10 +185,18 @@ async function scrollToEnd() {
   list.value?.scrollTo({ top: list.value.scrollHeight })
 }
 
-onMounted(() => loadChannels().catch((error) => message.error(error.message)))
+onMounted(() => {
+  loadChannels().catch((error) => message.error(error.message))
+  void loadContacts()
+})
 watch(() => props.botId, () => {
   selected.value = undefined
+  contacts.value = []
   loadChannels().catch(() => {})
+  void loadContacts()
+})
+watch(() => bot.value?.status, (status, previous) => {
+  if (status === 'online' && previous !== 'online') void loadContacts()
 })
 watch(selected, () => loadMessages().catch(() => {}))
 
@@ -154,11 +214,20 @@ const off = on('bots/message', (record: MessageRecord) => {
 })
 onBeforeUnmount(off)
 
+const inSandbox = computed(() => current.value?.sandbox === true)
+// The sandbox needs the bot running, not connected: its replies never reach the platform.
+const canSend = computed(() => (inSandbox.value ? !!bot.value?.enabled : bot.value?.status === 'online'))
+const placeholder = computed(() => {
+  if (inSandbox.value) return t('live.sandboxSend')
+  return bot.value?.status === 'online' ? t('live.sendAs', { name: bot.value?.selfName ?? bot.value?.name }) : t('live.offline')
+})
+
 async function send() {
-  if (!current.value || !draft.value.trim()) return
+  if (!current.value || !draft.value.trim() || !canSend.value) return
   sending.value = true
   try {
-    await call('bots.send', { id: props.botId, channel: { type: current.value.type, id: current.value.id }, text: draft.value })
+    if (inSandbox.value) await call('bots.sandbox', { id: props.botId, text: draft.value })
+    else await call('bots.send', { id: props.botId, channel: { type: current.value.type, id: current.value.id }, text: draft.value })
     draft.value = ''
   } catch (error) {
     message.error((error as Error).message)
@@ -172,154 +241,82 @@ async function send() {
   <Card class="live-card">
     <div class="live">
       <nav class="channels" :aria-label="t('live.channels')">
-        <div v-if="!channels.length" class="channels-empty">{{ t('live.noChannels') }}</div>
-        <button
-          v-for="channel in channels"
-          :key="key(channel)"
-          type="button"
-          class="channel"
-          :class="{ active: key(channel) === selected }"
-          @click="selected = key(channel)"
-        >
-          <span class="channel-icon text-[18px]" :class="channel.type === 'group' ? 'i-lucide-users' : 'i-lucide-user'" />
-          <span class="channel-body">
-            <span class="channel-name">{{ channel.name ?? channel.id }}</span>
-            <span class="channel-last">{{ channel.lastText }}</span>
-          </span>
-          <span class="channel-time">{{ formatTime(channel.lastAt) }}</span>
-        </button>
+        <div class="channel-tools">
+          <Input v-model:value="search" size="small" clearable :placeholder="t('live.search')" />
+          <RadioGroup v-model:value="filter" size="small" block :options="filterOptions" />
+        </div>
+        <div class="channel-list">
+          <button
+            type="button"
+            class="channel pinned"
+            :class="{ active: selected === SANDBOX_KEY }"
+            @click="selected = SANDBOX_KEY"
+          >
+            <Avatar :size="36" square color="var(--primary)"><span class="i-lucide-flask-conical text-[18px]" /></Avatar>
+            <span class="channel-body">
+              <span class="channel-name">{{ sandboxEntry.name }}<span class="i-lucide-pin pin" /></span>
+              <span class="channel-last">{{ sandboxEntry.lastText }}</span>
+            </span>
+          </button>
+          <div v-if="!entries.length" class="channels-empty">{{ t('live.noChannels') }}</div>
+          <div v-else-if="!shown.length" class="channels-empty">{{ t('live.noMatch') }}</div>
+          <button
+            v-for="entry in shown"
+            :key="entry.key"
+            type="button"
+            class="channel"
+            :class="{ active: entry.key === selected }"
+            @click="selected = entry.key"
+          >
+            <Avatar :size="36" :src="entryAvatar(entry)" :color="avatarColor(entry.id)">
+              <span v-if="entry.type === 'group'" class="i-lucide-users text-[16px]" />
+              <template v-else>{{ initial(label(entry)) }}</template>
+            </Avatar>
+            <span class="channel-body">
+              <span class="channel-name">{{ label(entry) }}</span>
+              <span class="channel-last">
+                <template v-if="entry.lastText !== undefined">{{ entry.lastText }}</template>
+                <template v-else>{{ entry.type === 'group' ? t('live.group') : t('live.private') }} · {{ entry.id }}<template v-if="entry.members"> · {{ t('live.members', { n: entry.members }) }}</template></template>
+              </span>
+            </span>
+            <span v-if="entry.lastAt" class="channel-time">{{ formatTime(entry.lastAt) }}</span>
+          </button>
+        </div>
       </nav>
 
       <section class="conversation">
         <header v-if="current" class="conversation-head">
-          <strong>{{ current.name ?? current.id }}</strong>
-          <span class="mono sub">{{ current.type === 'group' ? t('live.group') : t('live.private') }} · {{ current.id }}</span>
-          <span class="sub hover-hint">{{ t('live.hoverHint') }}</span>
+          <strong>{{ label(current) }}</strong>
+          <span v-if="current.sandbox" class="sub">{{ t('live.sandboxHint') }}</span>
+          <template v-else>
+            <span class="mono sub">{{ current.type === 'group' ? t('live.group') : t('live.private') }} · {{ current.id }}</span>
+            <span class="sub hover-hint">{{ t('live.hoverHint') }}</span>
+          </template>
         </header>
         <div ref="list" class="messages">
           <Empty v-if="!records.length" :description="t('live.empty')" class="messages-empty" />
-          <div v-for="record in records" :key="record.id" class="message-row" :class="{ out: record.direction === 'out' }">
-            <MessageBubble :record="record" />
-            <Dropdown v-if="record.direction === 'in'" :options="actionOptions" @select="(key: string) => onAction(key, record)">
-              <Button quaternary circle size="tiny" class="message-actions" :aria-label="t('live.actions')" icon="i-lucide-ellipsis" />
-            </Dropdown>
-          </div>
+          <MessageBubble
+            v-for="record in records"
+            :key="record.id"
+            :record="record"
+            :avatar="senderAvatar(record)"
+            :name="senderName(record)"
+            @new-flow="newFlow(record)"
+            @quote="quoteToAgent(record)"
+          />
         </div>
         <footer v-if="current" class="composer">
-          <Input
-            v-model:value="draft"
-            :placeholder="bot?.status === 'online' ? t('live.sendAs', { name: bot?.selfName ?? bot?.name }) : t('live.offline')"
-            :disabled="bot?.status !== 'online'"
-            @keyup.enter="send"
-          />
-          <Button type="primary" :loading="sending" :disabled="!draft.trim() || bot?.status !== 'online'" :aria-label="t('live.send')" icon="i-lucide-send" @click="send" />
+          <Input v-model:value="draft" :placeholder="placeholder" :disabled="!canSend" @keyup.enter="send" />
+          <Button type="primary" :loading="sending" :disabled="!draft.trim() || !canSend" :aria-label="t('live.send')" icon="i-lucide-send" @click="send" />
         </footer>
       </section>
     </div>
   </Card>
-
-  <Modal :show="!!runsFor" :title="t('live.runsTitle')" :width="520" @update:show="(show: boolean) => { if (!show) runsFor = undefined }">
-    <template v-if="runsFor">
-      <p class="muted quoted">{{ runsFor.user.name ?? runsFor.user.id }}：{{ segmentsText(runsFor.segments) }}</p>
-      <Spin :show="loadingRuns">
-        <p v-if="!runRows.length && !loadingRuns" class="muted small">{{ t('live.noRuns') }}</p>
-        <ul class="run-list">
-          <li v-for="row in runRows" :key="row.id">
-            <button type="button" class="run-row" @click="openRun(row)">
-              <strong>{{ row.flowName }}</strong>
-              <Tag size="small" :type="row.status === 'ok' ? 'success' : row.status === 'error' ? 'error' : 'default'">{{ t(`runs.status.${row.status}`) }}</Tag>
-              <span class="muted small">{{ formatTime(row.startedAt) }}</span>
-              <span v-if="row.error" class="small run-error">{{ row.error }}</span>
-            </button>
-          </li>
-        </ul>
-      </Spin>
-      <div class="run-actions">
-        <Button size="small" @click="newFlow(runsFor!); runsFor = undefined">{{ t('live.actionNewFlow') }}</Button>
-        <Button size="small" @click="quoteToAgent(runsFor!); runsFor = undefined">{{ t('live.actionAgent') }}</Button>
-      </div>
-    </template>
-  </Modal>
 </template>
 
 <style scoped>
 .live-card :deep(.mu-card__body) {
   padding: 0;
-}
-
-.message-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 4px;
-}
-
-.message-row.out {
-  flex-direction: row-reverse;
-}
-
-.message-row > :first-child {
-  min-width: 0;
-}
-
-.message-actions {
-  margin-top: 22px;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.message-row:hover .message-actions,
-.message-actions:focus-visible {
-  opacity: 1;
-}
-
-.quoted {
-  margin: 0 0 10px;
-  font-size: 13px;
-}
-
-.run-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 4px;
-}
-
-.run-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.run-row:hover {
-  background: var(--s2);
-}
-
-.run-error {
-  color: var(--bad);
-  width: 100%;
-}
-
-.run-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-@media (hover: none) {
-  .message-actions {
-    opacity: 1;
-  }
 }
 
 .live {
@@ -329,11 +326,37 @@ async function send() {
 }
 
 .channels {
-  width: 260px;
+  width: clamp(200px, 34%, 280px);
   flex: none;
+  display: flex;
+  flex-direction: column;
   border-right: 1px solid var(--line);
+}
+
+.channel-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.channel-list {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
+}
+
+.channel.pinned {
+  border-bottom: 1px solid var(--line);
+}
+
+.pin {
+  margin-left: 4px;
+  font-size: 12px;
+  opacity: 0.45;
+  vertical-align: -1px;
 }
 
 .channels-empty {
@@ -362,11 +385,6 @@ async function send() {
 
 .channel.active {
   background: var(--primary-soft);
-}
-
-.channel-icon {
-  opacity: 0.6;
-  flex: none;
 }
 
 .channel-body {
@@ -444,7 +462,7 @@ async function send() {
 
   .channels {
     width: auto;
-    max-height: 180px;
+    max-height: 300px;
     border-right: none;
     border-bottom: 1px solid var(--line);
   }

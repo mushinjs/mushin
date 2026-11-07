@@ -41,6 +41,22 @@ function compileRegex(pattern: string, flags: string) {
   return regexCache.get(key)
 }
 
+/** Which messages a message or keyword trigger looks at: all, @-mentions, private or group chats. */
+const whenField = z.enum(['any', 'mention', 'groupMention', 'private', 'group']).default('any').meta(field(
+  'Which messages',
+  '@ me or private: @-mentions in groups and every private message. @ me in groups: only @-mentions in groups.',
+  { 'zh-CN': { title: '哪些消息', description: '@我或私聊：群里 @ 机器人的消息，以及所有私聊。群里@我：只有群里 @ 机器人的消息。', options: { any: '所有消息', mention: '@我或私聊', groupMention: '群里@我', private: '仅私聊', group: '仅群聊' } } },
+  { options: { any: 'All', mention: '@ me or private', groupMention: '@ me in groups', private: 'Private only', group: 'Groups only' } },
+))
+
+function whenMatches(when: string | undefined, session: FlowSession) {
+  return !when || when === 'any'
+    || (when === 'private' && session.isDirect)
+    || (when === 'group' && !session.isDirect)
+    || (when === 'mention' && (session.isDirect || session.mentioned))
+    || (when === 'groupMention' && !session.isDirect && session.mentioned)
+}
+
 const messageTrigger: NodeType = {
   kind: 'trigger',
   type: 'trigger.message',
@@ -48,12 +64,7 @@ const messageTrigger: NodeType = {
   title: { en: 'On message', 'zh-CN': '收到消息' },
   description: { en: 'Starts when a message arrives', 'zh-CN': '收到消息时开始' },
   config: z.object({
-    when: z.enum(['any', 'mention', 'groupMention', 'private', 'group']).default('any').meta(field(
-      'Which messages',
-      '@ me or private: @-mentions in groups and every private message. @ me in groups: only @-mentions in groups.',
-      { 'zh-CN': { title: '哪些消息', description: '@我或私聊：群里 @ 机器人的消息，以及所有私聊。群里@我：只有群里 @ 机器人的消息。', options: { any: '所有消息', mention: '@我或私聊', groupMention: '群里@我', private: '仅私聊', group: '仅群聊' } } },
-      { options: { any: 'All', mention: '@ me or private', groupMention: '@ me in groups', private: 'Private only', group: 'Groups only' } },
-    )),
+    when: whenField,
     groups: z.array(z.string()).default([]).meta(field('Only these groups', 'Group ids; empty means every group. Private chats are not affected.', {
       'zh-CN': { title: '仅限这些群', description: '群号；留空表示所有群。不影响私聊。' },
     })),
@@ -66,11 +77,7 @@ const messageTrigger: NodeType = {
   }),
   outputs: [...sessionOutputs, { name: 'isPrivate', type: 'boolean', title: { en: 'Private chat', 'zh-CN': '是私聊' } }],
   match({ config, session }) {
-    const ok = config.when === 'any'
-      || (config.when === 'private' && session.isDirect)
-      || (config.when === 'group' && !session.isDirect)
-      || (config.when === 'mention' && (session.isDirect || session.mentioned))
-      || (config.when === 'groupMention' && !session.isDirect && session.mentioned)
+    const ok = whenMatches(config.when, session)
     if (!ok) return
     if (!session.isDirect && config.groups?.length && !config.groups.includes(session.channel.id)) return
     if (config.ignoreUsers?.includes(session.user.id)) return
@@ -93,6 +100,7 @@ const keywordTrigger: NodeType = {
       'zh-CN': { title: '匹配方式', options: { contains: '包含', startsWith: '匹配开头', exact: '匹配全部' } },
     }, { options: { contains: 'Contains', startsWith: 'Starts with', exact: 'Whole message' } })),
     ignoreCase: z.boolean().default(true).meta(field('Ignore case', undefined, { 'zh-CN': { title: '忽略大小写' } })),
+    when: whenField,
   }),
   outputs: [
     ...sessionOutputs,
@@ -100,6 +108,7 @@ const keywordTrigger: NodeType = {
     { name: 'rest', type: 'text', title: { en: 'Text after keyword', 'zh-CN': '关键词后的内容' } },
   ],
   match({ config, session }) {
+    if (!whenMatches(config.when, session)) return
     const text = session.text
     const fold = (value: string) => (config.ignoreCase ? value.toLowerCase() : value)
     for (const keyword of config.keywords as string[]) {

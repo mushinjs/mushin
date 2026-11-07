@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 import { Context, Service, z } from '@mushin/core'
-import type {} from '@mushin/plugin-bots'
+import { isSandbox } from '@mushin/plugin-bots'
 import type {} from '@mushin/plugin-flows'
 import type {} from '@mushin/plugin-providers'
 import type {} from '@mushin/plugin-storage'
@@ -91,7 +91,7 @@ export class StatsService extends Service {
   async *[Service.init]() {
     const [today] = dayHour(Date.now())
     await this.prune(today)
-    yield this.home.on('bots/message', (record) => this.count(record.timestamp, (counters, doc) => {
+    yield this.home.on('bots/message', (record) => !isSandbox(record.channel) && this.count(record.timestamp, (counters, doc) => {
       if (record.direction === 'out') return bump(counters.out, record.botId)
       bump(counters.in, record.botId)
       const channel = `${record.botId}|${record.channel.type}:${record.channel.id}`

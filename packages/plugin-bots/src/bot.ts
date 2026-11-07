@@ -1,14 +1,14 @@
 import {
   type ChannelInfo, type Content, Context, type MessageRecord, type Provenance, type Segment, segmentsToText,
-  Service, toSegments,
+  randomId, Service, seg, toSegments,
 } from '@mushin/core'
 import {
   type ArgValue, type CommandDef, type CommandEntry, commandMatches, DEFAULT_PREFIXES, parseArgs, type ParsedCommand, requiredRole, splitCommand,
   usageReply,
 } from './commands'
 import {
-  type BotEvent, type BotRecord, type BotRole, type BotStatus, type GroupRole, type GroupRoleResolver, type IncomingMessage, type MediaResolver, roleAtLeast,
-  type SourcedContent, type Transport,
+  type BotEvent, type BotRecord, type BotRole, type BotStatus, type ContactResolver, type GroupRole, type GroupRoleResolver, type IncomingMessage, isSandbox,
+  type MediaResolver, roleAtLeast, SANDBOX_CHANNEL, SANDBOX_USER, type SourcedContent, type Transport,
 } from './types'
 
 export type Sendable = Content | SourcedContent
@@ -151,6 +151,7 @@ export class Bot extends Service {
   private commandProviders = new Set<() => CommandEntry[]>()
   private roleResolver?: GroupRoleResolver
   private mediaResolver?: MediaResolver
+  private contactResolver?: ContactResolver
 
   constructor(ctx: Context, config: { record: BotRecord; hooks: BotHooks }) {
     super(ctx, 'bot')
@@ -217,6 +218,38 @@ export class Bot extends Service {
     }, 'bot.useMediaResolver()')
   }
 
+  /** Called by adapters that can list the account's friends and groups. */
+  useContacts(resolver: ContactResolver) {
+    return this.ctx.effect(() => {
+      this.contactResolver = resolver
+      return () => {
+        if (this.contactResolver === resolver) this.contactResolver = undefined
+      }
+    }, 'bot.useContacts()')
+  }
+
+  /** The account's friends and groups; empty when the adapter cannot list them. */
+  async contacts() {
+    return this.contactResolver ? this.contactResolver() : []
+  }
+
+  /**
+   * A message from the sandbox's test user, as if they wrote it to the bot in a private chat. A
+   * leading "@" mentions the bot. Replies stay in the sandbox and never reach the platform.
+   */
+  sandbox(text: string) {
+    const mention = /^@\S*\s*/.exec(text)
+    const rest = mention ? text.slice(mention[0].length) : text
+    const segments: Segment[] = [
+      ...(mention ? [seg.at(this.selfId ?? this.id, this.selfName ?? this.record.name)] : []),
+      ...(rest ? [seg.text(mention ? ` ${rest}` : rest)] : []),
+    ]
+    // Not awaited: a flow may wait for the next message, which comes through another call.
+    this.receive({ messageId: randomId(6), channel: SANDBOX_CHANNEL, user: SANDBOX_USER, segments }).catch((error) => {
+      this.ctx.logger('bot').warn('sandbox message failed: %s', error)
+    })
+  }
+
   /** An address for an image, video, voice or file segment; see `MediaResolver.media`. */
   async media(segment: Segment, options: { channel?: ChannelInfo; inline?: boolean } = {}) {
     if (!this.mediaResolver?.media) throw new Error(`the ${this.platform} adapter cannot fetch media`)
@@ -231,6 +264,8 @@ export class Bot extends Service {
 
   /** The user's role on this bot, from the permissions plugin; nothing when it is not running. */
   roleOf(userId: string): BotRole | undefined {
+    // Whoever plays the sandbox's test user is signed in to the dashboard, so they own the bot.
+    if (userId === SANDBOX_USER.id) return 'master'
     return this.hooks.roleOf?.(this, userId)
   }
 
@@ -437,7 +472,8 @@ export class Bot extends Service {
     content: Sendable,
     options: { plugin?: string; source?: Provenance; replyTo?: string },
   ) {
-    if (!this.transport) throw new Error(`bot ${this.record.name} is not connected`)
+    const sandbox = isSandbox(channel)
+    if (!this.transport && !sandbox) throw new Error(`bot ${this.record.name} is not connected`)
     let segments: Segment[]
     let source: Provenance | undefined = options.source
     if (isSourced(content)) {
@@ -451,7 +487,7 @@ export class Bot extends Service {
     if (!segments.length || (segments.length === 1 && segments[0].type === 'text' && !segments[0].data.text)) {
       return
     }
-    const { messageId } = await this.transport.send(channel, segments)
+    const { messageId } = sandbox ? { messageId: randomId(6) } : await this.transport!.send(channel, segments)
     return this.hooks.record({
       botId: this.id,
       messageId,
