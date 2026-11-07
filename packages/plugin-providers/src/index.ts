@@ -1,7 +1,7 @@
-import { Context, isMasked, mask, MushinError, randomId, Service, toJsonSchema, z } from '@mushin/core'
+import { Context, isMasked, mask, MushinError, randomId, Service, toJsonSchema, usage, z } from '@mushin/core'
 import type {} from '@mushin/plugin-storage'
 import type {
-  ChatRequest, DecisionQuestion, LlmChatOptions, LlmDecideOptions, LlmDecideResult, LlmEmbedOptions, LlmEmbedResult, LlmResult, ModelProfile,
+  ChatRequest, DecisionQuestion, LlmChatOptions, LlmMessage, LlmDecideOptions, LlmDecideResult, LlmEmbedOptions, LlmEmbedResult, LlmResult, ModelProfile,
   ProviderCapability, ProviderClient, ProviderRecord, ProviderTest, ProviderType, StreamEvent,
 } from './types'
 
@@ -30,6 +30,11 @@ export interface LlmCall {
 }
 
 const STORAGE_KEY = 'providers'
+
+/** A chat request that shows the model an image is counted as reading it. */
+function chatKind(request: { messages: LlmMessage[] }) {
+  return request.messages.some((message) => message.role === 'user' && Array.isArray(message.content) && message.content.some((part) => part.type === 'image')) ? 'vision' : 'chat'
+}
 
 /** Most texts sent in one embedding request. */
 export const EMBED_BATCH = 64
@@ -404,9 +409,24 @@ export class LlmService extends Service {
     return true
   }
 
-  private result(record: ProviderRecord, model: string, start: number, response: Awaited<ReturnType<ProviderClient['chat']>>): LlmResult {
+  /** Counts a request against the message being handled, if any; see `usage` in core. */
+  private report(kind: string, record: ProviderRecord, model: string, latencyMs: number, used?: { inputTokens?: number; outputTokens?: number }, ok = true) {
+    usage.report({
+      kind,
+      plugin: this.ctx.fiber.name,
+      provider: record.name,
+      model,
+      latencyMs,
+      ok,
+      ...(used?.inputTokens !== undefined ? { inputTokens: used.inputTokens } : {}),
+      ...(used?.outputTokens !== undefined ? { outputTokens: used.outputTokens } : {}),
+    })
+  }
+
+  private result(record: ProviderRecord, model: string, start: number, response: Awaited<ReturnType<ProviderClient['chat']>>, request: { messages: LlmMessage[] }): LlmResult {
     const latencyMs = Date.now() - start
     const tokens = response.usage ? response.usage.inputTokens + response.usage.outputTokens : undefined
+    this.report(chatKind(request), record, model, latencyMs, response.usage)
     this.home.emit('llm/called', {
       provider: record.id,
       providerName: record.name,
@@ -434,9 +454,9 @@ export class LlmService extends Service {
       const start = Date.now()
       try {
         const response = await this.client(record).chat({ ...options, model } satisfies ChatRequest)
-        return this.result(record, model, start, response)
+        return this.result(record, model, start, response, options)
       } catch (error) {
-        this.logRequestError(record, model, error, start)
+        this.logRequestError(record, model, error, start, chatKind(options))
         if (!this.fallBack(targets, index, error, options.signal)) throw error
       }
     }
@@ -456,18 +476,18 @@ export class LlmService extends Service {
         if (!client.stream) {
           const response = await client.chat(request)
           if (response.text) yield { type: 'delta', text: response.text }
-          yield { type: 'result', result: this.result(record, model, start, response) }
+          yield { type: 'result', result: this.result(record, model, start, response, request) }
           return
         }
         for await (const event of client.stream(request)) {
           if (event.type === 'delta') {
             streamed = true
             yield event
-          } else yield { type: 'result', result: this.result(record, model, start, event.response) }
+          } else yield { type: 'result', result: this.result(record, model, start, event.response, request) }
         }
         return
       } catch (error) {
-        this.logRequestError(record, model, error, start)
+        this.logRequestError(record, model, error, start, chatKind(request))
         if (streamed || !this.fallBack(targets, index, error, options.signal)) throw error
       }
     }
@@ -500,7 +520,7 @@ export class LlmService extends Service {
           return client.embed!({ model: options.model, input, signal: options.signal })
         })
       } catch (error) {
-        this.logRequestError(record, options.model, error, start)
+        this.logRequestError(record, options.model, error, start, 'embed')
         throw error
       }
       if (response.vectors.length !== input.length) throw new MushinError('unavailable', `Provider "${record.name}" returned ${response.vectors.length} vectors for ${input.length} texts`)
@@ -508,6 +528,7 @@ export class LlmService extends Service {
       tokens += response.usage?.inputTokens ?? 0
     }
     this.home.emit('llm/called', { provider: record.id, providerName: record.name, model: options.model, ok: true, inputTokens: tokens || undefined, latencyMs: Date.now() - start })
+    this.report('embed', record, options.model, Date.now() - start, tokens ? { inputTokens: tokens } : undefined)
     return { vectors, provider: record.id, model: options.model, dimension: vectors[0]?.length ?? 0, ...(tokens ? { tokens } : {}) }
   }
 
@@ -520,10 +541,11 @@ export class LlmService extends Service {
     try {
       response = await client.decide({ model, state: options.state, questions: options.questions, assets: options.assets, signal: options.signal })
     } catch (error) {
-      this.logRequestError(record, model, error, start)
+      this.logRequestError(record, model, error, start, 'decision')
       throw error
     }
     const latencyMs = Date.now() - start
+    this.report('decision', record, model, latencyMs, response.usage)
     this.home.emit('llm/called', {
       provider: record.id,
       providerName: record.name,
@@ -536,9 +558,10 @@ export class LlmService extends Service {
     return { ...response, provider: record.id, providerName: record.name, model, latencyMs }
   }
 
-  private logRequestError(record: ProviderRecord, model: string, error: unknown, start: number) {
+  private logRequestError(record: ProviderRecord, model: string, error: unknown, start: number, kind: string) {
     // A caller that gave up (timeout, user stop) is not the provider's fault.
     if (error instanceof Error && error.name === 'AbortError') return
+    this.report(kind, record, model, Date.now() - start, undefined, false)
     this.home.emit('llm/called', { provider: record.id, providerName: record.name, model, ok: false, latencyMs: Date.now() - start })
     this.logger.warn('request to %s (%s) failed: %s', this.label(record), model, error instanceof Error ? error.message : error)
   }

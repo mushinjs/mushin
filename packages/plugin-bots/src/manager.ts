@@ -1,11 +1,11 @@
 import {
   type ChannelInfo, Context, describeMissing, dependencyReport, type LogTag, type MissingDependency, logTag, type Exporter, type Fiber, fiberError, fiberStatus, isMasked, Logger, mask, type Message,
   type MessageRecord, messageType, MushinError, type Plugin, type Provenance, pluginSchema, randomId, type Segment, segmentsToText, Service, toJsonSchema,
-  validatePluginConfig, z,
+  type UsageEvent, validatePluginConfig, z,
 } from '@mushin/core'
 import type {} from '@mushin/plugin-storage'
 import { MessageArchive } from './archive'
-import { Bot, type BotHooks, type Session } from './bot'
+import { Bot, type BotHooks, byteSize, type Session } from './bot'
 import { type CommandArg, type CommandDef, type CommandEntry, commandConflicts, type CommandSettings, commandMatches, commandUsage, DEFAULT_PREFIXES, helpText, parseArgs, requiredRole, splitCommand } from './commands'
 import { type AdapterType, type BotPluginEntry, type BotRecord, type BotStatus, isSandbox, type PermissionProvider, roleAtLeast } from './types'
 
@@ -94,6 +94,24 @@ const adapterInput = z.object({
   type: z.string().describe('Adapter type id from bots.adapters, e.g. "onebot"'),
   config: z.record(z.string(), z.any()).describe('Adapter config matching the schema from bots.adapters'),
 })
+
+/** Messages whose costs are kept; older ones are forgotten. */
+const USAGE_MESSAGES = 2000
+/** A runaway loop on one message stops being recorded after this many costs. */
+const USAGE_EVENTS_PER_MESSAGE = 200
+
+/** What handling one message cost; see `bots.usage`. */
+export interface MessageUsage {
+  events: UsageEvent[]
+  /** Size on the wire, roughly. */
+  bytes?: number
+  /** For a sent message: how long the platform took to accept it. */
+  sendMs?: number
+  /** For a sent message: the incoming message being handled when it was sent. */
+  cause?: string
+  /** For an incoming message: what was sent while handling it. */
+  replies: string[]
+}
 
 const idInput = z.object({ id: z.string().describe('Bot id from bots.list') })
 const commandSettingsInput = z.object({
@@ -404,6 +422,23 @@ export class BotManager extends Service {
       },
       roleOf: (bot, userId) => this.permissionProvider?.roleOf(bot.id, userId),
       appCommand: (bot, entry) => this.appCommandFor(bot.id, entry)?.handler,
+      usageScope: (bot, message) => {
+        const entry = this.usageEntry(bot.id, message.id, true)!
+        entry.bytes = byteSize(message.segments)
+        return {
+          botId: bot.id,
+          messageId: message.id,
+          report: (event) => {
+            const target = this.usageEntry(bot.id, message.id, true)!
+            if (target.events.length < USAGE_EVENTS_PER_MESSAGE) target.events.push(event)
+          },
+        }
+      },
+      sent: (bot, message, transfer) => {
+        const entry = this.usageEntry(bot.id, message.id, true)!
+        Object.assign(entry, { bytes: transfer.bytes }, transfer.ms !== undefined ? { sendMs: transfer.ms } : {}, transfer.cause ? { cause: transfer.cause } : {})
+        if (transfer.cause) this.usageEntry(bot.id, transfer.cause)?.replies.push(message.id)
+      },
     }
     this.runtimes.set(id, runtime)
     runtime.fiber = this.home.isolate('bot').plugin({
@@ -731,6 +766,26 @@ export class BotManager extends Service {
 
   /** Messages recorded since Mushin started, for the live conversation. */
   private recent = new WeakSet<MessageRecord>()
+  /** What handling each recent message cost, in memory only; see `bots.usage`. */
+  private usages = new Map<string, MessageUsage>()
+
+  private usageEntry(botId: string, messageId: string, create = false) {
+    const key = `${botId}:${messageId}`
+    let entry = this.usages.get(key)
+    if (!entry && create) {
+      this.usages.set(key, entry = { events: [], replies: [] })
+      if (this.usages.size > USAGE_MESSAGES) this.usages.delete(this.usages.keys().next().value!)
+    }
+    return entry
+  }
+
+  /** A message's costs, and for a reply the costs of the message it answered. */
+  usage(botId: string, messageId: string) {
+    const entry = this.usageEntry(botId, messageId)
+    if (!entry) return null
+    const cause = entry.cause ? this.usageEntry(botId, entry.cause) : undefined
+    return { ...entry, ...(cause ? { causeEvents: cause.events } : {}) }
+  }
 
   private record(partial: Omit<MessageRecord, 'id' | 'type' | 'platforms'>): MessageRecord {
     const record: MessageRecord = {
@@ -1084,6 +1139,14 @@ export class BotManager extends Service {
       risk: 'read',
       input: z.object({}),
       handler: () => this.seen('group'),
+    })
+
+    yield actions.define({
+      name: 'bots.usage',
+      description: 'What one recent message cost, kept in memory since Mushin started: model requests made while handling it (kind chat, vision, decision, embed or a plugin\'s own, with plugin, model, tokens and time), its size in bytes, and for a sent message how long sending took and which message it answered.',
+      risk: 'read',
+      input: idInput.extend({ message: z.string().describe('Message record id from bots.messages') }),
+      handler: ({ id, message }) => this.usage(id, message),
     })
 
     yield actions.define({

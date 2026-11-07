@@ -1,6 +1,6 @@
 import {
   type ChannelInfo, type Content, Context, type MessageRecord, type Provenance, type Segment, segmentsToText,
-  randomId, Service, seg, toSegments,
+  randomId, Service, seg, toSegments, usage, type UsageScope,
 } from '@mushin/core'
 import {
   type ArgValue, type CommandDef, type CommandEntry, commandMatches, DEFAULT_PREFIXES, parseArgs, type ParsedCommand, requiredRole, splitCommand,
@@ -40,6 +40,10 @@ export interface BotHooks {
   roleOf?(bot: Bot, userId: string): BotRole | undefined
   /** A command that an app plugin answers on every bot, such as `/persona`. */
   appCommand?(bot: Bot, entry: CommandEntry): ((session: Session) => Promise<unknown> | unknown) | undefined
+  /** Where the costs of handling a message go; see `usage` in core. */
+  usageScope?(bot: Bot, record: MessageRecord): UsageScope | undefined
+  /** An outgoing message was sent: its size, how long the platform took (not for the sandbox), and the message being handled. */
+  sent?(bot: Bot, record: MessageRecord, transfer: { bytes: number; ms?: number; cause?: string }): void
 }
 
 export type CommandHandler = (session: Session, args: Record<string, ArgValue>, command: ParsedCommand) => Promise<unknown> | unknown
@@ -452,7 +456,8 @@ export class Bot extends Service {
         this.ctx.logger('bot').warn('middleware of %s failed: %s', entry.plugin, error)
       }
     }
-    await run(0)
+    const scope = this.hooks.usageScope?.(this, record)
+    await (scope ? usage.run(scope, () => run(0)) : run(0))
     return session
   }
 
@@ -487,8 +492,10 @@ export class Bot extends Service {
     if (!segments.length || (segments.length === 1 && segments[0].type === 'text' && !segments[0].data.text)) {
       return
     }
+    const started = Date.now()
     const { messageId } = sandbox ? { messageId: randomId(6) } : await this.transport!.send(channel, segments)
-    return this.hooks.record({
+    const ms = Date.now() - started
+    const record = this.hooks.record({
       botId: this.id,
       messageId,
       direction: 'out',
@@ -499,5 +506,12 @@ export class Bot extends Service {
       replyTo: options.replyTo,
       source,
     })
+    this.hooks.sent?.(this, record, { bytes: byteSize(segments), ...(sandbox ? {} : { ms }), cause: usage.current()?.messageId })
+    return record
   }
+}
+
+/** How big a message is on the wire, roughly: its segments as JSON. Inline images count in full. */
+export function byteSize(segments: Segment[]) {
+  return Buffer.byteLength(JSON.stringify(segments))
 }

@@ -6,7 +6,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import { call } from '../api'
 import { avatarColor, initial } from '../botAvatar'
 import type { MessageRecord } from '../types'
-import { formatTime } from '../utils'
+import { formatBytes, formatTime } from '../utils'
 import MessageContent from './message/MessageContent.vue'
 
 const props = defineProps<{ record: MessageRecord; avatar?: string; name?: string }>()
@@ -63,6 +63,43 @@ async function loadRuns() {
 watch(open, (value) => {
   if (value && !runs.value?.length) void loadRuns()
 })
+
+// ---- what handling the message cost, kept in memory by the server; read on every open ----
+
+interface UsageEvent {
+  kind: string
+  plugin?: string
+  provider?: string
+  model?: string
+  inputTokens?: number
+  outputTokens?: number
+  latencyMs?: number
+  ok?: boolean
+  note?: string
+}
+
+interface MessageUsage {
+  events: UsageEvent[]
+  bytes?: number
+  sendMs?: number
+  cause?: string
+  causeEvents?: UsageEvent[]
+}
+
+const cost = ref<MessageUsage | null>()
+watch(open, async (value) => {
+  if (!value) return
+  try {
+    cost.value = await call<MessageUsage | null>('bots.usage', { id: props.record.botId, message: props.record.id })
+  } catch {
+    cost.value = undefined
+  }
+})
+
+const tokensOf = (events: UsageEvent[]) => events.reduce((sum, event) => sum + (event.inputTokens ?? 0) + (event.outputTokens ?? 0), 0)
+const kindLabel = (kind: string) => (te(`usage.kind.${kind}`) ? t(`usage.kind.${kind}`) : kind)
+const shortPlugin = (name?: string) => name?.replace(/^@mushin\/(bot-)?plugin-/, '')
+const speed = (bytes: number, ms: number) => formatBytes(Math.round(bytes / Math.max(ms, 1) * 1000))
 
 const openRun = (row: RunRow) => router.push({ path: `/flows/${row.flowId}`, query: { run: row.id } })
 const source = computed(() => props.record.source)
@@ -170,6 +207,38 @@ const bare = computed(() => {
             </dd>
           </template>
         </dl>
+        <template v-if="cost !== undefined">
+          <div class="section-title">
+            {{ t('usage.title') }}
+            <span v-if="cost?.events.length" class="total">{{ t('usage.total', { n: tokensOf(cost.events) }) }}</span>
+          </div>
+          <p v-if="cost === null" class="muted-line">{{ t('usage.unknown') }}</p>
+          <template v-else>
+            <ul v-if="cost.events.length" class="costs">
+              <li v-for="(event, index) in cost.events" :key="index" :class="{ failed: event.ok === false }">
+                <Tag size="tiny" :type="event.ok === false ? 'error' : 'default'">{{ kindLabel(event.kind) }}</Tag>
+                <span class="cost-what" :title="[event.provider, event.model, event.plugin].filter(Boolean).join(' · ')">{{ event.model ?? event.note ?? shortPlugin(event.plugin) }}</span>
+                <span class="cost-num">
+                  <template v-if="event.ok === false">{{ t('usage.failed') }}</template>
+                  <template v-else-if="event.inputTokens !== undefined || event.outputTokens !== undefined">{{ t('usage.tokens', { input: event.inputTokens ?? 0, output: event.outputTokens ?? 0 }) }}</template>
+                  <template v-if="event.latencyMs !== undefined"> · {{ event.latencyMs }} ms</template>
+                </span>
+              </li>
+            </ul>
+            <p v-else-if="!outgoing" class="muted-line">{{ t('usage.none') }}</p>
+            <dl class="info transfer">
+              <template v-if="outgoing && cost.bytes !== undefined && cost.sendMs !== undefined">
+                <dt>{{ t('usage.send') }}</dt>
+                <dd class="mono">{{ t('usage.sendDetail', { size: formatBytes(cost.bytes), ms: cost.sendMs, speed: speed(cost.bytes, cost.sendMs) }) }}</dd>
+              </template>
+              <template v-else-if="cost.bytes !== undefined">
+                <dt>{{ t('usage.size') }}</dt>
+                <dd class="mono">{{ formatBytes(cost.bytes) }}</dd>
+              </template>
+            </dl>
+            <p v-if="cost.causeEvents?.length" class="muted-line">{{ t('usage.cause', { n: tokensOf(cost.causeEvents), count: cost.causeEvents.length }) }}</p>
+          </template>
+        </template>
         <template v-if="!outgoing">
           <div class="section-title">{{ t('live.runs') }}</div>
           <p v-if="runsError" class="muted-line">{{ t('live.runsUnavailable') }}</p>
@@ -239,6 +308,45 @@ const bare = computed(() => {
   border-top: 1px solid var(--line);
   font-size: 12px;
   opacity: 0.6;
+}
+
+.total {
+  float: right;
+  font-family: var(--mono, monospace);
+}
+
+.costs {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.costs li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cost-what {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.8;
+}
+
+.cost-num {
+  font-size: 12px;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+.transfer {
+  margin-top: 4px;
 }
 
 .muted-line {
