@@ -1,7 +1,7 @@
 import { type Logger, randomId, seg } from '@mushin/core'
-import { type CompiledFlow, interceptOf, triggerPriority } from './graph'
+import { type CompiledFlow, type CompiledNode, interceptOf, triggerPriority } from './graph'
 import type { ResourceLocks } from './locks'
-import { interpolate, interpolateConfig, readPath, REF_PATTERN, SCOPES, splitName, sysValues, toText } from './refs'
+import { interpolate, interpolateConfig, readPath, REF_PATTERN, refsIn, refSource, SCOPES, splitName, sysValues, toText } from './refs'
 import type { DailyCounter, FlowBot, FlowEvent, FlowSession, LlmLike, NodeResult, PersonaLike, PortType, RunState, RunStep, RunTrace, TriggerSource, UsageStore, Variables, VariableScope, WaitOptions } from './types'
 
 export const MAX_STEPS = 200
@@ -314,6 +314,56 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
     return undefined
   }
 
+  /** Why a reference gives nothing at this point of the run, for errors about empty settings. */
+  const explainRef = (ref: string): string => {
+    const [parsed] = refsIn(ref)
+    if (!parsed) return ''
+    const [head, name] = parsed
+    const { first, path } = splitName(name)
+    const value = lookup(head, name)
+    if (value !== undefined && value !== null && value !== '') return ''
+    if (head === 'sys') return value === '' ? `the message's ${name} is empty` : `the message has no ${name}`
+    if ((SCOPES as string[]).includes(head)) return `the ${head} variable "${first}" is not set`
+    const source = flow.nodes.get(head)
+    if (!source) return `there is no node "${head}"`
+    const label = `"${source.node.label || source.node.type}" (${head})`
+    if (!outputs.has(head)) return `${label} has not run before this node`
+    const own = outputs.get(head)![first]
+    if (own === undefined) return `${label} gave no ${first}`
+    if (path.length && readPath(own, path) === undefined) {
+      // Name the first step that is missing: `data has no group_id`.
+      let at = own
+      const walked = [first]
+      for (const key of path) {
+        const next = readPath(at, [key])
+        if (next === undefined) return `${label}: ${walked.join('.')} has no ${key}${at === null ? ' (it is null)' : ''}`
+        walked.push(key)
+        at = next
+      }
+    }
+    return `${label} gave an empty ${name}`
+  }
+
+  /**
+   * Settings that had references are checked again once filled in, against the node's schema: a
+   * required setting that came out empty fails here, naming the reference, instead of deep in the node.
+   */
+  const checkFilled = (entry: CompiledNode, filled: Record<string, any>) => {
+    const schema = entry.type?.config
+    if (!schema) return
+    const referenced = Object.keys(entry.config).filter((key) => typeof entry.config[key] === 'string' && refsIn(entry.config[key]).length > 0)
+    if (!referenced.length) return
+    const result = schema.safeParse(filled)
+    if (result.success) return
+    for (const issue of result.error.issues) {
+      const key = String(issue.path[0] ?? '')
+      if (!referenced.includes(key)) continue
+      const value = filled[key]
+      const empty = value === undefined || value === null || value === ''
+      throw new FlowError(`Setting ${key} is ${empty ? 'empty' : `not valid (${issue.message})`}${refSource({ template: entry.config, explainRef }, key)}`)
+    }
+  }
+
   /** The node's config with references filled in; keys with an escape get each value escaped. */
   const configFor = (config: Record<string, any>, escape?: Record<string, (value: string, config: any) => string>) => {
     if (!escape) return interpolateConfig(config, lookup)
@@ -343,8 +393,12 @@ export async function runFlow(flow: CompiledFlow, env: RunEnvironment): Promise<
 
   const contextFor = (id: string, inputs: Record<string, unknown>) => {
     const entry = flow.nodes.get(id)!
+    const config = configFor(entry.config, entry.type?.escapeConfig)
+    checkFilled(entry, config)
     return {
-      config: configFor(entry.config, entry.type?.escapeConfig),
+      config,
+      template: entry.config,
+      explainRef,
       inputs,
       session,
       vars,

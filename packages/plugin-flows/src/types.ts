@@ -270,6 +270,13 @@ export interface UsageStore {
 }
 
 export interface NodeContext<C> extends TriggerContext<C> {
+  /**
+   * The settings as written, before references were filled in, so a node can say where an empty
+   * value came from (see `refSource`). Missing outside flow runs.
+   */
+  template?: Record<string, any>
+  /** Why a reference such as `{{n2.group_id}}` gives no value here, e.g. `"Read group" (n2) has not run`. */
+  explainRef?(ref: string): string
   inputs: Record<string, any>
   flow: { id: string; name: string }
   node: { id: string; label: string }

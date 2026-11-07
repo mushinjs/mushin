@@ -81,9 +81,10 @@ export interface FieldDisplay {
   /**
    * How compact forms (the flow editor) show a field: for booleans a checkbox (default) or a
    * switch, for settings that change behavior; otherwise the name of an editor the dashboard
-   * provides, such as `commandArgs` (a command's argument list) or `people` (users or groups).
+   * provides, such as `commandArgs` (a command's argument list), `people` (users or groups) or
+   * `json` (JSON text that may hold references, checked as it is typed).
    */
-  widget?: 'checkbox' | 'switch' | 'commandArgs' | 'people' | 'prompt' | 'message'
+  widget?: 'checkbox' | 'switch' | 'commandArgs' | 'people' | 'prompt' | 'message' | 'json'
   /** Compact forms fold descriptions into a hint icon; `inline` keeps this one visible. */
   hint?: 'inline'
   /**

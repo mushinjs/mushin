@@ -1,5 +1,6 @@
 import { field, type LocalizedText, type Segment, z } from '@mushin/core'
-import { FlowError, type FlowEvent, type FlowSession, type NodeCategory, type NodeContext, type NodeResult, type NodeType, type PortDef, resolveTarget } from '@mushin/plugin-flows'
+import { FlowError, type FlowEvent, type FlowSession, type NodeCategory, type NodeContext, type NodeResult, type NodeType, type PortDef, refSource, resolveTarget } from '@mushin/plugin-flows'
+import { checkParams, onebotApis } from './apis'
 import { idOf } from './events'
 
 /**
@@ -56,6 +57,21 @@ function messageOf(config: { messageId?: string }, context: { session: FlowSessi
   return toId(id)
 }
 
+/** Id settings that fall back to the chat when empty; see `checkIds`. */
+const ID_SETTINGS = ['groupId', 'userId', 'messageId']
+
+/**
+ * An id setting written as a reference that came out empty fails, saying where it came from,
+ * instead of quietly falling back to the chat the run is about.
+ */
+function checkIds(context: NodeContext<any>) {
+  for (const key of ID_SETTINGS) {
+    if (!str(context.template?.[key]) || str(context.config?.[key])) continue
+    const source = refSource(context, key)
+    if (source) throw new FlowError(`Setting ${key} is empty${source}`)
+  }
+}
+
 /** Calls the OneBot API; a failed call continues on "failed" with the error instead of stopping the run. */
 async function callApi(context: NodeContext<any>, action: string, params: Record<string, any>) {
   const { bot } = context
@@ -97,6 +113,7 @@ function apiNode<C>(definition: {
     outputs,
     execOut: ['ok', 'failed'],
     async run(context): Promise<NodeResult> {
+      checkIds(context)
       const { action, params } = definition.request(context)
       const response = await callApi(context, action, params)
       if (!response.ok) {
@@ -930,6 +947,7 @@ const findMemberNode: NodeType = {
     if (mention) return found(str(mention.data.qq), str(mention.data.name))
     if (/^\d{5,}$/.test(query)) return found(query, '')
     if (session.channel.type !== 'group' && !str(config.groupId)) return none('Names can only be looked up in a group; set the group id')
+    checkIds(context)
     const response = await callApi(context, 'get_group_member_list', { group_id: groupOf(config, session) })
     if (!response.ok) return none(response.error)
     if (response.data === null) return found('10002', query)
@@ -948,6 +966,12 @@ const findMemberNode: NodeType = {
   },
 }
 
+/** What a param was written as in the params JSON, e.g. `{{n2.group_id}}` for `"group_id": {{n2.group_id}}`. */
+function paramTemplate(template: string, param: string) {
+  // Param names in the API table are plain words, so they need no escaping.
+  return new RegExp(`"${param}"\\s*:\\s*("(?:[^"\\\\]|\\\\.)*"|\\{\\{[^}]*\\}\\})`).exec(template)?.[1] ?? ''
+}
+
 const callApiNode: NodeType = {
   kind: 'action',
   type: 'onebot.call',
@@ -958,10 +982,14 @@ const callApiNode: NodeType = {
     '用 JSON 参数调用任意 OneBot 11 或 NapCat 接口，例如 get_group_honor_info、upload_group_file、get_group_msg_history',
   ),
   config: z.object({
-    action: z.string().min(1).default('get_status').meta(field('API', 'Action name', { 'zh-CN': { title: '接口', description: '接口名（action）' } })),
+    // The editor offers the known APIs and checks their params with `x-apis`.
+    action: z.string().min(1).default('get_status').meta({
+      ...field('API', 'Action name', { 'zh-CN': { title: '接口', description: '接口名（action）' } }),
+      'x-apis': onebotApis,
+    }),
     params: z.string().default('{}').meta(field('Params (JSON)', 'Supports references, e.g. {"group_id": {{sys.groupId}}}', {
       'zh-CN': { title: '参数（JSON）', description: '支持变量引用，例如 {"group_id": {{sys.groupId}}}' },
-    })),
+    }, { widget: 'json' })),
   }),
   outputs: [port('data', 'any', 'Response data', '返回数据'), port('json', 'text', 'Response (JSON)', '返回 JSON'), errorPort],
   execOut: ['ok', 'failed'],
@@ -973,9 +1001,15 @@ const callApiNode: NodeType = {
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object')
       params = parsed
     } catch (error) {
-      throw new FlowError(`Params are not a JSON object: ${(error as Error).message}`)
+      throw new FlowError(`Params are not a JSON object: ${(error as Error).message}${refSource(context, 'params')}`)
     }
-    const response = await callApi(context, str(config.action), params)
+    const action = str(config.action)
+    const checked = checkParams(action, params)
+    if (checked.problems.length) {
+      const template = str(context.template?.params)
+      throw new FlowError(`${action}: ${checked.problems.map(({ param, problem }) => `param ${param} ${problem}${refSource(context, 'params', paramTemplate(template, param))}`).join('; ')}`)
+    }
+    const response = await callApi(context, action, checked.params)
     if (!response.ok) return { exec: 'failed', outputs: { data: null, json: '', error: response.error } }
     return { exec: 'ok', outputs: { data: response.data ?? null, json: JSON.stringify(response.data ?? null), error: '' } }
   },

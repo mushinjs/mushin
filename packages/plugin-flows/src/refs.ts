@@ -50,6 +50,22 @@ export function readPath(value: unknown, path: readonly string[]): unknown {
   return current
 }
 
+/** The references in a setting as written, joined: `{{n2.group_id}}`, or nothing when it has none. */
+export function refText(value: unknown) {
+  return typeof value === 'string' ? [...value.matchAll(REF_PATTERN)].map((match) => match[0]).join(' ') : ''
+}
+
+/**
+ * ` (from {{n2.group_id}}: "Read group" gave no group_id)` for a setting that was a reference and
+ * came out empty, so an error can say where to look; nothing when the setting was written out.
+ */
+export function refSource(context: { template?: Record<string, any>; explainRef?(ref: string): string }, key: string, written?: unknown) {
+  const refs = refText(written ?? context.template?.[key])
+  if (!refs) return ''
+  const why = refs.split(' ').map((ref) => context.explainRef?.(ref)).filter(Boolean).join('; ')
+  return ` (from ${refs}${why ? `: ${why}` : ''})`
+}
+
 /** Every reference in a string, as `[head, name]` pairs; `name` may carry a path, as in `data.group_id`. */
 export function refsIn(text: string) {
   return [...text.matchAll(REF_PATTERN)].map((match) => [match[1], match[2]] as const)

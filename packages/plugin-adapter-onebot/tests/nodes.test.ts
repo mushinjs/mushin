@@ -361,6 +361,52 @@ describe('queries', () => {
   })
 })
 
+describe('param checks', () => {
+  /** Runs `node` after a text node that gives `value`, so references to `{{v.text}}` come out as it. */
+  async function runAfterText(value: string, node: { type: string; config?: any }) {
+    const { bot, calls } = fakeBot(() => null)
+    const compiled = compile(doc([
+      { id: 't', type: 'trigger.message' },
+      { id: 'v', type: 'data.text', config: { template: value } },
+      { id: 'n', ...node },
+    ], [['t', 'next', 'v'], ['v', 'next', 'n']]), types)
+    expect(compiled.issues.filter((issue) => issue.severity === 'error')).toEqual([])
+    const result = await runFlow(compiled, { session: session(), vars: { get() {}, set() {} }, logger, bot })
+    return { calls, error: result.trace.error }
+  }
+
+  it('turns numeric text into numbers for the API', async () => {
+    const { calls, error } = await runAfterText('10086', { type: 'onebot.call', config: { action: 'send_poke', params: '{"user_id": "{{v.text}}", "group_id": "500"}' } })
+    expect(error).toBeUndefined()
+    expect(calls).toEqual([{ action: 'send_poke', params: { user_id: 10086, group_id: 500 } }])
+  })
+
+  it('fails on a required param that came out empty, naming the reference', async () => {
+    const { calls, error } = await runAfterText('', { type: 'onebot.call', config: { action: 'send_poke', params: '{"user_id": "{{v.text}}"}' } })
+    expect(calls).toEqual([])
+    expect(error).toBe('send_poke: param user_id is empty (from {{v.text}}: "data.text" (v) gave an empty text)')
+  })
+
+  it('fails on missing and mistyped params, and passes unknown APIs as written', async () => {
+    const missing = await runAfterText('x', { type: 'onebot.call', config: { action: 'set_group_ban', params: '{"group_id": "abc", "duration": 60}' } })
+    expect(missing.error).toBe('set_group_ban: param group_id should be a number, not "abc"; param user_id is missing')
+    const unknown = await runAfterText('x', { type: 'onebot.call', config: { action: 'some_napcat_api', params: '{"anything": "{{v.text}}"}' } })
+    expect(unknown.error).toBeUndefined()
+    expect(unknown.calls).toEqual([{ action: 'some_napcat_api', params: { anything: 'x' } }])
+  })
+
+  it('fails on a referenced id that came out empty instead of using the chat', async () => {
+    const { calls, error } = await runAfterText('', { type: 'onebot.sendPoke', config: { where: 'group', groupId: '{{v.text}}' } })
+    expect(calls).toEqual([])
+    expect(error).toBe('Setting groupId is empty (from {{v.text}}: "data.text" (v) gave an empty text)')
+  })
+
+  it('checks settings again once references are filled in', async () => {
+    const { error } = await runAfterText('', { type: 'onebot.call', config: { action: '{{v.text}}', params: '{}' } })
+    expect(error).toBe('Setting action is empty (from {{v.text}}: "data.text" (v) gave an empty text)')
+  })
+})
+
 describe('test runs', () => {
   it('records API calls without making them and outputs empty values', async () => {
     const compiled = compile(doc([{ id: 't', type: 'trigger.message' }, { id: 'n', type: 'onebot.memberInfo' }], [['t', 'next', 'n']]), types)
