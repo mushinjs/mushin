@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { Button, FormItem, Input, NumberInput, RadioGroup, Select, TagsInput, Toggle, Tooltip } from '@mushin/ui'
-import { computed, ref, watch } from 'vue'
+import { computed, inject, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { JsonSchema } from '../types'
 import { choicesOf } from '../choices'
 import { humanize } from '../utils'
 import SchemaForm from './SchemaForm.vue'
+import { schemaFieldHooks } from './schemaHooks'
 
 const props = defineProps<{
   name: string
@@ -38,9 +39,13 @@ const schema = computed<JsonSchema>(() => {
   return props.schema
 })
 
+const hooks = inject(schemaFieldHooks, {})
+
 const kind = computed(() => {
   const s = schema.value
   if (Array.isArray(s.enum)) return 'enum'
+  if (s.type === 'string' && Array.isArray(s['x-apis'] ?? props.schema['x-apis'])) return 'apis'
+  if (s.type === 'string' && (s['x-widget'] ?? props.schema['x-widget']) === 'json') return 'text'
   if (s.type === 'string' && (s['x-choices'] ?? props.schema['x-choices'])) return 'choices'
   if (s.type === 'string') return /prompt|template/i.test(props.name) || (s.maxLength ?? 0) > 200 ? 'text' : 'string'
   if (s.type === 'integer' || s.type === 'number') return 'number'
@@ -84,8 +89,15 @@ const choiceOptions = computed(() => {
 const textWidth = (text: string) => [...text].reduce((sum, char) => sum + (/[\u3000-\u9fff\uff00-\uffef]/.test(char) ? 2 : 1), 0)
 const asButtons = computed(() => kind.value === 'enum' && options.value.length <= 4 && options.value.reduce((sum: number, option: { label: string }) => sum + textWidth(option.label), 0) <= 34)
 const widget = computed(() => schema.value['x-widget'] ?? props.schema['x-widget'])
-/** Under the field: the description (unless folded into the label's info icon) or the JSON error. */
-const feedback = computed(() => jsonError.value || (props.compact && !hintInline.value ? undefined : description.value))
+/** A platform's API list (`x-apis`), as `send_poke · 戳一戳`; other names can be typed. */
+const apiOptions = computed(() => ((schema.value['x-apis'] ?? props.schema['x-apis'] ?? []) as { action: string; title: any }[])
+  .map((api) => ({ value: api.action, label: `${api.action} · ${typeof api.title === 'string' ? api.title : api.title?.[locale.value] ?? api.title?.en ?? ''}` })))
+/** What the surroundings found wrong with the value, such as the flow editor's checks. */
+const problem = computed(() => hooks.problemOf?.(props.name))
+/** Under the field: a problem, the JSON error, or the description (unless folded into the label's info icon). */
+const feedback = computed(() => problem.value?.message || jsonError.value || (props.compact && !hintInline.value ? undefined : description.value))
+/** Text settings go to the surroundings' editor when there is one; secrets keep the password input. */
+const textEditor = computed(() => (!props.secret && (kind.value === 'string' || kind.value === 'text') ? hooks.textEditor : undefined))
 
 // Lists of objects, such as the conditions of a database node: one small form per item.
 const items = computed<Record<string, any>[]>(() => (Array.isArray(props.modelValue) ? props.modelValue : []))
@@ -148,9 +160,28 @@ function onJson(text: string) {
     :required="required"
     :info="compact && !hintInline ? description : undefined"
     :feedback="feedback"
-    :validation-status="jsonError ? 'error' : undefined"
+    :validation-status="problem?.severity ?? (jsonError ? 'error' : undefined)"
   >
-    <RadioGroup v-if="asButtons" v-model:value="value" :size="compact ? 'small' : 'medium'" :block="compact" :options="options" />
+    <component
+      :is="textEditor"
+      v-if="textEditor"
+      :model-value="value ?? ''"
+      :multiline="kind === 'text'"
+      :mono="widget === 'json'"
+      :placeholder="schema.default !== undefined && schema.default !== '' ? String(schema.default) : undefined"
+      :status="problem?.severity"
+      @update:model-value="(next: string) => (value = next)"
+    />
+    <Select
+      v-else-if="kind === 'apis'"
+      :value="value ?? ''"
+      :size="compact ? 'small' : 'medium'"
+      :options="apiOptions"
+      filterable
+      tag
+      @update:value="(next: string | null) => (value = next ?? '')"
+    />
+    <RadioGroup v-else-if="asButtons" v-model:value="value" :size="compact ? 'small' : 'medium'" :block="compact" :options="options" />
     <Select
       v-else-if="kind === 'enum'"
       v-model:value="value"

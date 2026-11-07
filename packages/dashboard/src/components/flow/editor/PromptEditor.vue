@@ -9,7 +9,6 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { call } from '../../../api'
 import VarInput from '../VarInput.vue'
 import { useEditor } from './editor'
-import { useNodeWiring } from './useNodeWiring'
 
 type Block =
   | { kind: 'persona' }
@@ -28,7 +27,6 @@ interface Line {
 const props = defineProps<{ nodeId: string; config: Record<string, any> }>()
 const emit = defineEmits<{ update: [config: Record<string, any>] }>()
 const { t, flowId, sample, samplePayload, test, dirty } = useEditor()
-const { varGroups } = useNodeWiring()
 
 const blocks = computed<Block[]>(() => (Array.isArray(props.config.prompt) ? props.config.prompt : []))
 const setBlocks = (next: Block[]) => emit('update', { ...props.config, prompt: next })
@@ -144,7 +142,7 @@ const highlighted = ref<number>()
       <VarInput
         v-if="block.kind === 'system'"
         :model-value="block.text"
-        :groups="varGroups"
+       
         multiline
         :placeholder="t('promptEditor.systemPlaceholder')"
         @update:model-value="(value: string) => setBlock(index, { text: value })"
@@ -165,7 +163,7 @@ const highlighted = ref<number>()
       <VarInput
         v-else-if="block.kind === 'message'"
         :model-value="block.text"
-        :groups="varGroups"
+       
         :placeholder="t('promptEditor.messagePlaceholder')"
         @update:model-value="(value: string) => setBlock(index, { text: value })"
       />

@@ -4,11 +4,12 @@
  * its wiring. Keyword and command triggers can be turned into each other from here.
  */
 import { Alert, Button, Empty, Form, FormItem, TabPane, Tabs, Tooltip } from '@mushin/ui'
-import { computed } from 'vue'
+import { computed, provide } from 'vue'
 import { RouterLink } from 'vue-router'
 import { categoryColors, portColors, schemaDefaults } from '../../../flow'
 import { clone, localize } from '../../../utils'
 import SchemaForm from '../../SchemaForm.vue'
+import { schemaFieldHooks } from '../../schemaHooks'
 import { nodeIcon } from '../icons'
 import VarInput from '../VarInput.vue'
 import { useEditor } from './editor'
@@ -23,7 +24,20 @@ const {
   t, locale, message, types, selected, selectedId, selectedInfo, selectedIsTrigger, order, nodeTab, typeTitle, portLabel, issuesByNode,
   inheritedSkip, blockedNodes, blockedSlots, toggleSkip, deleteSelected, updateSelected, openTrigger, bots, sampleValue,
 } = useEditor()
-const { wiring, varGroups, setInput } = useNodeWiring()
+const { wiring, setInput } = useNodeWiring()
+
+/** The selected node's problems by setting (`in:<port>` for inputs), errors first; the rest show under everything. */
+const problems = computed(() => {
+  const map = new Map<string, { message: string; severity: 'error' | 'warning' }>()
+  const own = issuesByNode.value.get(selectedId.value ?? '') ?? []
+  for (const issue of [...own].sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'error' ? -1 : 1))) {
+    if (issue.field && !map.has(issue.field)) map.set(issue.field, { message: issue.message, severity: issue.severity })
+  }
+  return map
+})
+const generalIssues = computed(() => (issuesByNode.value.get(selectedId.value ?? '') ?? []).filter((issue) => !issue.field))
+// Text settings take references with the same editor as the inputs, and show their problems below.
+provide(schemaFieldHooks, { textEditor: VarInput, problemOf: (name: string) => problems.value.get(name) })
 
 const selectedNumber = computed(() => String((order.value.get(selectedId.value ?? '') ?? 0) + 1).padStart(2, '0'))
 const selectedColor = computed(() => (selectedInfo.value ? categoryColors[selectedInfo.value.category] : '#8c8c8c'))
@@ -137,13 +151,18 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
         <template v-if="wiring?.inputs.length">
           <div class="inputs-title lead">{{ t('flows.ioInputs') }}</div>
           <Form compact>
-            <FormItem v-for="item in wiring.inputs" :key="item.port.name">
+            <FormItem
+              v-for="item in wiring.inputs"
+              :key="item.port.name"
+              :feedback="problems.get(`in:${item.port.name}`)?.message"
+              :validation-status="problems.get(`in:${item.port.name}`)?.severity"
+            >
               <template #label>
                 {{ portLabel(item.port) }}
                 <span class="port-type" :style="{ color: portColors[item.port.type] }">{{ item.port.type }}</span>
               </template>
               <div class="input-cell">
-                <VarInput :model-value="item.binding" :groups="varGroups" @update:model-value="(value: string) => setInput(item.port.name, value)" />
+                <VarInput :model-value="item.binding" :status="problems.get(`in:${item.port.name}`)?.severity" @update:model-value="(value: string) => setInput(item.port.name, value)" />
                 <span v-if="sampleValue(item.binding) !== undefined" class="muted small sample-value" :title="sampleValue(item.binding)">
                   {{ t('flows.sampleValue', { value: sampleValue(item.binding) || '""' }) }}
                 </span>
@@ -196,7 +215,7 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
           />
         </template>
         <TriggerOrder v-if="selectedIsTrigger" />
-        <Alert v-for="(issue, index) in issuesByNode.get(selected.id) ?? []" :key="index" :type="issue.severity" :show-icon="false" class="issue">
+        <Alert v-for="(issue, index) in generalIssues" :key="index" :type="issue.severity" :show-icon="false" class="issue">
           {{ issue.message }}
           <RouterLink v-if="issue.plugin" :to="`/plugins?highlight=${issue.plugin}`" class="issue-link">{{ t('flows.enablePlugin') }}</RouterLink>
         </Alert>

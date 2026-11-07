@@ -13,6 +13,7 @@ import type { FlowDoc, FlowGroupDoc, FlowIssue, FlowPause, FlowRunInfo, NodeType
 import { localize } from '../../../utils'
 import type { CanvasNodeData, FlowHighlight, RunStatus } from '../context'
 import type RunLogs from '../RunLogs.vue'
+import { checkNode, upstreamOf } from './checks'
 
 // A collapsed group is drawn as one box node (type `mushinGroup`, id `group:<group id>`) with its
 // nodes hidden; connections that cross the group are drawn to the box as `virt:<edge id>`. Boxes
@@ -113,15 +114,51 @@ export function createEditorState() {
 
   const realNodes = computed(() => nodes.value.filter((node) => !isBox(node)))
   const order = computed(() => new Map(realNodes.value.map((node, index) => [node.id, index])))
+
+  /** A setting's or input's name as the panel shows it. */
+  function fieldLabel(info: NodeTypeInfo, field: string) {
+    if (field.startsWith('in:')) {
+      const port = info.inputs.find((item) => item.name === field.slice(3))
+      return port ? portLabel(port) : field.slice(3)
+    }
+    const schema = info.configSchema?.properties?.[field]
+    return schema?.['x-i18n']?.[locale.value]?.title ?? schema?.title ?? field
+  }
+
+  /** Problems in each node's settings as they are typed, before saving; see `checks.ts`. */
+  const checks = computed<FlowIssue[]>(() => {
+    const all = new Map(realNodes.value.map((node) => [node.id, { id: node.id, typeId: node.data!.typeId, config: node.data!.config, inputs: node.data!.inputs }]))
+    const out: FlowIssue[] = []
+    for (const node of all.values()) {
+      const info = types.value.get(node.typeId)
+      if (!info) continue
+      for (const check of checkNode(node, info, { nodes: all, types: types.value, upstream: upstreamOf(node.id, edges.value) })) {
+        const params: Record<string, string> = { ...check.params }
+        if (params.node) params.node = params.node === 'sys' ? t('flows.varsMessage') : nodeName(params.node)
+        if (params.field) params.field = fieldLabel(info, params.field)
+        if (params.type) params.type = t(`flows.check.types.${params.type}`)
+        out.push({ severity: check.severity, nodeId: node.id, field: check.field, message: t(`flows.check.${check.code}`, params) })
+      }
+    }
+    return out
+  })
+  /**
+   * The server's issues from the last save and the editor's own checks. The server's notes on
+   * references are left out: the checks above say the same, and stay current while typing.
+   */
+  const allIssues = computed(() => [
+    ...issues.value.filter((issue) => !(issue.nodeId && issue.message.includes(' references {{'))),
+    ...checks.value,
+  ])
   const issuesByNode = computed(() => {
     const map = new Map<string, FlowIssue[]>()
-    for (const issue of issues.value) {
+    for (const issue of allIssues.value) {
       if (issue.nodeId) map.set(issue.nodeId, [...(map.get(issue.nodeId) ?? []), issue])
     }
     return map
   })
-  const errorCount = computed(() => issues.value.filter((issue) => issue.severity === 'error').length)
-  const warningCount = computed(() => issues.value.length - errorCount.value)
+  const errorCount = computed(() => allIssues.value.filter((issue) => issue.severity === 'error').length)
+  const warningCount = computed(() => allIssues.value.length - errorCount.value)
 
   const selected = computed(() => nodes.value.find((node) => node.id === selectedId.value))
   const selectedInfo = computed(() => selected.value && types.value.get(selected.value.data!.typeId))
@@ -229,7 +266,7 @@ export function createEditorState() {
     runs, logsRun, viewing, breakpoints, paused, testing, executing, highlight, testStatus, uncovered, hoveredHandle, hoveredEdge, linked,
     loaded, saving, savedSignature, selectedId, tab, nodeTab,
     canvas, root, logs, width, narrow, showPalette, showPanel, showLogs, logsTab, immersive,
-    realNodes, order, issuesByNode, errorCount, warningCount, selected, selectedInfo, selectedIsTrigger,
+    realNodes, order, allIssues, issuesByNode, errorCount, warningCount, selected, selectedInfo, selectedIsTrigger,
     currentAdapter, adapterName, typeTitle, nodeName, nodeType, botName, portLabel, groupOf,
     toDoc, signature, dirty, edgeLook, restyleEdges, link, openPanel, selectNode,
   }

@@ -4,7 +4,7 @@ import { Alert, Form, FormItem, Input } from '@mushin/ui'
 import { RouterLink } from 'vue-router'
 import { useEditor } from './editor'
 
-const { t, description, issues, nodeName, selectIssue } = useEditor()
+const { t, description, allIssues: issues, nodeName, selectIssue } = useEditor()
 </script>
 
 <template>

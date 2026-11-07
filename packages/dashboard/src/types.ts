@@ -488,6 +488,8 @@ export interface FlowIssue {
   edgeId?: string
   /** The installed plugin that adds an unknown node type. */
   plugin?: string
+  /** The setting (or `in:<port>` input) it is about; only the editor's own checks set it. */
+  field?: string
 }
 
 /** Nodes the editor frames together; no effect on runs. */

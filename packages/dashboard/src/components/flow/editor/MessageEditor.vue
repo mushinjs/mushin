@@ -8,12 +8,10 @@ import { Button, Input, Popover } from '@mushin/ui'
 import { computed, ref } from 'vue'
 import VarInput from '../VarInput.vue'
 import { useEditor } from './editor'
-import { useNodeWiring } from './useNodeWiring'
 
 const props = defineProps<{ label: string; modelValue: string; quote?: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 const { t, sampleMatch, sampleValue } = useEditor()
-const { varGroups } = useNodeWiring()
 
 const text = computed({
   get: () => props.modelValue ?? '',
@@ -62,7 +60,7 @@ const isUrl = (url: string) => /^https?:\/\//.test(url)
 <template>
   <div class="message-editor">
     <div class="field-label">{{ label }}</div>
-    <VarInput v-model="text" :groups="varGroups" multiline :placeholder="t('messageEditor.placeholder')" />
+    <VarInput v-model="text" multiline :placeholder="t('messageEditor.placeholder')" />
     <div class="parts" role="toolbar" :aria-label="t('messageEditor.parts')">
       <Popover placement="bottom" align="start">
         <template #trigger>

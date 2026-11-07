@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /** The editor's top bar: the flow's name, where it runs, whether it is on, the panels and saving. */
 import { Button, Input, Select, Tag, Toggle, Tooltip } from '@mushin/ui'
+import { computed } from 'vue'
 import { useEditor } from './editor'
 import PanelIcon from './PanelIcon.vue'
 import SamplePicker from './SamplePicker.vue'
@@ -8,7 +9,22 @@ import SamplePicker from './SamplePicker.vue'
 const {
   t, router, name, bots, enabled, toggling, currentAdapter, adapterOptions, setAdapter, botOptions, setEnabled,
   errorCount, warningCount, dirty, saving, save, showPalette, showPanel, togglePalette, togglePanel, immersive, toggleImmersive,
+  issuesByNode, order, selectedId, selectNode, openPanel, focusNode,
 } = useEditor()
+
+/** Nodes with problems, in canvas order. */
+const problemNodes = computed(() => [...issuesByNode.value.keys()].filter((id) => order.value.has(id)).sort((a, b) => order.value.get(a)! - order.value.get(b)!))
+const problemLevel = computed(() => (problemNodes.value.some((id) => issuesByNode.value.get(id)!.some((issue) => issue.severity === 'error')) ? 'error' : 'warning'))
+
+/** Selects the next node with problems after the selected one, and brings it into view. */
+function nextProblem() {
+  const list = problemNodes.value
+  if (!list.length) return
+  const id = list[(list.indexOf(selectedId.value ?? '') + 1) % list.length]
+  selectNode(id)
+  openPanel()
+  focusNode(id)
+}
 </script>
 
 <template>
@@ -35,7 +51,10 @@ const {
       data-agent-target="flows.bots"
     />
     <Toggle class="enabled" variant="button" size="small" :value="enabled" :loading="toggling" :title="enabled ? t('flows.enabledHint') : t('flows.disabledHint')" data-agent-target="flows.enabled" @update:value="setEnabled" />
-    <Tag v-if="errorCount" type="error" size="small">{{ t('flows.errorCount', errorCount) }}</Tag>
+    <button v-if="problemNodes.length" type="button" class="problems" :title="t('flows.nextProblem')" data-agent-target="flows.problems" @click="nextProblem">
+      <Tag :type="problemLevel" size="small">{{ t('flows.nodesWithProblems', problemNodes.length) }}</Tag>
+    </button>
+    <Tag v-else-if="errorCount" type="error" size="small">{{ t('flows.errorCount', errorCount) }}</Tag>
     <Tag v-else-if="warningCount" type="warning" size="small">{{ t('flows.warningCount', warningCount) }}</Tag>
     <span class="spacer" />
     <SamplePicker />
@@ -71,6 +90,13 @@ const {
 </template>
 
 <style scoped>
+.problems {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
 .editor-head {
   display: flex;
   align-items: center;
