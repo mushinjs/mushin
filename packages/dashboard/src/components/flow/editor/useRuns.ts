@@ -31,8 +31,14 @@ export function useRuns(s: EditorState, actions: { save: () => Promise<void>; sa
     s.restyleEdges()
   }
 
-  /** Draws a finished run: each edge takes the state of the node it led to. */
-  function showTrace(trace: RunTrace) {
+  /**
+   * Whether the logs follow the latest run. Once an older run is picked there, runs coming in do not
+   * draw over it, so the canvas keeps showing the run the logs show.
+   */
+  const following = () => !logsRun.value || logsRun.value === runs.value[0]?.id
+
+  /** Draws a finished run: each edge takes the state of the node it led to. With `stay`, it does not fade. */
+  function showTrace(trace: RunTrace, stay = false) {
     const nodeStatus = new Map<string, RunStatus>(trace.steps.map((step) => [step.nodeId, step.error ? 'error' : step.skipped ? 'skipped' : 'ok']))
     const target = new Map(edges.value.map((edge) => [edge.id, edge.target]))
     const edgeStatus = new Map<string, RunStatus>(trace.edges.map((id) => {
@@ -43,8 +49,8 @@ export function useRuns(s: EditorState, actions: { save: () => Promise<void>; sa
     highlight.value = { nodes: nodeStatus, edges: edgeStatus }
     s.restyleEdges()
     window.clearTimeout(clearTimer)
-    // A run opened from the run list stays drawn; others fade after a while.
-    if (viewing.value?.id !== trace.id) clearTimer = window.setTimeout(clearHighlight, 10_000)
+    // A run opened from the run list or picked in the logs stays drawn; others fade after a while.
+    if (!stay && viewing.value?.id !== trace.id) clearTimer = window.setTimeout(clearHighlight, 10_000)
   }
 
   /** What a node took and gave in the run the logs show: its last step there. */
@@ -80,14 +86,18 @@ export function useRuns(s: EditorState, actions: { save: () => Promise<void>; sa
 
   const offRun = on('flows/run', (trace: RunTrace) => {
     if (trace.flowId !== flowId.value) return
+    // Read before the run joins the logs, which moves the latest run.
+    const follow = following()
     keep(trace)
     if (viewing.value && viewing.value.id !== trace.id) return
-    if (!trace.test || liveRun === trace.id) showTrace(trace)
+    if (follow && (!trace.test || liveRun === trace.id)) showTrace(trace)
   })
   const offStep = on('flows/step', (step: RunStep) => {
     if (step.flowId !== flowId.value) return
     // While a run from the run list is open, other runs do not draw over it.
     if (viewing.value && viewing.value.id !== step.runId) return
+    // Nor do they while an older run is picked in the logs, except the test run just started here.
+    if (!following() && liveRun !== step.runId && !(step.test && testing.value)) return
     showStep(step)
   })
 
@@ -302,6 +312,11 @@ export function useRuns(s: EditorState, actions: { save: () => Promise<void>; sa
     clearHighlight()
   }
 
+  /** A run picked in the logs: the canvas draws it and keeps it drawn. */
+  function showPicked(trace: RunTrace) {
+    showTrace(trace, true)
+  }
+
   function selectFromLogs(nodeId: string) {
     if (nodes.value.some((node) => node.id === nodeId)) s.selectNode(nodeId)
   }
@@ -361,7 +376,7 @@ export function useRuns(s: EditorState, actions: { save: () => Promise<void>; sa
 
   return {
     showTrace, stepOf, lastStep, openRun, closeRun, stopViewing, viewingBot, now, liveRuns,
-    test, quickTests, schedules, runTest, showCaseTrace, saveBeforeTests, nodeOptions, execOptions, clearRuns, selectFromLogs,
+    test, quickTests, schedules, runTest, showCaseTrace, saveBeforeTests, nodeOptions, execOptions, clearRuns, showPicked, selectFromLogs,
     loadBreakpoints, toggleBreakpoint, debug,
   }
 }

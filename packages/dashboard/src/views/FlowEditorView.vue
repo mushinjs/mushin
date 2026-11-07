@@ -31,7 +31,7 @@ const {
   isValidConnection, onEdgeUpdateStart, onEdgeUpdate, onEdgeUpdateEnd, onConnect, onConnectStart, onConnectEnd,
   onNodesInitialized, onNodeClick, onNodeDragStop, toggleGroup, openMenu, onNodeContextMenu,
   menu, menuOptions, onMenuSelect, onMenuClickOutside, picker, pickerTypes, pickerTitle, onPick,
-  test, quickTests, sampleMatch, liveRuns, schedules, runTest, clearRuns, showTrace, selectFromLogs, nodeOptions, execOptions, saveBeforeTests, showCaseTrace,
+  test, quickTests, sampleMatch, liveRuns, schedules, runTest, clearRuns, showPicked, selectFromLogs, nodeOptions, execOptions, saveBeforeTests, showCaseTrace,
 } = createFlowEditor()
 </script>
 
@@ -133,7 +133,7 @@ const {
           :node-type="nodeType"
           @run="runTest()"
           @clear="clearRuns"
-          @show="showTrace"
+          @show="showPicked"
           @select="selectFromLogs"
         >
           <template #tests>
