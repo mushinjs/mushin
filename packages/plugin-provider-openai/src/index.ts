@@ -241,6 +241,7 @@ export function apply(ctx: Context) {
     displayName: 'Azure OpenAI',
     config: AzureConfig,
     secrets: ['apiKey'],
+    presets: [{ id: 'azure-openai', label: 'Azure OpenAI', config: { apiVersion: '2024-10-21' } }],
     create: (config) => OpenAIClient.fromAzure(config),
   })
 }
