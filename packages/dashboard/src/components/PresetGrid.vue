@@ -76,7 +76,7 @@ const total = computed(() => props.types.reduce((sum, type) => sum + type.preset
             :title="card.label"
             @click="emit('select', card.value)"
           >
-            <span v-if="card.icon" class="tile"><span :class="card.icon" class="text-[20px]" /></span>
+            <span v-if="card.icon" class="tile"><span :class="card.icon" class="icon" /></span>
             <span v-else class="tile letter" :style="{ background: card.color }">{{ card.initial }}</span>
             <span class="label">{{ card.label }}</span>
           </button>
@@ -154,12 +154,33 @@ const total = computed(() => props.types.reduce((sum, type) => sum + type.preset
 
 .tile {
   display: grid;
+  overflow: hidden;
   flex: none;
   place-items: center;
   width: 30px;
   height: 30px;
   border-radius: 7px;
   background: var(--s2);
+}
+
+/*
+ * Brand icons are not all square (the Azure and DeepSeek logos are wider than tall), and UnoCSS
+ * sizes an icon by its own aspect ratio. A fixed box with the image scaled to fit keeps every
+ * icon inside its tile without stretching it; mono icons draw through a mask, colored ones
+ * through a background, so both are scaled.
+ */
+.tile .icon {
+  width: 20px;
+  height: 20px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 }
 
 .card.active .tile {

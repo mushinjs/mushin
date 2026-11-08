@@ -3,7 +3,7 @@
  * UnoCSS, which ships only the icons named here. `simple-icons` and `ri` icons are one color and
  * follow the text color, so they suit both themes; `logos` icons keep their brand colors and are
  * used only where those colors read on light and dark backgrounds. Presets without an icon show
- * their initial instead.
+ * their initial instead, as does Groq, whose only icon is a wide wordmark that is unreadable at tile size.
  *
  * Licenses: simple-icons and logos are CC0-1.0, ri (Remix Icon) is Apache-2.0, hugeicons is MIT.
  * Class names are written out in full so UnoCSS finds them.
@@ -20,7 +20,6 @@ const icons: Record<string, string> = {
   'openai:hunyuan': 'i-simple-icons-tencenthy',
   'openai:minimax': 'i-logos-minimax-icon',
   'openai:xai': 'i-hugeicons-grok',
-  'openai:groq': 'i-logos-groq',
   'openai:mistral': 'i-logos-mistral-ai-icon',
   'openai:gemini-openai': 'i-logos-google-gemini-icon',
   'openai:together': 'i-logos-togetherai-icon',
