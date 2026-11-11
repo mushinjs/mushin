@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/bot-plugin-flows",
+  "name": "@mushinjs/bot-plugin-flows",
   "version": "0.1.0",
   "description": "Runs the conversation flows attached to a bot",
   "type": "module",
@@ -45,14 +45,14 @@
     },
     "requires": {
       "plugins": {
-        "@mushin/plugin-bots": "*",
-        "@mushin/plugin-flows": "*"
+        "@mushinjs/plugin-bots": "*",
+        "@mushinjs/plugin-flows": "*"
       }
     }
   },
   "dependencies": {
-    "@mushin/core": "workspace:*",
-    "@mushin/plugin-bots": "workspace:*",
-    "@mushin/plugin-flows": "workspace:*"
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-bots": "workspace:*",
+    "@mushinjs/plugin-flows": "workspace:*"
   }
 }

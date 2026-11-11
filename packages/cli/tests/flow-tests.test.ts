@@ -141,7 +141,7 @@ describe('flow test cases', () => {
 
   it('runs every flow\'s cases offline from the command line', async () => {
     const baseDir = app.baseDir
-    await app.call('plugins.enable', { package: '@mushin/plugin-demo' })
+    await app.call('plugins.enable', { package: '@mushinjs/plugin-demo' })
     await app.call('plugins.configure', { id: 'demo', config: { bot: true } })
     const configBefore = await readFile(join(baseDir, 'mushin.config.json'), 'utf8')
     await app.stop({ keep: true })

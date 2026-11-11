@@ -19,7 +19,7 @@ describe('database', () => {
   it('runs by default and keeps flow variables across restarts', async () => {
     app = await startInstance()
     expect(await app.call('database.status')).toMatchObject({ driver: 'sqlite', path: 'data/mushin.db' })
-    await app.call('plugins.enable', { package: '@mushin/plugin-demo' })
+    await app.call('plugins.enable', { package: '@mushinjs/plugin-demo' })
     await app.call('plugins.configure', { id: 'demo', config: { bot: true } })
     const botId = (await app.call<any[]>('bots.list'))[0].id
     await waitFor(async () => (await app!.call('bots.get', { id: botId })).status === 'online')
@@ -75,7 +75,7 @@ describe('database', () => {
     await new Promise((resolve) => setTimeout(resolve, 300))
     expect((await app.call('database.rows', { table: 'bots_message', filter: { bot: 'legacy' } })).total).toBe(4)
 
-    await app.call('plugins.enable', { package: '@mushin/plugin-demo' })
+    await app.call('plugins.enable', { package: '@mushinjs/plugin-demo' })
     await app.call('plugins.configure', { id: 'demo', config: { bot: true } })
     const botId = (await app.call<any[]>('bots.list'))[0].id
     await waitFor(async () => (await app!.call('bots.get', { id: botId })).status === 'online')

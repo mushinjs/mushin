@@ -1,5 +1,5 @@
 export default {
-  // Words the shared components (@mushin/ui) show themselves.
+  // Words the shared components (@mushinjs/ui) show themselves.
   ui: {
     on: 'On',
     off: 'Off',

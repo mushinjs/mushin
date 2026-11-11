@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Alert, Button, Card, Form, FormItem, Spin, TagsInput, useToast } from '@mushin/ui'
+import { Alert, Button, Card, Form, FormItem, Spin, TagsInput, useToast } from '@mushinjs/ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -25,7 +25,7 @@ const saving = ref(false)
 async function refresh() {
   try {
     const plugins = await call<AppPlugin[]>('plugins.list')
-    available.value = plugins.some((plugin) => plugin.package === '@mushin/plugin-permissions' && plugin.status === 'active')
+    available.value = plugins.some((plugin) => plugin.package === '@mushinjs/plugin-permissions' && plugin.status === 'active')
     if (!available.value) return
     const result = await call<{ masters: string[]; admins: string[]; groupRoles: boolean; chats: boolean; chatCommands: boolean }>('permissions.get', { bot: props.bot.id })
     chats.value = result.chats
@@ -71,7 +71,7 @@ async function save() {
   <Spin :show="loading">
     <Alert v-if="available === false" type="warning" :title="t('permissions.unavailable')">
       {{ t('permissions.unavailableHint') }}
-      <RouterLink to="/plugins?highlight=@mushin/plugin-permissions">{{ t('permissions.openPlugins') }}</RouterLink>
+      <RouterLink to="/plugins?highlight=@mushinjs/plugin-permissions">{{ t('permissions.openPlugins') }}</RouterLink>
     </Alert>
     <div v-else class="flex flex-col gap-[16px]">
       <Card :title="t('permissions.title')">
@@ -94,7 +94,7 @@ async function save() {
       <BotChatPermissions v-if="chats" v-model:chat-commands="chatCommands" :bot="bot" />
       <Alert v-else type="info" :title="t('chatPermissions.title')">
         {{ t('chatPermissions.needsDatabase') }}
-        <RouterLink to="/plugins?highlight=@mushin/plugin-database">{{ t('permissions.openPlugins') }}</RouterLink>
+        <RouterLink to="/plugins?highlight=@mushinjs/plugin-database">{{ t('permissions.openPlugins') }}</RouterLink>
       </Alert>
       <Card :title="t('permissions.usageTitle')">
         <ul class="usage">

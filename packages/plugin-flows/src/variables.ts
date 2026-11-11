@@ -1,5 +1,5 @@
-import type { Context } from '@mushin/core'
-import type {} from '@mushin/plugin-database'
+import type { Context } from '@mushinjs/core'
+import type {} from '@mushinjs/plugin-database'
 import type { VariableScope } from './types'
 
 declare module 'minato' {

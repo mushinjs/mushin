@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Card, Empty, Form, FormItem, Input, Modal, Select, Tag, Toggle, useConfirm, useToast } from '@mushin/ui'
+import { Button, Card, Empty, Form, FormItem, Input, Modal, Select, Tag, Toggle, useConfirm, useToast } from '@mushinjs/ui'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'

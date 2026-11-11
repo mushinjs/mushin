@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/plugin-bots",
+  "name": "@mushinjs/plugin-bots",
   "version": "0.1.0",
   "description": "Bot manager and per-bot runtimes",
   "type": "module",
@@ -46,19 +46,19 @@
     ],
     "requires": {
       "plugins": {
-        "@mushin/plugin-storage": "*"
+        "@mushinjs/plugin-storage": "*"
       }
     },
     "optional": {
       "plugins": {
-        "@mushin/plugin-database": "*"
+        "@mushinjs/plugin-database": "*"
       }
     }
   },
   "dependencies": {
-    "@mushin/core": "workspace:*",
-    "@mushin/plugin-database": "workspace:*",
-    "@mushin/plugin-storage": "workspace:*",
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-database": "workspace:*",
+    "@mushinjs/plugin-storage": "workspace:*",
     "minato": "catalog:"
   }
 }

@@ -1,4 +1,4 @@
-import { z } from '@mushin/core'
+import { z } from '@mushinjs/core'
 import { refsIn, SCOPES, splitName } from './refs'
 import { similarHint } from './suggest'
 import type { FlowDocument, FlowIssue, FlowNode, Intercept, NodeType, PortDef, PortType } from './types'

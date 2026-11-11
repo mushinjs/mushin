@@ -1,4 +1,4 @@
-# @mushin/ui
+# @mushinjs/ui
 
 The Vue components and design tokens of the Mushin.js dashboard. The dashboard is built on them, and a plugin page can use them to look and behave like the rest of the dashboard in both the light and the dark theme.
 
@@ -8,7 +8,7 @@ Most plugins do not need a page. A plugin that declares a config schema gets its
 
 ```ts
 // main.ts
-import '@mushin/ui/theme.css'
+import '@mushinjs/ui/theme.css'
 import 'virtual:uno.css'
 ```
 
@@ -25,7 +25,7 @@ Build with UnoCSS. Use the repository's `uno.config.ts`, or make your own from t
 
 ```ts
 import { defineConfig, presetIcons, presetWind3 } from 'unocss'
-import { presetMushin } from '@mushin/ui/preset'
+import { presetMushin } from '@mushinjs/ui/preset'
 
 export default defineConfig({
   presets: [
@@ -49,7 +49,7 @@ Run the dashboard in development and open `/dev/ui` to see every component in it
 ## Toasts and confirmations
 
 ```ts
-import { useConfirm, useToast } from '@mushin/ui'
+import { useConfirm, useToast } from '@mushinjs/ui'
 
 const toast = useToast()
 const confirm = useConfirm()
@@ -80,7 +80,7 @@ Write each class name out in full. UnoCSS finds class names by reading the sourc
 
 ## Plugin pages
 
-- Declare `vue` and `@mushin/ui` as peer dependencies, so the page uses the dashboard's copies and not a second Vue.
+- Declare `vue` and `@mushinjs/ui` as peer dependencies, so the page uses the dashboard's copies and not a second Vue.
 - Keep the page's own CSS from leaking into the dashboard. Use scoped styles or a class prefix for the plugin, or put the rules in an `@layer`.
-- Do not restyle the shared components from outside (`.mu-button { … }`). If one is missing something, add it to `@mushin/ui`.
+- Do not restyle the shared components from outside (`.mu-button { … }`). If one is missing something, add it to `@mushinjs/ui`.
 - Write the page's words in both English and Simplified Chinese, as the dashboard does.

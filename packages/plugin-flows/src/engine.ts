@@ -1,4 +1,4 @@
-import { type Logger, randomId, seg } from '@mushin/core'
+import { type Logger, randomId, seg } from '@mushinjs/core'
 import { type CompiledFlow, type CompiledNode, interceptOf, triggerPriority } from './graph'
 import type { ResourceLocks } from './locks'
 import { interpolate, interpolateConfig, readPath, REF_PATTERN, refsIn, refSource, SCOPES, splitName, sysValues, toText } from './refs'

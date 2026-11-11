@@ -2,7 +2,7 @@ import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { Actions, Context } from '@mushin/core'
+import { Actions, Context } from '@mushinjs/core'
 import * as database from '../src'
 
 declare module 'minato' {

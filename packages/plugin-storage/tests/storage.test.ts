@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { Context } from '@mushin/core'
+import { Context } from '@mushinjs/core'
 import { Storage } from '../src'
 
 const dirs: string[] = []

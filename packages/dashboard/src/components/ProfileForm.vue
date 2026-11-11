@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Form, FormItem, Input, Select, type SelectGroup, Tag } from '@mushin/ui'
+import { Button, Form, FormItem, Input, Select, type SelectGroup, Tag } from '@mushinjs/ui'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useDataStore } from '../stores/data'

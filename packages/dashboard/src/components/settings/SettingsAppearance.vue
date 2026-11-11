@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Form, FormItem, RadioButton, RadioGroup } from '@mushin/ui'
+import { Form, FormItem, RadioButton, RadioGroup } from '@mushinjs/ui'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '../../i18n'
 import { themeMode } from '../../theme'

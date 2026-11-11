@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/plugin-providers",
+  "name": "@mushinjs/plugin-providers",
   "version": "0.1.0",
   "description": "LLM provider management and the llm service",
   "type": "module",
@@ -45,12 +45,12 @@
     ],
     "requires": {
       "plugins": {
-        "@mushin/plugin-storage": "*"
+        "@mushinjs/plugin-storage": "*"
       }
     }
   },
   "dependencies": {
-    "@mushin/core": "workspace:*",
-    "@mushin/plugin-storage": "workspace:*"
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-storage": "workspace:*"
   }
 }

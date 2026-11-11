@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { type Context, type MessageRecord, MushinError, randomId, Service, z } from '@mushin/core'
-import { type BotRole, roleAtLeast, type Session } from '@mushin/plugin-bots'
-import type { Query } from '@mushin/plugin-database'
-import type { FlowNode } from '@mushin/plugin-flows'
-import type {} from '@mushin/plugin-providers'
-import type {} from '@mushin/plugin-storage'
+import { type Context, type MessageRecord, MushinError, randomId, Service, z } from '@mushinjs/core'
+import { type BotRole, roleAtLeast, type Session } from '@mushinjs/plugin-bots'
+import type { Query } from '@mushinjs/plugin-database'
+import type { FlowNode } from '@mushinjs/plugin-flows'
+import type {} from '@mushinjs/plugin-providers'
+import type {} from '@mushinjs/plugin-storage'
 import { type Candidate, candidateText, LEARN_PROMPT, parseCandidates, transcript } from './learn'
 import { searchNode } from './node'
 import { type IndexedChunk, normalize, SearchIndex, type SearchHit } from './search'
@@ -16,7 +16,7 @@ export * from './learn'
 export * from './search'
 export * from './text'
 
-declare module '@mushin/core' {
+declare module '@mushinjs/core' {
   interface Context {
     knowledge: Knowledge
   }
@@ -844,7 +844,7 @@ export class Knowledge extends Service {
         id: doc.id,
         name: doc.name,
         bots: doc.bots,
-        llmChat: doc.source?.kind === 'plugin' && doc.source.plugin === '@mushin/bot-plugin-llm-chat',
+        llmChat: doc.source?.kind === 'plugin' && doc.source.plugin === '@mushinjs/bot-plugin-llm-chat',
         uses: !!search && (!base || ((search.config.bases as string[] | undefined) ?? []).includes(base)),
       }]
     })

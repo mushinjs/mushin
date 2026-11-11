@@ -2,18 +2,18 @@ import { readdir, stat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { monitorEventLoopDelay } from 'node:perf_hooks'
-import { Context, Service, z } from '@mushin/core'
-import { isSandbox } from '@mushin/plugin-bots'
-import type {} from '@mushin/plugin-flows'
-import type {} from '@mushin/plugin-providers'
-import type {} from '@mushin/plugin-storage'
+import { Context, Service, z } from '@mushinjs/core'
+import { isSandbox } from '@mushinjs/plugin-bots'
+import type {} from '@mushinjs/plugin-flows'
+import type {} from '@mushinjs/plugin-providers'
+import type {} from '@mushinjs/plugin-storage'
 import {
   bump, compact, type Counters, type DayDoc, dayHour, dayStart, type Dimension, emptyCounters, merge, type Metric, metricValues, sum, top,
 } from './counters'
 
 export * from './counters'
 
-declare module '@mushin/core' {
+declare module '@mushinjs/core' {
   interface Context {
     stats: StatsService
   }
@@ -356,7 +356,7 @@ export class StatsService extends Service {
       providers: { total: providers.length, passed: providers.filter((provider) => provider.lastTest?.ok).length },
       today: await this.today(),
       versions: {
-        mushin: versionOf('@mushin/core'),
+        mushin: versionOf('@mushinjs/core'),
         node: process.version,
         cordis: versionOf('cordis'),
         plugins: manager.entries.map((entry) => ({ package: entry.package, enabled: entry.enabled !== false, version: versions.get(entry.package) })),

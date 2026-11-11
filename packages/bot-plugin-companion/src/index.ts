@@ -1,8 +1,8 @@
-import type { ChannelInfo, Context, MessageRecord, Segment } from '@mushin/core'
-import type {} from '@mushin/plugin-bots'
-import type {} from '@mushin/plugin-flows'
-import type {} from '@mushin/plugin-personas'
-import type {} from '@mushin/plugin-providers'
+import type { ChannelInfo, Context, MessageRecord, Segment } from '@mushinjs/core'
+import type {} from '@mushinjs/plugin-bots'
+import type {} from '@mushinjs/plugin-flows'
+import type {} from '@mushinjs/plugin-personas'
+import type {} from '@mushinjs/plugin-providers'
 import { Config } from './config'
 import { DatabaseStore, defineTables } from './database'
 import { shareActions } from './actions'
@@ -32,8 +32,8 @@ export * from './transcript'
 export const name = 'companion'
 export const inject = ['bot', 'llm', 'actions']
 
-export const PACKAGE = '@mushin/bot-plugin-companion'
-const LLM_CHAT = '@mushin/bot-plugin-llm-chat'
+export const PACKAGE = '@mushinjs/bot-plugin-companion'
+const LLM_CHAT = '@mushinjs/bot-plugin-llm-chat'
 
 /** Ahead of flows (10), so the companion sees every message; it always passes the message on. */
 export const PRIORITY = 20

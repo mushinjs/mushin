@@ -1,5 +1,5 @@
-import { type ChannelInfo, field, seg, type Segment, segmentsToText, z } from '@mushin/core'
-import { type CommandArg, commandMatches, parseArgs, roleAtLeast, splitCommand, usageReply } from '@mushin/plugin-bots'
+import { type ChannelInfo, field, seg, type Segment, segmentsToText, z } from '@mushinjs/core'
+import { type CommandArg, commandMatches, parseArgs, roleAtLeast, splitCommand, usageReply } from '@mushinjs/plugin-bots'
 import { FlowError, TriggerReply } from './engine'
 import { BUILTIN_GUIDES } from './guides'
 import type { FlowSession, LlmLike, NodeContext, NodeType, PersonaLike, VariableScope } from './types'

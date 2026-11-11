@@ -5,7 +5,7 @@
  * literal typed in (or picked) or one reference. The node still stores the params as JSON,
  * written back from the fields; see `writeParams`.
  */
-import { Button, FormItem, Select, Toggle } from '@mushin/ui'
+import { Button, FormItem, Select, Toggle } from '@mushinjs/ui'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { localize } from '../../../utils'

@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/plugin-adapter-onebot",
+  "name": "@mushinjs/plugin-adapter-onebot",
   "version": "0.1.0",
   "description": "OneBot v11 adapter (NapCat)",
   "type": "module",
@@ -41,13 +41,13 @@
     },
     "requires": {
       "plugins": {
-        "@mushin/plugin-bots": "*",
+        "@mushinjs/plugin-bots": "*",
         "@cordisjs/plugin-server": "*"
       }
     },
     "optional": {
       "plugins": {
-        "@mushin/plugin-flows": "*"
+        "@mushinjs/plugin-flows": "*"
       }
     },
     "nodes": [
@@ -55,9 +55,9 @@
     ]
   },
   "dependencies": {
-    "@mushin/core": "workspace:*",
-    "@mushin/plugin-bots": "workspace:*",
-    "@mushin/plugin-flows": "workspace:*",
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-bots": "workspace:*",
+    "@mushinjs/plugin-flows": "workspace:*",
     "@cordisjs/plugin-server": "catalog:",
     "ws": "catalog:"
   }

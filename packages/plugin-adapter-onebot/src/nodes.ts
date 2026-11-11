@@ -1,5 +1,5 @@
-import { field, type LocalizedText, type Segment, z } from '@mushin/core'
-import { FlowError, type FlowEvent, type FlowSession, type NodeCategory, type NodeContext, type NodeResult, type NodeType, type PortDef, refSource, resolveTarget } from '@mushin/plugin-flows'
+import { field, type LocalizedText, type Segment, z } from '@mushinjs/core'
+import { FlowError, type FlowEvent, type FlowSession, type NodeCategory, type NodeContext, type NodeResult, type NodeType, type PortDef, refSource, resolveTarget } from '@mushinjs/plugin-flows'
 import { checkParams, onebotApis } from './apis'
 import { idOf } from './events'
 

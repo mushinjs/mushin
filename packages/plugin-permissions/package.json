@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/plugin-permissions",
+  "name": "@mushinjs/plugin-permissions",
   "version": "0.1.0",
   "description": "Who is master, admin or user on each bot, and the permission check node for flows",
   "type": "module",
@@ -46,14 +46,14 @@
     "requires": {
       "mushin": ">=0.1.0",
       "plugins": {
-        "@mushin/plugin-bots": "*",
-        "@mushin/plugin-storage": "*"
+        "@mushinjs/plugin-bots": "*",
+        "@mushinjs/plugin-storage": "*"
       }
     },
     "optional": {
       "plugins": {
-        "@mushin/plugin-flows": "*",
-        "@mushin/plugin-database": "*"
+        "@mushinjs/plugin-flows": "*",
+        "@mushinjs/plugin-database": "*"
       }
     },
     "nodes": [
@@ -62,11 +62,11 @@
     ]
   },
   "dependencies": {
-    "@mushin/core": "workspace:*",
-    "@mushin/plugin-bots": "workspace:*",
-    "@mushin/plugin-flows": "workspace:*",
-    "@mushin/plugin-storage": "workspace:*",
-    "@mushin/plugin-database": "workspace:*",
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-bots": "workspace:*",
+    "@mushinjs/plugin-flows": "workspace:*",
+    "@mushinjs/plugin-storage": "workspace:*",
+    "@mushinjs/plugin-database": "workspace:*",
     "minato": "catalog:"
   }
 }

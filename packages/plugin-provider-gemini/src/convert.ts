@@ -1,4 +1,4 @@
-import type { ChatResponse, FinishReason, LlmMessage, ToolCall, ToolDefinition } from '@mushin/plugin-providers'
+import type { ChatResponse, FinishReason, LlmMessage, ToolCall, ToolDefinition } from '@mushinjs/plugin-providers'
 
 /** `RawTurn.type` of assistant turns from this provider; their parts are replayed verbatim. */
 export const TYPE = 'gemini'

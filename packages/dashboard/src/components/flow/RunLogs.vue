@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Checkbox, Input, Popover, RadioButton, RadioGroup, Select, Tag } from '@mushin/ui'
+import { Button, Checkbox, Input, Popover, RadioButton, RadioGroup, Select, Tag } from '@mushinjs/ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { categoryColors, eventSamples } from '../../flow'

@@ -1,7 +1,7 @@
 import {
   type ChannelInfo, type Content, Context, type MessageRecord, type Provenance, type Segment, segmentsToText,
   randomId, Service, seg, toSegments, usage, type UsageEvent, type UsageScope, type UserInfo,
-} from '@mushin/core'
+} from '@mushinjs/core'
 import {
   type ArgValue, type CommandDef, type CommandEntry, commandMatches, DEFAULT_PREFIXES, parseArgs, type ParsedCommand, requiredRole, splitCommand,
   usageReply,

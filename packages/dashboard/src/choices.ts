@@ -10,7 +10,7 @@ export interface Choice {
 
 /**
  * Values a text field can take, read from the action its schema names in `x-choices` (see
- * `field()` in @mushin/core). Loaded once per action and kept fresh when plugins change.
+ * `field()` in @mushinjs/core). Loaded once per action and kept fresh when plugins change.
  */
 const lists = reactive<Record<string, Choice[]>>({})
 const loading = new Map<string, Promise<void>>()

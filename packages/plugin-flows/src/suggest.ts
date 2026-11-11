@@ -1,4 +1,4 @@
-import type { LocalizedText } from '@mushin/core'
+import type { LocalizedText } from '@mushinjs/core'
 import type { NodeType } from './types'
 
 export const english = (text: LocalizedText) => (typeof text === 'string' ? text : text.en ?? Object.values(text)[0] ?? '')

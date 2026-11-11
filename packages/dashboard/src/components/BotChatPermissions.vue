@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Alert, Button, Card, DataTable, type DataTableColumn, Empty, Form, FormItem, Input, Modal, RadioButton, RadioGroup, Select, Tag, TagsInput, Toggle, useConfirm, useToast } from '@mushin/ui'
+import { Alert, Button, Card, DataTable, type DataTableColumn, Empty, Form, FormItem, Input, Modal, RadioButton, RadioGroup, Select, Tag, TagsInput, Toggle, useConfirm, useToast } from '@mushinjs/ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../api'

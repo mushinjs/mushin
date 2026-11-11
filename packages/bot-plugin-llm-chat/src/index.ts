@@ -1,7 +1,7 @@
-import type { Context } from '@mushin/core'
-import { z } from '@mushin/core'
-import type {} from '@mushin/plugin-flows'
-import type {} from '@mushin/plugin-storage'
+import type { Context } from '@mushinjs/core'
+import { z } from '@mushinjs/core'
+import type {} from '@mushinjs/plugin-flows'
+import type {} from '@mushinjs/plugin-storage'
 import { chatFlow, LegacyConfig, legacySettings } from './legacy'
 
 export * from './legacy'
@@ -9,7 +9,7 @@ export * from './legacy'
 export const name = 'llm-chat'
 export const inject = ['bot', 'flows', 'storage']
 
-export const PACKAGE = '@mushin/bot-plugin-llm-chat'
+export const PACKAGE = '@mushinjs/bot-plugin-llm-chat'
 const STORAGE_KEY = 'llm-chat/flows'
 
 /**

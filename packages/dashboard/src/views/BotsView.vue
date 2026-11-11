@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Empty, Input, useToast } from '@mushin/ui'
+import { Button, Empty, Input, useToast } from '@mushinjs/ui'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'

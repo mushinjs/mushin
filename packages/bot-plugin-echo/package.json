@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/bot-plugin-echo",
+  "name": "@mushinjs/bot-plugin-echo",
   "version": "0.1.0",
   "description": "Echo bot plugin: the minimal example",
   "type": "module",
@@ -45,12 +45,12 @@
     },
     "requires": {
       "plugins": {
-        "@mushin/plugin-bots": "*"
+        "@mushinjs/plugin-bots": "*"
       }
     }
   },
   "dependencies": {
-    "@mushin/core": "workspace:*",
-    "@mushin/plugin-bots": "workspace:*"
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-bots": "workspace:*"
   }
 }

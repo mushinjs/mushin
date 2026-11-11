@@ -18,7 +18,7 @@ const flow = (command: string) => ({
 
 beforeAll(async () => {
   app = await startInstance()
-  await app.call('plugins.enable', { package: '@mushin/plugin-terminal' })
+  await app.call('plugins.enable', { package: '@mushinjs/plugin-terminal' })
   await waitFor(async () => (await app.call<any[]>('flows.nodeTypes')).some((type) => type.type === 'terminal.local'))
 })
 

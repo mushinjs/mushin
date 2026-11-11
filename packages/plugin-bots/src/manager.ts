@@ -1,15 +1,15 @@
 import {
-  type ChannelInfo, Context, describeMissing, dependencyReport, type LogTag, type MissingDependency, logTag, type Exporter, type Fiber, fiberError, fiberStatus, isMasked, Logger, mask, type Message,
+  type ChannelInfo, Context, currentPackageName, describeMissing, dependencyReport, type LogTag, type MissingDependency, logTag, type Exporter, type Fiber, fiberError, fiberStatus, isMasked, Logger, mask, type Message,
   type MessageRecord, messageType, MushinError, type Plugin, type Provenance, pluginSchema, randomId, type Segment, segmentsToText, Service, toJsonSchema,
   type UsageEvent, validatePluginConfig, z,
-} from '@mushin/core'
-import type {} from '@mushin/plugin-storage'
+} from '@mushinjs/core'
+import type {} from '@mushinjs/plugin-storage'
 import { MessageArchive } from './archive'
 import { Bot, type BotHooks, byteSize, type Session } from './bot'
 import { type CommandArg, type CommandDef, type CommandEntry, commandConflicts, type CommandSettings, commandMatches, commandUsage, DEFAULT_PREFIXES, helpText, parseArgs, requiredRole, splitCommand } from './commands'
 import { type AdapterType, type BotPluginEntry, type BotRecord, type BotStatus, isSandbox, type PermissionProvider, roleAtLeast } from './types'
 
-declare module '@mushin/core' {
+declare module '@mushinjs/core' {
   interface Context {
     bots: BotManager
     bot: Bot
@@ -167,6 +167,9 @@ export class BotManager extends Service {
   async *[Service.init]() {
     const stored = await this.home.storage.get<{ bots: BotRecord[] }>(STORAGE_KEY)
     this.records = stored?.bots ?? []
+    for (const record of this.records) {
+      for (const plugin of record.plugins ?? []) plugin.package = currentPackageName(plugin.package)
+    }
     this.logger.info('loaded %d bot(s)', this.records.length)
     yield this.home.logger.exporter({
       colors: false,
@@ -447,7 +450,7 @@ export class BotManager extends Service {
         runtime.ctx = ctx
         this.runtimeFibers.set(ctx.fiber, id)
         ctx.effect(() => () => this.runtimeFibers.delete(ctx.fiber), 'bot log attribution')
-        const enabled = loaded.map(({ entry }) => entry.package.replace(/^@mushin\/bot-plugin-/, ''))
+        const enabled = loaded.map(({ entry }) => entry.package.replace(/^@mushinjs\/bot-plugin-/, ''))
         ctx.logger('bot').info('starting with the %s adapter; plugins: %s', record.adapter.type, enabled.join(', ') || 'none')
         for (const [name, error] of runtime.pluginErrors) ctx.logger('bot').warn('plugin %s did not load: %s', name, error)
         ctx.plugin(Bot, { record, hooks })
@@ -955,7 +958,7 @@ export class BotManager extends Service {
         name: z.string().min(1),
         adapter: adapterInput,
         plugins: z.array(z.object({ package: z.string(), config: z.record(z.string(), z.any()).optional() })).optional()
-          .describe('Bot plugins to enable right away, e.g. @mushin/bot-plugin-llm-chat'),
+          .describe('Bot plugins to enable right away, e.g. @mushinjs/bot-plugin-llm-chat'),
         enabled: z.boolean().optional(),
         provider: z.string().optional().describe('Default provider or model profile id for this bot\'s LLM plugins'),
         commands: commandSettingsInput.optional(),

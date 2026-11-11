@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Tooltip } from '@mushin/ui'
+import { Button, Tooltip } from '@mushinjs/ui'
 
 /**
  * A row action shown as an icon, with its name as tooltip and accessible label. `icon` is an icon

@@ -1,5 +1,5 @@
-import { randomId, z } from '@mushin/core'
-import type { CommandArg } from '@mushin/plugin-bots'
+import { randomId, z } from '@mushinjs/core'
+import type { CommandArg } from '@mushinjs/plugin-bots'
 import { sampleArg } from './nodes'
 import type { CompiledFlow } from './graph'
 import type { LlmLike, RunTrace, Variables, VariableScope } from './types'

@@ -8,20 +8,20 @@
   },
   "scripts": {
     "start": "mushin start --dir instance",
-    "dev": "pnpm --filter @mushin/cli dev",
-    "demo": "pnpm --filter @mushin/cli demo",
-    "build": "tsx scripts/build.ts && pnpm --filter @mushin/dashboard build",
+    "dev": "pnpm --filter @mushinjs/cli dev",
+    "demo": "pnpm --filter @mushinjs/cli demo",
+    "build": "tsx scripts/build.ts && pnpm --filter @mushinjs/dashboard build",
     "build:packages": "tsx scripts/build.ts",
     "test": "vitest run",
     "test:pack": "tsx scripts/pack-test.ts",
     "test:flows": "mushin test --dir instance",
-    "typecheck": "tsc -p tsconfig.json && pnpm --filter @mushin/dashboard typecheck",
+    "typecheck": "tsc -p tsconfig.json && pnpm --filter @mushinjs/dashboard typecheck",
     "changeset": "changeset",
     "release": "pnpm build && changeset publish"
   },
   "dependencies": {
-    "@mushin/cli": "workspace:*",
-    "@mushin/core": "workspace:*"
+    "@mushinjs/cli": "workspace:*",
+    "@mushinjs/core": "workspace:*"
   },
   "devDependencies": {
     "@changesets/cli": "catalog:",

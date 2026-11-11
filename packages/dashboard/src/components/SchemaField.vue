@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, FormItem, Input, NumberInput, RadioGroup, Select, TagsInput, Toggle, Tooltip } from '@mushin/ui'
+import { Button, FormItem, Input, NumberInput, RadioGroup, Select, TagsInput, Toggle, Tooltip } from '@mushinjs/ui'
 import { computed, inject, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { JsonSchema } from '../types'
@@ -56,7 +56,7 @@ const kind = computed(() => {
   return 'json'
 })
 
-// Plugins attach translations under `x-i18n` (see `field()` in @mushin/core).
+// Plugins attach translations under `x-i18n` (see `field()` in @mushinjs/core).
 const translated = computed(() => schema.value['x-i18n']?.[locale.value] ?? props.schema['x-i18n']?.[locale.value] ?? {})
 const label = computed(() => translated.value.title ?? schema.value.title ?? props.schema.title ?? humanize(props.name))
 const description = computed(() => translated.value.description ?? schema.value.description ?? props.schema.description)

@@ -4,7 +4,7 @@
  * `[image:…]` and `[face:…]`, and a bubble shows the message as the chat will show it, with the
  * sample's values filled in where they are known.
  */
-import { Button, Input, Popover } from '@mushin/ui'
+import { Button, Input, Popover } from '@mushinjs/ui'
 import { computed, ref } from 'vue'
 import VarInput from '../VarInput.vue'
 import { useEditor } from './editor'

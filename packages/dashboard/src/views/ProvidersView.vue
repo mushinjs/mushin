@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Dropdown, type DropdownOption, Modal, Tooltip, useConfirm, useToast } from '@mushin/ui'
+import { Button, Dropdown, type DropdownOption, Modal, Tooltip, useConfirm, useToast } from '@mushinjs/ui'
 import { nextTick, onMounted, ref, watch } from 'vue'
 import IconAction from '../components/IconAction.vue'
 import EmptyState from '../components/EmptyState.vue'

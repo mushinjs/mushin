@@ -18,7 +18,7 @@ async function say(text: string, userId: string) {
 
 beforeAll(async () => {
   app = await startInstance()
-  await app.call('plugins.enable', { package: '@mushin/plugin-demo' })
+  await app.call('plugins.enable', { package: '@mushinjs/plugin-demo' })
   await app.call('plugins.configure', { id: 'demo', config: { bot: true, greet: false } })
   botId = (await app.call<any[]>('bots.list'))[0].id
   await waitFor(async () => (await app.call('bots.get', { id: botId })).status === 'online')

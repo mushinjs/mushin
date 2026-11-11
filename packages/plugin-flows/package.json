@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/plugin-flows",
+  "name": "@mushinjs/plugin-flows",
   "version": "0.1.0",
   "description": "Conversation flows: node registry, execution engine and flow storage",
   "type": "module",
@@ -44,23 +44,23 @@
     ],
     "requires": {
       "plugins": {
-        "@mushin/plugin-storage": "*"
+        "@mushinjs/plugin-storage": "*"
       }
     },
     "optional": {
       "plugins": {
-        "@mushin/plugin-bots": "*",
-        "@mushin/plugin-providers": "*",
-        "@mushin/plugin-database": "*"
+        "@mushinjs/plugin-bots": "*",
+        "@mushinjs/plugin-providers": "*",
+        "@mushinjs/plugin-database": "*"
       }
     }
   },
   "dependencies": {
-    "@mushin/core": "workspace:*",
-    "@mushin/plugin-bots": "workspace:*",
-    "@mushin/plugin-database": "workspace:*",
-    "@mushin/plugin-providers": "workspace:*",
-    "@mushin/plugin-storage": "workspace:*",
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-bots": "workspace:*",
+    "@mushinjs/plugin-database": "workspace:*",
+    "@mushinjs/plugin-providers": "workspace:*",
+    "@mushinjs/plugin-storage": "workspace:*",
     "minato": "catalog:"
   }
 }

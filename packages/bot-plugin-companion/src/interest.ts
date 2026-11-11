@@ -1,4 +1,4 @@
-import type { MessageRecord } from '@mushin/core'
+import type { MessageRecord } from '@mushinjs/core'
 
 /** What the companion notices in a batch of new messages, scored by rules alone (no model call). */
 export interface Interest {

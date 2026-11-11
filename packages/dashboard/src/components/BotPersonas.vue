@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Alert, Button, Card, Empty, Form, FormItem, Input, RadioButton, RadioGroup, Select, Spin, Tag, TagsInput, TimeInput, Toggle, useToast } from '@mushin/ui'
+import { Alert, Button, Card, Empty, Form, FormItem, Input, RadioButton, RadioGroup, Select, Spin, Tag, TagsInput, TimeInput, Toggle, useToast } from '@mushinjs/ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -21,7 +21,7 @@ const settings = ref<BotPersonaSettings>({ personas: [], rules: [], command: { e
 async function refresh() {
   try {
     const plugins = await call<AppPlugin[]>('plugins.list')
-    available.value = plugins.some((plugin) => plugin.package === '@mushin/plugin-personas' && plugin.status === 'active')
+    available.value = plugins.some((plugin) => plugin.package === '@mushinjs/plugin-personas' && plugin.status === 'active')
     if (!available.value) return
     personas.value = await call<Persona[]>('personas.list')
     settings.value = await call<BotPersonaSettings>('personas.botSettings', { bot: props.bot.id })
@@ -124,7 +124,7 @@ async function tryIt() {
   <Spin :show="loading">
     <Alert v-if="available === false" type="warning" :title="t('personas.unavailable')">
       {{ t('personas.unavailableHint') }}
-      <RouterLink to="/plugins?highlight=@mushin/plugin-personas">{{ t('permissions.openPlugins') }}</RouterLink>
+      <RouterLink to="/plugins?highlight=@mushinjs/plugin-personas">{{ t('permissions.openPlugins') }}</RouterLink>
     </Alert>
     <Card v-else-if="!personas.length && !loading">
       <Empty :description="t('botPersonas.noPersonas')">

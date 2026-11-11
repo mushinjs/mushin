@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Alert, Button, Card, Form, FormItem, Input, Modal, Spin, TabPane, Tabs, Tag, useToast } from '@mushin/ui'
+import { Alert, Button, Card, Form, FormItem, Input, Modal, Spin, TabPane, Tabs, Tag, useToast } from '@mushinjs/ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -34,7 +34,7 @@ const base = computed(() => bases.value.find((item) => item.id === id.value))
 async function refresh() {
   try {
     const plugins = await call<AppPlugin[]>('plugins.list')
-    available.value = plugins.some((plugin) => plugin.package === '@mushin/plugin-knowledge' && plugin.status === 'active')
+    available.value = plugins.some((plugin) => plugin.package === '@mushinjs/plugin-knowledge' && plugin.status === 'active')
     if (!available.value) return
     bases.value = await call<KnowledgeSummary[]>('kb.list')
   } catch (error) {
@@ -122,7 +122,7 @@ const botNames = (ids: string[]) => ids.map((bot) => data.bots.find((item) => it
       <Spin :show="loading">
         <Alert v-if="available === false" type="warning" :title="t('knowledge.unavailable')">
           {{ t('knowledge.unavailableHint') }}
-          <RouterLink to="/plugins?highlight=@mushin/plugin-knowledge">{{ t('permissions.openPlugins') }}</RouterLink>
+          <RouterLink to="/plugins?highlight=@mushinjs/plugin-knowledge">{{ t('permissions.openPlugins') }}</RouterLink>
         </Alert>
         <EmptyState v-else-if="!bases.length && !loading" icon="i-lucide-library" :title="t('knowledge.empty')" :hint="t('knowledge.emptyHint')">
           <Button type="primary" @click="openCreate">{{ t('knowledge.add') }}</Button>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Select } from '@mushin/ui'
+import { Select } from '@mushinjs/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { modelOptions } from '../models'

@@ -1,6 +1,6 @@
 import type { WebSocket } from 'ws'
-import { type ChannelInfo, type Context, type Segment, segmentsToText, type UserInfo } from '@mushin/core'
-import type {} from '@mushin/plugin-bots'
+import { type ChannelInfo, type Context, type Segment, segmentsToText, type UserInfo } from '@mushinjs/core'
+import type {} from '@mushinjs/plugin-bots'
 import { normalizeEvent } from './events'
 
 export interface OneBotResponse {

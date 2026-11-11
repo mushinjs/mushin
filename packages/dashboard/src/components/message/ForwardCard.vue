@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Modal, Spin } from '@mushin/ui'
+import { Modal, Spin } from '@mushinjs/ui'
 import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { type ForwardedMessage, loadForward, type MediaChannel } from '../../media'

@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/plugin-agent",
+  "name": "@mushinjs/plugin-agent",
   "version": "0.1.0",
   "description": "The Mushin.js Agent",
   "type": "module",
@@ -44,19 +44,19 @@
     ],
     "requires": {
       "plugins": {
-        "@mushin/plugin-storage": "*",
-        "@mushin/plugin-providers": "*"
+        "@mushinjs/plugin-storage": "*",
+        "@mushinjs/plugin-providers": "*"
       }
     },
     "optional": {
       "plugins": {
-        "@mushin/plugin-bots": "*"
+        "@mushinjs/plugin-bots": "*"
       }
     }
   },
   "dependencies": {
-    "@mushin/core": "workspace:*",
-    "@mushin/plugin-storage": "workspace:*",
-    "@mushin/plugin-providers": "workspace:*"
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-storage": "workspace:*",
+    "@mushinjs/plugin-providers": "workspace:*"
   }
 }

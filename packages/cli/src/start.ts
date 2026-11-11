@@ -2,8 +2,8 @@ import { mkdir, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { Actions, Context, type Exporter, type InstanceConfig, Logger, type Message, PluginManager, readJson, writeJsonAtomic } from '@mushin/core'
-import type { SignInInfo } from '@mushin/plugin-console'
+import { Actions, Context, currentPackageName, type Exporter, type InstanceConfig, Logger, type Message, PluginManager, readJson, writeJsonAtomic } from '@mushinjs/core'
+import type { SignInInfo } from '@mushinjs/plugin-console'
 
 export const DEFAULT_PORT = 5160
 
@@ -27,23 +27,23 @@ export function defaultConfig(): InstanceConfig {
   return {
     plugins: [
       { id: 'server', package: '@cordisjs/plugin-server', config: { host: '127.0.0.1', port: DEFAULT_PORT } },
-      { id: 'storage', package: '@mushin/plugin-storage', config: {} },
-      { id: 'database', package: '@mushin/plugin-database', config: {} },
-      { id: 'providers', package: '@mushin/plugin-providers', config: {} },
-      { id: 'provider-openai', package: '@mushin/plugin-provider-openai', config: {} },
-      { id: 'provider-anthropic', package: '@mushin/plugin-provider-anthropic', config: {} },
-      { id: 'provider-gemini', package: '@mushin/plugin-provider-gemini', config: {} },
-      { id: 'provider-typesafe', package: '@mushin/plugin-provider-typesafe', config: {} },
-      { id: 'bots', package: '@mushin/plugin-bots', config: {} },
-      { id: 'permissions', package: '@mushin/plugin-permissions', config: {} },
-      { id: 'personas', package: '@mushin/plugin-personas', config: {} },
-      { id: 'adapter-onebot', package: '@mushin/plugin-adapter-onebot', config: {} },
-      { id: 'flows', package: '@mushin/plugin-flows', config: {} },
-      { id: 'knowledge', package: '@mushin/plugin-knowledge', config: {} },
-      { id: 'agent', package: '@mushin/plugin-agent', config: {} },
-      { id: 'mcp', package: '@mushin/plugin-mcp', config: {} },
-      { id: 'stats', package: '@mushin/plugin-stats', config: {} },
-      { id: 'console', package: '@mushin/plugin-console', config: {} },
+      { id: 'storage', package: '@mushinjs/plugin-storage', config: {} },
+      { id: 'database', package: '@mushinjs/plugin-database', config: {} },
+      { id: 'providers', package: '@mushinjs/plugin-providers', config: {} },
+      { id: 'provider-openai', package: '@mushinjs/plugin-provider-openai', config: {} },
+      { id: 'provider-anthropic', package: '@mushinjs/plugin-provider-anthropic', config: {} },
+      { id: 'provider-gemini', package: '@mushinjs/plugin-provider-gemini', config: {} },
+      { id: 'provider-typesafe', package: '@mushinjs/plugin-provider-typesafe', config: {} },
+      { id: 'bots', package: '@mushinjs/plugin-bots', config: {} },
+      { id: 'permissions', package: '@mushinjs/plugin-permissions', config: {} },
+      { id: 'personas', package: '@mushinjs/plugin-personas', config: {} },
+      { id: 'adapter-onebot', package: '@mushinjs/plugin-adapter-onebot', config: {} },
+      { id: 'flows', package: '@mushinjs/plugin-flows', config: {} },
+      { id: 'knowledge', package: '@mushinjs/plugin-knowledge', config: {} },
+      { id: 'agent', package: '@mushinjs/plugin-agent', config: {} },
+      { id: 'mcp', package: '@mushinjs/plugin-mcp', config: {} },
+      { id: 'stats', package: '@mushinjs/plugin-stats', config: {} },
+      { id: 'console', package: '@mushinjs/plugin-console', config: {} },
     ],
   }
 }
@@ -87,14 +87,14 @@ export interface StartOptions {
 }
 
 /** Plugins `mushin test` leaves out: they serve people or reach other programs, and flows do not need them. */
-const OFFLINE_SKIP = new Set(['@cordisjs/plugin-server', '@mushin/plugin-console', '@mushin/plugin-agent', '@mushin/plugin-mcp', '@mushin/plugin-stats'])
+const OFFLINE_SKIP = new Set(['@cordisjs/plugin-server', '@mushinjs/plugin-console', '@mushinjs/plugin-agent', '@mushinjs/plugin-mcp', '@mushinjs/plugin-stats'])
 
 function offlineConfig(config: InstanceConfig): InstanceConfig {
   return {
     ...config,
     plugins: config.plugins
       .filter((entry) => !OFFLINE_SKIP.has(entry.package))
-      .map((entry) => (entry.package === '@mushin/plugin-database' ? { ...entry, config: { ...entry.config, driver: 'memory' } } : entry)),
+      .map((entry) => (entry.package === '@mushinjs/plugin-database' ? { ...entry, config: { ...entry.config, driver: 'memory' } } : entry)),
   }
 }
 
@@ -108,12 +108,18 @@ export async function start(options: StartOptions) {
     config = defaultConfig()
     await writeJsonAtomic(configPath, config)
   } else {
+    let changed = false
+    for (const entry of config.plugins) {
+      const name = currentPackageName(entry.package)
+      if (name !== entry.package) [entry.package, changed] = [name, true]
+    }
     // Built-in plugins added in newer versions join existing instances; entries the user disabled stay disabled.
     const missing = defaultConfig().plugins.filter((entry) => !config!.plugins.some((item) => item.package === entry.package))
     if (missing.length) {
       config.plugins.push(...missing)
-      await writeJsonAtomic(configPath, config)
+      changed = true
     }
+    if (changed) await writeJsonAtomic(configPath, config)
   }
   if (options.port !== undefined) {
     const server = config.plugins.find((entry) => entry.package === '@cordisjs/plugin-server')

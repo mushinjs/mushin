@@ -3,7 +3,7 @@ import { startInstance, type TestInstance, waitFor } from './helpers/instance'
 import { createMockNapCat } from './helpers/mock-napcat'
 import { createMockOpenAI } from './helpers/mock-openai'
 
-const LLM_CHAT = '@mushin/bot-plugin-llm-chat'
+const LLM_CHAT = '@mushinjs/bot-plugin-llm-chat'
 const RULES = '# 群规\n\n## 广告\n\n群里禁止发广告和推广链接，违者踢出。\n\n## 发言\n\n请友善发言，不要刷屏。\n\n## 维护\n\n服务器每周四早上 8 点维护。'
 
 let app: TestInstance

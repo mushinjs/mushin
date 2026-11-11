@@ -1,4 +1,4 @@
-import { field, z } from '@mushin/core'
+import { field, z } from '@mushinjs/core'
 
 export const exampleSchema = z.object({
   user: z.string().describe('What someone says'),

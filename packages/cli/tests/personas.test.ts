@@ -3,7 +3,7 @@ import { startInstance, type TestInstance, waitFor } from './helpers/instance'
 import { createMockNapCat } from './helpers/mock-napcat'
 import { createMockOpenAI } from './helpers/mock-openai'
 
-const LLM_CHAT = '@mushin/bot-plugin-llm-chat'
+const LLM_CHAT = '@mushinjs/bot-plugin-llm-chat'
 
 let app: TestInstance
 let llm: Awaited<ReturnType<typeof createMockOpenAI>>

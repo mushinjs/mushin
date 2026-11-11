@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FormItem, Select } from '@mushin/ui'
+import { FormItem, Select } from '@mushinjs/ui'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'

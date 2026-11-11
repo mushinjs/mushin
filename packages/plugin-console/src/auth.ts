@@ -1,6 +1,6 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { join } from 'node:path'
-import { readJson, writeJsonAtomic } from '@mushin/core'
+import { readJson, writeJsonAtomic } from '@mushinjs/core'
 
 /**
  * The admin token, stored in plain text next to the provider keys it protects, so it can be

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Input } from '@mushin/ui'
+import { Input } from '@mushinjs/ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { categories, categoryColors, supports } from '../../flow'

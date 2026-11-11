@@ -1,4 +1,4 @@
-import { z } from '@mushin/core'
+import { z } from '@mushinjs/core'
 
 /** Where a skill comes from: shipped with the Agent, added by a plugin, or written by the user. */
 export type SkillSource = 'builtin' | 'plugin' | 'user'

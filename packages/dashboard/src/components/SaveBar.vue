@@ -3,7 +3,7 @@
  * Stays at the bottom of the window while there are unsaved changes, so saving never needs a
  * scroll: what is unsaved, a way to undo it, and the save button.
  */
-import { Button } from '@mushin/ui'
+import { Button } from '@mushinjs/ui'
 
 defineProps<{ show: boolean; saving?: boolean; text: string; discardText: string; saveText: string }>()
 defineEmits<{ discard: []; save: [] }>()

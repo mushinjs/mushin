@@ -4,7 +4,7 @@
  * list them in one place.
  */
 
-import type { Segment } from '@mushin/core'
+import type { Segment } from '@mushinjs/core'
 
 /**
  * What an argument takes: `text` a word (or the rest, for the last one), `number` a number,

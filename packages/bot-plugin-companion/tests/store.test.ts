@@ -1,7 +1,7 @@
 import { tmpdir } from 'node:os'
 import { afterAll, describe, expect, it } from 'vitest'
-import { Actions, Context } from '@mushin/core'
-import * as database from '@mushin/plugin-database'
+import { Actions, Context } from '@mushinjs/core'
+import * as database from '@mushinjs/plugin-database'
 import { DatabaseStore, defineTables } from '../src/database'
 import { InMemoryStore, type MemoryItem, type MemoryStore, type PersonCard } from '../src/store'
 

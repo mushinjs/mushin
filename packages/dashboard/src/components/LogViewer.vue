@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useVirtualizer } from '@tanstack/vue-virtual'
-import { useToast } from '@mushin/ui'
-import { Button, Input, RadioButton, RadioGroup } from '@mushin/ui'
+import { useToast } from '@mushinjs/ui'
+import { Button, Input, RadioButton, RadioGroup } from '@mushinjs/ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'

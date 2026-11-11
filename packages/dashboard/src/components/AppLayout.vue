@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Drawer, Dropdown, type DropdownOption } from '@mushin/ui'
+import { Button, Drawer, Dropdown, type DropdownOption } from '@mushinjs/ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'

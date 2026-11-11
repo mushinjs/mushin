@@ -4,7 +4,7 @@ import { startInstance, type TestInstance, waitFor } from './helpers/instance'
 let app: TestInstance
 let botId: string
 
-const PACKAGE = '@mushin/plugin-demo'
+const PACKAGE = '@mushinjs/plugin-demo'
 const allOn = {
   provider: true,
   bot: true,

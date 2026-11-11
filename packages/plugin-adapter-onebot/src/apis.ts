@@ -1,4 +1,4 @@
-import type { LocalizedText } from '@mushin/core'
+import type { LocalizedText } from '@mushinjs/core'
 
 /**
  * The params of OneBot 11 APIs and of NapCat's extensions, for the "Call OneBot API" node: the

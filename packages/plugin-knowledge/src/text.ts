@@ -1,4 +1,4 @@
-import { MushinError } from '@mushin/core'
+import { MushinError } from '@mushinjs/core'
 
 /** Document formats a knowledge base reads. PDF and DOCX need optional packages. */
 export const FORMATS = ['md', 'txt', 'html', 'pdf', 'docx'] as const

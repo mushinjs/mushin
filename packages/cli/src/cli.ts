@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import { type InstanceConfig, readJson } from '@mushin/core'
-import { resetAdminToken, type SignInInfo } from '@mushin/plugin-console'
+import { type InstanceConfig, readJson } from '@mushinjs/core'
+import { resetAdminToken, type SignInInfo } from '@mushinjs/plugin-console'
 import { start } from './start'
 import { testCommand } from './test'
 
@@ -114,7 +114,7 @@ if (values.help) {
     console.error(`No Mushin.js instance in ${baseDir}. Pass the instance folder with --dir, e.g. "mushin token reset --dir instance".`)
     process.exit(1)
   }
-  const storage = config.plugins.find((entry) => entry.package === '@mushin/plugin-storage')
+  const storage = config.plugins.find((entry) => entry.package === '@mushinjs/plugin-storage')
   const server = config.plugins.find((entry) => entry.package === '@cordisjs/plugin-server')
   const token = await resetAdminToken(resolve(baseDir, storage?.config?.dir ?? 'data'))
   const host = server?.config?.host === '0.0.0.0' || !server?.config?.host ? '127.0.0.1' : server.config.host

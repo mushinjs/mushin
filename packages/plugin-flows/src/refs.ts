@@ -1,4 +1,4 @@
-import { type Segment, segmentsToText } from '@mushin/core'
+import { type Segment, segmentsToText } from '@mushinjs/core'
 import type { FlowEdge, FlowNode, FlowSession, NodeType, PortDef, VariableScope } from './types'
 
 /**

@@ -1,10 +1,10 @@
-import { Context, isMasked, mask, MushinError, type Risk, Service, z } from '@mushin/core'
-import type {} from '@mushin/plugin-storage'
+import { Context, isMasked, mask, MushinError, type Risk, Service, z } from '@mushinjs/core'
+import type {} from '@mushinjs/plugin-storage'
 import { HttpTransport, McpClient, type McpTool, resultText, StdioTransport } from './client'
 
 export * from './client'
 
-declare module '@mushin/core' {
+declare module '@mushinjs/core' {
   interface Context {
     mcp: Mcp
   }

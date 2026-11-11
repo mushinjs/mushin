@@ -1,5 +1,5 @@
-import type { ChannelInfo, KnowledgeSource, Logger, LocalizedText, Segment, UserInfo, z } from '@mushin/core'
-import type { BotRole, GroupRole, ParsedCommand, SourcedContent } from '@mushin/plugin-bots'
+import type { ChannelInfo, KnowledgeSource, Logger, LocalizedText, Segment, UserInfo, z } from '@mushinjs/core'
+import type { BotRole, GroupRole, ParsedCommand, SourcedContent } from '@mushinjs/plugin-bots'
 import type { TriggerReply } from './engine'
 
 type SourcedContentLike = SourcedContent

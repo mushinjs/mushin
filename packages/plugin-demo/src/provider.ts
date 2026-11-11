@@ -1,5 +1,5 @@
-import { field, z } from '@mushin/core'
-import type { ChatRequest, ChatResponse, EmbedRequest, LlmMessage, ProviderClient, ProviderType, StreamEvent } from '@mushin/plugin-providers'
+import { field, z } from '@mushinjs/core'
+import type { ChatRequest, ChatResponse, EmbedRequest, LlmMessage, ProviderClient, ProviderType, StreamEvent } from '@mushinjs/plugin-providers'
 
 export const DEMO_MODEL = 'demo-chat'
 export const DEMO_EMBEDDING_MODEL = 'demo-embedding'

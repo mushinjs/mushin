@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { seg } from '@mushin/core'
-import { builtinNodes, compile, type FlowBot, type FlowDocument, type FlowEvent, type FlowSession, type NodeType, runFlow } from '@mushin/plugin-flows'
+import { seg } from '@mushinjs/core'
+import { builtinNodes, compile, type FlowBot, type FlowDocument, type FlowEvent, type FlowSession, type NodeType, runFlow } from '@mushinjs/plugin-flows'
 import { onebotNodes } from '../src/nodes'
 
 const types = new Map<string, NodeType>([...builtinNodes, ...onebotNodes].map((type) => [type.type, type]))

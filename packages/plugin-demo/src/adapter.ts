@@ -1,5 +1,5 @@
-import { type ChannelInfo, type Context, field, randomId, type Segment, seg, z } from '@mushin/core'
-import type { AdapterType, Bot } from '@mushin/plugin-bots'
+import { type ChannelInfo, type Context, field, randomId, type Segment, seg, z } from '@mushinjs/core'
+import type { AdapterType, Bot } from '@mushinjs/plugin-bots'
 
 export const SELF_ID = 'demo-bot'
 

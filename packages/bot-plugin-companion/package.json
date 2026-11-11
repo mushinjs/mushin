@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/bot-plugin-companion",
+  "name": "@mushinjs/bot-plugin-companion",
   "version": "0.1.0",
   "description": "Companion bot plugin: chats in groups like a member, deciding for itself when to speak",
   "type": "module",
@@ -45,25 +45,25 @@
     },
     "requires": {
       "plugins": {
-        "@mushin/plugin-bots": "*",
-        "@mushin/plugin-providers": "*"
+        "@mushinjs/plugin-bots": "*",
+        "@mushinjs/plugin-providers": "*"
       }
     },
     "optional": {
       "plugins": {
-        "@mushin/plugin-flows": "*",
-        "@mushin/plugin-personas": "*",
-        "@mushin/plugin-database": "*"
+        "@mushinjs/plugin-flows": "*",
+        "@mushinjs/plugin-personas": "*",
+        "@mushinjs/plugin-database": "*"
       }
     }
   },
   "dependencies": {
-    "@mushin/core": "workspace:*",
-    "@mushin/plugin-bots": "workspace:*",
-    "@mushin/plugin-database": "workspace:*",
-    "@mushin/plugin-flows": "workspace:*",
-    "@mushin/plugin-personas": "workspace:*",
-    "@mushin/plugin-providers": "workspace:*",
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-bots": "workspace:*",
+    "@mushinjs/plugin-database": "workspace:*",
+    "@mushinjs/plugin-flows": "workspace:*",
+    "@mushinjs/plugin-personas": "workspace:*",
+    "@mushinjs/plugin-providers": "workspace:*",
     "minato": "catalog:"
   }
 }

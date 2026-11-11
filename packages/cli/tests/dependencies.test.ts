@@ -1,4 +1,4 @@
-import { manifestProblems, undeclaredServices } from '@mushin/core'
+import { manifestProblems, undeclaredServices } from '@mushinjs/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { startInstance, type TestInstance, waitFor } from './helpers/instance'
 
@@ -17,7 +17,7 @@ const status = async (id: string) => (await app.call<any[]>('plugins.list')).fin
 describe('plugin dependencies', () => {
   it('declares in every built-in manifest the plugins behind the services it injects', async () => {
     const graph = await app.ctx.manager.graph()
-    const builtin = graph.catalog.filter((entry) => entry.package.startsWith('@mushin/'))
+    const builtin = graph.catalog.filter((entry) => entry.package.startsWith('@mushinjs/'))
     expect(builtin.length).toBeGreaterThan(10)
     for (const entry of builtin) {
       expect(manifestProblems(entry.manifest), entry.package).toEqual([])
@@ -27,34 +27,34 @@ describe('plugin dependencies', () => {
   })
 
   it('reports what a plugin needs and what needs it', async () => {
-    const report = await app.call('plugins.dependencies', { package: '@mushin/plugin-flows' })
-    expect(report.requires.map((dep: any) => dep.package)).toEqual(['@mushin/plugin-storage'])
+    const report = await app.call('plugins.dependencies', { package: '@mushinjs/plugin-flows' })
+    expect(report.requires.map((dep: any) => dep.package)).toEqual(['@mushinjs/plugin-storage'])
     expect(report.dependents).toEqual(expect.arrayContaining([
-      expect.objectContaining({ package: '@mushin/bot-plugin-flows', kind: 'bot', optional: false }),
-      expect.objectContaining({ package: '@mushin/plugin-demo', optional: false }),
+      expect.objectContaining({ package: '@mushinjs/bot-plugin-flows', kind: 'bot', optional: false }),
+      expect.objectContaining({ package: '@mushinjs/plugin-demo', optional: false }),
     ]))
-    expect(report.disable.botPlugins).toContain('@mushin/bot-plugin-flows')
+    expect(report.disable.botPlugins).toContain('@mushinjs/bot-plugin-flows')
   })
 
   it('enables the disabled plugins a plugin requires only when asked to', async () => {
     await app.call('plugins.disable', { id: 'flows' })
-    await expect(app.call('plugins.enable', { package: '@mushin/plugin-demo' })).rejects.toMatchObject({
+    await expect(app.call('plugins.enable', { package: '@mushinjs/plugin-demo' })).rejects.toMatchObject({
       code: 'conflict',
-      details: { plan: { enable: ['@mushin/plugin-flows'] } },
+      details: { plan: { enable: ['@mushinjs/plugin-flows'] } },
     })
-    await app.call('plugins.enable', { package: '@mushin/plugin-demo', cascade: true })
+    await app.call('plugins.enable', { package: '@mushinjs/plugin-demo', cascade: true })
     await waitFor(async () => (await status('flows')) === 'active' && (await status('demo')) === 'active')
   })
 
   it('disables the plugins that require one only when asked to', async () => {
     await expect(app.call('plugins.disable', { id: 'flows' })).rejects.toMatchObject({
       code: 'conflict',
-      details: { plan: { disable: [{ id: 'demo', package: '@mushin/plugin-demo' }] } },
+      details: { plan: { disable: [{ id: 'demo', package: '@mushinjs/plugin-demo' }] } },
     })
     await app.call('plugins.disable', { id: 'flows', cascade: true })
     expect(await status('flows')).toBe('disabled')
     expect(await status('demo')).toBe('disabled')
-    await app.call('plugins.enable', { package: '@mushin/plugin-flows' })
+    await app.call('plugins.enable', { package: '@mushinjs/plugin-flows' })
     await waitFor(async () => (await status('flows')) === 'active')
   })
 

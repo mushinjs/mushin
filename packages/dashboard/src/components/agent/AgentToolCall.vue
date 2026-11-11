@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Spin, Tag } from '@mushin/ui'
+import { Button, Spin, Tag } from '@mushinjs/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ChatItem } from '../../stores/agent'

@@ -3,7 +3,7 @@ name: Release
 # On every push to main that carries changesets:
 #   - every package is published as a snapshot to the `next` tag on npm;
 #   - the "Version Packages" pull request is opened or updated. Merging it publishes to `latest`.
-# Needs the NPM_TOKEN secret: an npm automation token that can publish the @mushin scope.
+# Needs the NPM_TOKEN secret: an npm automation token that can publish the @mushinjs scope.
 
 on:
   push:

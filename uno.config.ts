@@ -2,7 +2,7 @@ import { defineConfig, presetIcons, presetWind3, transformerDirectives } from 'u
 import { presetMushin } from './packages/ui/src/preset'
 
 /**
- * UnoCSS for the dashboard and @mushin/ui. It sits at the repository root so editor extensions
+ * UnoCSS for the dashboard and @mushinjs/ui. It sits at the repository root so editor extensions
  * find it; packages point their build at this file.
  *
  * Utilities follow Tailwind's names (presetWind3); the one UnoCSS-only feature in use is icons by

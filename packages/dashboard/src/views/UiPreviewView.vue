@@ -1,12 +1,12 @@
 <script setup lang="ts">
 /**
- * Every @mushin/ui component in its states, for checking both themes at a glance. Development
+ * Every @mushinjs/ui component in its states, for checking both themes at a glance. Development
  * builds only, at /dev/ui (registered in main.ts).
  */
 import {
   Alert, Button, Card, Checkbox, Dropdown, Empty, Form, FormItem, Image, Input, Modal, NumberInput, Popover, RadioButton, RadioGroup, Select, Spin,
   TabPane, Tabs, Tag, TagsInput, Toggle, Tooltip, useConfirm, useToast,
-} from '@mushin/ui'
+} from '@mushinjs/ui'
 import { ref } from 'vue'
 import { themeMode } from '../theme'
 
@@ -52,7 +52,7 @@ const tones = ['default', 'primary', 'info', 'success', 'warning', 'error'] as c
 <template>
   <div class="mx-auto max-w-5xl p-6 flex flex-col gap-5 text-fg">
     <header class="flex items-center gap-3">
-      <h1 class="m-0 text-xl font-semibold flex-1">@mushin/ui</h1>
+      <h1 class="m-0 text-xl font-semibold flex-1">@mushinjs/ui</h1>
       <RadioGroup v-model:value="themeMode" size="small" :options="[{ label: 'Light', value: 'light', icon: 'i-lucide-sun' }, { label: 'Dark', value: 'dark', icon: 'i-lucide-moon' }, { label: 'Auto', value: 'auto' }]" />
     </header>
 

@@ -27,11 +27,19 @@ export interface PluginManifest {
 export interface DependencySpec {
   /** A version range of Mushin.js, such as `>=0.2.0`. */
   mushin?: string
-  /** Package name → version range, such as `{ "@mushin/plugin-bots": "*" }`. */
+  /** Package name → version range, such as `{ "@mushinjs/plugin-bots": "*" }`. */
   plugins?: Record<string, string>
 }
 
-/** The running Mushin.js version: the version of `@mushin/core`. */
+/**
+ * The official packages moved from the `@mushin` scope to `@mushinjs` before the first npm release.
+ * Names saved by older instances (in mushin.config.json and bot records) are read through this.
+ */
+export function currentPackageName(name: string) {
+  return name.startsWith('@mushin/') ? `@mushinjs/${name.slice('@mushin/'.length)}` : name
+}
+
+/** The running Mushin.js version: the version of `@mushinjs/core`. */
 export const MUSHIN_VERSION: string = (() => {
   try {
     return JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version ?? '0.0.0'

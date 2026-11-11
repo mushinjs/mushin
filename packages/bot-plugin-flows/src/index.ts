@@ -1,6 +1,6 @@
-import type { Context } from '@mushin/core'
-import type {} from '@mushin/plugin-bots'
-import type {} from '@mushin/plugin-flows'
+import type { Context } from '@mushinjs/core'
+import type {} from '@mushinjs/plugin-bots'
+import type {} from '@mushinjs/plugin-flows'
 
 export const name = 'flows'
 export const inject = ['bot', 'flows']

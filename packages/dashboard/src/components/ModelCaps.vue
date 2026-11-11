@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Tooltip } from '@mushin/ui'
+import { Tooltip } from '@mushinjs/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CAPABILITY_ICONS, modelCapabilities } from '../models'

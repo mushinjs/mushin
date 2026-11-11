@@ -131,10 +131,10 @@ importers:
 
   .:
     dependencies:
-      '@mushin/cli':
+      '@mushinjs/cli':
         specifier: workspace:*
         version: link:packages/cli
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:packages/core
     devDependencies:
@@ -168,22 +168,22 @@ importers:
 
   packages/bot-plugin-companion:
     dependencies:
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-bots':
+      '@mushinjs/plugin-bots':
         specifier: workspace:*
         version: link:../plugin-bots
-      '@mushin/plugin-database':
+      '@mushinjs/plugin-database':
         specifier: workspace:*
         version: link:../plugin-database
-      '@mushin/plugin-flows':
+      '@mushinjs/plugin-flows':
         specifier: workspace:*
         version: link:../plugin-flows
-      '@mushin/plugin-personas':
+      '@mushinjs/plugin-personas':
         specifier: workspace:*
         version: link:../plugin-personas
-      '@mushin/plugin-providers':
+      '@mushinjs/plugin-providers':
         specifier: workspace:*
         version: link:../plugin-providers
       minato:
@@ -192,40 +192,40 @@ importers:
 
   packages/bot-plugin-echo:
     dependencies:
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-bots':
+      '@mushinjs/plugin-bots':
         specifier: workspace:*
         version: link:../plugin-bots
 
   packages/bot-plugin-flows:
     dependencies:
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-bots':
+      '@mushinjs/plugin-bots':
         specifier: workspace:*
         version: link:../plugin-bots
-      '@mushin/plugin-flows':
+      '@mushinjs/plugin-flows':
         specifier: workspace:*
         version: link:../plugin-flows
 
   packages/bot-plugin-llm-chat:
     dependencies:
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-bots':
+      '@mushinjs/plugin-bots':
         specifier: workspace:*
         version: link:../plugin-bots
-      '@mushin/plugin-flows':
+      '@mushinjs/plugin-flows':
         specifier: workspace:*
         version: link:../plugin-flows
-      '@mushin/plugin-providers':
+      '@mushinjs/plugin-providers':
         specifier: workspace:*
         version: link:../plugin-providers
-      '@mushin/plugin-storage':
+      '@mushinjs/plugin-storage':
         specifier: workspace:*
         version: link:../plugin-storage
 
@@ -234,76 +234,76 @@ importers:
       '@cordisjs/plugin-server':
         specifier: 'catalog:'
         version: 1.7.0(cordis@4.0.0-rc.11)
-      '@mushin/bot-plugin-companion':
+      '@mushinjs/bot-plugin-companion':
         specifier: workspace:*
         version: link:../bot-plugin-companion
-      '@mushin/bot-plugin-echo':
+      '@mushinjs/bot-plugin-echo':
         specifier: workspace:*
         version: link:../bot-plugin-echo
-      '@mushin/bot-plugin-flows':
+      '@mushinjs/bot-plugin-flows':
         specifier: workspace:*
         version: link:../bot-plugin-flows
-      '@mushin/bot-plugin-llm-chat':
+      '@mushinjs/bot-plugin-llm-chat':
         specifier: workspace:*
         version: link:../bot-plugin-llm-chat
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-adapter-onebot':
+      '@mushinjs/plugin-adapter-onebot':
         specifier: workspace:*
         version: link:../plugin-adapter-onebot
-      '@mushin/plugin-agent':
+      '@mushinjs/plugin-agent':
         specifier: workspace:*
         version: link:../plugin-agent
-      '@mushin/plugin-bots':
+      '@mushinjs/plugin-bots':
         specifier: workspace:*
         version: link:../plugin-bots
-      '@mushin/plugin-console':
+      '@mushinjs/plugin-console':
         specifier: workspace:*
         version: link:../plugin-console
-      '@mushin/plugin-database':
+      '@mushinjs/plugin-database':
         specifier: workspace:*
         version: link:../plugin-database
-      '@mushin/plugin-demo':
+      '@mushinjs/plugin-demo':
         specifier: workspace:*
         version: link:../plugin-demo
-      '@mushin/plugin-flows':
+      '@mushinjs/plugin-flows':
         specifier: workspace:*
         version: link:../plugin-flows
-      '@mushin/plugin-knowledge':
+      '@mushinjs/plugin-knowledge':
         specifier: workspace:*
         version: link:../plugin-knowledge
-      '@mushin/plugin-mcp':
+      '@mushinjs/plugin-mcp':
         specifier: workspace:*
         version: link:../plugin-mcp
-      '@mushin/plugin-permissions':
+      '@mushinjs/plugin-permissions':
         specifier: workspace:*
         version: link:../plugin-permissions
-      '@mushin/plugin-personas':
+      '@mushinjs/plugin-personas':
         specifier: workspace:*
         version: link:../plugin-personas
-      '@mushin/plugin-provider-anthropic':
+      '@mushinjs/plugin-provider-anthropic':
         specifier: workspace:*
         version: link:../plugin-provider-anthropic
-      '@mushin/plugin-provider-gemini':
+      '@mushinjs/plugin-provider-gemini':
         specifier: workspace:*
         version: link:../plugin-provider-gemini
-      '@mushin/plugin-provider-openai':
+      '@mushinjs/plugin-provider-openai':
         specifier: workspace:*
         version: link:../plugin-provider-openai
-      '@mushin/plugin-provider-typesafe':
+      '@mushinjs/plugin-provider-typesafe':
         specifier: workspace:*
         version: link:../plugin-provider-typesafe
-      '@mushin/plugin-providers':
+      '@mushinjs/plugin-providers':
         specifier: workspace:*
         version: link:../plugin-providers
-      '@mushin/plugin-stats':
+      '@mushinjs/plugin-stats':
         specifier: workspace:*
         version: link:../plugin-stats
-      '@mushin/plugin-storage':
+      '@mushinjs/plugin-storage':
         specifier: workspace:*
         version: link:../plugin-storage
-      '@mushin/plugin-terminal':
+      '@mushinjs/plugin-terminal':
         specifier: workspace:*
         version: link:../plugin-terminal
       cordis:
@@ -331,7 +331,7 @@ importers:
 
   packages/dashboard:
     devDependencies:
-      '@mushin/ui':
+      '@mushinjs/ui':
         specifier: workspace:*
         version: link:../ui
       '@tanstack/vue-virtual':
@@ -403,13 +403,13 @@ importers:
       '@cordisjs/plugin-server':
         specifier: 'catalog:'
         version: 1.7.0(cordis@4.0.0-rc.11)
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-bots':
+      '@mushinjs/plugin-bots':
         specifier: workspace:*
         version: link:../plugin-bots
-      '@mushin/plugin-flows':
+      '@mushinjs/plugin-flows':
         specifier: workspace:*
         version: link:../plugin-flows
       ws:
@@ -418,25 +418,25 @@ importers:
 
   packages/plugin-agent:
     dependencies:
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-providers':
+      '@mushinjs/plugin-providers':
         specifier: workspace:*
         version: link:../plugin-providers
-      '@mushin/plugin-storage':
+      '@mushinjs/plugin-storage':
         specifier: workspace:*
         version: link:../plugin-storage
 
   packages/plugin-bots:
     dependencies:
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-database':
+      '@mushinjs/plugin-database':
         specifier: workspace:*
         version: link:../plugin-database
-      '@mushin/plugin-storage':
+      '@mushinjs/plugin-storage':
         specifier: workspace:*
         version: link:../plugin-storage
       minato:
@@ -448,28 +448,28 @@ importers:
       '@cordisjs/plugin-server':
         specifier: 'catalog:'
         version: 1.7.0(cordis@4.0.0-rc.11)
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/dashboard':
+      '@mushinjs/dashboard':
         specifier: workspace:*
         version: link:../dashboard
-      '@mushin/plugin-agent':
+      '@mushinjs/plugin-agent':
         specifier: workspace:*
         version: link:../plugin-agent
-      '@mushin/plugin-bots':
+      '@mushinjs/plugin-bots':
         specifier: workspace:*
         version: link:../plugin-bots
-      '@mushin/plugin-flows':
+      '@mushinjs/plugin-flows':
         specifier: workspace:*
         version: link:../plugin-flows
-      '@mushin/plugin-providers':
+      '@mushinjs/plugin-providers':
         specifier: workspace:*
         version: link:../plugin-providers
-      '@mushin/plugin-stats':
+      '@mushinjs/plugin-stats':
         specifier: workspace:*
         version: link:../plugin-stats
-      '@mushin/plugin-storage':
+      '@mushinjs/plugin-storage':
         specifier: workspace:*
         version: link:../plugin-storage
       ws:
@@ -484,7 +484,7 @@ importers:
       '@minatojs/driver-sqlite':
         specifier: 'catalog:'
         version: 5.0.3(cordis@4.0.0-rc.11)(minato@4.0.1(cordis@4.0.0-rc.11))
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
       cordis:
@@ -496,37 +496,37 @@ importers:
 
   packages/plugin-demo:
     dependencies:
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-bots':
+      '@mushinjs/plugin-bots':
         specifier: workspace:*
         version: link:../plugin-bots
-      '@mushin/plugin-flows':
+      '@mushinjs/plugin-flows':
         specifier: workspace:*
         version: link:../plugin-flows
-      '@mushin/plugin-providers':
+      '@mushinjs/plugin-providers':
         specifier: workspace:*
         version: link:../plugin-providers
-      '@mushin/plugin-storage':
+      '@mushinjs/plugin-storage':
         specifier: workspace:*
         version: link:../plugin-storage
 
   packages/plugin-flows:
     dependencies:
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-bots':
+      '@mushinjs/plugin-bots':
         specifier: workspace:*
         version: link:../plugin-bots
-      '@mushin/plugin-database':
+      '@mushinjs/plugin-database':
         specifier: workspace:*
         version: link:../plugin-database
-      '@mushin/plugin-providers':
+      '@mushinjs/plugin-providers':
         specifier: workspace:*
         version: link:../plugin-providers
-      '@mushin/plugin-storage':
+      '@mushinjs/plugin-storage':
         specifier: workspace:*
         version: link:../plugin-storage
       minato:
@@ -535,56 +535,56 @@ importers:
 
   packages/plugin-knowledge:
     dependencies:
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-bots':
+      '@mushinjs/plugin-bots':
         specifier: workspace:*
         version: link:../plugin-bots
-      '@mushin/plugin-database':
+      '@mushinjs/plugin-database':
         specifier: workspace:*
         version: link:../plugin-database
-      '@mushin/plugin-flows':
+      '@mushinjs/plugin-flows':
         specifier: workspace:*
         version: link:../plugin-flows
-      '@mushin/plugin-providers':
+      '@mushinjs/plugin-providers':
         specifier: workspace:*
         version: link:../plugin-providers
-      '@mushin/plugin-storage':
+      '@mushinjs/plugin-storage':
         specifier: workspace:*
         version: link:../plugin-storage
       minato:
         specifier: 'catalog:'
         version: 4.0.1(cordis@4.0.0-rc.11)
     devDependencies:
-      '@mushin/plugin-agent':
+      '@mushinjs/plugin-agent':
         specifier: workspace:*
         version: link:../plugin-agent
 
   packages/plugin-mcp:
     dependencies:
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-storage':
+      '@mushinjs/plugin-storage':
         specifier: workspace:*
         version: link:../plugin-storage
 
   packages/plugin-permissions:
     dependencies:
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-bots':
+      '@mushinjs/plugin-bots':
         specifier: workspace:*
         version: link:../plugin-bots
-      '@mushin/plugin-database':
+      '@mushinjs/plugin-database':
         specifier: workspace:*
         version: link:../plugin-database
-      '@mushin/plugin-flows':
+      '@mushinjs/plugin-flows':
         specifier: workspace:*
         version: link:../plugin-flows
-      '@mushin/plugin-storage':
+      '@mushinjs/plugin-storage':
         specifier: workspace:*
         version: link:../plugin-storage
       minato:
@@ -593,16 +593,16 @@ importers:
 
   packages/plugin-personas:
     dependencies:
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-bots':
+      '@mushinjs/plugin-bots':
         specifier: workspace:*
         version: link:../plugin-bots
-      '@mushin/plugin-flows':
+      '@mushinjs/plugin-flows':
         specifier: workspace:*
         version: link:../plugin-flows
-      '@mushin/plugin-storage':
+      '@mushinjs/plugin-storage':
         specifier: workspace:*
         version: link:../plugin-storage
 
@@ -611,28 +611,28 @@ importers:
       '@anthropic-ai/sdk':
         specifier: 'catalog:'
         version: 0.134.0(zod@4.6.7)
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-providers':
+      '@mushinjs/plugin-providers':
         specifier: workspace:*
         version: link:../plugin-providers
 
   packages/plugin-provider-gemini:
     dependencies:
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-providers':
+      '@mushinjs/plugin-providers':
         specifier: workspace:*
         version: link:../plugin-providers
 
   packages/plugin-provider-openai:
     dependencies:
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-providers':
+      '@mushinjs/plugin-providers':
         specifier: workspace:*
         version: link:../plugin-providers
       openai:
@@ -641,37 +641,37 @@ importers:
 
   packages/plugin-provider-typesafe:
     dependencies:
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-providers':
+      '@mushinjs/plugin-providers':
         specifier: workspace:*
         version: link:../plugin-providers
 
   packages/plugin-providers:
     dependencies:
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-storage':
+      '@mushinjs/plugin-storage':
         specifier: workspace:*
         version: link:../plugin-storage
 
   packages/plugin-stats:
     dependencies:
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-bots':
+      '@mushinjs/plugin-bots':
         specifier: workspace:*
         version: link:../plugin-bots
-      '@mushin/plugin-flows':
+      '@mushinjs/plugin-flows':
         specifier: workspace:*
         version: link:../plugin-flows
-      '@mushin/plugin-providers':
+      '@mushinjs/plugin-providers':
         specifier: workspace:*
         version: link:../plugin-providers
-      '@mushin/plugin-storage':
+      '@mushinjs/plugin-storage':
         specifier: workspace:*
         version: link:../plugin-storage
       cordis:
@@ -680,19 +680,19 @@ importers:
 
   packages/plugin-storage:
     dependencies:
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
 
   packages/plugin-terminal:
     dependencies:
-      '@mushin/core':
+      '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
-      '@mushin/plugin-flows':
+      '@mushinjs/plugin-flows':
         specifier: workspace:*
         version: link:../plugin-flows
-      '@mushin/plugin-storage':
+      '@mushinjs/plugin-storage':
         specifier: workspace:*
         version: link:../plugin-storage
       ssh2:

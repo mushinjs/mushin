@@ -1,4 +1,4 @@
-import type { MessageRecord, Segment } from '@mushin/core'
+import type { MessageRecord, Segment } from '@mushinjs/core'
 
 /** One message as the planner and the replier read it. */
 export interface TranscriptLine {

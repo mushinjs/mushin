@@ -1,8 +1,8 @@
 import { appendFile, mkdir, readdir, readFile, rm } from 'node:fs/promises'
 import { dirname, join, relative, resolve, sep } from 'node:path'
-import { Context, field, readJson, Service, writeJsonAtomic, z } from '@mushin/core'
+import { Context, field, readJson, Service, writeJsonAtomic, z } from '@mushinjs/core'
 
-declare module '@mushin/core' {
+declare module '@mushinjs/core' {
   interface Context {
     storage: Storage
   }

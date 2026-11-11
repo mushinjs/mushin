@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Popover, Spin } from '@mushin/ui'
+import { Popover, Spin } from '@mushinjs/ui'
 import { Handle, Position } from '@vue-flow/core'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'

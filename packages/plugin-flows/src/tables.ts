@@ -1,5 +1,5 @@
-import { type Context, field, MushinError, z } from '@mushin/core'
-import type {} from '@mushin/plugin-database'
+import { type Context, field, MushinError, z } from '@mushinjs/core'
+import type {} from '@mushinjs/plugin-database'
 import { $ } from 'minato'
 import { FlowError } from './engine'
 import type { NodeContext, NodeType } from './types'

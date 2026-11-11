@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Form } from '@mushin/ui'
+import { Form } from '@mushinjs/ui'
 import { computed, watch } from 'vue'
 import type { JsonSchema } from '../types'
 import SchemaField from './SchemaField.vue'

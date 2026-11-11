@@ -3,7 +3,7 @@
  * The inspector's node tab: the selected node's name, notes on why it may not run, its settings and
  * its wiring. Keyword and command triggers can be turned into each other from here.
  */
-import { Alert, Button, Empty, Form, FormItem, TabPane, Tabs, Tooltip } from '@mushin/ui'
+import { Alert, Button, Empty, Form, FormItem, TabPane, Tabs, Tooltip } from '@mushinjs/ui'
 import { computed, provide, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { categoryColors, portColors, schemaDefaults } from '../../../flow'

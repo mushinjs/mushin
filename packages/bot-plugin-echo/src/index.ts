@@ -1,5 +1,5 @@
-import { type Context, field, z } from '@mushin/core'
-import type {} from '@mushin/plugin-bots'
+import { type Context, field, z } from '@mushinjs/core'
+import type {} from '@mushinjs/plugin-bots'
 
 // A bot plugin is a module exporting `name`, `inject`, an optional zod `Config`, and `apply`.
 export const name = 'echo'

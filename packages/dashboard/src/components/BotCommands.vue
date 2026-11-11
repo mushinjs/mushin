@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Alert, Button, Card, DataTable, type DataTableColumn, Form, FormItem, Input, Tag, TagsInput, Toggle, useToast } from '@mushin/ui'
+import { Alert, Button, Card, DataTable, type DataTableColumn, Form, FormItem, Input, Tag, TagsInput, Toggle, useToast } from '@mushinjs/ui'
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'

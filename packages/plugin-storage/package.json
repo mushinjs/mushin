@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/plugin-storage",
+  "name": "@mushinjs/plugin-storage",
   "version": "0.1.0",
   "description": "JSON document storage",
   "type": "module",
@@ -45,6 +45,6 @@
     ]
   },
   "dependencies": {
-    "@mushin/core": "workspace:*"
+    "@mushinjs/core": "workspace:*"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/plugin-demo",
+  "name": "@mushinjs/plugin-demo",
   "version": "0.1.0",
   "description": "Demo content: an offline test provider, a sandbox bot and sample flows",
   "type": "module",
@@ -42,18 +42,18 @@
     },
     "requires": {
       "plugins": {
-        "@mushin/plugin-providers": "*",
-        "@mushin/plugin-bots": "*",
-        "@mushin/plugin-flows": "*",
-        "@mushin/plugin-storage": "*"
+        "@mushinjs/plugin-providers": "*",
+        "@mushinjs/plugin-bots": "*",
+        "@mushinjs/plugin-flows": "*",
+        "@mushinjs/plugin-storage": "*"
       }
     }
   },
   "dependencies": {
-    "@mushin/core": "workspace:*",
-    "@mushin/plugin-bots": "workspace:*",
-    "@mushin/plugin-flows": "workspace:*",
-    "@mushin/plugin-providers": "workspace:*",
-    "@mushin/plugin-storage": "workspace:*"
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-bots": "workspace:*",
+    "@mushinjs/plugin-flows": "workspace:*",
+    "@mushinjs/plugin-providers": "workspace:*",
+    "@mushinjs/plugin-storage": "workspace:*"
   }
 }

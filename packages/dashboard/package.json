@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/dashboard",
+  "name": "@mushinjs/dashboard",
   "version": "0.1.0",
   "description": "Mushin.js dashboard",
   "type": "module",
@@ -24,7 +24,7 @@
     "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
-    "@mushin/ui": "workspace:*",
+    "@mushinjs/ui": "workspace:*",
     "@tanstack/vue-virtual": "catalog:",
     "@types/markdown-it": "catalog:",
     "@vitejs/plugin-vue": "catalog:",

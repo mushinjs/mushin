@@ -1,4 +1,4 @@
-import type { MessageRecord, Segment } from '@mushin/core'
+import type { MessageRecord, Segment } from '@mushinjs/core'
 
 let counter = 0
 

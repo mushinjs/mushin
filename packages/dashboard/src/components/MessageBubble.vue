@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Avatar, Popover, Tag } from '@mushin/ui'
+import { Avatar, Popover, Tag } from '@mushinjs/ui'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRouter } from 'vue-router'
@@ -98,7 +98,7 @@ watch(open, async (value) => {
 
 const tokensOf = (events: UsageEvent[]) => events.reduce((sum, event) => sum + (event.inputTokens ?? 0) + (event.outputTokens ?? 0), 0)
 const kindLabel = (kind: string) => (te(`usage.kind.${kind}`) ? t(`usage.kind.${kind}`) : kind)
-const shortPlugin = (name?: string) => name?.replace(/^@mushin\/(bot-)?plugin-/, '')
+const shortPlugin = (name?: string) => name?.replace(/^@mushinjs\/(bot-)?plugin-/, '')
 const speed = (bytes: number, ms: number) => formatBytes(Math.round(bytes / Math.max(ms, 1) * 1000))
 
 const openRun = (row: RunRow) => router.push({ path: `/flows/${row.flowId}`, query: { run: row.id } })

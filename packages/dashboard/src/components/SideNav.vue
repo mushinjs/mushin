@@ -6,7 +6,7 @@
  * the panel widens first and the words fade in once there is room for them. Both steps are CSS
  * transitions on classes, so they hold whatever Vue re-renders in between.
  */
-import { Tooltip } from '@mushin/ui'
+import { Tooltip } from '@mushinjs/ui'
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 

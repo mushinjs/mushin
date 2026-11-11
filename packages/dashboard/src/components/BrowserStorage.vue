@@ -3,7 +3,7 @@
  * The database page's browser tab: what this dashboard keeps in this browser, in localStorage,
  * sessionStorage and IndexedDB, to look through, change and delete.
  */
-import { Alert, Button, DataTable, type DataTableColumn, Empty, Input, Modal, Pagination, Tag, Toggle, useConfirm, useToast } from '@mushin/ui'
+import { Alert, Button, DataTable, type DataTableColumn, Empty, Input, Modal, Pagination, Tag, Toggle, useConfirm, useToast } from '@mushinjs/ui'
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'

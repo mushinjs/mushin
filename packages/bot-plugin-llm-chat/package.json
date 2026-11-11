@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/bot-plugin-llm-chat",
+  "name": "@mushinjs/bot-plugin-llm-chat",
   "version": "0.1.0",
   "description": "LLM chat bot plugin: makes an editable chat flow on each bot",
   "type": "module",
@@ -45,23 +45,23 @@
     },
     "requires": {
       "plugins": {
-        "@mushin/plugin-bots": "*",
-        "@mushin/plugin-flows": "*",
-        "@mushin/plugin-providers": "*",
-        "@mushin/plugin-storage": "*"
+        "@mushinjs/plugin-bots": "*",
+        "@mushinjs/plugin-flows": "*",
+        "@mushinjs/plugin-providers": "*",
+        "@mushinjs/plugin-storage": "*"
       }
     },
     "optional": {
       "plugins": {
-        "@mushin/plugin-personas": "*"
+        "@mushinjs/plugin-personas": "*"
       }
     }
   },
   "dependencies": {
-    "@mushin/core": "workspace:*",
-    "@mushin/plugin-bots": "workspace:*",
-    "@mushin/plugin-providers": "workspace:*",
-    "@mushin/plugin-storage": "workspace:*",
-    "@mushin/plugin-flows": "workspace:*"
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-bots": "workspace:*",
+    "@mushinjs/plugin-providers": "workspace:*",
+    "@mushinjs/plugin-storage": "workspace:*",
+    "@mushinjs/plugin-flows": "workspace:*"
   }
 }

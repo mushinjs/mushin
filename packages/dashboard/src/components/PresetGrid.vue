@@ -3,7 +3,7 @@
  * Provider presets as a grid of icon cards, grouped by provider type. The first card starts from
  * scratch; picking any card emits its value (`type:preset`, or `custom`).
  */
-import { Input } from '@mushin/ui'
+import { Input } from '@mushinjs/ui'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { avatarColor, presetIcon } from '../presetIcons'
