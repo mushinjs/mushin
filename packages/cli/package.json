@@ -4,6 +4,11 @@
   "description": "Mushin.js launcher",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mushinjs/mushin.git",
+    "directory": "packages/cli"
+  },
   "bin": {
     "mushin": "./bin/mushin.js"
   },
@@ -15,8 +20,23 @@
     ".": "./src/index.ts",
     "./package.json": "./package.json"
   },
+  "files": [
+    "bin",
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
   "dependencies": {
     "@mushin/core": "workspace:*",
+    "cordis": "catalog:",
     "@cordisjs/plugin-server": "catalog:",
     "tsx": "catalog:",
     "@mushin/plugin-storage": "workspace:*",

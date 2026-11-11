@@ -4,38 +4,47 @@
   "description": "Mushin.js dashboard",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mushinjs/mushin.git",
+    "directory": "packages/dashboard"
+  },
   "exports": {
     "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   },
-  "dependencies": {
+  "devDependencies": {
     "@mushin/ui": "workspace:*",
     "@tanstack/vue-virtual": "catalog:",
-    "ansi_up": "catalog:",
+    "@types/markdown-it": "catalog:",
+    "@vitejs/plugin-vue": "catalog:",
     "@vue-flow/background": "catalog:",
     "@vue-flow/controls": "catalog:",
     "@vue-flow/core": "catalog:",
     "@vue-flow/minimap": "catalog:",
+    "ansi_up": "catalog:",
     "echarts": "catalog:",
     "gsap": "catalog:",
     "highlight.js": "catalog:",
     "markdown-it": "catalog:",
     "mermaid": "catalog:",
     "pinia": "catalog:",
-    "vue": "catalog:",
-    "vue-i18n": "catalog:",
-    "vue-router": "catalog:"
-  },
-  "devDependencies": {
-    "@types/markdown-it": "catalog:",
-    "@vitejs/plugin-vue": "catalog:",
     "typescript": "catalog:",
     "unocss": "catalog:",
     "vite": "catalog:",
+    "vue": "catalog:",
+    "vue-i18n": "catalog:",
+    "vue-router": "catalog:",
     "vue-tsc": "catalog:"
   }
 }

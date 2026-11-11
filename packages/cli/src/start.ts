@@ -7,6 +7,22 @@ import type { SignInInfo } from '@mushin/plugin-console'
 
 export const DEFAULT_PORT = 5160
 
+/** True when this file runs as TypeScript: from the repository's sources, where tsx is already loaded. */
+const fromSource = import.meta.url.endsWith('.ts')
+let tsx: Promise<unknown> | undefined
+
+/**
+ * Imports a plugin entry. Published packages are JavaScript; a plugin in the instance's plugins/ folder may be
+ * TypeScript, so tsx starts the first time one is imported, and an instance without one never loads it.
+ */
+export async function importPlugin(specifier: string) {
+  if (!fromSource && /\.[cm]?tsx?$/.test(specifier)) {
+    tsx ??= import('tsx/esm/api').then(({ register }) => register())
+    await tsx
+  }
+  return import(specifier)
+}
+
 export function defaultConfig(): InstanceConfig {
   return {
     plugins: [
@@ -123,7 +139,7 @@ export async function start(options: StartOptions) {
       join(baseDir, 'node_modules'),
     ],
     localDirs: [join(baseDir, 'plugins')],
-    importer: (specifier: string) => import(specifier),
+    importer: importPlugin,
   })
   await manager
 
