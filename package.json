@@ -10,19 +10,26 @@
     "start": "mushin start --dir instance",
     "dev": "pnpm --filter @mushin/cli dev",
     "demo": "pnpm --filter @mushin/cli demo",
-    "build": "pnpm --filter @mushin/dashboard build",
+    "build": "tsx scripts/build.ts && pnpm --filter @mushin/dashboard build",
+    "build:packages": "tsx scripts/build.ts",
     "test": "vitest run",
+    "test:pack": "tsx scripts/pack-test.ts",
     "test:flows": "mushin test --dir instance",
-    "typecheck": "tsc -p tsconfig.json && pnpm --filter @mushin/dashboard typecheck"
+    "typecheck": "tsc -p tsconfig.json && pnpm --filter @mushin/dashboard typecheck",
+    "changeset": "changeset",
+    "release": "pnpm build && changeset publish"
   },
   "dependencies": {
     "@mushin/cli": "workspace:*",
     "@mushin/core": "workspace:*"
   },
   "devDependencies": {
+    "@changesets/cli": "catalog:",
     "@iconify/json": "catalog:",
     "@types/node": "catalog:",
     "@types/ws": "catalog:",
+    "tsdown": "catalog:",
+    "tsx": "catalog:",
     "typescript": "catalog:",
     "unocss": "catalog:",
     "vitest": "catalog:"

@@ -4,11 +4,32 @@
   "description": "Vue components and design tokens shared by the Mushin.js dashboard and plugin pages",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mushinjs/mushin.git",
+    "directory": "packages/ui"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./preset": "./src/preset.ts",
     "./theme.css": "./src/theme.css",
     "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": "./src/index.ts",
+      "./preset": {
+        "types": "./dist/preset.d.ts",
+        "import": "./dist/preset.js"
+      },
+      "./theme.css": "./src/theme.css",
+      "./package.json": "./package.json"
+    }
   },
   "peerDependencies": {
     "vue": "catalog:"

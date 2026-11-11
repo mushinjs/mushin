@@ -4,9 +4,27 @@
   "description": "Demo content: an offline test provider, a sandbox bot and sample flows",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mushinjs/mushin.git",
+    "directory": "packages/plugin-demo"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./package.json": "./package.json"
+    }
   },
   "keywords": [
     "mushin-plugin"

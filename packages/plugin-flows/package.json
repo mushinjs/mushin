@@ -4,9 +4,27 @@
   "description": "Conversation flows: node registry, execution engine and flow storage",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mushinjs/mushin.git",
+    "directory": "packages/plugin-flows"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./package.json": "./package.json"
+    }
   },
   "keywords": [
     "mushin-plugin"
