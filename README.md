@@ -27,7 +27,7 @@ You need Node.js 22.13 or later and pnpm.
 
 ```sh
 pnpm install
-pnpm build      # builds the dashboard
+pnpm build      # builds the packages and the dashboard
 pnpm start      # starts Mushin.js in ./instance
 ```
 
@@ -208,7 +208,14 @@ pnpm dev          # backend on :5160 and the dashboard dev server on :5173 (prox
 pnpm test         # unit and end-to-end tests (mock NapCat and mock LLM)
 pnpm typecheck    # TypeScript for all packages, vue-tsc for the dashboard
 pnpm test:flows   # the saved test cases of every flow in ./instance, offline (mushin test)
+pnpm test:pack    # after pnpm build: packs every package, installs the tarballs with npm in an empty folder and starts Mushin.js from them
 ```
+
+Inside the repository the packages run from their TypeScript sources through tsx, so a change needs no build. Published packages are JavaScript: `pnpm build` compiles each package's `src/` into `dist/` with type declarations (`tsdown.config.ts`), and `publishConfig.exports` points the published package there. An install from npm loads tsx only when the instance's `plugins/` folder holds a TypeScript plugin.
+
+### Releasing
+
+A pull request that changes what users get adds a changeset (`pnpm changeset`). When it merges, the Release workflow publishes a snapshot of every package to the `next` tag on npm and opens or updates the "Version Packages" pull request; merging that one publishes to `latest`. All `@mushin/*` packages share one version. See `.changeset/README.md`.
 
 | Package | Role |
 | --- | --- |
