@@ -27,7 +27,9 @@ const base = {
   clean: true,
   // Every bare import stays an import: dependencies are installed next to the package, and
   // optional ones (such as the PDF and Word readers of plugin-knowledge) are imported only when present.
-  deps: { neverBundle: [/^[^./]/] },
+  // The pattern is also tested against resolved paths, so it must not match `C:\...` on Windows:
+  // only package names (optionally scoped, with a subpath) and `node:` builtins.
+  deps: { neverBundle: [/^node:/, /^(@[\w-][\w.-]*\/)?[\w-][\w.-]*(\/.*)?$/] },
   logLevel: 'warn',
   // Declarations take most of each build; the timing report says nothing new.
   checks: { pluginTimings: false },

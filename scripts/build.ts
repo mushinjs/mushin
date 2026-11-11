@@ -5,7 +5,9 @@
 // Declaration files come from the TypeScript compiler, which keeps memory between builds in one process,
 // so each package builds in a process of its own, a few at a time.
 import { spawn } from 'node:child_process'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'tsdown'
 import configs from '../tsdown.config'
@@ -16,6 +18,18 @@ if (flag === '--one') {
   const config = configs.find((item) => item.name === args[0])
   if (!config) throw new Error(`No build config for ${args[0]}`)
   await build({ ...config, config: false })
+  // A relative import must name a .js file that exists in dist/. A source path that slipped through as an
+  // "external" (it happened on Windows, where `C:\...` looked like a package name) fails here, not after publishing.
+  const dist = join(config.cwd!, config.outDir!)
+  for (const file of readdirSync(dist, { recursive: true, encoding: 'utf8' })) {
+    if (!file.endsWith('.js')) continue
+    for (const [, specifier] of readFileSync(join(dist, file), 'utf8').matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)) {
+      if (/^[a-z]:[\\/]|^\//i.test(specifier!)) throw new Error(`${config.name}: dist/${file} imports an absolute path: ${specifier}`)
+      if (specifier!.startsWith('.') && !existsSync(join(dist, dirname(file), specifier!))) {
+        throw new Error(`${config.name}: dist/${file} imports ${specifier}, which is not in dist/`)
+      }
+    }
+  }
 } else {
   const only = new Set([flag, ...args].filter(Boolean))
   const queue = configs.filter((config) => !only.size || only.has(config.name!))
