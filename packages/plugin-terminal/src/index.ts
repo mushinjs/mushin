@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, resolve } from 'node:path'
-import { type Context, field, type LocalizedText, MushinError, z } from '@mushin/core'
-import { FlowError, type NodeContext, type NodeResult, type NodeType, type PortDef } from '@mushin/plugin-flows'
-import type {} from '@mushin/plugin-storage'
+import { type Context, field, type LocalizedText, MushinError, z } from '@mushinjs/core'
+import { FlowError, type NodeContext, type NodeResult, type NodeType, type PortDef } from '@mushinjs/plugin-flows'
+import type {} from '@mushinjs/plugin-storage'
 import { type CommandResult, type LocalShell, quote, quotingOf, runLocal } from './shell'
 import { type HostCheck, runSsh, sameFingerprint, type SshTarget } from './ssh'
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Image } from '@mushin/ui'
+import { Image } from '@mushinjs/ui'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { loadableUrl, type MediaChannel, resolveMedia } from '../../media'

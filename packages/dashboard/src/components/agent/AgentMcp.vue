@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Alert, Button, Card, Empty, Form, FormItem, Input, KeyValueInput, Modal, RadioButton, RadioGroup, Select, Spin, Tag, TagsInput, Toggle, useConfirm, useToast } from '@mushin/ui'
+import { Alert, Button, Card, Empty, Form, FormItem, Input, KeyValueInput, Modal, RadioButton, RadioGroup, Select, Spin, Tag, TagsInput, Toggle, useConfirm, useToast } from '@mushinjs/ui'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -151,7 +151,7 @@ const statusType = { connected: 'success', connecting: 'info', error: 'error', s
   <div class="mcp">
     <Alert v-if="available === false" type="warning" :title="t('agentPage.mcp.unavailable')">
       {{ t('agentPage.mcp.unavailableHint') }}
-      <RouterLink to="/plugins?highlight=@mushin/plugin-mcp">{{ t('permissions.openPlugins') }}</RouterLink>
+      <RouterLink to="/plugins?highlight=@mushinjs/plugin-mcp">{{ t('permissions.openPlugins') }}</RouterLink>
     </Alert>
     <template v-else>
       <div class="toolbar">

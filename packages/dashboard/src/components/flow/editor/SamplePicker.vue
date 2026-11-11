@@ -3,7 +3,7 @@
  * Picks the editor's sample: a bot that is online, one of its recent chats, then a message
  * someone sent there. While one is picked the button shows who sent it.
  */
-import { Button, Empty, Popover, Select, Spin, Tag } from '@mushin/ui'
+import { Button, Empty, Popover, Select, Spin, Tag } from '@mushinjs/ui'
 import { computed, ref, watch } from 'vue'
 import { call } from '../../../api'
 import type { ChannelSummary, MessageRecord } from '../../../types'

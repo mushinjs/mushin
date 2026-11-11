@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/plugin-provider-typesafe",
+  "name": "@mushinjs/plugin-provider-typesafe",
   "version": "0.1.0",
   "description": "TypeSafe Jev decision provider type",
   "type": "module",
@@ -41,12 +41,12 @@
     },
     "requires": {
       "plugins": {
-        "@mushin/plugin-providers": "*"
+        "@mushinjs/plugin-providers": "*"
       }
     }
   },
   "dependencies": {
-    "@mushin/core": "workspace:*",
-    "@mushin/plugin-providers": "workspace:*"
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-providers": "workspace:*"
   }
 }

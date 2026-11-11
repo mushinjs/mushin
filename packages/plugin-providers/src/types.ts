@@ -1,4 +1,4 @@
-import type { JsonSchema, LocalizedText, Provenance, z } from '@mushin/core'
+import type { JsonSchema, LocalizedText, Provenance, z } from '@mushinjs/core'
 
 export interface ToolCall {
   id: string

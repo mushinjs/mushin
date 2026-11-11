@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/plugin-terminal",
+  "name": "@mushinjs/plugin-terminal",
   "version": "0.1.0",
   "description": "Flow nodes that run commands in a local terminal or over SSH",
   "type": "module",
@@ -42,8 +42,8 @@
     "requires": {
       "mushin": ">=0.1.0",
       "plugins": {
-        "@mushin/plugin-flows": "*",
-        "@mushin/plugin-storage": "*"
+        "@mushinjs/plugin-flows": "*",
+        "@mushinjs/plugin-storage": "*"
       }
     },
     "nodes": [
@@ -51,9 +51,9 @@
     ]
   },
   "dependencies": {
-    "@mushin/core": "workspace:*",
-    "@mushin/plugin-flows": "workspace:*",
-    "@mushin/plugin-storage": "workspace:*",
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-flows": "workspace:*",
+    "@mushinjs/plugin-storage": "workspace:*",
     "ssh2": "catalog:"
   },
   "devDependencies": {

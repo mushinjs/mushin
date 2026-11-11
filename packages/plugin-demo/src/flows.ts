@@ -1,4 +1,4 @@
-import type {} from '@mushin/plugin-bots'
+import type {} from '@mushinjs/plugin-bots'
 
 interface DemoNode {
   id: string

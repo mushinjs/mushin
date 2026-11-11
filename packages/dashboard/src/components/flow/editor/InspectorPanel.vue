@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** The panel beside the canvas: the selected node's settings, or the flow's. */
-import { TabPane, Tabs } from '@mushin/ui'
+import { TabPane, Tabs } from '@mushinjs/ui'
 import { useEditor } from './editor'
 import FlowPanel from './FlowPanel.vue'
 import NodePanel from './NodePanel.vue'

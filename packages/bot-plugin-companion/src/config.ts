@@ -1,4 +1,4 @@
-import { field, z } from '@mushin/core'
+import { field, z } from '@mushinjs/core'
 
 /** How long the companion waits for someone to finish typing before it reads what they said. */
 export const DEBOUNCE = {

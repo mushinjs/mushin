@@ -1,20 +1,20 @@
 import type { WebSocket } from 'ws'
 import {
   type ActionCaller, Context, type Exporter, field, Logger, LOG_TAGS, type LogTag, logTag, type Message, MushinError, randomId, Service, toErrorPayload, z,
-} from '@mushin/core'
+} from '@mushinjs/core'
 import type {} from '@cordisjs/plugin-server'
-import type {} from '@mushin/plugin-agent'
-import type {} from '@mushin/plugin-bots'
-import type {} from '@mushin/plugin-flows'
-import type {} from '@mushin/plugin-providers'
-import type {} from '@mushin/plugin-stats'
-import type {} from '@mushin/plugin-storage'
+import type {} from '@mushinjs/plugin-agent'
+import type {} from '@mushinjs/plugin-bots'
+import type {} from '@mushinjs/plugin-flows'
+import type {} from '@mushinjs/plugin-providers'
+import type {} from '@mushinjs/plugin-stats'
+import type {} from '@mushinjs/plugin-storage'
 import { AUTH_KEY, type AuthRecord, generateToken, isAuthRecord, tokensEqual } from './auth'
 import { dashboardRoot, MISSING_BUILD_PAGE, readStatic } from './static'
 
 export { readAdminToken, resetAdminToken } from './auth'
 
-declare module '@mushin/core' {
+declare module '@mushinjs/core' {
   interface Context {
     console: Console
   }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Alert, Button, Checkbox, Form, FormItem, Input, Modal, Select, useToast } from '@mushin/ui'
+import { Alert, Button, Checkbox, Form, FormItem, Input, Modal, Select, useToast } from '@mushinjs/ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../api'
@@ -18,7 +18,7 @@ const message = useToast()
 const name = ref('')
 const adapterType = ref('onebot')
 const config = ref<Record<string, any>>({})
-const plugins = ref<string[]>(['@mushin/bot-plugin-llm-chat'])
+const plugins = ref<string[]>(['@mushinjs/bot-plugin-llm-chat'])
 const catalog = ref<CatalogEntry[]>([])
 const togglePlugin = (name: string, on: boolean) => (plugins.value = on ? [...plugins.value, name] : plugins.value.filter((item) => item !== name))
 const saving = ref(false)

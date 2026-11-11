@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import { extname } from 'node:path'
-import type { ChannelInfo, Context, Segment } from '@mushin/core'
-import type { ForwardedMessage, MediaResolver, ResolvedMedia } from '@mushin/plugin-bots'
+import type { ChannelInfo, Context, Segment } from '@mushinjs/core'
+import type { ForwardedMessage, MediaResolver, ResolvedMedia } from '@mushinjs/plugin-bots'
 import { toId } from './protocol'
 
 /** The most bytes sent to the dashboard as a data URL. */

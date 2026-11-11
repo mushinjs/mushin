@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TabPane, Tabs } from '@mushin/ui'
+import { TabPane, Tabs } from '@mushinjs/ui'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'

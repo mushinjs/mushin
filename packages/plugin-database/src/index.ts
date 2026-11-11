@@ -1,7 +1,7 @@
 import { mkdir, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { type Context, field, MushinError, z } from '@mushin/core'
+import { type Context, field, MushinError, z } from '@mushinjs/core'
 import MemoryDriver from '@minatojs/driver-memory'
 import SQLiteDriver from '@minatojs/driver-sqlite'
 import { $, Database, type Field, type Model } from 'minato'

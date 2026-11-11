@@ -1,7 +1,7 @@
-import { type ChannelInfo, Context, field, MushinError, randomId, Service, type UserInfo, z } from '@mushin/core'
-import { roleAtLeast, type Session } from '@mushin/plugin-bots'
-import type { FlowSession, NodeType, PersonaLike } from '@mushin/plugin-flows'
-import type {} from '@mushin/plugin-storage'
+import { type ChannelInfo, Context, field, MushinError, randomId, Service, type UserInfo, z } from '@mushinjs/core'
+import { roleAtLeast, type Session } from '@mushinjs/plugin-bots'
+import type { FlowSession, NodeType, PersonaLike } from '@mushinjs/plugin-flows'
+import type {} from '@mushinjs/plugin-storage'
 import { type PersonaExport, personasFrom } from './cards'
 import {
   type BotPersonaSettings, DEFAULT_SETTINGS, type Persona, type PersonaInput, personaFields, personaInput, type PersonaReason,
@@ -11,7 +11,7 @@ import {
 export * from './cards'
 export * from './types'
 
-declare module '@mushin/core' {
+declare module '@mushinjs/core' {
   interface Context {
     personas: Personas
   }

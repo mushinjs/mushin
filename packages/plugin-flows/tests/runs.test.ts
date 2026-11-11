@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { seg } from '@mushin/core'
+import { seg } from '@mushinjs/core'
 import { builtinNodes, compile, type FlowDocument, type FlowSession, type NodeType, parseCron, runFlow, type TriggerNodeType } from '../src'
 
 const types = new Map<string, NodeType>(builtinNodes.map((type) => [type.type, type]))

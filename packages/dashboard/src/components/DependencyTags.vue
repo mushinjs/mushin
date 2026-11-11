@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Tag, Tooltip } from '@mushin/ui'
+import { Button, Tag, Tooltip } from '@mushinjs/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CatalogEntry, DependencyState, PluginDependencies } from '../types'

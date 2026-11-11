@@ -4,7 +4,7 @@
  * message), and beside it the exact messages that go to the model, built by the server for the
  * test message or the editor's sample without calling the model.
  */
-import { Button, Dropdown, Input, NumberInput, RadioButton, RadioGroup, Spin, Tag } from '@mushin/ui'
+import { Button, Dropdown, Input, NumberInput, RadioButton, RadioGroup, Spin, Tag } from '@mushinjs/ui'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { call } from '../../../api'
 import VarInput from '../VarInput.vue'

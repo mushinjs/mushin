@@ -1,4 +1,4 @@
-import type { SelectGroup, SelectOption } from '@mushin/ui'
+import type { SelectGroup, SelectOption } from '@mushinjs/ui'
 import type { ModelProfile, Provider } from './types'
 
 export type Capability = 'vision' | 'reasoning' | 'tools' | 'code' | 'embedding' | 'rerank' | 'image' | 'audio'

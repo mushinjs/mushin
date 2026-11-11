@@ -51,7 +51,7 @@ describe('plugin tree', () => {
     const saved = JSON.parse(await readFile(join(app.baseDir, 'mushin.config.json'), 'utf8'))
     expect(saved.plugins.find((entry: any) => entry.id === 'provider-anthropic').enabled).toBe(false)
 
-    await app.call('plugins.enable', { package: '@mushin/plugin-provider-anthropic' })
+    await app.call('plugins.enable', { package: '@mushinjs/plugin-provider-anthropic' })
     await waitFor(async () => (await typeIds()).length === 5)
     await app.call('plugins.reload', { id: 'provider-anthropic' })
     await waitFor(async () => (await app.call<any[]>('plugins.list')).find((p) => p.id === 'provider-anthropic').status === 'active')
@@ -60,7 +60,7 @@ describe('plugin tree', () => {
 
   it('lists bot plugins in the catalog', async () => {
     const catalog = await app.call<any[]>('plugins.catalog', { kind: 'bot' })
-    expect(catalog.map((entry) => entry.package).sort()).toEqual(['@mushin/bot-plugin-companion', '@mushin/bot-plugin-echo', '@mushin/bot-plugin-flows', '@mushin/bot-plugin-llm-chat'])
+    expect(catalog.map((entry) => entry.package).sort()).toEqual(['@mushinjs/bot-plugin-companion', '@mushinjs/bot-plugin-echo', '@mushinjs/bot-plugin-flows', '@mushinjs/bot-plugin-llm-chat'])
     const server = (await app.call<any[]>('plugins.list')).find((p) => p.id === 'server')
     expect(server.manifest).toMatchObject({ essential: true })
   })
@@ -99,7 +99,7 @@ describe('bots over OneBot', () => {
     const bot = await app.call('bots.create', {
       name: 'Alpha',
       adapter: { type: 'onebot', config: { mode: 'forward', url: napcat.url, token: 'nap-token' } },
-      plugins: [{ package: '@mushin/bot-plugin-echo' }],
+      plugins: [{ package: '@mushinjs/bot-plugin-echo' }],
     })
     botA = bot.id
     expect(bot.adapter.config.token).not.toBe('nap-token')
@@ -130,10 +130,10 @@ describe('bots over OneBot', () => {
   })
 
   it('replies with the LLM when mentioned and records the model as the source', async () => {
-    await app.call('bots.plugins.enable', { id: botA, package: '@mushin/bot-plugin-llm-chat' })
+    await app.call('bots.plugins.enable', { id: botA, package: '@mushinjs/bot-plugin-llm-chat' })
     // The plugin answers through the flow it makes on the bot.
-    await waitFor(async () => (await app.call<any[]>('flows.list')).some((flow) => flow.source?.plugin === '@mushin/bot-plugin-llm-chat' && flow.bots.includes(botA)))
-    await waitFor(async () => (await app.call<any[]>('bots.plugins.list', { id: botA })).find((p) => p.package === '@mushin/bot-plugin-flows')?.status === 'active')
+    await waitFor(async () => (await app.call<any[]>('flows.list')).some((flow) => flow.source?.plugin === '@mushinjs/bot-plugin-llm-chat' && flow.bots.includes(botA)))
+    await waitFor(async () => (await app.call<any[]>('bots.plugins.list', { id: botA })).find((p) => p.package === '@mushinjs/bot-plugin-flows')?.status === 'active')
     llm.setFallback({ text: 'Hi from LLM' })
     const before = llm.requests.length
     napcat.pushGroupMessage('500', '42', [{ type: 'text', data: { text: 'just chatting' } }])
@@ -160,7 +160,7 @@ describe('bots over OneBot', () => {
       mushin: { kind: 'bot', displayName: 'Shout' },
     }))
     await writeFile(join(dir, 'index.ts'), [
-      "import type { Context } from '@mushin/core'",
+      "import type { Context } from '@mushinjs/core'",
       "export const name = 'shout'",
       "export const inject = ['bot']",
       'export function apply(ctx: Context) {',
@@ -184,11 +184,11 @@ describe('bots over OneBot', () => {
   it('shows plugin state per bot', async () => {
     const plugins = await app.call<any[]>('bots.plugins.list', { id: botA })
     const byName = Object.fromEntries(plugins.map((p) => [p.package, p]))
-    expect(byName['@mushin/bot-plugin-echo']).toMatchObject({ enabled: true, status: 'active' })
+    expect(byName['@mushinjs/bot-plugin-echo']).toMatchObject({ enabled: true, status: 'active' })
     expect(byName['mushin-bot-plugin-shout']).toMatchObject({ enabled: true, status: 'active' })
     // LLM chat keeps its settings in its flow.
-    expect(byName['@mushin/bot-plugin-llm-chat']).toMatchObject({ enabled: true, status: 'active' })
-    expect(Object.keys(byName['@mushin/bot-plugin-llm-chat'].configSchema.properties ?? {})).toEqual([])
+    expect(byName['@mushinjs/bot-plugin-llm-chat']).toMatchObject({ enabled: true, status: 'active' })
+    expect(Object.keys(byName['@mushinjs/bot-plugin-llm-chat'].configSchema.properties ?? {})).toEqual([])
   })
 
   it('accepts a reverse-mode connection with the right token only', async () => {

@@ -21,7 +21,7 @@ async function say(text: string, userId = '10001', quiet = false) {
 
 beforeAll(async () => {
   app = await startInstance()
-  await app.call('plugins.enable', { package: '@mushin/plugin-demo' })
+  await app.call('plugins.enable', { package: '@mushinjs/plugin-demo' })
   await app.call('plugins.configure', { id: 'demo', config: { bot: true } })
   botId = (await app.call<any[]>('bots.list'))[0].id
   await waitFor(async () => (await app.call('bots.get', { id: botId })).status === 'online')
@@ -154,7 +154,7 @@ describe('permissions plugin', () => {
     await app.call('plugins.disable', { id: 'permissions' })
     const flows = await app.call<any[]>('flows.list')
     const mute = await app.call('flows.get', { id: flows.find((flow) => flow.name === 'Mute').id })
-    expect(mute.issues).toEqual(expect.arrayContaining([expect.objectContaining({ plugin: '@mushin/plugin-permissions' })]))
-    await app.call('plugins.enable', { package: '@mushin/plugin-permissions' })
+    expect(mute.issues).toEqual(expect.arrayContaining([expect.objectContaining({ plugin: '@mushinjs/plugin-permissions' })]))
+    await app.call('plugins.enable', { package: '@mushinjs/plugin-permissions' })
   })
 })

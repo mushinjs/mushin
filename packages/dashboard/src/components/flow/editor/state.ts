@@ -4,7 +4,7 @@
  * behaviour on top; `useFlowEditorView` puts them together.
  */
 import { type Edge, type Node, useVueFlow } from '@vue-flow/core'
-import { useConfirm, useToast } from '@mushin/ui'
+import { useConfirm, useToast } from '@mushinjs/ui'
 import { computed, type Ref, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'

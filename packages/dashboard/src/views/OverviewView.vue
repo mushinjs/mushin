@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Empty, RadioButton, RadioGroup, Select, useToast } from '@mushin/ui'
+import { Button, Empty, RadioButton, RadioGroup, Select, useToast } from '@mushinjs/ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'

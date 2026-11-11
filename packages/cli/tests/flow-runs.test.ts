@@ -19,7 +19,7 @@ const command = (name: string, nodes: any[]) => ({
 
 beforeAll(async () => {
   app = await startInstance()
-  await app.call('plugins.enable', { package: '@mushin/plugin-demo' })
+  await app.call('plugins.enable', { package: '@mushinjs/plugin-demo' })
   await app.call('plugins.configure', { id: 'demo', config: { bot: true, greet: false } })
   botId = (await app.call<any[]>('bots.list'))[0].id
   await waitFor(async () => (await app.call('bots.get', { id: botId })).status === 'online')
@@ -105,7 +105,7 @@ describe('run monitoring', () => {
   })
 
   it('queues runs that need a resource another run holds', async () => {
-    await app.call('plugins.enable', { package: '@mushin/plugin-terminal' })
+    await app.call('plugins.enable', { package: '@mushinjs/plugin-terminal' })
     await waitFor(async () => (await app.call<any[]>('flows.nodeTypes')).some((type) => type.type === 'terminal.local'))
     await app.call('flows.create', command('原神', [
       { id: 'run', type: 'terminal.local', label: '运行 BetterGI', config: { command: 'sleep 0.6', resource: 'game', timeout: 120 } },

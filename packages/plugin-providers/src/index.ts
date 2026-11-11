@@ -1,5 +1,5 @@
-import { Context, isMasked, mask, MushinError, randomId, Service, toJsonSchema, usage, z } from '@mushin/core'
-import type {} from '@mushin/plugin-storage'
+import { Context, isMasked, mask, MushinError, randomId, Service, toJsonSchema, usage, z } from '@mushinjs/core'
+import type {} from '@mushinjs/plugin-storage'
 import type {
   ChatRequest, DecisionQuestion, LlmChatOptions, LlmMessage, LlmDecideOptions, LlmDecideResult, LlmEmbedOptions, LlmEmbedResult, LlmResult, ModelProfile,
   ProviderCapability, ProviderClient, ProviderRecord, ProviderTest, ProviderType, StreamEvent,
@@ -7,7 +7,7 @@ import type {
 
 export * from './types'
 
-declare module '@mushin/core' {
+declare module '@mushinjs/core' {
   interface Context {
     llm: LlmService
   }

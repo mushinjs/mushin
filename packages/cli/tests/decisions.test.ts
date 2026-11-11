@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import type { DecisionRequest } from '@mushin/plugin-providers'
-import { z } from '@mushin/core'
+import type { DecisionRequest } from '@mushinjs/plugin-providers'
+import { z } from '@mushinjs/core'
 import { startInstance, type TestInstance } from './helpers/instance'
 import { createMockOpenAI } from './helpers/mock-openai'
 

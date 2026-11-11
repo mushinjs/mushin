@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { DIGEST_EVERY } from '@mushin/bot-plugin-companion'
+import { DIGEST_EVERY } from '@mushinjs/bot-plugin-companion'
 import { startInstance, type TestInstance, waitFor } from './helpers/instance'
 import { createMockNapCat } from './helpers/mock-napcat'
 import { createMockOpenAI } from './helpers/mock-openai'
@@ -24,11 +24,11 @@ beforeAll(async () => {
   const bot = await app.call('bots.create', {
     name: 'Companion',
     adapter: { type: 'onebot', config: { mode: 'forward', url: napcat.url } },
-    plugins: [{ package: '@mushin/bot-plugin-companion', config: { debounce: 'fast', typingSpeed: 50, talkValue: 0, memory: true } }],
+    plugins: [{ package: '@mushinjs/bot-plugin-companion', config: { debounce: 'fast', typingSpeed: 50, talkValue: 0, memory: true } }],
   })
   botId = bot.id
   await waitFor(async () => (await app.call('bots.get', { id: botId })).status === 'online')
-  await waitFor(async () => (await app.call<any[]>('bots.plugins.list', { id: botId })).find((plugin) => plugin.package === '@mushin/bot-plugin-companion')?.status === 'active')
+  await waitFor(async () => (await app.call<any[]>('bots.plugins.list', { id: botId })).find((plugin) => plugin.package === '@mushinjs/bot-plugin-companion')?.status === 'active')
 })
 
 afterAll(async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { seg, z } from '@mushin/core'
+import { seg, z } from '@mushinjs/core'
 import { builtinNodes, compile, type FlowDocument, type FlowSession, type NodeType, ResourceLocks, runFlow, StopError } from '../src'
 
 const logger = { info() {}, warn() {}, debug() {}, error() {} } as any

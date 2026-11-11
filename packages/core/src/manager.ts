@@ -484,7 +484,7 @@ export class PluginManager extends Service {
       name: 'plugins.dependencies',
       description: 'What a plugin package needs and what needs it: required and optional plugins with whether each is installed, fits the version range and is enabled; the plugins that depend on it; the app plugins enabling it would also enable; and the ones disabling it would also disable. Read this before enabling or disabling a plugin.',
       risk: 'read',
-      input: z.object({ package: z.string().describe('Package name, e.g. @mushin/plugin-flows') }),
+      input: z.object({ package: z.string().describe('Package name, e.g. @mushinjs/plugin-flows') }),
       handler: ({ package: name }) => this.dependencies(name),
     })
 

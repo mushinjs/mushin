@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Dropdown, type DropdownOption, Input, Modal, Popover, Select, Spin, Tag, Tooltip } from '@mushin/ui'
+import { Button, Dropdown, type DropdownOption, Input, Modal, Popover, Select, Spin, Tag, Tooltip } from '@mushinjs/ui'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -136,14 +136,14 @@ const providerOptions = computed(() => toProviderOptions(data.providers, data.pr
 
 async function openModel() {
   const plugins = await call<{ id: string; package: string; config: Record<string, any> }[]>('plugins.list')
-  const entry = plugins.find((plugin) => plugin.package === '@mushin/plugin-agent')
+  const entry = plugins.find((plugin) => plugin.package === '@mushinjs/plugin-agent')
   modelForm.value = { provider: entry?.config.provider, model: entry?.config.model }
   showModel.value = true
 }
 
 async function saveModel() {
   const plugins = await call<{ id: string; package: string; config: Record<string, any> }[]>('plugins.list')
-  const entry = plugins.find((plugin) => plugin.package === '@mushin/plugin-agent')
+  const entry = plugins.find((plugin) => plugin.package === '@mushinjs/plugin-agent')
   if (!entry) return
   const config = { ...entry.config, provider: modelForm.value.provider || undefined, model: modelForm.value.model || undefined }
   await call('plugins.configure', { id: entry.id, config })

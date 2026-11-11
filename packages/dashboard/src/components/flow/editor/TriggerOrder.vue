@@ -3,7 +3,7 @@
  * A trigger's place among the triggers that compete for the same message on a bot: its priority,
  * whether it stops the message there, and the order list, which can be dragged to reorder.
  */
-import { Button, Form, FormItem, NumberInput, RadioButton, RadioGroup, Select, Tooltip } from '@mushin/ui'
+import { Button, Form, FormItem, NumberInput, RadioButton, RadioGroup, Select, Tooltip } from '@mushinjs/ui'
 import type { Intercept } from '../../../types'
 import { useEditor } from './editor'
 import { intercepts } from './useTriggerOrder'
@@ -69,7 +69,7 @@ const interceptLabel = (value: Intercept) => t(`flows.intercept.${value}`)
         </li>
       </ol>
       <p class="muted small">
-        {{ pluginsAfter.length ? t('flows.afterFlows', { plugins: pluginsAfter.map((name) => name.replace(/^@mushin\/bot-plugin-/, '')).join('、') }) : t('flows.afterFlowsNone') }}
+        {{ pluginsAfter.length ? t('flows.afterFlows', { plugins: pluginsAfter.map((name) => name.replace(/^@mushinjs\/bot-plugin-/, '')).join('、') }) : t('flows.afterFlowsNone') }}
         <template v-if="dirty"> {{ t('flows.orderPreview') }}</template>
       </p>
     </template>

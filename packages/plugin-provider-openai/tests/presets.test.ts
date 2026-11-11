@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ProviderType } from '@mushin/plugin-providers'
+import type { ProviderType } from '@mushinjs/plugin-providers'
 import { apply } from '../src'
 
 function definedTypes() {

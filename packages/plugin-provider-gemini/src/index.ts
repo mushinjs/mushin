@@ -1,7 +1,7 @@
-import { type Context, field, z } from '@mushin/core'
+import { type Context, field, z } from '@mushinjs/core'
 import type {
   ChatRequest, ChatResponse, EmbedRequest, EmbedResponse, ProviderClient, StreamEvent,
-} from '@mushin/plugin-providers'
+} from '@mushinjs/plugin-providers'
 import { fromParts, fromResponse, type GeminiPart, type GeminiResponse, mergeParts, toGeminiRequest, TYPE } from './convert'
 
 export * from './convert'

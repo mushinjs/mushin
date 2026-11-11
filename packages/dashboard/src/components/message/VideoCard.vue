@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, useToast } from '@mushin/ui'
+import { Button, useToast } from '@mushinjs/ui'
 import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { loadableUrl, type MediaChannel, resolveMedia, saveFile } from '../../media'

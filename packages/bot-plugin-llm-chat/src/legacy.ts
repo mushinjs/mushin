@@ -1,5 +1,5 @@
-import { z } from '@mushin/core'
-import type { FlowEdge, FlowNode } from '@mushin/plugin-flows'
+import { z } from '@mushinjs/core'
+import type { FlowEdge, FlowNode } from '@mushinjs/plugin-flows'
 
 /**
  * The settings this plugin had before LLM chat became a flow. Bots that still carry them (or API

@@ -1,4 +1,4 @@
-import { type Context, MushinError, z } from '@mushin/core'
+import { type Context, MushinError, z } from '@mushinjs/core'
 import { decisionsOf, dropDecisions, LOG_SIZE } from './log'
 import type { MemoryStore } from './store'
 

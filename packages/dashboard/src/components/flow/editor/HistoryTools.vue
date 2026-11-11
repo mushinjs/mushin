@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** Undo, redo, and the list of steps taken on this flow, to go back or forward to any of them. */
-import { Button, Popover, Tooltip } from '@mushin/ui'
+import { Button, Popover, Tooltip } from '@mushinjs/ui'
 import { computed, ref } from 'vue'
 import { useEditor } from './editor'
 import { LIMIT } from './useHistory'

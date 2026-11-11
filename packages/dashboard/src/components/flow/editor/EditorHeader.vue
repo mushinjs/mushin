@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** The editor's top bar: the flow's name, where it runs, whether it is on, the panels and saving. */
-import { Button, Input, Select, Tag, Toggle, Tooltip } from '@mushin/ui'
+import { Button, Input, Select, Tag, Toggle, Tooltip } from '@mushinjs/ui'
 import { computed } from 'vue'
 import { useEditor } from './editor'
 import HistoryTools from './HistoryTools.vue'

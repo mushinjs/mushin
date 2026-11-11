@@ -5,7 +5,7 @@ import { startInstance, type TestInstance, waitFor } from './helpers/instance'
 import { createMockNapCat } from './helpers/mock-napcat'
 import { createMockOpenAI } from './helpers/mock-openai'
 
-const PLUGIN = '@mushin/bot-plugin-llm-chat'
+const PLUGIN = '@mushinjs/bot-plugin-llm-chat'
 
 let app: TestInstance
 let llm: Awaited<ReturnType<typeof createMockOpenAI>>
@@ -92,7 +92,7 @@ describe('LLM chat as a flow', () => {
     const plugin = (await app.call<any[]>('bots.plugins.list', { id: botId })).find((p) => p.package === PLUGIN)
     expect(Object.keys(plugin.configSchema.properties ?? {})).toEqual([])
     // The flows runner came along, since the flow runs on the bot.
-    expect((await app.call<any[]>('bots.plugins.list', { id: botId })).find((p) => p.package === '@mushin/bot-plugin-flows')?.status).toBe('active')
+    expect((await app.call<any[]>('bots.plugins.list', { id: botId })).find((p) => p.package === '@mushinjs/bot-plugin-flows')?.status).toBe('active')
     await expect(app.call('flows.delete', { id: flow.id })).rejects.toMatchObject({ code: 'forbidden' })
   })
 

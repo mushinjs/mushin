@@ -1,8 +1,8 @@
 import OpenAI, { AzureOpenAI } from 'openai'
-import { type Context, field, z } from '@mushin/core'
+import { type Context, field, z } from '@mushinjs/core'
 import type {
   ChatRequest, ChatResponse, EmbedRequest, EmbedResponse, FinishReason, LlmMessage, ProviderClient, StreamEvent, ToolCall,
-} from '@mushin/plugin-providers'
+} from '@mushinjs/plugin-providers'
 
 export const name = 'provider-openai'
 export const inject = ['llm']

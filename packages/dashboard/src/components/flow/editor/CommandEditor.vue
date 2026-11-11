@@ -3,7 +3,7 @@
  * The command node's head: its prefixes and name side by side, then its arguments as a list
  * (one row per argument), the usage line they make and a box to try a message against them.
  */
-import { Button, Checkbox, Input, Select, Tag, TagsInput } from '@mushin/ui'
+import { Button, Checkbox, Input, Select, Tag, TagsInput } from '@mushinjs/ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../../api'

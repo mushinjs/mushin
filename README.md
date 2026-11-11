@@ -56,7 +56,7 @@ pnpm demo
 
 This starts an instance wired to a mock NapCat and a mock LLM, with a provider, two bots, some chat traffic and an Agent conversation already in place. Sign in with the token `demo`.
 
-To try things inside your own instance instead, enable **Demo** (`@mushin/plugin-demo`) on the **Plugins** page. It adds a *Demo (offline)* provider type that answers without an API key, a *Demo sandbox* bot adapter that is always online, and a sandbox bot to try flows on. Nothing is created until you tick it in the plugin's settings:
+To try things inside your own instance instead, enable **Demo** (`@mushinjs/plugin-demo`) on the **Plugins** page. It adds a *Demo (offline)* provider type that answers without an API key, a *Demo sandbox* bot adapter that is always online, and a sandbox bot to try flows on. Nothing is created until you tick it in the plugin's settings:
 
 - **Create the demo provider**: a provider of the offline type.
 - **Create the demo bot**: a sandbox bot. In its live conversation view you play the test user: what you send is received by the bot as the test user's message (start with `@` to mention the bot). The Agent can do the same with the `demo.say` action.
@@ -215,30 +215,30 @@ Inside the repository the packages run from their TypeScript sources through tsx
 
 ### Releasing
 
-A pull request that changes what users get adds a changeset (`pnpm changeset`). When it merges, the Release workflow publishes a snapshot of every package to the `next` tag on npm and opens or updates the "Version Packages" pull request; merging that one publishes to `latest`. All `@mushin/*` packages share one version. See `.changeset/README.md`.
+A pull request that changes what users get adds a changeset (`pnpm changeset`). When it merges, the Release workflow publishes a snapshot of every package to the `next` tag on npm and opens or updates the "Version Packages" pull request; merging that one publishes to `latest`. All `@mushinjs/*` packages share one version. See `.changeset/README.md`.
 
 | Package | Role |
 | --- | --- |
-| `@mushin/core` | Action registry, plugin manager, message and provenance types |
-| `@mushin/cli` | `mushin start`, `mushin test` and `mushin token reset` |
-| `@mushin/plugin-storage` | JSON documents in the data directory |
-| `@mushin/plugin-database` | The database service (minato; SQLite in `data/mushin.db` by default) and the actions behind the Database page |
-| `@mushin/plugin-providers` | Provider records and the `llm` service |
-| `@mushin/plugin-provider-openai` | OpenAI-compatible and Azure OpenAI provider types |
-| `@mushin/plugin-provider-anthropic` | Anthropic provider type, with presets for Anthropic-compatible endpoints |
-| `@mushin/plugin-provider-gemini` | Native Google Gemini provider type (chat, tools, images, embeddings) |
-| `@mushin/plugin-provider-typesafe` | TypeSafe Jev decision provider type (noul, choice, score and box questions) |
-| `@mushin/plugin-bots` | Bot records, per-bot runtimes, sessions, message records |
-| `@mushin/plugin-adapter-onebot` | OneBot v11 adapter |
-| `@mushin/plugin-agent` | The Agent's tool loop, skills, page profiles, tool policy and token budget |
-| `@mushin/plugin-mcp` | MCP client (stdio and Streamable HTTP); each MCP tool becomes an action |
-| `@mushin/plugin-console` | HTTP API, WebSocket, admin token, dashboard hosting |
-| `@mushin/plugin-flows` | Flow documents, node types, validation and the execution engine |
-| `@mushin/plugin-terminal` | Flow nodes that run commands locally or over SSH (opt-in) |
-| `@mushin/plugin-stats` | Hourly counts of messages, commands, flow runs and model usage (kept hourly for 30 days, daily for a year, in `data/stats/`) and process samples for the overview |
-| `@mushin/bot-plugin-echo`, `@mushin/bot-plugin-llm-chat`, `@mushin/bot-plugin-flows` | Bot plugins |
-| `@mushin/plugin-demo` | Offline demo provider, sandbox bot adapter and sample flows (opt-in) |
-| `@mushin/dashboard` | The Vue 3 dashboard |
+| `@mushinjs/core` | Action registry, plugin manager, message and provenance types |
+| `@mushinjs/cli` | `mushin start`, `mushin test` and `mushin token reset` |
+| `@mushinjs/plugin-storage` | JSON documents in the data directory |
+| `@mushinjs/plugin-database` | The database service (minato; SQLite in `data/mushin.db` by default) and the actions behind the Database page |
+| `@mushinjs/plugin-providers` | Provider records and the `llm` service |
+| `@mushinjs/plugin-provider-openai` | OpenAI-compatible and Azure OpenAI provider types |
+| `@mushinjs/plugin-provider-anthropic` | Anthropic provider type, with presets for Anthropic-compatible endpoints |
+| `@mushinjs/plugin-provider-gemini` | Native Google Gemini provider type (chat, tools, images, embeddings) |
+| `@mushinjs/plugin-provider-typesafe` | TypeSafe Jev decision provider type (noul, choice, score and box questions) |
+| `@mushinjs/plugin-bots` | Bot records, per-bot runtimes, sessions, message records |
+| `@mushinjs/plugin-adapter-onebot` | OneBot v11 adapter |
+| `@mushinjs/plugin-agent` | The Agent's tool loop, skills, page profiles, tool policy and token budget |
+| `@mushinjs/plugin-mcp` | MCP client (stdio and Streamable HTTP); each MCP tool becomes an action |
+| `@mushinjs/plugin-console` | HTTP API, WebSocket, admin token, dashboard hosting |
+| `@mushinjs/plugin-flows` | Flow documents, node types, validation and the execution engine |
+| `@mushinjs/plugin-terminal` | Flow nodes that run commands locally or over SSH (opt-in) |
+| `@mushinjs/plugin-stats` | Hourly counts of messages, commands, flow runs and model usage (kept hourly for 30 days, daily for a year, in `data/stats/`) and process samples for the overview |
+| `@mushinjs/bot-plugin-echo`, `@mushinjs/bot-plugin-llm-chat`, `@mushinjs/bot-plugin-flows` | Bot plugins |
+| `@mushinjs/plugin-demo` | Offline demo provider, sandbox bot adapter and sample flows (opt-in) |
+| `@mushinjs/dashboard` | The Vue 3 dashboard |
 
 To write your own plugin, see [docs/plugin-guide.md](docs/plugin-guide.md).
 

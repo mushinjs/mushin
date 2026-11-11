@@ -1,6 +1,6 @@
 /** The canvas's right-click menu, and copying and pasting nodes. */
 import type { GraphNode, Node } from '@vue-flow/core'
-import type { DropdownOption } from '@mushin/ui'
+import type { DropdownOption } from '@mushinjs/ui'
 import { computed, nextTick, ref } from 'vue'
 import { clone } from '../../../utils'
 import type { CanvasNodeData } from '../context'

@@ -1,7 +1,7 @@
-import { type ChannelInfo, Context, MushinError, randomId, seg, type Segment, segmentsToText, Service, toJsonSchema, type UserInfo, z } from '@mushin/core'
-import { type BotEvent, type BotRole, BUILTIN_PRIORITY, type CommandArg, type CommandEntry, commandMatches, type GroupRole, helpText, requiredRole, roleAtLeast, splitCommand } from '@mushin/plugin-bots'
-import type {} from '@mushin/plugin-providers'
-import type {} from '@mushin/plugin-storage'
+import { type ChannelInfo, Context, MushinError, randomId, seg, type Segment, segmentsToText, Service, toJsonSchema, type UserInfo, z } from '@mushinjs/core'
+import { type BotEvent, type BotRole, BUILTIN_PRIORITY, type CommandArg, type CommandEntry, commandMatches, type GroupRole, helpText, requiredRole, roleAtLeast, splitCommand } from '@mushinjs/plugin-bots'
+import type {} from '@mushinjs/plugin-providers'
+import type {} from '@mushinjs/plugin-storage'
 import { FlowError, localDay, matchTriggers, TriggerReply, MemoryUsage, type PauseAction, type PauseInfo, runFlow, type RunEnvironment, type TriggerMatch } from './engine'
 import { compile, type CompiledFlow, FLOW_FORMAT, interceptOf, layout, migrateIntercept, triggerPriority } from './graph'
 import { builtinNodes, commandName, scheduleTarget } from './nodes'
@@ -27,7 +27,7 @@ export * from './types'
 export * from './tables'
 export * from './variables'
 
-declare module '@mushin/core' {
+declare module '@mushinjs/core' {
   interface Context {
     flows: FlowService
   }
@@ -49,7 +49,7 @@ declare module 'minato' {
 }
 
 /** The bot plugin that runs flows; attaching a flow to a bot enables it there. */
-export const RUNNER_PACKAGE = '@mushin/bot-plugin-flows'
+export const RUNNER_PACKAGE = '@mushinjs/bot-plugin-flows'
 const TRACE_LIMIT = 20
 /** How often schedule triggers are checked. */
 const TICK = 15_000

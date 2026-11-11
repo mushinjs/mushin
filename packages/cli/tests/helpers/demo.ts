@@ -1,6 +1,6 @@
 // A local demo: a Mushin.js instance wired to a mock NapCat and a mock OpenAI-compatible LLM,
 // seeded with a provider, two bots, a flow, chat traffic and one Agent conversation.
-// Run: pnpm --filter @mushin/cli exec tsx tests/helpers/demo.ts  (then open http://127.0.0.1:5160, token "demo")
+// Run: pnpm --filter @mushinjs/cli exec tsx tests/helpers/demo.ts  (then open http://127.0.0.1:5160, token "demo")
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -32,7 +32,7 @@ await call('providers.test', { id: provider.id })
 const alpha = await call('bots.create', {
   name: 'Alpha',
   adapter: { type: 'onebot', config: { mode: 'forward', url: napcat.url, token: 'napcat' } },
-  plugins: [{ package: '@mushin/bot-plugin-echo' }, { package: '@mushin/bot-plugin-llm-chat' }],
+  plugins: [{ package: '@mushinjs/bot-plugin-echo' }, { package: '@mushinjs/bot-plugin-llm-chat' }],
 })
 await call('bots.create', { name: 'Beta', adapter: { type: 'onebot', config: { mode: 'reverse', token: 'secret' } } })
 while ((await call('bots.get', { id: alpha.id })).status !== 'online') await wait(50)

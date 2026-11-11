@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Empty, Input, Modal, Spin, Toggle, Tooltip, useConfirm, useToast } from '@mushin/ui'
+import { Button, Empty, Input, Modal, Spin, Toggle, Tooltip, useConfirm, useToast } from '@mushinjs/ui'
 import IconAction from '../components/IconAction.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'

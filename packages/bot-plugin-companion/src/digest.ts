@@ -1,4 +1,4 @@
-import { randomId } from '@mushin/core'
+import { randomId } from '@mushinjs/core'
 import type { ChatSummary, MemoryItem, PersonCard } from './store'
 import { personId } from './store'
 

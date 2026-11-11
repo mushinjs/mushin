@@ -1,4 +1,4 @@
-import { type Risk, z } from '@mushin/core'
+import { type Risk, z } from '@mushinjs/core'
 import type { AgentSkill } from './skills'
 
 /** Whether the Agent runs a tool on its own, asks first, or never sees it. */

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** The inspector's flow tab: the description and every problem the flow has. */
-import { Alert, Form, FormItem, Input } from '@mushin/ui'
+import { Alert, Form, FormItem, Input } from '@mushinjs/ui'
 import { RouterLink } from 'vue-router'
 import { useEditor } from './editor'
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import IconAction from './IconAction.vue'
-import { Button, Card, Empty, Modal, Spin, Tag, Toggle, useToast } from '@mushin/ui'
+import { Button, Card, Empty, Modal, Spin, Tag, Toggle, useToast } from '@mushinjs/ui'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -104,7 +104,7 @@ async function save() {
               <RouterLink v-for="flow in flowsBy[plugin.package]" :key="flow.id" :to="`/flows/${flow.id}`">
                 <Tag size="small" type="info" icon="i-lucide-network" class="clickable">{{ flow.name }}</Tag>
               </RouterLink>
-              <span v-if="plugin.package === '@mushin/bot-plugin-llm-chat'" class="sub">{{ t('botPlugins.llmChatHint') }}</span>
+              <span v-if="plugin.package === '@mushinjs/bot-plugin-llm-chat'" class="sub">{{ t('botPlugins.llmChatHint') }}</span>
             </div>
           </div>
           <div class="actions">

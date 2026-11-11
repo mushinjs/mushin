@@ -3,7 +3,7 @@
  * A bot at a glance: what it handled today, how it connects, where it is busiest and which flows
  * run on it. Each block links to the page that has the detail.
  */
-import { Button, Empty } from '@mushin/ui'
+import { Button, Empty } from '@mushinjs/ui'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../api'

@@ -1,8 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { type Context, field, z } from '@mushin/core'
+import { type Context, field, z } from '@mushinjs/core'
 import type {
   ChatRequest, ChatResponse, FinishReason, LlmMessage, ProviderClient, StreamEvent, ToolCall,
-} from '@mushin/plugin-providers'
+} from '@mushinjs/plugin-providers'
 
 export const name = 'provider-anthropic'
 export const inject = ['llm']

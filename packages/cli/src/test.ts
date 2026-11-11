@@ -1,4 +1,4 @@
-import type {} from '@mushin/plugin-flows'
+import type {} from '@mushinjs/plugin-flows'
 import { start } from './start'
 
 export interface TestCommandOptions {

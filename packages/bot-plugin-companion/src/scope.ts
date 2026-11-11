@@ -1,4 +1,4 @@
-import type { ChannelInfo } from '@mushin/core'
+import type { ChannelInfo } from '@mushinjs/core'
 import type { Config } from './config'
 
 /** Whether the companion chats in a channel, by the plugin's group and private settings. */

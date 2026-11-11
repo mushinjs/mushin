@@ -1,4 +1,4 @@
-import type { MessageRecord, Provenance } from '@mushin/core'
+import type { MessageRecord, Provenance } from '@mushinjs/core'
 import { type Config, DEBOUNCE } from './config'
 import { cleanReply, reactionDelay, splitReply, typingDelay } from './express'
 import { type Interest, interestOf, Willingness } from './interest'

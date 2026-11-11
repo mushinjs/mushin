@@ -1,5 +1,5 @@
-import { type Context, field, type LocalizedText, z } from '@mushin/core'
-import type {} from '@mushin/plugin-database'
+import { type Context, field, type LocalizedText, z } from '@mushinjs/core'
+import type {} from '@mushinjs/plugin-database'
 import { FlowError } from './engine'
 import type { NodeType, RunTrace, TriggerSource } from './types'
 

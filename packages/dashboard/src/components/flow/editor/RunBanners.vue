@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** Bars above the canvas: a test run paused at a breakpoint, and a run opened from a bot's run list. */
-import { Button } from '@mushin/ui'
+import { Button } from '@mushinjs/ui'
 import { RouterLink } from 'vue-router'
 import { isLive } from '../../../stores/runs'
 import { runColors, useRunText } from '../../runs/useRunText'

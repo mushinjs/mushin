@@ -10,7 +10,7 @@ const tone = (name: string) => ({ DEFAULT: `var(--${name})`, soft: `var(--${name
  */
 export function presetMushin(): Preset {
   return {
-    name: '@mushin/ui',
+    name: '@mushinjs/ui',
     theme: {
       colors: {
         bg: 'var(--bg)',

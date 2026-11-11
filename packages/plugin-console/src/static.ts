@@ -22,7 +22,7 @@ const types: Record<string, string> = {
 export function dashboardRoot() {
   try {
     const require = createRequire(import.meta.url)
-    return join(dirname(require.resolve('@mushin/dashboard/package.json')), 'dist')
+    return join(dirname(require.resolve('@mushinjs/dashboard/package.json')), 'dist')
   } catch {
     return undefined
   }

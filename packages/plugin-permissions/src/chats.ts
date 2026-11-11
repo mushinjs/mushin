@@ -1,7 +1,7 @@
-import { type ChannelInfo, type Context, field, MushinError, z } from '@mushin/core'
-import type { BotRole } from '@mushin/plugin-bots'
-import type {} from '@mushin/plugin-database'
-import type { FlowSession, NodeContext, NodeType } from '@mushin/plugin-flows'
+import { type ChannelInfo, type Context, field, MushinError, z } from '@mushinjs/core'
+import type { BotRole } from '@mushinjs/plugin-bots'
+import type {} from '@mushinjs/plugin-database'
+import type { FlowSession, NodeContext, NodeType } from '@mushinjs/plugin-flows'
 
 declare module 'minato' {
   interface Tables {

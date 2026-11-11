@@ -3,7 +3,7 @@
  * Ctrl+K (⌘K on a Mac): one box to jump anywhere — a page, a bot, a flow, a persona, a plugin or a
  * provider — or to do a common thing such as starting a new flow.
  */
-import { Modal } from '@mushin/ui'
+import { Modal } from '@mushinjs/ui'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -51,7 +51,7 @@ async function load() {
   ])
   flows.value = flowList
   plugins.value = pluginList
-  const hasPersonas = pluginList.some((plugin) => plugin.package === '@mushin/plugin-personas' && plugin.status === 'active')
+  const hasPersonas = pluginList.some((plugin) => plugin.package === '@mushinjs/plugin-personas' && plugin.status === 'active')
   personas.value = hasPersonas ? await call<Persona[]>('personas.list').catch(() => []) : []
 }
 

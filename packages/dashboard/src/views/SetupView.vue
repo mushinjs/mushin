@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Alert, Button, Card, useToast } from '@mushin/ui'
+import { Alert, Button, Card, useToast } from '@mushinjs/ui'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'

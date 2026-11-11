@@ -1,4 +1,4 @@
-import type { MessageRecord } from '@mushin/core'
+import type { MessageRecord } from '@mushinjs/core'
 import { DIGEST_EVERY, DIGEST_SYSTEM, digestPrompt, mergePeople, newMemories, nextSummary, parseDigest } from './digest'
 import { recall } from './recall'
 import type { MemoryItem, MemoryStore, PersonCard } from './store'

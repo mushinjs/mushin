@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Checkbox, Form, FormItem, Toggle } from '@mushin/ui'
+import { Checkbox, Form, FormItem, Toggle } from '@mushinjs/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { OPTIONAL_PAGES, prefs } from '../../prefs'

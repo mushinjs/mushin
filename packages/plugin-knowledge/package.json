@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/plugin-knowledge",
+  "name": "@mushinjs/plugin-knowledge",
   "version": "0.1.0",
   "description": "Knowledge bases: documents searched by keywords and meaning, from flows, the Agent and chat",
   "type": "module",
@@ -46,16 +46,16 @@
     "requires": {
       "mushin": ">=0.1.0",
       "plugins": {
-        "@mushin/plugin-bots": "*",
-        "@mushin/plugin-database": "*",
-        "@mushin/plugin-providers": "*",
-        "@mushin/plugin-storage": "*"
+        "@mushinjs/plugin-bots": "*",
+        "@mushinjs/plugin-database": "*",
+        "@mushinjs/plugin-providers": "*",
+        "@mushinjs/plugin-storage": "*"
       }
     },
     "optional": {
       "plugins": {
-        "@mushin/plugin-flows": "*",
-        "@mushin/plugin-agent": "*"
+        "@mushinjs/plugin-flows": "*",
+        "@mushinjs/plugin-agent": "*"
       }
     },
     "nodes": [
@@ -63,15 +63,15 @@
     ]
   },
   "dependencies": {
-    "@mushin/core": "workspace:*",
-    "@mushin/plugin-bots": "workspace:*",
-    "@mushin/plugin-database": "workspace:*",
-    "@mushin/plugin-flows": "workspace:*",
-    "@mushin/plugin-providers": "workspace:*",
-    "@mushin/plugin-storage": "workspace:*",
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-bots": "workspace:*",
+    "@mushinjs/plugin-database": "workspace:*",
+    "@mushinjs/plugin-flows": "workspace:*",
+    "@mushinjs/plugin-providers": "workspace:*",
+    "@mushinjs/plugin-storage": "workspace:*",
     "minato": "catalog:"
   },
   "devDependencies": {
-    "@mushin/plugin-agent": "workspace:*"
+    "@mushinjs/plugin-agent": "workspace:*"
   }
 }

@@ -1,7 +1,7 @@
-import { type Context, field, z } from '@mushin/core'
+import { type Context, field, z } from '@mushinjs/core'
 import type {
   ChatResponse, DecisionAnswer, DecisionRequest, DecisionResponse, ProviderClient,
-} from '@mushin/plugin-providers'
+} from '@mushinjs/plugin-providers'
 
 export const name = 'provider-typesafe'
 export const inject = ['llm']

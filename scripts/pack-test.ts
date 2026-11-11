@@ -84,7 +84,7 @@ const packages = readdirSync(join(root, 'packages'))
   .filter(({ pkg }) => !pkg.private)
 
 for (const { dir, pkg } of packages) {
-  const built = pkg.name === '@mushin/dashboard' ? 'dist/index.html' : pkg.publishConfig?.exports?.['.']?.import
+  const built = pkg.name === '@mushinjs/dashboard' ? 'dist/index.html' : pkg.publishConfig?.exports?.['.']?.import
   if (built && !existsSync(join(dir, built))) fail(`${pkg.name} is not built (${built} is missing). Run "pnpm build" first.`)
 }
 
@@ -105,24 +105,24 @@ try {
     files[pkg.name] = join(tarballs, file)
   }
 
-  step('Installing @mushin/cli from the tarballs with npm')
+  step('Installing @mushinjs/cli from the tarballs with npm')
   await mkdir(app)
   const spec = (name: string) => `file:${files[name]!.replaceAll('\\', '/')}`
   await writeFile(join(app, 'package.json'), JSON.stringify({
     name: 'mushin-pack-test',
     private: true,
     type: 'module',
-    dependencies: { '@mushin/cli': spec('@mushin/cli') },
-    // Point every @mushin/* dependency at its tarball instead of the registry.
+    dependencies: { '@mushinjs/cli': spec('@mushinjs/cli') },
+    // Point every @mushinjs/* dependency at its tarball instead of the registry.
     overrides: Object.fromEntries(Object.keys(files).map((name) => [name, spec(name)])),
   }, null, 2))
   await run('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error'], app)
 
-  const installed = join(app, 'node_modules', '@mushin')
+  const installed = join(app, 'node_modules', '@mushinjs')
   for (const name of readdirSync(installed)) {
     if (existsSync(join(installed, name, 'src'))) {
       const pkg = JSON.parse(readFileSync(join(installed, name, 'package.json'), 'utf8'))
-      if (pkg.name !== '@mushin/ui') fail(`@mushin/${name} was published with its TypeScript sources`)
+      if (pkg.name !== '@mushinjs/ui') fail(`@mushinjs/${name} was published with its TypeScript sources`)
     }
   }
 
@@ -151,7 +151,7 @@ registerHooks({
   const tsxLoads = () => existsSync(probeLog) ? readFileSync(probeLog, 'utf8').trim().split('\n') : []
 
   const instanceDir = join(app, 'instance')
-  const bin = join(app, 'node_modules', '@mushin', 'cli', 'bin', 'mushin.js')
+  const bin = join(app, 'node_modules', '@mushinjs', 'cli', 'bin', 'mushin.js')
 
   async function startMushin() {
     const port = await freePort()
@@ -226,7 +226,7 @@ registerHooks({
   // Type annotations and an import without a file extension: both need tsx, neither works in plain Node.
   await writeFile(join(plugin, 'src', 'greeting.ts'), `export const greeting: string = 'hello from a TypeScript plugin'\n`)
   await writeFile(join(plugin, 'src', 'index.ts'), `
-import type { Context } from '@mushin/core'
+import type { Context } from '@mushinjs/core'
 import { greeting } from './greeting'
 
 export const name = 'hello-ts'

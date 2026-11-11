@@ -1,7 +1,7 @@
 /**
- * @mushin/ui: the components and design tokens of the Mushin.js dashboard, for the dashboard and
- * for plugin pages. Import '@mushin/ui/theme.css' once, wrap the app in UiProvider, and build with
- * the repository's uno.config.ts (or presetMushin from '@mushin/ui/preset').
+ * @mushinjs/ui: the components and design tokens of the Mushin.js dashboard, for the dashboard and
+ * for plugin pages. Import '@mushinjs/ui/theme.css' once, wrap the app in UiProvider, and build with
+ * the repository's uno.config.ts (or presetMushin from '@mushinjs/ui/preset').
  *
  * Components follow the Naive UI props the dashboard used before (`value` / `update:value`,
  * `type`, `size`, `secondary`…), so moving a page over is mostly a change of imports.

@@ -23,7 +23,7 @@ watch(themeMode, (mode) => {
 
 /**
  * The palette behind both themes, for what draws on a canvas (charts, graphs) and cannot read CSS
- * variables. @mushin/ui/theme.css declares the same values as --bg, --s1, --primary, …; keep the two in step.
+ * variables. @mushinjs/ui/theme.css declares the same values as --bg, --s1, --primary, …; keep the two in step.
  */
 export const palettes = {
   light: {

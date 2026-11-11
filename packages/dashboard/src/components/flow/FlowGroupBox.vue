@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Spin } from '@mushin/ui'
+import { Spin } from '@mushinjs/ui'
 import { Handle, Position } from '@vue-flow/core'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'

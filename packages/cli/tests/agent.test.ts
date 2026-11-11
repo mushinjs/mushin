@@ -14,7 +14,7 @@ beforeAll(async () => {
   llm = await createMockOpenAI()
   app = await startInstance()
   await app.call('providers.create', { name: 'Mock', type: 'openai', config: { baseURL: llm.baseURL, apiKey: 'sk-test-1234567890' }, models: ['mock-model'] })
-  await app.call('plugins.enable', { package: '@mushin/plugin-demo' })
+  await app.call('plugins.enable', { package: '@mushinjs/plugin-demo' })
   await app.call('plugins.configure', { id: 'demo', config: { bot: true } })
   botId = (await app.call<any[]>('bots.list'))[0].id
   await waitFor(async () => (await app.call('bots.get', { id: botId })).status === 'online')

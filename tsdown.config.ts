@@ -40,7 +40,7 @@ const packages = readdirSync('packages').filter((name) => !special.has(name) && 
 export default defineConfig([
   ...packages.map((name): UserConfig => ({
     ...base,
-    name: `@mushin/${name}`,
+    name: `@mushinjs/${name}`,
     cwd: join('packages', name),
     entry: ['src/index.ts', ...(extraEntries[name] ?? [])],
     outDir: 'dist',
@@ -48,7 +48,7 @@ export default defineConfig([
   {
     // A uno.config file imports the preset from Node, so it is the one part of ui that ships compiled.
     ...base,
-    name: '@mushin/ui',
+    name: '@mushinjs/ui',
     cwd: 'packages/ui',
     entry: ['src/preset.ts'],
     outDir: 'dist',

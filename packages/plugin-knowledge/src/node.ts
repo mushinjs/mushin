@@ -1,5 +1,5 @@
-import { field, z } from '@mushin/core'
-import type { NodeType } from '@mushin/plugin-flows'
+import { field, z } from '@mushinjs/core'
+import type { NodeType } from '@mushinjs/plugin-flows'
 import type { Knowledge } from './index'
 import { passages } from './search'
 

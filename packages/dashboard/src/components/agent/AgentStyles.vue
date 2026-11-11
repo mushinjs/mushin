@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Card, TabPane, Tabs, useToast } from '@mushin/ui'
+import { Button, Card, TabPane, Tabs, useToast } from '@mushinjs/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAgentStore } from '../../stores/agent'

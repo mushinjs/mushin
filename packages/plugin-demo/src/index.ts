@@ -1,8 +1,8 @@
-import { type Context, field, MushinError, z } from '@mushin/core'
-import type {} from '@mushin/plugin-bots'
-import type {} from '@mushin/plugin-flows'
-import type {} from '@mushin/plugin-providers'
-import type {} from '@mushin/plugin-storage'
+import { type Context, field, MushinError, z } from '@mushinjs/core'
+import type {} from '@mushinjs/plugin-bots'
+import type {} from '@mushinjs/plugin-flows'
+import type {} from '@mushinjs/plugin-providers'
+import type {} from '@mushinjs/plugin-storage'
 import { AdapterConfig, sandboxAdapter, simulate } from './adapter'
 import { type DemoFlowKey, demoFlows } from './flows'
 import { DEMO_EMBEDDING_MODEL, DEMO_MODEL, demoProviderType } from './provider'
@@ -14,7 +14,7 @@ export * from './provider'
 export const name = 'demo'
 export const inject = ['llm', 'bots', 'flows', 'storage', 'actions', 'manager']
 
-export const PACKAGE = '@mushin/plugin-demo'
+export const PACKAGE = '@mushinjs/plugin-demo'
 const STORAGE_KEY = 'demo'
 
 const toggle = (title: string, zhTitle: string, description?: string, zhDescription?: string) => z.boolean().default(false)

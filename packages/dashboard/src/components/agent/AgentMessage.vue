@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Tag } from '@mushin/ui'
+import { Button, Tag } from '@mushinjs/ui'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'

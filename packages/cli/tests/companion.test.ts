@@ -25,13 +25,13 @@ beforeAll(async () => {
     name: 'Companion',
     adapter: { type: 'onebot', config: { mode: 'forward', url: napcat.url } },
     plugins: [
-      { package: '@mushin/bot-plugin-llm-chat' },
-      { package: '@mushin/bot-plugin-companion', config: { debounce: 'fast', typingSpeed: 50, excludeGroups: ['700'] } },
+      { package: '@mushinjs/bot-plugin-llm-chat' },
+      { package: '@mushinjs/bot-plugin-companion', config: { debounce: 'fast', typingSpeed: 50, excludeGroups: ['700'] } },
     ],
   })
   botId = bot.id
   await waitFor(async () => (await app.call('bots.get', { id: botId })).status === 'online')
-  await waitFor(async () => (await app.call<any[]>('bots.plugins.list', { id: botId })).find((plugin) => plugin.package === '@mushin/bot-plugin-companion')?.status === 'active')
+  await waitFor(async () => (await app.call<any[]>('bots.plugins.list', { id: botId })).find((plugin) => plugin.package === '@mushinjs/bot-plugin-companion')?.status === 'active')
 })
 
 afterAll(async () => {
@@ -51,7 +51,7 @@ describe('companion chat', () => {
     expect(requests).toHaveLength(2)
     expect(requests[0].messages[1].content).toContain('user42：@你 在吗')
     const out = (await app.call<any[]>('bots.messages', { id: botId, limit: 10 })).filter((record) => record.direction === 'out')
-    expect(out.at(-1).source).toMatchObject({ kind: 'llm', plugin: '@mushin/bot-plugin-companion' })
+    expect(out.at(-1).source).toMatchObject({ kind: 'llm', plugin: '@mushinjs/bot-plugin-companion' })
   }, 20_000)
 
   it('lets small talk go by without asking a model', async () => {
@@ -76,9 +76,9 @@ describe('companion chat', () => {
     const second = await app.call('bots.create', {
       name: 'Second',
       adapter: { type: 'onebot', config: { mode: 'forward', url: other.url } },
-      plugins: [{ package: '@mushin/bot-plugin-companion' }],
+      plugins: [{ package: '@mushinjs/bot-plugin-companion' }],
     })
-    await waitFor(async () => (await app.call<any[]>('bots.plugins.list', { id: second.id })).find((plugin) => plugin.package === '@mushin/bot-plugin-companion')?.status === 'active')
+    await waitFor(async () => (await app.call<any[]>('bots.plugins.list', { id: second.id })).find((plugin) => plugin.package === '@mushinjs/bot-plugin-companion')?.status === 'active')
     await app.call('bots.stop', { id: botId })
     expect(await app.call('companion.decisions', { bot: second.id })).toEqual([])
     await app.call('bots.stop', { id: second.id })

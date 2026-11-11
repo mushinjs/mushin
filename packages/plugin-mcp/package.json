@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/plugin-mcp",
+  "name": "@mushinjs/plugin-mcp",
   "version": "0.1.0",
   "description": "Connects to MCP servers and offers their tools as actions for the Agent and flows",
   "type": "module",
@@ -46,12 +46,12 @@
     "requires": {
       "mushin": ">=0.1.0",
       "plugins": {
-        "@mushin/plugin-storage": "*"
+        "@mushinjs/plugin-storage": "*"
       }
     }
   },
   "dependencies": {
-    "@mushin/core": "workspace:*",
-    "@mushin/plugin-storage": "workspace:*"
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-storage": "workspace:*"
   }
 }

@@ -6,7 +6,7 @@
  * `{{<node id>.<field>}}`. The value stays plain text, so the server reads it as before. Anything
  * can be typed in as well; the menu only opens on `{{` or the button.
  */
-import { Button } from '@mushin/ui'
+import { Button } from '@mushinjs/ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { REF } from '../../flow'

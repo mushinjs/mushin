@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/plugin-console",
+  "name": "@mushinjs/plugin-console",
   "version": "0.1.0",
   "description": "HTTP API, WebSocket and dashboard hosting",
   "type": "module",
@@ -46,29 +46,29 @@
     "requires": {
       "plugins": {
         "@cordisjs/plugin-server": "*",
-        "@mushin/plugin-storage": "*"
+        "@mushinjs/plugin-storage": "*"
       }
     },
     "optional": {
       "plugins": {
-        "@mushin/plugin-bots": "*",
-        "@mushin/plugin-agent": "*",
-        "@mushin/plugin-providers": "*",
-        "@mushin/plugin-flows": "*",
-        "@mushin/plugin-stats": "*"
+        "@mushinjs/plugin-bots": "*",
+        "@mushinjs/plugin-agent": "*",
+        "@mushinjs/plugin-providers": "*",
+        "@mushinjs/plugin-flows": "*",
+        "@mushinjs/plugin-stats": "*"
       }
     }
   },
   "dependencies": {
-    "@mushin/core": "workspace:*",
-    "@mushin/plugin-storage": "workspace:*",
-    "@mushin/plugin-bots": "workspace:*",
-    "@mushin/plugin-agent": "workspace:*",
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-storage": "workspace:*",
+    "@mushinjs/plugin-bots": "workspace:*",
+    "@mushinjs/plugin-agent": "workspace:*",
     "@cordisjs/plugin-server": "catalog:",
     "ws": "catalog:",
-    "@mushin/dashboard": "workspace:*",
-    "@mushin/plugin-providers": "workspace:*",
-    "@mushin/plugin-flows": "workspace:*",
-    "@mushin/plugin-stats": "workspace:*"
+    "@mushinjs/dashboard": "workspace:*",
+    "@mushinjs/plugin-providers": "workspace:*",
+    "@mushinjs/plugin-flows": "workspace:*",
+    "@mushinjs/plugin-stats": "workspace:*"
   }
 }

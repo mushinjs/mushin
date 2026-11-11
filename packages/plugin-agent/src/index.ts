@@ -1,8 +1,8 @@
 import {
   type ActionInfo, Context, field, fromToolName, MushinError, randomId, segmentsToText, Service, toToolName, z,
-} from '@mushin/core'
-import type { LlmMessage, LlmResult, ToolCall, ToolDefinition } from '@mushin/plugin-providers'
-import type {} from '@mushin/plugin-storage'
+} from '@mushinjs/core'
+import type { LlmMessage, LlmResult, ToolCall, ToolDefinition } from '@mushinjs/plugin-providers'
+import type {} from '@mushinjs/plugin-storage'
 import { contextNote, type SceneInfo, skillBlock, SYSTEM_PROMPT, type TurnContext } from './prompt'
 import {
   type AgentSettings, defaultPolicy, formatSkillMarkdown, parseSkillMarkdown, policyInput, profileInput, SCENE_KEYS, type SceneProfile, today,
@@ -14,7 +14,7 @@ export * from './prompt'
 export * from './settings'
 export * from './skills'
 
-declare module '@mushin/core' {
+declare module '@mushinjs/core' {
   interface Context {
     agent: Agent
   }

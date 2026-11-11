@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Checkbox, Input, Modal, NumberInput, RadioButton, RadioGroup, Select, Spin, Tag, Toggle, Tooltip, useConfirm, useToast } from '@mushin/ui'
+import { Button, Checkbox, Input, Modal, NumberInput, RadioButton, RadioGroup, Select, Spin, Tag, Toggle, Tooltip, useConfirm, useToast } from '@mushinjs/ui'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call, on } from '../../api'

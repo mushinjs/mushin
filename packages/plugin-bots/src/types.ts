@@ -1,5 +1,5 @@
 import type { CommandSettings } from './commands'
-import type { ChannelInfo, LocalizedText, Plugin, Provenance, Segment, UserInfo, z } from '@mushin/core'
+import type { ChannelInfo, LocalizedText, Plugin, Provenance, Segment, UserInfo, z } from '@mushinjs/core'
 
 export type BotStatus = 'offline' | 'connecting' | 'online' | 'error'
 

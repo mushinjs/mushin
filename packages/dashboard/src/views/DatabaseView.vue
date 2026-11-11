@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Alert, Button, DataTable, type DataTableColumn, type DataTableSortState, Dropdown, Empty, Input, Modal, Pagination, Select, Spin, TabPane, Tabs, Tag, useConfirm, useToast } from '@mushin/ui'
+import { Alert, Button, DataTable, type DataTableColumn, type DataTableSortState, Dropdown, Empty, Input, Modal, Pagination, Select, Spin, TabPane, Tabs, Tag, useConfirm, useToast } from '@mushinjs/ui'
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -33,7 +33,7 @@ const loading = ref(true)
 async function refresh() {
   try {
     const plugins = await call<AppPlugin[]>('plugins.list')
-    available.value = plugins.some((plugin) => plugin.package === '@mushin/plugin-database' && plugin.status === 'active')
+    available.value = plugins.some((plugin) => plugin.package === '@mushinjs/plugin-database' && plugin.status === 'active')
     if (!available.value) return
     const [nextStatus, nextTables] = await Promise.all([call<DatabaseStatus>('database.status'), call<DatabaseTable[]>('database.tables')])
     status.value = nextStatus

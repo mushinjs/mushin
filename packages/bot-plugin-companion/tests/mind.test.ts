@@ -1,4 +1,4 @@
-import type { MessageRecord } from '@mushin/core'
+import type { MessageRecord } from '@mushinjs/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Config } from '../src/config'
 import { ChatMind, type Decision, type MindDeps } from '../src/mind'

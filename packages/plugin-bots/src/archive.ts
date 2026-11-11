@@ -1,8 +1,8 @@
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { type Context, type MessageRecord, messageType, segmentsToText } from '@mushin/core'
-import type {} from '@mushin/plugin-database'
-import type {} from '@mushin/plugin-storage'
+import { type Context, type MessageRecord, messageType, segmentsToText } from '@mushinjs/core'
+import type {} from '@mushinjs/plugin-database'
+import type {} from '@mushinjs/plugin-storage'
 import { $ } from 'minato'
 
 declare module 'minato' {

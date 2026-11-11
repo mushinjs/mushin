@@ -42,7 +42,7 @@ beforeAll(async () => {
   const bot = await app.call('bots.create', {
     name: 'Flowy',
     adapter: { type: 'onebot', config: { mode: 'forward', url: napcat.url } },
-    plugins: [{ package: '@mushin/bot-plugin-llm-chat', config: { trigger: 'always', cooldown: 0, userLimit: 0 } }],
+    plugins: [{ package: '@mushinjs/bot-plugin-llm-chat', config: { trigger: 'always', cooldown: 0, userLimit: 0 } }],
   })
   botId = bot.id
   await waitFor(async () => (await app.call('bots.get', { id: botId })).status === 'online')
@@ -71,7 +71,7 @@ describe('flows', () => {
     expect(flow.issues).toEqual([])
     expect(flow.nodes.every((node: any) => Number.isFinite(node.position.x) && Number.isFinite(node.position.y))).toBe(true)
     const plugins = await app.call<any[]>('bots.plugins.list', { id: botId })
-    expect(plugins.find((plugin) => plugin.package === '@mushin/bot-plugin-flows')).toMatchObject({ enabled: true, status: 'active' })
+    expect(plugins.find((plugin) => plugin.package === '@mushinjs/bot-plugin-flows')).toMatchObject({ enabled: true, status: 'active' })
   })
 
   it('answers through the flow before LLM chat, with flow provenance', async () => {
@@ -269,13 +269,13 @@ describe('upgrading an instance', () => {
   it('adds built-in plugins that an older config does not list', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'mushin-upgrade-'))
     const old = defaultConfig()
-    old.plugins = old.plugins.filter((entry) => entry.package !== '@mushin/plugin-flows')
-    old.plugins.find((entry) => entry.package === '@mushin/plugin-agent')!.enabled = false
+    old.plugins = old.plugins.filter((entry) => entry.package !== '@mushinjs/plugin-flows')
+    old.plugins.find((entry) => entry.package === '@mushinjs/plugin-agent')!.enabled = false
     await writeFile(join(baseDir, 'mushin.config.json'), JSON.stringify(old))
     const instance = await start({ baseDir, port: 0, quiet: true })
     const saved = JSON.parse(await readFile(join(baseDir, 'mushin.config.json'), 'utf8'))
-    expect(saved.plugins.map((entry: any) => entry.package)).toContain('@mushin/plugin-flows')
-    expect(saved.plugins.find((entry: any) => entry.package === '@mushin/plugin-agent').enabled).toBe(false)
+    expect(saved.plugins.map((entry: any) => entry.package)).toContain('@mushinjs/plugin-flows')
+    expect(saved.plugins.find((entry: any) => entry.package === '@mushinjs/plugin-agent').enabled).toBe(false)
     await instance.stop()
     await rm(baseDir, { recursive: true, force: true }).catch(() => {})
   })

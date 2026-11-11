@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Alert, Button, Card, Empty, FormItem, Input, NumberInput, Tag, useToast } from '@mushin/ui'
+import { Alert, Button, Card, Empty, FormItem, Input, NumberInput, Tag, useToast } from '@mushinjs/ui'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'

@@ -1,12 +1,12 @@
-import { type ChannelInfo, Context, field, MushinError, Service, type UserInfo, z } from '@mushin/core'
-import { type BotRole, type CommandArg, type GroupRole, roleAtLeast, type Session } from '@mushin/plugin-bots'
-import type { FlowSession, NodeType, TestOption } from '@mushin/plugin-flows'
-import type {} from '@mushin/plugin-storage'
+import { type ChannelInfo, Context, field, MushinError, Service, type UserInfo, z } from '@mushinjs/core'
+import { type BotRole, type CommandArg, type GroupRole, roleAtLeast, type Session } from '@mushinjs/plugin-bots'
+import type { FlowSession, NodeType, TestOption } from '@mushinjs/plugin-flows'
+import type {} from '@mushinjs/plugin-storage'
 import { applyMemberAction, channelKey, type ChatMember, type ChatMemberPatch, ChatStore, type MemberAction, memberNodes, RuleInput } from './chats'
 
 export * from './chats'
 
-declare module '@mushin/core' {
+declare module '@mushinjs/core' {
   interface Context {
     permissions: Permissions
   }

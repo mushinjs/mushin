@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/core",
+  "name": "@mushinjs/core",
   "version": "0.1.0",
   "description": "Core types, action registry and plugin manager for Mushin.js",
   "type": "module",

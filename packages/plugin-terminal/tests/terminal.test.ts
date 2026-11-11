@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { seg } from '@mushin/core'
-import { builtinNodes, compile, type FlowDocument, type FlowSession, type NodeType, runFlow } from '@mushin/plugin-flows'
+import { seg } from '@mushinjs/core'
+import { builtinNodes, compile, type FlowDocument, type FlowSession, type NodeType, runFlow } from '@mushinjs/plugin-flows'
 import { Server, utils } from 'ssh2'
 import { Config, fingerprint, type HostCheck, OutputBuffer, quote, remoteCommand, runLocal, terminalNodes } from '../src'
 

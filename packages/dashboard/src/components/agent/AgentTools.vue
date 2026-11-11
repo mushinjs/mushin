@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, DataTable, type DataTableColumn, Input, Select, Tag, useToast } from '@mushin/ui'
+import { Button, DataTable, type DataTableColumn, Input, Select, Tag, useToast } from '@mushinjs/ui'
 import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call, on } from '../../api'

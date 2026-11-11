@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/plugin-personas",
+  "name": "@mushinjs/plugin-personas",
   "version": "0.1.0",
   "description": "Personas shared by bots, LLM chat and flows: a character, a voice and example exchanges, chosen per chat",
   "type": "module",
@@ -46,14 +46,14 @@
     "requires": {
       "mushin": ">=0.1.0",
       "plugins": {
-        "@mushin/plugin-bots": "*",
-        "@mushin/plugin-storage": "*"
+        "@mushinjs/plugin-bots": "*",
+        "@mushinjs/plugin-storage": "*"
       }
     },
     "optional": {
       "plugins": {
-        "@mushin/plugin-flows": "*",
-        "@mushin/plugin-permissions": "*"
+        "@mushinjs/plugin-flows": "*",
+        "@mushinjs/plugin-permissions": "*"
       }
     },
     "nodes": [
@@ -61,9 +61,9 @@
     ]
   },
   "dependencies": {
-    "@mushin/core": "workspace:*",
-    "@mushin/plugin-bots": "workspace:*",
-    "@mushin/plugin-flows": "workspace:*",
-    "@mushin/plugin-storage": "workspace:*"
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-bots": "workspace:*",
+    "@mushinjs/plugin-flows": "workspace:*",
+    "@mushinjs/plugin-storage": "workspace:*"
   }
 }

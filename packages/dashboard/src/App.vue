@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiProvider } from '@mushin/ui'
+import { UiProvider } from '@mushinjs/ui'
 import { computed, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'

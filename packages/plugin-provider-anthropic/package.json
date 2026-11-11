@@ -1,5 +1,5 @@
 {
-  "name": "@mushin/plugin-provider-anthropic",
+  "name": "@mushinjs/plugin-provider-anthropic",
   "version": "0.1.0",
   "description": "Anthropic provider type",
   "type": "module",
@@ -41,13 +41,13 @@
     },
     "requires": {
       "plugins": {
-        "@mushin/plugin-providers": "*"
+        "@mushinjs/plugin-providers": "*"
       }
     }
   },
   "dependencies": {
-    "@mushin/core": "workspace:*",
-    "@mushin/plugin-providers": "workspace:*",
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-providers": "workspace:*",
     "@anthropic-ai/sdk": "catalog:"
   }
 }

@@ -1,5 +1,5 @@
-import type { ChannelInfo, UserInfo } from '@mushin/core'
-import type { BotEvent } from '@mushin/plugin-bots'
+import type { ChannelInfo, UserInfo } from '@mushinjs/core'
+import type { BotEvent } from '@mushinjs/plugin-bots'
 
 /** A OneBot id as Mushin stores it; 0 and missing ids (such as `user_id` of a whole-group mute) become undefined. */
 export function idOf(value: unknown) {

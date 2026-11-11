@@ -47,7 +47,7 @@ describe('OneBot HTTP mode', () => {
     const bot = await app.call('bots.create', {
       name: 'Http',
       adapter: { type: 'onebot', config: { mode: 'http', url: napcatUrl, token: 'tok', secret: SECRET } },
-      plugins: [{ package: '@mushin/bot-plugin-echo' }],
+      plugins: [{ package: '@mushinjs/bot-plugin-echo' }],
     })
     botId = bot.id
     await waitFor(async () => (await app.call('bots.get', { id: botId })).status === 'online')

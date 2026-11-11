@@ -1,4 +1,4 @@
-import { seg } from '@mushin/core'
+import { seg } from '@mushinjs/core'
 import { describe, expect, it } from 'vitest'
 import { type CommandArg, commandUsage, formatArgs, helpText, parseArgs, usageReply } from '../src/commands'
 
