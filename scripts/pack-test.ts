@@ -252,6 +252,11 @@ export function apply(ctx: Context): void {
   console.log('\n✓ The packed packages install and run.')
 } finally {
   if (child && child.exitCode === null) child.kill()
-  if (keep) console.log(`\nKept ${work}`)
+  if (keep) {
+    console.log(`\nKept ${work}`)
+    if (existsSync(join(app, 'node_modules'))) {
+      console.log(`Start the installed copy yourself:\n  cd ${JSON.stringify(app)}\n  npx mushin start --dir instance`)
+    }
+  }
   else await rm(work, { recursive: true, force: true, maxRetries: 5 }).catch(() => {})
 }
