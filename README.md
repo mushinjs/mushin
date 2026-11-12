@@ -215,7 +215,7 @@ Inside the repository the packages run from their TypeScript sources through tsx
 
 ### Releasing
 
-A pull request that changes what users get adds a changeset (`pnpm changeset`). When it merges, the Release workflow publishes a snapshot of every package to the `next` tag on npm and opens or updates the "Version Packages" pull request; merging that one publishes to `latest`. All `@mushinjs/*` packages share one version. See `.changeset/README.md`.
+A pull request that changes what users get adds a changeset (`pnpm changeset`). When it merges, the Release workflow publishes a snapshot of every package to the `next` tag on npm and opens or updates the "Version Packages" pull request; merging that one publishes to `latest`. All `@mushinjs/*` packages share one version. See `.changeset/README.md`. Publishing uses npm Trusted Publishing, so the repository holds no npm token: a new package must be published once by hand and then given this repository and `release.yml` as its trusted publisher on npmjs.com.
 
 | Package | Role |
 | --- | --- |
