@@ -57,8 +57,11 @@ describe('secrets in .env', () => {
     expect(env).toContain('BOT_OLD_BOT_TOKEN=old-napcat-token')
     expect(env).toContain('MCP_TOOLS_AUTHORIZATION="Bearer old-mcp-token"')
     // Nothing in data/ holds a key any more, the copy in data/backups/ aside.
-    const stored = (await texts(join(baseDir, 'data'))).join('\n')
-    for (const secret of ['sk-old-provider-key', 'old-napcat-token', 'old-mcp-token']) expect(stored).not.toContain(secret)
+    const secrets = ['sk-old-provider-key', 'old-napcat-token', 'old-mcp-token']
+    await waitFor(async () => {
+      const stored = (await texts(join(baseDir, 'data'))).join('\n')
+      return secrets.every((secret) => !stored.includes(secret))
+    })
     expect(app.ctx.llm.client(app.ctx.llm.get('p1'))).toBeTruthy()
     expect(app.ctx.storage.secrets.resolve(app.ctx.llm.get('p1').config.apiKey)).toBe('sk-old-provider-key')
   })
