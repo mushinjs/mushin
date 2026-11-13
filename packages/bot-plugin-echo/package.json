@@ -1,6 +1,6 @@
 {
   "name": "@mushinjs/bot-plugin-echo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Echo bot plugin: the minimal example",
   "type": "module",
   "license": "MIT",

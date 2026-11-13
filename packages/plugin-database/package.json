@@ -1,6 +1,6 @@
 {
   "name": "@mushinjs/plugin-database",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A database for plugins, SQLite by default",
   "type": "module",
   "license": "MIT",

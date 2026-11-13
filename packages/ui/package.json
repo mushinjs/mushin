@@ -1,6 +1,6 @@
 {
   "name": "@mushinjs/ui",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Vue components and design tokens shared by the Mushin.js dashboard and plugin pages",
   "type": "module",
   "license": "MIT",

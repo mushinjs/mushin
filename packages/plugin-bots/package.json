@@ -1,6 +1,6 @@
 {
   "name": "@mushinjs/plugin-bots",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Bot manager and per-bot runtimes",
   "type": "module",
   "license": "MIT",

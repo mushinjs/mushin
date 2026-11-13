@@ -1,6 +1,6 @@
 {
   "name": "@mushinjs/plugin-demo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Demo content: an offline test provider, a sandbox bot and sample flows",
   "type": "module",
   "license": "MIT",

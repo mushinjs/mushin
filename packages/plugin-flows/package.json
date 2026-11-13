@@ -1,6 +1,6 @@
 {
   "name": "@mushinjs/plugin-flows",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Conversation flows: node registry, execution engine and flow storage",
   "type": "module",
   "license": "MIT",
