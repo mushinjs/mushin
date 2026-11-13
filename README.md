@@ -42,10 +42,29 @@ Every start prints a sign-in link and the admin token:
 
 Open the sign-in link, then follow **Quick setup** to connect an LLM provider. After that, ask the Agent, for example: *"Connect a QQ bot through NapCat at ws://127.0.0.1:3001 and turn on LLM chat."*
 
-- The token is kept in `instance/data/auth.json`, so it stays the same across restarts.
+- The token is kept in `instance/data/core/auth.json`, so it stays the same across restarts.
 - To replace it, run `pnpm exec mushin token reset`. A running Mushin.js accepts the new token at once and the old one stops working.
 - Prefer a fixed token? Set `MUSHIN_ADMIN_TOKEN` before starting.
 - The server listens on `127.0.0.1:5160`. Change host and port in `instance/mushin.config.json` (the `server` entry).
+
+### Where things are kept
+
+```
+instance/
+  mushin.config.json   which plugins run, and their settings
+  plugins/             your own plugins
+  data/                everything worth keeping: back up this folder
+    mushin.db          the database
+    core/              bots, providers, permissions, sign-in
+    bots/<id>/         one bot's message log
+    agents/            Agent sessions, skills and settings
+    plugins/<name>/    each plugin's own files
+    backups/           copies Mushin.js makes before changing the folder
+  logs/                bot logs, safe to delete
+  cache/               safe to delete
+```
+
+An instance from an older version is moved to this layout when it starts, after a copy of its `data/` folder goes to `data/backups/`. To see the moves first, run `pnpm exec mushin migrate --dry-run`; `mushin migrate` makes them without starting.
 
 ### Try it without QQ or an API key
 
@@ -91,7 +110,7 @@ The bots list shows each bot's connection mode and address, with a switch to sta
 
 If Mushin.js and NapCat run on different machines, bind Mushin.js to a reachable address (`host` in the server entry) and keep the admin token private.
 
-When a bot misbehaves, open its **Logs** tab. It lists what happened inside that bot only: every connection attempt (address, NapCat self id, client role, and why a token was rejected), logins, status changes, and plugin warnings. The same lines are saved in `instance/data/logs/<bot id>/` and the Agent can read them.
+When a bot misbehaves, open its **Logs** tab. It lists what happened inside that bot only: every connection attempt (address, NapCat self id, client role, and why a token was rejected), logins, status changes, and plugin warnings. The same lines are saved in `instance/logs/bots/<bot id>/` and the Agent can read them.
 
 ## Keeping LLM chat in check
 
@@ -235,7 +254,7 @@ A pull request that changes what users get adds a changeset (`pnpm changeset`). 
 | `@mushinjs/plugin-console` | HTTP API, WebSocket, admin token, dashboard hosting |
 | `@mushinjs/plugin-flows` | Flow documents, node types, validation and the execution engine |
 | `@mushinjs/plugin-terminal` | Flow nodes that run commands locally or over SSH (opt-in) |
-| `@mushinjs/plugin-stats` | Hourly counts of messages, commands, flow runs and model usage (kept hourly for 30 days, daily for a year, in `data/stats/`) and process samples for the overview |
+| `@mushinjs/plugin-stats` | Hourly counts of messages, commands, flow runs and model usage (kept hourly for 30 days, daily for a year, in `data/plugins/stats/`) and process samples for the overview |
 | `@mushinjs/bot-plugin-echo`, `@mushinjs/bot-plugin-llm-chat`, `@mushinjs/bot-plugin-flows` | Bot plugins |
 | `@mushinjs/plugin-demo` | Offline demo provider, sandbox bot adapter and sample flows (opt-in) |
 | `@mushinjs/dashboard` | The Vue 3 dashboard |

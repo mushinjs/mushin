@@ -12,7 +12,7 @@ async function setup() {
   dirs.push(baseDir)
   const ctx = new Context()
   ctx.baseDir = baseDir
-  await ctx.plugin(Storage, { dir: 'data' })
+  await ctx.plugin(Storage, { dir: 'data', logs: 'logs', cache: 'cache' })
   return { ctx, baseDir }
 }
 
@@ -27,7 +27,7 @@ describe('storage', () => {
     await ctx.storage.set('agent/two', { b: 2 })
     expect(await ctx.storage.get('agent/one')).toEqual({ a: 1 })
     expect(await ctx.storage.list('agent')).toEqual(['agent/one', 'agent/two'])
-    expect(JSON.parse(await readFile(join(baseDir, 'data', 'agent', 'one.json'), 'utf8'))).toEqual({ a: 1 })
+    expect(JSON.parse(await readFile(join(baseDir, 'data', 'agents', 'sessions', 'one.json'), 'utf8'))).toEqual({ a: 1 })
     await ctx.storage.delete('agent/one')
     expect(await ctx.storage.get('agent/one')).toBeUndefined()
   })

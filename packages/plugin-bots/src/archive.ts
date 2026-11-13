@@ -1,5 +1,3 @@
-import { readdir } from 'node:fs/promises'
-import { join } from 'node:path'
 import { type Context, type MessageRecord, messageType, segmentsToText } from '@mushinjs/core'
 import type {} from '@mushinjs/plugin-database'
 import type {} from '@mushinjs/plugin-storage'
@@ -166,12 +164,11 @@ export class MessageArchive {
    * plugin was off. The files stay where they are.
    */
   private async importLogs() {
-    const root = join(this.ctx.storage.dir, 'messages')
     let imported = 0
-    for (const bot of await readdir(root).catch(() => [] as string[])) {
+    for (const bot of await this.ctx.storage.children('messages')) {
       const newest = Number(await this.ctx.database.select('bots_message', { bot }).execute((row) => $.max(row.timestamp))) || 0
       const since = newest ? new Date(newest).toISOString().slice(0, 10) : ''
-      const days = (await readdir(join(root, bot)).catch(() => [] as string[]))
+      const days = (await this.ctx.storage.children(`messages/${bot}`))
         .filter((name) => name.endsWith('.jsonl') && name.slice(0, -'.jsonl'.length) >= since)
         .sort()
       for (const day of days) {

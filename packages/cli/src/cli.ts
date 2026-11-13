@@ -3,7 +3,8 @@ import { join, relative, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { type InstanceConfig, readJson } from '@mushinjs/core'
 import { resetAdminToken, type SignInInfo } from '@mushinjs/plugin-console'
-import { start } from './start'
+import { LAYOUT_VERSION, migrateLayout } from '@mushinjs/plugin-storage'
+import { instanceDirs, start } from './start'
 import { testCommand } from './test'
 
 const usage = `Usage: mushin <command> [options]
@@ -12,12 +13,14 @@ Commands:
   start           Start Mushin.js (default)
   token reset     Create a new admin token for the dashboard
   test            Run the saved test cases of every flow, offline; exits with 1 when one fails
+  migrate         Move a data folder from an older version to the current layout (start does this too)
 
 Options:
   -d, --dir <path>   Instance directory (default: the current directory, or ./instance if it holds one)
   -p, --port <port>  Override the server port
   --flow <id|name>   test: only this flow
   --json             test: print the results as JSON
+  --dry-run          migrate: only list the moves
   -h, --help         Show this help`
 
 const { values, positionals } = parseArgs({
@@ -28,6 +31,7 @@ const { values, positionals } = parseArgs({
     help: { type: 'boolean', short: 'h' },
     flow: { type: 'string' },
     json: { type: 'boolean' },
+    'dry-run': { type: 'boolean' },
   },
 })
 
@@ -108,15 +112,28 @@ if (values.help) {
     process.exit(1)
   }
   process.exit(await testCommand({ baseDir, flow: values.flow, json: values.json }))
+} else if (command === 'migrate') {
+  const config = await readJson<InstanceConfig>(join(baseDir, CONFIG))
+  if (!config) {
+    console.error(`No Mushin.js instance in ${baseDir}. Pass the instance folder with --dir.`)
+    process.exit(1)
+  }
+  const dirs = instanceDirs(baseDir, config)
+  const result = await migrateLayout(dirs, { dryRun: values['dry-run'] })
+  for (const move of result.moves) console.log(`  ${relative(baseDir, move.from)} → ${relative(baseDir, move.to)}`)
+  if (!result.moves.length) console.log(`The data folder already uses the current layout (version ${LAYOUT_VERSION}). Nothing to move.`)
+  else if (values['dry-run']) console.log(`${result.moves.length} file(s) would move. Run without --dry-run to move them; a copy of the data folder is made first.`)
+  else console.log(`Moved ${result.moves.length} file(s). A copy of the old data folder is in ${relative(baseDir, result.backup!)}.`)
 } else if (command === 'token' && sub === 'reset') {
   const config = await readJson<InstanceConfig>(join(baseDir, CONFIG))
   if (!config) {
     console.error(`No Mushin.js instance in ${baseDir}. Pass the instance folder with --dir, e.g. "mushin token reset --dir instance".`)
     process.exit(1)
   }
-  const storage = config.plugins.find((entry) => entry.package === '@mushinjs/plugin-storage')
   const server = config.plugins.find((entry) => entry.package === '@cordisjs/plugin-server')
-  const token = await resetAdminToken(resolve(baseDir, storage?.config?.dir ?? 'data'))
+  const dirs = instanceDirs(baseDir, config)
+  await migrateLayout(dirs)
+  const token = await resetAdminToken(dirs.data)
   const host = server?.config?.host === '0.0.0.0' || !server?.config?.host ? '127.0.0.1' : server.config.host
   const url = `http://${host}:${server?.config?.port ?? 5160}`
   console.log(`New admin token: ${token}`)

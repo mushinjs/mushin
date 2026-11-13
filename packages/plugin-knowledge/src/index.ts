@@ -437,7 +437,7 @@ export class Knowledge extends Service {
   // ---- documents ----
 
   private fileDir(base: string) {
-    return join(this.home.storage.dir, 'knowledge', base)
+    return this.home.storage.path(`knowledge/${base}`)
   }
 
   private filePath(doc: Pick<KnowledgeDoc, 'base' | 'id' | 'format'>) {

@@ -60,7 +60,7 @@ describe('admin token', () => {
     await writeFile(join(baseDir, 'data', 'auth.json'), JSON.stringify({ salt: 'aa', hash: 'bb', createdAt: 1 }))
     const { info, login } = await boot()
     expect(await login(info.token)).toBe(200)
-    const stored = JSON.parse(await readFile(join(baseDir, 'data', 'auth.json'), 'utf8'))
+    const stored = JSON.parse(await readFile(join(baseDir, 'data', 'core', 'auth.json'), 'utf8'))
     expect(stored.token).toBe(info.token)
   })
 
