@@ -1,6 +1,6 @@
 import { appendFile, mkdir, readdir, readFile, rm } from 'node:fs/promises'
 import { dirname, join, relative, resolve, sep } from 'node:path'
-import { Context, field, readJson, Service, writeJsonAtomic, z } from '@mushinjs/core'
+import { Context, EnvFile, field, readJson, Service, writeJsonAtomic, z } from '@mushinjs/core'
 import { childrenOf, type LayoutDirs, pathOf } from './layout'
 
 export * from './layout'
@@ -34,6 +34,8 @@ export class Storage extends Service {
   /** The data directory: the one folder to back up. */
   readonly dir: string
   readonly dirs: LayoutDirs
+  /** The instance's `.env` file, where secrets live. Documents hold `${NAME}` references to them. */
+  readonly secrets: EnvFile
   private readonly baseDir: string
 
   constructor(ctx: Context, config: z.infer<typeof Storage.Config>) {
@@ -41,6 +43,7 @@ export class Storage extends Service {
     this.baseDir = ctx.baseDir ?? process.cwd()
     this.dirs = resolveDirs(this.baseDir, config)
     this.dir = this.dirs.data
+    this.secrets = new EnvFile(join(this.baseDir, '.env')).loadSync()
   }
 
   private file(key: string, ext: '.json' | '.jsonl') {

@@ -2,7 +2,7 @@ import { mkdir, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { Actions, Context, currentPackageName, type Exporter, type InstanceConfig, Logger, type Message, PluginManager, readJson, writeJsonAtomic } from '@mushinjs/core'
+import { Actions, Context, currentPackageName, EnvFile, type Exporter, type InstanceConfig, Logger, type Message, PluginManager, readJson, resolveEnvReferences, writeJsonAtomic } from '@mushinjs/core'
 import type { SignInInfo } from '@mushinjs/plugin-console'
 import { type LayoutDirs, migrateLayout, resolveDirs } from '@mushinjs/plugin-storage'
 
@@ -102,7 +102,9 @@ function offlineConfig(config: InstanceConfig): InstanceConfig {
 /** The data, log and cache folders of an instance, from its storage plugin entry. */
 export function instanceDirs(baseDir: string, config: InstanceConfig): LayoutDirs {
   const storage = config.plugins.find((entry) => entry.package === '@mushinjs/plugin-storage' || entry.package === '@mushin/plugin-storage')
-  return resolveDirs(baseDir, storage?.config)
+  // The folders may be `${NAME}` references to .env.
+  new EnvFile(join(baseDir, '.env')).loadSync()
+  return resolveDirs(baseDir, resolveEnvReferences(storage?.config ?? {}))
 }
 
 /** Boots an instance: root context, action registry, then every app plugin in the config file. */
@@ -137,6 +139,9 @@ export async function start(options: StartOptions) {
     const server = config.plugins.find((entry) => entry.package === '@cordisjs/plugin-server')
     if (server) server.config = { ...server.config, port: options.port }
   }
+
+  // Secrets in .env, for `${NAME}` references in the config and for plugins that read the environment.
+  new EnvFile(join(baseDir, '.env')).loadSync()
 
   const ctx = new Context()
   ctx.baseDir = baseDir

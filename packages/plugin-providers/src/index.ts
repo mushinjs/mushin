@@ -1,4 +1,4 @@
-import { Context, isMasked, mask, MushinError, randomId, Service, toJsonSchema, usage, z } from '@mushinjs/core'
+import { Context, envReference, isMasked, mask, MushinError, randomId, Service, toJsonSchema, usage, z } from '@mushinjs/core'
 import type {} from '@mushinjs/plugin-storage'
 import type {
   ChatRequest, DecisionQuestion, LlmChatOptions, LlmMessage, LlmDecideOptions, LlmDecideResult, LlmEmbedOptions, LlmEmbedResult, LlmResult, ModelProfile,
@@ -146,6 +146,7 @@ export class LlmService extends Service {
       if (this.typeStore.has(type.id)) throw new Error(`provider type "${type.id}" is already defined`)
       this.typeStore.set(type.id, type)
       this.logger.info('provider type %s is available', type.id)
+      this.secureRecords(type as ProviderType).catch((error) => this.logger.warn('could not move the keys of %s providers to .env: %s', type.id, error))
       ctx.emit('providers/changed')
       return () => {
         this.typeStore.delete(type.id)
@@ -199,11 +200,38 @@ export class LlmService extends Service {
     return this.records.some((record) => record.lastTest?.ok && this.supports(record, 'chat'))
   }
 
+  /** Moves keys an older version saved in plain text to .env, once their type is known. */
+  private async secureRecords(type: ProviderType) {
+    let moved = 0
+    for (const record of this.records) {
+      if (record.type !== type.id) continue
+      const result = await this.secureConfig(type, record, record.config)
+      record.config = result.config
+      moved += result.moved.length
+    }
+    if (moved) {
+      await this.save()
+      this.logger.info('moved %d %s provider key(s) to .env', moved, type.id)
+    }
+  }
+
+  /** Puts the secrets of a provider's config into .env and returns the config with `${NAME}` references. */
+  private secureConfig(type: ProviderType, record: Pick<ProviderRecord, 'id' | 'name'> & { config?: Record<string, any> }, config: Record<string, any>) {
+    const owner = /[A-Za-z0-9]/.test(record.name) ? record.name : `provider_${record.id}`
+    return this.home.storage.secrets.moveIn(config, { keys: type.secrets ?? [], name: [owner], previous: record.config })
+  }
+
+  /** The config a provider client gets: references replaced by the values in .env. */
+  private liveConfig(type: ProviderType, config: Record<string, any>) {
+    return this.home.storage.secrets.resolveAll(config, type.secrets ?? [])
+  }
+
   private redact(record: ProviderRecord) {
     const secrets = this.typeStore.get(record.type)?.secrets ?? []
     const config = { ...record.config }
     for (const key of secrets) {
-      if (typeof config[key] === 'string') config[key] = mask(config[key])
+      // A `${NAME}` reference is not a secret: it shows where the key is.
+      if (typeof config[key] === 'string' && envReference(config[key]) === undefined) config[key] = mask(config[key])
     }
     return { ...record, config, typeAvailable: this.typeStore.has(record.type), capabilities: this.capabilities(record) }
   }
@@ -230,11 +258,12 @@ export class LlmService extends Service {
 
   async create(input: z.infer<typeof providerInput>) {
     const type = this.requireType(input.type)
+    const id = randomId()
     const record: ProviderRecord = {
-      id: randomId(),
+      id,
       name: input.name,
       type: input.type,
-      config: this.validateConfig(type, input.config),
+      config: (await this.secureConfig(type, { id, name: input.name }, this.validateConfig(type, input.config))).config,
       models: input.models ?? [],
       defaultModel: input.defaultModel || input.models?.[0],
       createdAt: Date.now(),
@@ -257,7 +286,7 @@ export class LlmService extends Service {
       for (const key of type.secrets ?? []) {
         if (isMasked(merged[key])) merged[key] = record.config[key]
       }
-      record.config = this.validateConfig(type, merged)
+      record.config = (await this.secureConfig(type, { ...record, name: patch.name ?? record.name }, this.validateConfig(type, merged))).config
     }
     if (patch.name !== undefined) record.name = patch.name
     if (patch.type !== undefined) record.type = patch.type
@@ -359,10 +388,11 @@ export class LlmService extends Service {
   client(record: ProviderRecord) {
     const type = this.typeStore.get(record.type)
     if (!type) throw new MushinError('unavailable', `Provider type "${record.type}" is not loaded; enable its plugin`)
-    const key = JSON.stringify(record.config)
+    const config = this.liveConfig(type, record.config)
+    const key = JSON.stringify(config)
     const cached = this.clients.get(record.id)
     if (cached?.key === key) return cached.client
-    const client = type.create(record.config)
+    const client = type.create(config)
     this.logger.debug('created a client for provider %s', this.label(record))
     this.clients.set(record.id, { key, client })
     return client
@@ -598,7 +628,8 @@ export class LlmService extends Service {
     if (input.provider) {
       client = this.client(this.get(input.provider))
     } else if (input.type && input.config) {
-      client = this.requireType(input.type).create(input.config)
+      const type = this.requireType(input.type)
+      client = type.create(this.liveConfig(type, input.config))
     } else {
       throw new MushinError('invalid_input', 'Pass a provider id, or a type with its config')
     }

@@ -1,6 +1,6 @@
 import {
-  type ChannelInfo, Context, currentPackageName, describeMissing, dependencyReport, type LogTag, type MissingDependency, logTag, type Exporter, type Fiber, fiberError, fiberStatus, isMasked, Logger, mask, type Message,
-  type MessageRecord, messageType, MushinError, type Plugin, type Provenance, pluginSchema, randomId, type Segment, segmentsToText, Service, toJsonSchema,
+  type ChannelInfo, Context, currentPackageName, describeMissing, dependencyReport, envReference, type LogTag, type MissingDependency, logTag, type Exporter, type Fiber, fiberError, fiberStatus, isMasked, Logger, mask, type Message,
+  type MessageRecord, messageType, MushinError, type Plugin, type Provenance, pluginSchema, randomId, resolveEnvReferences, type Segment, segmentsToText, Service, toJsonSchema,
   type UsageEvent, validatePluginConfig, z,
 } from '@mushinjs/core'
 import type {} from '@mushinjs/plugin-storage'
@@ -206,6 +206,7 @@ export class BotManager extends Service {
       if (this.adapterStore.has(adapter.id)) throw new Error(`adapter "${adapter.id}" is already defined`)
       this.adapterStore.set(adapter.id, adapter)
       this.logger.info('adapter %s is available', adapter.id)
+      this.secureRecords(adapter as AdapterType).catch((error) => this.logger.warn('could not move the %s secrets of bots to .env: %s', adapter.id, error))
       for (const record of this.records) {
         if (this.home.offline) break
         if (record.enabled && record.adapter.type === adapter.id && !this.runtimes.has(record.id)) {
@@ -269,11 +270,33 @@ export class BotManager extends Service {
     this.home.emit('bots/status', this.status(id))
   }
 
+  /** Moves adapter secrets an older version saved in plain text to .env, once the adapter is known. */
+  private async secureRecords(adapter: AdapterType) {
+    let moved = 0
+    for (const record of this.records) {
+      if (record.adapter.type !== adapter.id) continue
+      const result = await this.secureConfig(adapter.id, record, record.adapter.config)
+      record.adapter = { ...record.adapter, config: result.config }
+      moved += result.moved.length
+    }
+    if (moved) {
+      await this.save()
+      this.logger.info('moved %d %s bot secret(s) to .env', moved, adapter.id)
+    }
+  }
+
+  /** Puts the secrets of an adapter config into .env and returns the config with `${NAME}` references. */
+  private secureConfig(type: string, record: Pick<BotRecord, 'id' | 'name'> & { adapter?: BotRecord['adapter'] }, config: Record<string, any>) {
+    const owner = /[A-Za-z0-9]/.test(record.name) ? record.name : record.id
+    return this.home.storage.secrets.moveIn(config, { keys: this.adapterStore.get(type)?.secrets ?? [], name: ['bot', owner], previous: record.adapter?.config })
+  }
+
   private redact(record: BotRecord) {
     const secrets = this.adapterStore.get(record.adapter.type)?.secrets ?? []
     const config = { ...record.adapter.config }
     for (const key of secrets) {
-      if (typeof config[key] === 'string' && config[key]) config[key] = mask(config[key])
+      // A `${NAME}` reference is not a secret: it shows where the value is.
+      if (typeof config[key] === 'string' && config[key] && envReference(config[key]) === undefined) config[key] = mask(config[key])
     }
     return { ...record, adapter: { ...record.adapter, config } }
   }
@@ -314,7 +337,7 @@ export class BotManager extends Service {
       id,
       name: input.name,
       enabled: input.enabled ?? true,
-      adapter: { type: input.adapter.type, config: this.validateAdapter(input.adapter.type, input.adapter.config) },
+      adapter: { type: input.adapter.type, config: (await this.secureConfig(input.adapter.type, { id, name: input.name }, this.validateAdapter(input.adapter.type, input.adapter.config))).config },
       plugins: [],
       provider: input.provider,
       ...(input.commands ? { commands: input.commands } : {}),
@@ -343,7 +366,7 @@ export class BotManager extends Service {
       for (const key of secrets) {
         if (isMasked(config[key])) config[key] = record.adapter.config[key]
       }
-      record.adapter = { type: patch.adapter.type, config: this.validateAdapter(patch.adapter.type, config) }
+      record.adapter = { type: patch.adapter.type, config: (await this.secureConfig(patch.adapter.type, record, this.validateAdapter(patch.adapter.type, config))).config }
     }
     await this.save()
     this.logger.info('updated bot %s', this.label(record))
@@ -454,8 +477,9 @@ export class BotManager extends Service {
         ctx.logger('bot').info('starting with the %s adapter; plugins: %s', record.adapter.type, enabled.join(', ') || 'none')
         for (const [name, error] of runtime.pluginErrors) ctx.logger('bot').warn('plugin %s did not load: %s', name, error)
         ctx.plugin(Bot, { record, hooks })
-        ctx.plugin(adapter.plugin, record.adapter.config)
-        for (const { entry, plugin } of loaded) runtime.plugins.set(entry.package, ctx.plugin(plugin, entry.config))
+        // Secrets are `${NAME}` references to .env; the adapter and plugins get the values.
+        ctx.plugin(adapter.plugin, this.home.storage.secrets.resolveAll(record.adapter.config, adapter.secrets ?? []))
+        for (const { entry, plugin } of loaded) runtime.plugins.set(entry.package, ctx.plugin(plugin, resolveEnvReferences(entry.config)))
       },
     })
     await runtime.fiber
@@ -591,7 +615,7 @@ export class BotManager extends Service {
     if (!runtime?.ctx) return
     runtime.plugins.get(entry.package)?.dispose()
     runtime.pluginErrors.delete(entry.package)
-    runtime.plugins.set(entry.package, runtime.ctx.plugin(plugin, entry.config))
+    runtime.plugins.set(entry.package, runtime.ctx.plugin(plugin, resolveEnvReferences(entry.config)))
   }
 
   // ---- commands ----

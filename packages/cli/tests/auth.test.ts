@@ -55,18 +55,32 @@ describe('admin token', () => {
     expect(await second.login(first)).toBe(200)
   })
 
+  it('keeps the token in .env', async () => {
+    const { info } = await boot()
+    expect(await readFile(join(baseDir, '.env'), 'utf8')).toBe(`MUSHIN_ADMIN_TOKEN=${info.token}\n`)
+  })
+
+  it('moves the token an older version kept in data/ to .env', async () => {
+    await mkdir(join(baseDir, 'data'), { recursive: true })
+    await writeFile(join(baseDir, 'data', 'auth.json'), JSON.stringify({ token: 'an-older-token-of-24-chars', createdAt: 1 }))
+    const { info, login } = await boot()
+    expect(info.token).toBe('an-older-token-of-24-chars')
+    expect(await login(info.token)).toBe(200)
+    expect(await readFile(join(baseDir, '.env'), 'utf8')).toContain('MUSHIN_ADMIN_TOKEN=an-older-token-of-24-chars')
+    await expect(readFile(join(baseDir, 'data', 'core', 'auth.json'), 'utf8')).rejects.toThrow()
+  })
+
   it('replaces a hash-only record from an older build with a token it can show', async () => {
     await mkdir(join(baseDir, 'data'), { recursive: true })
     await writeFile(join(baseDir, 'data', 'auth.json'), JSON.stringify({ salt: 'aa', hash: 'bb', createdAt: 1 }))
     const { info, login } = await boot()
     expect(await login(info.token)).toBe(200)
-    const stored = JSON.parse(await readFile(join(baseDir, 'data', 'core', 'auth.json'), 'utf8'))
-    expect(stored.token).toBe(info.token)
+    expect(await readFile(join(baseDir, '.env'), 'utf8')).toContain(`MUSHIN_ADMIN_TOKEN=${info.token}`)
   })
 
   it('accepts a token from "mushin token reset" without a restart, and drops the old one', async () => {
     const { info, login } = await boot()
-    const fresh = await resetAdminToken(join(baseDir, 'data'))
+    const fresh = await resetAdminToken(baseDir)
     expect(await login(fresh)).toBe(200)
     expect(await login(info.token)).toBe(401)
   })

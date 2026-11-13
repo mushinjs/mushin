@@ -151,7 +151,7 @@ export interface ProviderType<C = any> {
   id: string
   displayName: LocalizedText
   config: z.ZodType<C>
-  /** Config keys that hold secrets; they are masked in every API response. */
+  /** Config keys that hold secrets. They are kept in .env (the config holds `${NAME}` references), resolved before `create`, and masked in every API response. */
   secrets?: string[]
   presets?: ProviderPreset[]
   /** Defaults to `['chat']`. A type without `chat` is never picked for chat requests. */
