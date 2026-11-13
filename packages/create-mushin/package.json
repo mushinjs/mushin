@@ -1,0 +1,36 @@
+{
+  "name": "create-mushin",
+  "version": "0.1.0",
+  "description": "Create a Mushin.js app: npm create mushin@latest my-bot",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mushinjs/mushin.git",
+    "directory": "packages/create-mushin"
+  },
+  "bin": {
+    "create-mushin": "./bin/create-mushin.js"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}

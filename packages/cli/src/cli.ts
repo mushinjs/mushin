@@ -4,6 +4,7 @@ import { parseArgs } from 'node:util'
 import { type InstanceConfig, readJson } from '@mushinjs/core'
 import { resetAdminToken, type SignInInfo } from '@mushinjs/plugin-console'
 import { LAYOUT_VERSION, migrateLayout } from '@mushinjs/plugin-storage'
+import { appPackageManager, appPackages, CLI_VERSION, newPlugin, run, upgradeCommand, upgradeTag } from './scaffold'
 import { instanceDirs, start } from './start'
 import { testCommand } from './test'
 
@@ -14,6 +15,9 @@ Commands:
   token reset     Create a new admin token for the dashboard
   test            Run the saved test cases of every flow, offline; exits with 1 when one fails
   migrate         Move a data folder from an older version to the current layout (start does this too)
+  new plugin <name>
+                  Create a TypeScript plugin in plugins/<name> and turn it on
+  upgrade         Update the @mushinjs packages of this app, then migrate its data; stop Mushin.js first
 
 Options:
   -d, --dir <path>   Instance directory (default: the current directory, or ./instance if it holds one)
@@ -21,6 +25,7 @@ Options:
   --flow <id|name>   test: only this flow
   --json             test: print the results as JSON
   --dry-run          migrate: only list the moves
+  --tag <tag>        upgrade: the npm dist-tag to follow (default: next for a preview, latest otherwise)
   -h, --help         Show this help`
 
 const { values, positionals } = parseArgs({
@@ -32,6 +37,7 @@ const { values, positionals } = parseArgs({
     flow: { type: 'string' },
     json: { type: 'boolean' },
     'dry-run': { type: 'boolean' },
+    tag: { type: 'string' },
   },
 })
 
@@ -138,6 +144,41 @@ if (values.help) {
   console.log(`New admin token: ${token}`)
   console.log(`Sign in: ${signInLink(url, token)}`)
   console.log('A running Mushin.js accepts the new token right away; the old one stops working.')
+} else if (command === 'new' && sub === 'plugin') {
+  const name = positionals[2]
+  if (!name) {
+    console.error('Name the plugin: mushin new plugin <name>')
+    process.exit(1)
+  }
+  try {
+    const created = await newPlugin(baseDir, name)
+    console.log(`Created ${relative(process.cwd(), created.dir) || '.'} (${created.package}).`)
+    console.log(created.added ? 'It is turned on in mushin.config.json and starts with Mushin.js; a running Mushin.js picks it up after a restart.' : 'It is already listed in mushin.config.json.')
+    console.log(`Edit src/index.ts, then check it with "${appPackageManager(baseDir)} run typecheck".`)
+  } catch (error) {
+    console.error((error as Error).message)
+    process.exit(1)
+  }
+} else if (command === 'upgrade') {
+  const packages = await appPackages(baseDir)
+  if (!packages?.length) {
+    console.error(`${baseDir} has no package.json that depends on @mushinjs packages. "mushin upgrade" works in an app made with "npm create mushin".`)
+    process.exit(1)
+  }
+  const tag = values.tag ?? upgradeTag()
+  const [pm, args] = upgradeCommand(appPackageManager(baseDir), packages, tag)
+  console.log(`Mushin.js ${CLI_VERSION}: updating ${packages.join(', ')} to ${tag}. Stop Mushin.js first if it is running.`)
+  try {
+    await run(pm, args, baseDir)
+    // The new version decides the layout, so its own CLI moves the data.
+    const bin = join(baseDir, 'node_modules', '@mushinjs', 'cli', 'bin', 'mushin.js')
+    if (existsSync(join(baseDir, CONFIG)) && existsSync(bin)) await run(process.execPath, [bin, 'migrate', '--dir', baseDir], baseDir)
+    const after = await readJson<{ version: string }>(join(baseDir, 'node_modules', '@mushinjs', 'cli', 'package.json'))
+    console.log(`Mushin.js is now ${after?.version ?? 'updated'}. Start it with "${appPackageManager(baseDir)} start".`)
+  } catch (error) {
+    console.error((error as Error).message)
+    process.exit(1)
+  }
 } else {
   console.error(usage)
   process.exit(1)

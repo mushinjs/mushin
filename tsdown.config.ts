@@ -14,6 +14,7 @@ const special = new Set(['dashboard', 'ui'])
 /** Extra entries a package needs besides src/index.ts. */
 const extraEntries: Record<string, string[]> = {
   cli: ['src/cli.ts'],
+  'create-mushin': ['src/cli.ts'],
 }
 
 const base = {
@@ -40,7 +41,7 @@ const packages = readdirSync('packages').filter((name) => !special.has(name) && 
 export default defineConfig([
   ...packages.map((name): UserConfig => ({
     ...base,
-    name: `@mushinjs/${name}`,
+    name: name.startsWith('create-') ? name : `@mushinjs/${name}`,
     cwd: join('packages', name),
     entry: ['src/index.ts', ...(extraEntries[name] ?? [])],
     outDir: 'dist',

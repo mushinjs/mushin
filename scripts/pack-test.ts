@@ -6,7 +6,9 @@
 //   1. every package packs, and npm installs the tarballs into an empty folder;
 //   2. `mushin start` from that install serves the dashboard, and every built-in plugin becomes active;
 //   3. tsx never loads while the instance has no TypeScript plugin;
-//   4. a TypeScript plugin dropped into plugins/ loads without a build step.
+//   4. a TypeScript plugin dropped into plugins/ loads without a build step;
+//   5. create-mushin makes an app that npm and pnpm install, where `mushin new plugin` makes a plugin
+//      that passes the typecheck and runs.
 import { type ChildProcess, spawn } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -153,11 +155,11 @@ registerHooks({
   const instanceDir = join(app, 'instance')
   const bin = join(app, 'node_modules', '@mushinjs', 'cli', 'bin', 'mushin.js')
 
-  async function startMushin() {
+  async function startMushin(dir = instanceDir, mushinBin = bin) {
     const port = await freePort()
     let output = ''
-    child = spawn(process.execPath, ['--import', pathToFileURL(probe).href, bin, 'start', '--dir', instanceDir, '--port', String(port)], {
-      cwd: app,
+    child = spawn(process.execPath, ['--import', pathToFileURL(probe).href, mushinBin, 'start', '--dir', dir, '--port', String(port)], {
+      cwd: dir === instanceDir ? app : dir,
       env: { ...process.env, MUSHIN_ADMIN_TOKEN: TOKEN, NO_COLOR: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -186,7 +188,7 @@ registerHooks({
       return list.every((entry) => entry.status === 'active' || entry.status === 'disabled') ? list : undefined
     }, 'every plugin to become active')
 
-    return { base, entries, output: () => output }
+    return { base, entries, call, output: () => output }
   }
 
   async function stopMushin() {
@@ -246,6 +248,49 @@ export function apply(ctx: Context): void {
     await waitFor(() => output().includes('hello from a TypeScript plugin'), 'the TypeScript plugin to log', 5000)
     if (!tsxLoads().length) fail('the TypeScript plugin loaded, but not through tsx')
     console.log('  the plugin is active and loaded through tsx')
+    await stopMushin()
+  }
+
+  // --- 5. An app from create-mushin, with npm and with pnpm -----------------------------------------------
+
+  const creator = join(work, 'creator')
+  await mkdir(creator)
+  await writeFile(join(creator, 'package.json'), '{"private":true}')
+  await run('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error', spec('create-mushin')], creator)
+  const createBin = join(creator, 'node_modules', 'create-mushin', 'bin', 'create-mushin.js')
+
+  for (const pm of ['npm', 'pnpm'] as const) {
+    step(`Creating an app with create-mushin and installing it with ${pm}`)
+    const dir = join(work, `${pm}-app`)
+    await run(process.execPath, [createBin, dir, '--no-install', '--pm', pm], work)
+    // The app asks for the version create-mushin was built with; point those packages at the tarballs.
+    const pkgFile = join(dir, 'package.json')
+    const pkg = JSON.parse(await readFile(pkgFile, 'utf8'))
+    for (const name of Object.keys(pkg.dependencies)) pkg.dependencies[name] = spec(name)
+    const overrides = Object.fromEntries(Object.keys(files).filter((name) => name !== 'create-mushin').map((name) => [name, spec(name)]))
+    if (pm === 'npm') {
+      pkg.overrides = overrides
+      await writeFile(pkgFile, JSON.stringify(pkg, null, 2))
+      await run('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error'], dir)
+    } else {
+      await writeFile(pkgFile, JSON.stringify(pkg, null, 2))
+      // Keep the settings create-mushin wrote and add the overrides.
+      const settings = join(dir, 'pnpm-workspace.yaml')
+      await writeFile(settings, await readFile(settings, 'utf8') + 'overrides:\n' + Object.entries(overrides).map(([name, value]) => `  ${JSON.stringify(name)}: ${JSON.stringify(value)}\n`).join(''))
+      await run('pnpm', ['install'], dir)
+    }
+    const appBin = join(dir, 'node_modules', '@mushinjs', 'cli', 'bin', 'mushin.js')
+    await run(process.execPath, [appBin, 'new', 'plugin', 'demo-tool'], dir)
+    await run(pm, ['run', 'typecheck'], dir)
+    console.log('  mushin new plugin demo-tool passes the typecheck')
+    const { entries, call } = await startMushin(dir, appBin)
+    if (entries.find((item) => item.package === 'mushin-plugin-demo-tool')?.status !== 'active') fail(`the new plugin did not start with ${pm}`)
+    const reply = await call<{ text: string }>('demoTool.hello', { name: pm })
+    if (reply.text !== `Hello, ${pm}!`) fail(`demoTool.hello answered ${JSON.stringify(reply)}`)
+    for (const path of ['mushin.config.json', 'data/mushin.db', 'data/layout.json', 'AGENTS.md', '.gitignore']) {
+      if (!existsSync(join(dir, path))) fail(`the ${pm} app has no ${path} after starting`)
+    }
+    console.log(`  the app starts, the plugin answers, and the folder matches the layout`)
     await stopMushin()
   }
 
