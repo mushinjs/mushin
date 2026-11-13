@@ -23,12 +23,12 @@ The plugin marketplace is designed but not built yet; see [docs/architecture.md]
 
 ## Quick start
 
-You need Node.js 22.13 or later and pnpm.
+You need Node.js 22.13 or later. Create an app and start it:
 
 ```sh
-pnpm install
-pnpm build      # builds the packages and the dashboard
-pnpm start      # starts Mushin.js in ./instance
+npm create mushin@next my-bot     # or: pnpm create mushin@next my-bot
+cd my-bot
+npm start
 ```
 
 Every start prints a sign-in link and the admin token:
@@ -37,23 +37,28 @@ Every start prints a sign-in link and the admin token:
   Mushin.js dashboard: http://127.0.0.1:5160
   Sign in:     http://127.0.0.1:5160/login#token=qUdh_kYfFr08_...
   Admin token: qUdh_kYfFr08_...
-  New token:   mushin token reset --dir instance
+  New token:   mushin token reset
 ```
 
 Open the sign-in link, then follow **Quick setup** to connect an LLM provider. After that, ask the Agent, for example: *"Connect a QQ bot through NapCat at ws://127.0.0.1:3001 and turn on LLM chat."*
 
-- The token is kept in `instance/.env` as `MUSHIN_ADMIN_TOKEN`, so it stays the same across restarts.
-- To replace it, run `pnpm exec mushin token reset`. A running Mushin.js accepts the new token at once and the old one stops working.
+- The token is kept in `.env` as `MUSHIN_ADMIN_TOKEN`, so it stays the same across restarts.
+- To replace it, run `npx mushin token reset`. A running Mushin.js accepts the new token at once and the old one stops working.
 - Prefer a fixed token? Set `MUSHIN_ADMIN_TOKEN` in the environment before starting; it overrides `.env`.
-- The server listens on `127.0.0.1:5160`. Change host and port in `instance/mushin.config.json` (the `server` entry).
+- The server listens on `127.0.0.1:5160`. Change host and port in `mushin.config.json` (the `server` entry).
+- `npm run upgrade` updates Mushin.js (stop it first). `npx mushin new plugin <name>` creates a TypeScript plugin in `plugins/<name>/`, turned on and ready to edit; `npm run typecheck` checks it.
+- The app's `AGENTS.md` explains the folder to an AI such as Claude Code or Codex opened in it.
 
 ### Where things are kept
 
 ```
-instance/
+my-bot/
+  package.json         the Mushin.js packages and plugins this app uses
   mushin.config.json   which plugins run, and their settings
   .env                 secrets: the admin token, provider keys, bot tokens, MCP headers
+  AGENTS.md            what this folder is, for you and your AI
   plugins/             your own plugins
+  skills/              your own skills
   data/                everything worth keeping: back up this folder
     mushin.db          the database
     core/              bots, providers, permissions
@@ -67,7 +72,7 @@ instance/
 
 Secrets stay out of `mushin.config.json` and `data/`: a key you enter in the dashboard or through the Agent is written to `.env`, and the record holds a reference such as `${DEEPSEEK_API_KEY}`. You can write such a reference yourself, in a provider form or in any plugin setting in `mushin.config.json`. A variable set in the environment overrides `.env`. Keep `.env` out of git and out of anything you share.
 
-An instance from an older version is moved to this layout when it starts, after a copy of its `data/` folder goes to `data/backups/`, and the keys it kept in plain text move to `.env`. That copy still holds the old keys, so delete it once the instance runs. To see the moves first, run `pnpm exec mushin migrate --dry-run`; `mushin migrate` makes them without starting.
+An instance from an older version is moved to this layout when it starts, after a copy of its `data/` folder goes to `data/backups/`, and the keys it kept in plain text move to `.env`. That copy still holds the old keys, so delete it once the instance runs. To see the moves first, run `npx mushin migrate --dry-run`; `mushin migrate` makes them without starting.
 
 ### Try it without QQ or an API key
 
@@ -225,24 +230,30 @@ Every bot has a command list on its **Commands** tab: command nodes from the flo
 
 ## Development
 
+To work on Mushin.js itself, clone this repository and use pnpm:
+
 ```sh
+pnpm install
+pnpm build        # builds the packages and the dashboard
+pnpm start        # starts Mushin.js in ./instance
 pnpm dev          # backend on :5160 and the dashboard dev server on :5173 (proxying /api)
 pnpm test         # unit and end-to-end tests (mock NapCat and mock LLM)
 pnpm typecheck    # TypeScript for all packages, vue-tsc for the dashboard
 pnpm test:flows   # the saved test cases of every flow in ./instance, offline (mushin test)
-pnpm test:pack    # after pnpm build: packs every package, installs the tarballs with npm in an empty folder and starts Mushin.js from them
+pnpm test:pack    # after pnpm build: packs every package, installs the tarballs with npm, creates apps with create-mushin for npm and pnpm, and starts Mushin.js from each
 ```
 
 Inside the repository the packages run from their TypeScript sources through tsx, so a change needs no build. Published packages are JavaScript: `pnpm build` compiles each package's `src/` into `dist/` with type declarations (`tsdown.config.ts`), and `publishConfig.exports` points the published package there. An install from npm loads tsx only when the instance's `plugins/` folder holds a TypeScript plugin.
 
 ### Releasing
 
-A pull request that changes what users get adds a changeset (`pnpm changeset`). When it merges, the Release workflow publishes a snapshot of every package to the `next` tag on npm and opens or updates the "Version Packages" pull request; merging that one publishes to `latest`. All `@mushinjs/*` packages share one version. See `.changeset/README.md`. Publishing uses npm Trusted Publishing, so the repository holds no npm token: a new package must be published once by hand and then given this repository and `release.yml` as its trusted publisher on npmjs.com.
+A pull request that changes what users get adds a changeset (`pnpm changeset`). When it merges, the Release workflow publishes a snapshot of every package to the `next` tag on npm and opens or updates the "Version Packages" pull request; merging that one publishes to `latest`. All `@mushinjs/*` packages and `create-mushin` share one version. See `.changeset/README.md`. Publishing uses npm Trusted Publishing, so the repository holds no npm token: a new package must be published once by hand and then given this repository and `release.yml` as its trusted publisher on npmjs.com.
 
 | Package | Role |
 | --- | --- |
+| `create-mushin` | `npm create mushin` / `pnpm create mushin`: writes a new app folder and installs it |
 | `@mushinjs/core` | Action registry, plugin manager, message and provenance types |
-| `@mushinjs/cli` | `mushin start`, `mushin test` and `mushin token reset` |
+| `@mushinjs/cli` | `mushin start`, `test`, `token reset`, `migrate`, `new plugin` and `upgrade` |
 | `@mushinjs/plugin-storage` | JSON documents in the data directory |
 | `@mushinjs/plugin-database` | The database service (minato; SQLite in `data/mushin.db` by default) and the actions behind the Database page |
 | `@mushinjs/plugin-providers` | Provider records and the `llm` service |
