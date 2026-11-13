@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { startInstance, type TestInstance } from './helpers/instance'
+import { startInstance, type TestInstance, waitFor } from './helpers/instance'
 
 let app: TestInstance | undefined
 
@@ -45,10 +45,10 @@ describe('secrets in .env', () => {
     })
     app = await startInstance({ baseDir })
 
-    const [provider] = (await app.call('providers.list')).providers
-    expect(provider.config.apiKey).toBe('${DEEPSEEK_API_KEY}')
-    const [bot] = await app.call<any[]>('bots.list')
-    expect(bot.adapter.config.token).toBe('${BOT_OLD_BOT_TOKEN}')
+    // Keys move once their provider type or adapter loads, which can be just after the instance is up.
+    const instance = app
+    await waitFor(async () => (await instance.call('providers.list')).providers[0].config.apiKey === '${DEEPSEEK_API_KEY}')
+    await waitFor(async () => (await instance.call<any[]>('bots.list'))[0].adapter.config.token === '${BOT_OLD_BOT_TOKEN}')
     const [server] = await app.call<any[]>('mcp.servers.list')
     expect(server.headers.authorization).toBe('${MCP_TOOLS_AUTHORIZATION}')
 
