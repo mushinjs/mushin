@@ -77,15 +77,18 @@ async function reconcile(ctx: Context, config: Config) {
 
   const botExists = (id?: string) => !!id && ctx.bots.list().some((item) => item.id === id)
   const removedBot = !config.bot && botExists(state.bot) ? state.bot : undefined
+  let newBot: string | undefined
   if (config.bot && !botExists(state.bot)) {
     const record = await ctx.bots.create({
       name: '演示机器人',
+      // Started once its flows exist, so the /help it greets with lists their commands.
+      enabled: false,
       adapter: { type: 'demo', config: {} },
       provider: state.provider,
       // The built-in /help lists the demo flows' commands.
       commands: { helpTitle: '我是演示机器人，可以试试这些指令：' },
     })
-    state.bot = record.id
+    state.bot = newBot = record.id
     logger.info('created the demo bot')
   } else if (config.bot && state.bot) {
     // Point the bot at the demo provider unless someone picked another provider that still exists.
@@ -127,6 +130,7 @@ async function reconcile(ctx: Context, config: Config) {
   }
 
   await ctx.storage.set(STORAGE_KEY, state)
+  if (newBot) await ctx.bots.setEnabled(newBot, true)
   return state
 }
 
