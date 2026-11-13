@@ -11,7 +11,7 @@ Mushin.js is built on [Cordis](https://github.com/cordiverse/cordis). The MVP sh
 | Plugin architecture | Every feature is a Cordis plugin. App plugins extend Mushin.js; bot plugins run per bot, each bot in its own isolated context. |
 | Agent | A chat dock on every page. It operates the instance through the same actions the dashboard uses, asks before dangerous ones, and can open pages and point at controls. It knows which page you are on and suggests what to do there; type `/` for commands (its own and every bot's) and `$` for skills. Replies render Markdown, code, cards, checklists and Mermaid diagrams. |
 | Settings | Appearance (theme, language), features (Agent panel on start, which pages the sidebar shows), the Agent settings and an about page. The Agent settings hold per-page hints and suggestions, skills (write your own or import a `SKILL.md`), MCP servers whose tools the Agent can use, a policy per tool (auto, ask first, off), the model and a daily token budget. |
-| Providers | OpenAI-compatible endpoints (OpenAI, DeepSeek, Moonshot, Qwen, SiliconFlow, OpenRouter, Zhipu GLM, Volcengine Ark, Baidu Qianfan, Tencent Hunyuan, MiniMax, StepFun, xAI, Groq, Mistral, Gemini, Together, Ollama, LM Studio, vLLM), Azure OpenAI, Anthropic (plus the Anthropic-compatible endpoints of DeepSeek, Kimi, Zhipu and MiniMax), native Google Gemini, and TypeSafe Jev decision models through `providers.decide`. Keys are masked everywhere. |
+| Providers | OpenAI-compatible endpoints (OpenAI, DeepSeek, Moonshot, Qwen, SiliconFlow, OpenRouter, Zhipu GLM, Volcengine Ark, Baidu Qianfan, Tencent Hunyuan, MiniMax, StepFun, xAI, Groq, Mistral, Gemini, Together, Ollama, LM Studio, vLLM), Azure OpenAI, Anthropic (plus the Anthropic-compatible endpoints of DeepSeek, Kimi, Zhipu and MiniMax), native Google Gemini, and TypeSafe Jev decision models through `providers.decide`. Keys are kept in `.env`, never in the config or `data/`. |
 | Overview | The start page: bots online, today's messages and model tokens, flows with errors, commands, providers and plugins; a message chart for 24 hours or 7 days per bot; the busiest chats, users, commands, flows and models; live CPU, memory and event loop delay; versions, uptime and data directory size. |
 | Bots | Create, start, stop and configure bots; enable bot plugins per bot; each bot's commands and `/help`. |
 | OneBot adapter | OneBot v11 over WebSocket, in forward mode (Mushin dials NapCat) or reverse mode (NapCat dials Mushin), or over HTTP (API calls plus signed event reports). |
@@ -42,9 +42,9 @@ Every start prints a sign-in link and the admin token:
 
 Open the sign-in link, then follow **Quick setup** to connect an LLM provider. After that, ask the Agent, for example: *"Connect a QQ bot through NapCat at ws://127.0.0.1:3001 and turn on LLM chat."*
 
-- The token is kept in `instance/data/core/auth.json`, so it stays the same across restarts.
+- The token is kept in `instance/.env` as `MUSHIN_ADMIN_TOKEN`, so it stays the same across restarts.
 - To replace it, run `pnpm exec mushin token reset`. A running Mushin.js accepts the new token at once and the old one stops working.
-- Prefer a fixed token? Set `MUSHIN_ADMIN_TOKEN` before starting.
+- Prefer a fixed token? Set `MUSHIN_ADMIN_TOKEN` in the environment before starting; it overrides `.env`.
 - The server listens on `127.0.0.1:5160`. Change host and port in `instance/mushin.config.json` (the `server` entry).
 
 ### Where things are kept
@@ -52,10 +52,11 @@ Open the sign-in link, then follow **Quick setup** to connect an LLM provider. A
 ```
 instance/
   mushin.config.json   which plugins run, and their settings
+  .env                 secrets: the admin token, provider keys, bot tokens, MCP headers
   plugins/             your own plugins
   data/                everything worth keeping: back up this folder
     mushin.db          the database
-    core/              bots, providers, permissions, sign-in
+    core/              bots, providers, permissions
     bots/<id>/         one bot's message log
     agents/            Agent sessions, skills and settings
     plugins/<name>/    each plugin's own files
@@ -64,7 +65,9 @@ instance/
   cache/               safe to delete
 ```
 
-An instance from an older version is moved to this layout when it starts, after a copy of its `data/` folder goes to `data/backups/`. To see the moves first, run `pnpm exec mushin migrate --dry-run`; `mushin migrate` makes them without starting.
+Secrets stay out of `mushin.config.json` and `data/`: a key you enter in the dashboard or through the Agent is written to `.env`, and the record holds a reference such as `${DEEPSEEK_API_KEY}`. You can write such a reference yourself, in a provider form or in any plugin setting in `mushin.config.json`. A variable set in the environment overrides `.env`. Keep `.env` out of git and out of anything you share.
+
+An instance from an older version is moved to this layout when it starts, after a copy of its `data/` folder goes to `data/backups/`, and the keys it kept in plain text move to `.env`. That copy still holds the old keys, so delete it once the instance runs. To see the moves first, run `pnpm exec mushin migrate --dry-run`; `mushin migrate` makes them without starting.
 
 ### Try it without QQ or an API key
 

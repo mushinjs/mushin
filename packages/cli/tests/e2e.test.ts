@@ -67,7 +67,7 @@ describe('plugin tree', () => {
 })
 
 describe('providers', () => {
-  it('creates a provider with a masked key and passes its test', async () => {
+  it('creates a provider with its key in .env and passes its test', async () => {
     const provider = await app.call('providers.create', {
       name: 'Mock',
       type: 'openai',
@@ -75,18 +75,25 @@ describe('providers', () => {
       models: ['mock-model'],
     })
     providerId = provider.id
-    expect(provider.config.apiKey).toBe('sk-…7890')
+    expect(provider.config.apiKey).toBe('${MOCK_API_KEY}')
+    expect(await readFile(join(app.baseDir, '.env'), 'utf8')).toContain('MOCK_API_KEY=sk-test-1234567890')
+    expect(await readFile(join(app.baseDir, 'data', 'core', 'providers.json'), 'utf8')).not.toContain('sk-test-1234567890')
     expect(provider.isDefault).toBe(true)
     const test = await app.call('providers.test', { id: providerId })
     expect(test).toMatchObject({ ok: true, model: 'mock-model' })
     expect((await app.call('providers.list')).ready).toBe(true)
   })
 
-  it('keeps the stored key when an update sends the masked value back', async () => {
+  it('keeps the stored key when an update sends it back, and replaces the value in .env with a new key', async () => {
     const [record] = (await app.call('providers.list')).providers
     await app.call('providers.update', { id: providerId, config: { ...record.config } })
-    const stored = app.ctx.llm.get(providerId)
-    expect(stored.config.apiKey).toBe('sk-test-1234567890')
+    expect(app.ctx.llm.get(providerId).config.apiKey).toBe('${MOCK_API_KEY}')
+    await app.call('providers.update', { id: providerId, config: { ...record.config, apiKey: 'sk-test-0987654321' } })
+    expect(app.ctx.llm.get(providerId).config.apiKey).toBe('${MOCK_API_KEY}')
+    const env = await readFile(join(app.baseDir, '.env'), 'utf8')
+    expect(env).toContain('MOCK_API_KEY=sk-test-0987654321')
+    expect(env).not.toContain('sk-test-1234567890')
+    expect(await app.call('providers.test', { id: providerId })).toMatchObject({ ok: true })
   })
 
   it('fetches the live model list', async () => {
@@ -102,7 +109,7 @@ describe('bots over OneBot', () => {
       plugins: [{ package: '@mushinjs/bot-plugin-echo' }],
     })
     botA = bot.id
-    expect(bot.adapter.config.token).not.toBe('nap-token')
+    expect(bot.adapter.config.token).toBe('${BOT_ALPHA_TOKEN}')
     const status = await waitFor(async () => {
       const current = await app.call('bots.get', { id: botA })
       return current.status === 'online' && current

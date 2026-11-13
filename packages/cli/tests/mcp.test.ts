@@ -68,7 +68,7 @@ describe('MCP servers', () => {
   it('connects to a stdio server and offers its tools as actions', async () => {
     const server = await app.call('mcp.servers.create', { name: 'Mock tools', transport: 'stdio', command: process.execPath, args: [MOCK], env: { MOCK_SECRET: 'very-secret-value' } })
     serverId = server.id
-    expect(server).toMatchObject({ id: 'mockTools', status: 'connected', serverInfo: { name: 'mock' }, env: { MOCK_SECRET: 'ver…alue' } })
+    expect(server).toMatchObject({ id: 'mockTools', status: 'connected', serverInfo: { name: 'mock' }, env: { MOCK_SECRET: '${MCP_MOCK_TOOLS_MOCK_SECRET}' } })
     expect(server.tools.map((tool: any) => [tool.action, tool.risk])).toEqual([
       ['mcp.mockTools.echoText', 'write'],
       ['mcp.mockTools.add', 'read'],
@@ -100,7 +100,7 @@ describe('MCP servers', () => {
 
   it('talks Streamable HTTP with a session id and event streams', async () => {
     const server = await app.call('mcp.servers.create', { name: 'Remote', transport: 'http', url: httpUrl, headers: { authorization: 'Bearer s3cret-token' } })
-    expect(server).toMatchObject({ status: 'connected', headers: { authorization: 'Bea…oken' } })
+    expect(server).toMatchObject({ status: 'connected', headers: { authorization: '${MCP_REMOTE_AUTHORIZATION}' } })
     expect(await app.call('mcp.remote.lookup', { word: 'mushin' })).toEqual({ text: 'mushin: a word' })
     expect(httpRequests.find((request) => request.method === 'tools/call')).toMatchObject({ session: 'sess-1', version: '2025-06-18' })
   })
