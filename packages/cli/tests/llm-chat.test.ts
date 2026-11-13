@@ -125,10 +125,11 @@ describe('LLM chat as a flow', () => {
   })
 
   it('waits for the chat cooldown', async () => {
-    await configure({ cooldown: 0.8 })
+    // Long enough that a slow CI machine still sends the second message inside it.
+    await configure({ cooldown: 2.5 })
     expect(await llmCalls(() => say('first'))).toBe(1)
     expect(await llmCalls(() => say('too soon', { user: '43' }))).toBe(0)
-    await sleep(800)
+    await sleep(2500)
     expect(await llmCalls(() => say('after the cooldown', { user: '43' }))).toBe(1)
   })
 
