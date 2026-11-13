@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Actions, Context, currentPackageName, type Exporter, type InstanceConfig, Logger, type Message, PluginManager, readJson, writeJsonAtomic } from '@mushinjs/core'
 import type { SignInInfo } from '@mushinjs/plugin-console'
+import { type LayoutDirs, migrateLayout, resolveDirs } from '@mushinjs/plugin-storage'
 
 export const DEFAULT_PORT = 5160
 
@@ -98,6 +99,12 @@ function offlineConfig(config: InstanceConfig): InstanceConfig {
   }
 }
 
+/** The data, log and cache folders of an instance, from its storage plugin entry. */
+export function instanceDirs(baseDir: string, config: InstanceConfig): LayoutDirs {
+  const storage = config.plugins.find((entry) => entry.package === '@mushinjs/plugin-storage' || entry.package === '@mushin/plugin-storage')
+  return resolveDirs(baseDir, storage?.config)
+}
+
 /** Boots an instance: root context, action registry, then every app plugin in the config file. */
 export async function start(options: StartOptions) {
   const baseDir = resolve(options.baseDir)
@@ -120,6 +127,11 @@ export async function start(options: StartOptions) {
       changed = true
     }
     if (changed) await writeJsonAtomic(configPath, config)
+  }
+  // Data folders from older versions move to the current layout before any plugin reads them.
+  const migration = await migrateLayout(instanceDirs(baseDir, config))
+  if (migration.moves.length && !options.quiet) {
+    console.log(`Moved ${migration.moves.length} data file(s) to the new folder layout. A copy of the old data folder is in ${migration.backup}.`)
   }
   if (options.port !== undefined) {
     const server = config.plugins.find((entry) => entry.package === '@cordisjs/plugin-server')

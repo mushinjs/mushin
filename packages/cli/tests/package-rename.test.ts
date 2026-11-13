@@ -23,7 +23,7 @@ describe('the @mushin to @mushinjs rename', () => {
     app = undefined
 
     await toOldScope(join(baseDir, 'mushin.config.json'))
-    await toOldScope(join(baseDir, 'data', 'bots.json'))
+    await toOldScope(join(baseDir, 'data', 'core', 'bots.json'))
     expect(await readFile(join(baseDir, 'mushin.config.json'), 'utf8')).toContain('"@mushin/plugin-console"')
 
     app = await startInstance({ baseDir })

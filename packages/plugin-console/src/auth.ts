@@ -1,6 +1,6 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
-import { join } from 'node:path'
 import { readJson, writeJsonAtomic } from '@mushinjs/core'
+import { dataFile } from '@mushinjs/plugin-storage'
 
 /**
  * The admin token, stored in plain text next to the provider keys it protects, so it can be
@@ -33,11 +33,11 @@ export function tokensEqual(supplied: string | null | undefined, expected: strin
 /** Replaces the admin token in a data directory and returns it. A running instance picks it up on the next sign-in. */
 export async function resetAdminToken(dataDir: string) {
   const token = generateToken()
-  await writeJsonAtomic(join(dataDir, `${AUTH_KEY}.json`), { token, createdAt: Date.now() } satisfies AuthRecord)
+  await writeJsonAtomic(dataFile(dataDir, AUTH_KEY), { token, createdAt: Date.now() } satisfies AuthRecord)
   return token
 }
 
 export async function readAdminToken(dataDir: string) {
-  const record = await readJson<unknown>(join(dataDir, `${AUTH_KEY}.json`))
+  const record = await readJson<unknown>(dataFile(dataDir, AUTH_KEY))
   return isAuthRecord(record) ? record.token : undefined
 }

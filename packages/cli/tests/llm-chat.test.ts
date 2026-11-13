@@ -139,7 +139,7 @@ describe('LLM chat as a flow', () => {
     })
     expect(calls).toBe(2)
     await waitFor(async () => {
-      const saved = JSON.parse(await readFile(join(app.baseDir, 'data', 'flows-usage.json'), 'utf8'))
+      const saved = JSON.parse(await readFile(join(app.baseDir, 'data', 'plugins', 'flows', 'usage.json'), 'utf8'))
       return Object.values<any>(saved).some((counter) => counter.count === 2)
     })
     await app.call('bots.start', { id: botId })
