@@ -57,7 +57,7 @@ function signInLink(url: string, token: string) {
 function printSignIn(info: SignInInfo, dir: string) {
   const lines = ['', `  Mushin.js dashboard: ${info.url}`]
   if (info.fromEnv) {
-    lines.push('  Sign in with the token from MUSHIN_ADMIN_TOKEN.')
+    lines.push('  Sign in with the token from the MUSHIN_ADMIN_TOKEN environment variable.')
   } else {
     lines.push(
       `  Sign in:     ${signInLink(info.url, info.token)}`,
@@ -131,9 +131,8 @@ if (values.help) {
     process.exit(1)
   }
   const server = config.plugins.find((entry) => entry.package === '@cordisjs/plugin-server')
-  const dirs = instanceDirs(baseDir, config)
-  await migrateLayout(dirs)
-  const token = await resetAdminToken(dirs.data)
+  await migrateLayout(instanceDirs(baseDir, config))
+  const token = await resetAdminToken(baseDir)
   const host = server?.config?.host === '0.0.0.0' || !server?.config?.host ? '127.0.0.1' : server.config.host
   const url = `http://${host}:${server?.config?.port ?? 5160}`
   console.log(`New admin token: ${token}`)

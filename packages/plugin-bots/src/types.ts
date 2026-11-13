@@ -32,7 +32,7 @@ export interface AdapterType<C = any> {
   id: string
   displayName: LocalizedText
   config: z.ZodType<C>
-  /** Config keys holding secrets; masked in API responses. */
+  /** Config keys holding secrets. They are kept in .env (the config holds `${NAME}` references), resolved before the adapter starts, and masked in API responses. */
   secrets?: string[]
   /** Segment types this adapter can send; used to compute a message's supported platforms. */
   segments: string[]

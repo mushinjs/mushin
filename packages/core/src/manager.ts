@@ -7,6 +7,7 @@ import {
   injectedServices,
 } from './dependencies'
 import { MushinError } from './errors'
+import { resolveEnvReferences } from './env'
 import { type CatalogEntry, manifestProblems, MUSHIN_VERSION, type PluginManifest, readPackageJson, resolvePackageEntry, scanCatalog } from './manifest'
 import { writeJsonAtomic } from './utils'
 
@@ -87,7 +88,7 @@ export function pluginSchema(plugin: Plugin): JsonSchema | undefined {
 export function validatePluginConfig(plugin: Plugin, config: unknown) {
   const schema = (plugin as any).Config
   if (!schema || typeof schema !== 'object' || !('_zod' in schema)) return config
-  const result = (schema as z.ZodType).safeParse(config ?? {})
+  const result = (schema as z.ZodType).safeParse(resolveEnvReferences(config ?? {}))
   if (!result.success) throw new MushinError('invalid_input', z.prettifyError(result.error), result.error.issues)
   return config
 }
@@ -300,7 +301,8 @@ export class PluginManager extends Service {
     }
     // Let the old instance release its resources (e.g. the server's port) before the new one starts.
     await this.fibers.get(entry.id)?.dispose()
-    const fiber = this.home.plugin(plugin, entry.config ?? {})
+    // `${NAME}` values come from the instance's .env file.
+    const fiber = this.home.plugin(plugin, resolveEnvReferences(entry.config ?? {}))
     this.fibers.set(entry.id, fiber)
     this.home.emit('manager/changed', entry.id)
     return fiber

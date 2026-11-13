@@ -9,10 +9,10 @@ import type {} from '@mushinjs/plugin-flows'
 import type {} from '@mushinjs/plugin-providers'
 import type {} from '@mushinjs/plugin-stats'
 import type {} from '@mushinjs/plugin-storage'
-import { AUTH_KEY, type AuthRecord, generateToken, isAuthRecord, tokensEqual } from './auth'
+import { ADMIN_TOKEN_ENV, AUTH_KEY, generateToken, isAuthRecord, tokensEqual } from './auth'
 import { dashboardRoot, MISSING_BUILD_PAGE, readStatic } from './static'
 
-export { readAdminToken, resetAdminToken } from './auth'
+export { ADMIN_TOKEN_ENV, readAdminToken, resetAdminToken } from './auth'
 
 declare module '@mushinjs/core' {
   interface Context {
@@ -91,9 +91,11 @@ export class Console extends Service {
 
   private home: Context
   private clients = new Map<string, Client>()
-  private auth?: AuthRecord
+  /** The token in .env. */
+  private token?: string
   private reloadedAt = 0
-  private envToken = process.env.MUSHIN_ADMIN_TOKEN
+  /** A token set in the shell, which overrides .env and cannot be reset. */
+  private envToken?: string
   /** Set once the dashboard is being served. */
   ready?: SignInInfo
 
@@ -177,7 +179,7 @@ export class Console extends Service {
 
     // The launcher prints the sign-in link from this event; the token never goes to the log buffer,
     // which the dashboard and the Agent can read.
-    this.ready = { url: devDashboard ?? server.baseUrl, token: this.envToken ?? this.auth!.token, fromEnv: !!this.envToken }
+    this.ready = { url: devDashboard ?? server.baseUrl, token: this.envToken ?? this.token!, fromEnv: !!this.envToken }
     this.home.emit('console/ready', this.ready)
     this.home.logger('console').info('dashboard at %s', this.ready.url)
     yield this.home.logger.exporter({
@@ -193,34 +195,39 @@ export class Console extends Service {
   }
 
   private async ensureToken() {
-    if (this.envToken) {
-      this.home.logger('console').info('using the admin token from MUSHIN_ADMIN_TOKEN')
+    const { storage } = this.home
+    const logger = this.home.logger('console')
+    if (storage.secrets.fromShell(ADMIN_TOKEN_ENV)) {
+      this.envToken = process.env[ADMIN_TOKEN_ENV]
+      logger.info('using the admin token from %s', ADMIN_TOKEN_ENV)
       return
     }
-    const stored = await this.home.storage.get<unknown>(AUTH_KEY)
-    if (isAuthRecord(stored)) {
-      this.auth = stored
-      return
+    // Older versions kept the token in data/core/auth.json (or only a hash of it, which cannot be shown).
+    const legacy = await storage.get<unknown>(AUTH_KEY).catch(() => undefined)
+    this.token = storage.secrets.get(ADMIN_TOKEN_ENV) || undefined
+    if (!this.token) {
+      this.token = isAuthRecord(legacy) ? legacy.token : generateToken()
+      await storage.secrets.set(ADMIN_TOKEN_ENV, this.token)
+      logger.info(isAuthRecord(legacy) ? 'moved the admin token to .env' : 'created the admin token in .env')
     }
-    // No record yet, or one from an older build that kept only a hash: make a token that can be shown.
-    this.auth = { token: generateToken(), createdAt: Date.now() }
-    await this.home.storage.set(AUTH_KEY, this.auth)
-    this.home.logger('console').info(stored ? 'replaced an unreadable admin token record' : 'created the admin token')
+    if (legacy !== undefined) await storage.delete(AUTH_KEY)
   }
 
   private verify(token: string | null | undefined) {
-    return tokensEqual(token, this.envToken ?? this.auth?.token)
+    return tokensEqual(token, this.envToken ?? this.token)
   }
 
-  /** Verifies a token; on a miss, re-reads data/auth.json so `mushin token reset` works without a restart. */
+  /** Verifies a token; on a miss, re-reads .env so `mushin token reset` works without a restart. */
   private async authenticate(token: string | null | undefined) {
     if (this.verify(token)) return true
     if (this.envToken || !token || Date.now() - this.reloadedAt < 1000) return false
     this.reloadedAt = Date.now()
-    const stored = await this.home.storage.get<unknown>(AUTH_KEY).catch(() => undefined)
-    if (!isAuthRecord(stored) || stored.token === this.auth?.token) return false
-    this.auth = stored
-    if (this.ready) this.ready = { ...this.ready, token: stored.token }
+    const { secrets } = this.home.storage
+    await secrets.reload().catch(() => {})
+    const stored = secrets.get(ADMIN_TOKEN_ENV)
+    if (!stored || stored === this.token) return false
+    this.token = stored
+    if (this.ready) this.ready = { ...this.ready, token: stored }
     return this.verify(token)
   }
 

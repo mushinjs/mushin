@@ -1,4 +1,4 @@
-import { Context, isMasked, mask, MushinError, type Risk, Service, z } from '@mushinjs/core'
+import { Context, envReference, isMasked, mask, MushinError, type Risk, Service, z } from '@mushinjs/core'
 import type {} from '@mushinjs/plugin-storage'
 import { HttpTransport, McpClient, type McpTool, resultText, StdioTransport } from './client'
 
@@ -90,8 +90,12 @@ export class Mcp extends Service {
 
   async *[Service.init]() {
     for (const key of await this.home.storage.list(SERVERS)) {
-      const server = await this.home.storage.get<McpServerRecord>(key)
-      if (server?.id) this.servers.set(server.id, server)
+      const stored = await this.home.storage.get<McpServerRecord>(key)
+      if (!stored?.id) continue
+      // An older version kept environment values and headers in plain text: move them to .env.
+      const server = await this.secure(stored)
+      if (server !== stored) await this.home.storage.set(key, server)
+      this.servers.set(server.id, server)
     }
     yield* this.defineActions()
     yield () => {
@@ -116,7 +120,8 @@ export class Mcp extends Service {
   /** A server as the dashboard and the Agent see it: secrets masked, with status and tools. */
   describe(server: McpServerRecord) {
     const runtime = this.runtimes.get(server.id)
-    const masked = (values?: Record<string, string>) => values && Object.fromEntries(Object.entries(values).map(([key, value]) => [key, mask(value)]))
+    // A `${NAME}` reference is not a secret: it shows where the value is.
+    const masked = (values?: Record<string, string>) => values && Object.fromEntries(Object.entries(values).map(([key, value]) => [key, envReference(value) === undefined ? mask(value) : value]))
     return {
       ...server,
       env: masked(server.env),
@@ -140,7 +145,19 @@ export class Mcp extends Service {
     return [...this.servers.values()].sort((a, b) => a.createdAt - b.createdAt).map((server) => this.describe(server))
   }
 
-  private async save(server: McpServerRecord) {
+  /** The server with its environment values and headers moved to .env, or the same object when there was nothing to move. */
+  private async secure(server: McpServerRecord): Promise<McpServerRecord> {
+    const { secrets } = this.home.storage
+    const owner = /[A-Za-z0-9]/.test(server.name) ? server.name : server.id
+    const previous = this.servers.get(server.id)
+    const env = server.env && await secrets.moveIn(server.env, { keys: Object.keys(server.env), name: ['mcp', owner], previous: previous?.env })
+    const headers = server.headers && await secrets.moveIn(server.headers, { keys: Object.keys(server.headers), name: ['mcp', owner], previous: previous?.headers })
+    if (!env?.moved.length && !headers?.moved.length) return server
+    return { ...server, env: env?.config, headers: headers?.config }
+  }
+
+  private async save(input: McpServerRecord) {
+    const server = await this.secure(input)
     this.servers.set(server.id, server)
     await this.home.storage.set(`${SERVERS}/${server.id}`, server)
     this.changed()
@@ -215,8 +232,8 @@ export class Mcp extends Service {
     this.runtimes.set(id, runtime)
     this.changed()
     const transport = server.transport === 'stdio'
-      ? new StdioTransport({ command: server.command!, args: server.args, env: server.env, cwd: server.cwd })
-      : new HttpTransport({ url: server.url!, headers: server.headers })
+      ? new StdioTransport({ command: server.command!, args: server.args, env: server.env && this.home.storage.secrets.resolveAll(server.env), cwd: server.cwd })
+      : new HttpTransport({ url: server.url!, headers: server.headers && this.home.storage.secrets.resolveAll(server.headers) })
     const client = new McpClient(transport, {
       onToolsChanged: () => this.refreshTools(id, runtime).catch(() => {}),
       onClose: (error) => {

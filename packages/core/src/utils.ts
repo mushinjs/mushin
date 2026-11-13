@@ -33,11 +33,20 @@ const writeQueues = new Map<string, Promise<void>>()
  * Writes to the same path are serialized.
  */
 export function writeJsonAtomic(path: string, value: unknown) {
+  return writeTextAtomic(path, () => JSON.stringify(value, null, 2) + '\n')
+}
+
+/**
+ * Writes a text file through a temp file and a rename. Writes to the same path are serialized;
+ * a function is called when the write's turn comes, so it can build on what the last write left.
+ */
+export function writeTextAtomic(path: string, text: string | (() => string | Promise<string>), options: { mode?: number } = {}) {
   const previous = writeQueues.get(path) ?? Promise.resolve()
   const task = previous.catch(() => {}).then(async () => {
+    const content = typeof text === 'function' ? await text() : text
     await mkdir(dirname(path), { recursive: true })
     const temp = `${path}.${randomId(4)}.tmp`
-    await writeFile(temp, JSON.stringify(value, null, 2) + '\n', 'utf8')
+    await writeFile(temp, content, { encoding: 'utf8', mode: options.mode })
     await renameWithRetry(temp, path)
   })
   writeQueues.set(path, task)
