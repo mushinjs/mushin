@@ -21,6 +21,15 @@ export async function waitFor<T>(check: () => T | Promise<T>, timeout = 8000, in
   throw new Error(`timed out waiting${last ? `: ${last}` : ''}`)
 }
 
+/**
+ * Waits until a new demo bot is online and has answered the /help its test user sends on the first start,
+ * so that greeting is not taken for the reply to a test's first message.
+ */
+export async function demoBotReady(app: { call<T = any>(action: string, input?: unknown): Promise<T> }, botId: string) {
+  await waitFor(async () => (await app.call('bots.get', { id: botId })).status === 'online')
+  await waitFor(async () => (await app.call<any[]>('bots.messages', { id: botId, limit: 5 })).some((record) => record.direction === 'out'))
+}
+
 /** Boots a real Mushin.js instance on a free port, in a temp directory unless `baseDir` names one to reuse. */
 export async function startInstance(options: { baseDir?: string } = {}) {
   const baseDir = options.baseDir ?? await mkdtemp(join(tmpdir(), 'mushin-test-'))

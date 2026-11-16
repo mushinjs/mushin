@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { startInstance, type TestInstance, waitFor } from './helpers/instance'
+import { demoBotReady, startInstance, type TestInstance, waitFor } from './helpers/instance'
 
 let app: TestInstance
 let botId: string
@@ -24,7 +24,7 @@ beforeAll(async () => {
   await app.call('plugins.enable', { package: '@mushinjs/plugin-demo' })
   await app.call('plugins.configure', { id: 'demo', config: { bot: true } })
   botId = (await app.call<any[]>('bots.list'))[0].id
-  await waitFor(async () => (await app.call('bots.get', { id: botId })).status === 'online')
+  await demoBotReady(app, botId)
 })
 
 afterAll(async () => {
