@@ -1,7 +1,7 @@
 import {
   type ChannelInfo, Context, currentPackageName, describeMissing, dependencyReport, envReference, type LogTag, type MissingDependency, logTag, type Exporter, type Fiber, fiberError, fiberStatus, isMasked, Logger, mask, type Message,
   type MessageRecord, messageType, MushinError, type Plugin, type Provenance, pluginSchema, randomId, resolveEnvReferences, type Segment, segmentsToText, Service, toJsonSchema,
-  type UsageEvent, validatePluginConfig, z, maskSecrets, restoreMasked, secretFields,
+  type UsageEvent, usage, validatePluginConfig, z, maskSecrets, restoreMasked, secretFields,
 } from '@mushinjs/core'
 import type {} from '@mushinjs/plugin-storage'
 import { MessageArchive } from './archive'
@@ -33,7 +33,36 @@ export interface BotLogLine {
   name: string
   tag: LogTag
   text: string
+  /** Record id of the message being handled when the line was written. */
+  message?: string
 }
+
+/** A time as an ISO date-time or ms since the epoch, as ms. */
+const timeInput = z.union([z.number(), z.string()]).transform((value, check) => {
+  const ms = typeof value === 'number' ? value : Date.parse(value)
+  if (Number.isNaN(ms)) {
+    check.addIssue({ code: 'custom', message: `"${value}" is not a time` })
+    return z.NEVER
+  }
+  return ms
+})
+
+/** What `bots.logs` can narrow the lines to. */
+export interface LogFilter {
+  limit?: number
+  /** Only lines written while handling this message (its record id). */
+  message?: string
+  /** Times in ms since the epoch. */
+  since?: number
+  until?: number
+  /** Case-insensitive text the line contains. */
+  query?: string
+  /** This level and above. */
+  level?: 'debug' | 'info' | 'warn' | 'error'
+}
+
+const LEVELS = ['debug', 'info', 'warn', 'error']
+const DAY = 86_400_000
 
 /** A message ran a registered command. */
 export interface CommandCall {
@@ -787,6 +816,8 @@ export class BotManager extends Service {
       tag: logTag(message.name),
       text: Logger.format(plainExporter, message),
     }
+    const handling = usage.current()
+    if (handling?.botId === botId) line.message = handling.messageId
     let buffer = this.logs.get(botId)
     if (!buffer) this.logs.set(botId, buffer = [])
     buffer.push(line)
@@ -796,17 +827,37 @@ export class BotManager extends Service {
     this.home.storage.append(`logs/${botId}/${day}`, line).catch(() => {})
   }
 
-  async logLines(id: string, limit = 200) {
+  async logLines(id: string, filter: LogFilter = {}) {
     this.get(id)
-    let buffer = this.logs.get(id)
-    if (!buffer) {
-      const day = new Date().toISOString().slice(0, 10)
-      // Lines stored before tags existed get one from their logger name.
-      buffer = (await this.home.storage.tail<BotLogLine>(`logs/${id}/${day}`, LOG_BUFFER_SIZE))
-        .map((line) => (line.tag ? line : { ...line, tag: logTag(line.name) }))
-      this.logs.set(id, buffer)
+    const limit = filter.limit ?? 200
+    let lines: BotLogLine[]
+    if (filter.since !== undefined || filter.until !== undefined || filter.message) {
+      // Older lines are read from the daily files: the days of the time range, or the last three for a message.
+      const until = filter.until ?? Date.now()
+      const since = filter.since ?? (filter.message ? until - 2 * DAY : until)
+      const days: string[] = []
+      const first = Date.parse(new Date(Math.max(since, until - 31 * DAY)).toISOString().slice(0, 10))
+      for (let at = first; at <= until; at += DAY) days.push(new Date(at).toISOString().slice(0, 10))
+      lines = (await Promise.all(days.map((day) => this.home.storage.tail<BotLogLine>(`logs/${id}/${day}`, 100_000)))).flat()
+      lines = lines.filter((line) => line.ts >= (filter.since ?? 0) && line.ts <= until)
+    } else {
+      let buffer = this.logs.get(id)
+      if (!buffer) {
+        const day = new Date().toISOString().slice(0, 10)
+        buffer = await this.home.storage.tail<BotLogLine>(`logs/${id}/${day}`, LOG_BUFFER_SIZE)
+        this.logs.set(id, buffer)
+      }
+      lines = buffer
     }
-    return buffer.slice(-limit)
+    const query = filter.query?.toLowerCase()
+    const level = filter.level ? LEVELS.indexOf(filter.level) : -1
+    return lines
+      // Lines stored before tags existed get one from their logger name.
+      .map((line) => (line.tag ? line : { ...line, tag: logTag(line.name) }))
+      .filter((line) => (!filter.message || line.message === filter.message)
+        && (!query || line.text.toLowerCase().includes(query))
+        && (level < 0 || LEVELS.indexOf(line.type) >= level))
+      .slice(-limit)
   }
 
   // ---- messages ----
@@ -1136,10 +1187,17 @@ export class BotManager extends Service {
 
     yield actions.define({
       name: 'bots.logs',
-      description: 'Recent log lines of one bot, oldest first: connection events, adapter errors, plugin warnings, and why LLM chat skipped messages. Read this first when a bot misbehaves.',
+      description: 'Log lines of one bot, oldest first: connection events, adapter errors, plugin warnings, flow lines, and why LLM chat skipped messages. Each line written while handling a message carries its record id (message). Narrow with message (a record id from bots.messages), since and until, query and level. Read this first when a bot misbehaves.',
       risk: 'read',
-      input: idInput.extend({ limit: z.number().int().min(1).max(LOG_BUFFER_SIZE).optional() }),
-      handler: ({ id, limit }) => this.logLines(id, limit),
+      input: idInput.extend({
+        limit: z.number().int().min(1).max(LOG_BUFFER_SIZE).optional(),
+        message: z.string().optional().describe('Only lines written while handling this message: its record id, from bots.messages'),
+        since: timeInput.optional().describe('From this time: an ISO date-time or ms since the epoch'),
+        until: timeInput.optional().describe('Up to this time: an ISO date-time or ms since the epoch'),
+        query: z.string().optional().describe('Only lines containing this text, ignoring case'),
+        level: z.enum(['debug', 'info', 'warn', 'error']).optional().describe('Only lines at this level or above'),
+      }),
+      handler: ({ id, ...filter }) => this.logLines(id, filter),
     })
 
     yield actions.define({
