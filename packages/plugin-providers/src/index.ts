@@ -604,7 +604,7 @@ export class LlmService extends Service {
     if (error instanceof Error && error.name === 'AbortError') return
     this.report(kind, record, model, Date.now() - start, undefined, false)
     this.home.emit('llm/called', { provider: record.id, providerName: record.name, model, ok: false, latencyMs: Date.now() - start })
-    this.logger.warn('request to %s (%s) failed: %s', this.label(record), model, error instanceof Error ? error.message : error)
+    this.logger.error('request to %s (%s) failed: %s', this.label(record), model, error instanceof Error ? error.message : error)
   }
 
   async test(id: string): Promise<ProviderTest> {
