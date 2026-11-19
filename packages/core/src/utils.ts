@@ -101,6 +101,11 @@ export interface FieldDisplay {
    * `personas.choices`. Forms show a searchable select that still accepts other text.
    */
   choices?: string
+  /**
+   * A key, token or password. Its value is kept in the instance's `.env` and the config holds a `${NAME}`
+   * reference; forms show a password input, and lists show the value masked. Only top-level fields.
+   */
+  secret?: boolean
 }
 
 /**
@@ -116,6 +121,7 @@ export function field(title: string, description?: string, translations: Record<
     ...(display.widget ? { 'x-widget': display.widget } : {}),
     ...(display.hint ? { 'x-hint': display.hint } : {}),
     ...(display.choices ? { 'x-choices': display.choices } : {}),
+    ...(display.secret ? { 'x-secret': true } : {}),
   }
 }
 

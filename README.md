@@ -72,7 +72,7 @@ my-bot/
   cache/               safe to delete
 ```
 
-Secrets stay out of `mushin.config.json` and `data/`: a key you enter in the dashboard or through the Agent is written to `.env`, and the record holds a reference such as `${DEEPSEEK_API_KEY}`. You can write such a reference yourself, in a provider form or in any plugin setting in `mushin.config.json`. A variable set in the environment overrides `.env`. Keep `.env` out of git and out of anything you share.
+Secrets stay out of `mushin.config.json` and `data/`: a key you enter in the dashboard or through the Agent is written to `.env`, and the record holds a reference such as `${DEEPSEEK_API_KEY}`. You can write such a reference yourself, in a provider form or in any plugin setting in `mushin.config.json`. A plugin setting marked secret (`field(…, { secret: true })`) is moved to `.env` the same way when you save it, or on the next start if you typed the key into `mushin.config.json`, and lists show it masked. A variable set in the environment overrides `.env`. Keep `.env` out of git and out of anything you share.
 
 An instance from an older version is moved to this layout when it starts, after a copy of its `data/` folder goes to `data/backups/`, and the keys it kept in plain text move to `.env`. That copy still holds the old keys, so delete it once the instance runs. To see the moves first, run `npx mushin migrate --dry-run`; `mushin migrate` makes them without starting.
 
