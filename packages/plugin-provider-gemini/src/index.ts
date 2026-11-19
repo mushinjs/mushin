@@ -158,7 +158,8 @@ export class GeminiClient implements ProviderClient {
       }
       pageToken = data.nextPageToken
     } while (pageToken)
-    return models.sort()
+    // The API gives no release dates; higher version numbers come first.
+    return models.sort((a, b) => b.localeCompare(a, 'en', { numeric: true }))
   }
 }
 

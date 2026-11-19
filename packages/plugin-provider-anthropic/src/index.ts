@@ -213,9 +213,10 @@ export class AnthropicClient implements ProviderClient {
   }
 
   async listModels(signal?: AbortSignal) {
-    const models: string[] = []
-    for await (const model of this.sdk.models.list({}, { signal })) models.push(model.id)
-    return models
+    const models: { id: string; created: number }[] = []
+    for await (const model of this.sdk.models.list({}, { signal })) models.push({ id: model.id, created: Date.parse(model.created_at) || 0 })
+    // Newest first.
+    return models.sort((a, b) => b.created - a.created).map((model) => model.id)
   }
 }
 
