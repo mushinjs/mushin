@@ -106,14 +106,15 @@ export class OpenAIClient implements ProviderClient {
    * Some models refuse reasoning_effort in a Chat Completions request that carries tools. Such a request is sent
    * again without it, and later ones for that model leave it out.
    */
-  private async create<T>(request: ChatRequest, send: (params: ReturnType<OpenAIClient['params']>) => Promise<T>): Promise<T> {
+  private async create<T>(request: ChatRequest, send: (params: ReturnType<OpenAIClient['params']>) => Promise<T>): Promise<{ value: T; effortIgnored: boolean }> {
     const params = this.params(request)
+    const effortIgnored = !!request.effort && !('reasoning_effort' in params)
     try {
-      return await send(params)
+      return { value: await send(params), effortIgnored }
     } catch (error) {
       if (!('reasoning_effort' in params) || !request.tools?.length || !(error instanceof OpenAI.APIError) || error.status !== 400 || !/reasoning_effort/.test(error.message)) throw error
       this.noEffortWithTools.add(request.model)
-      return send(this.params(request))
+      return { value: await send(this.params(request)), effortIgnored: true }
     }
   }
 
@@ -166,7 +167,7 @@ export class OpenAIClient implements ProviderClient {
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
     if (this.options.responses) return responsesChat(this.sdk, request)
-    const completion = await this.create(request, (params) => this.sdk.chat.completions.create(
+    const { value: completion, effortIgnored } = await this.create(request, (params) => this.sdk.chat.completions.create(
       { ...params, stream: false },
       { signal: request.signal },
     ))
@@ -181,6 +182,7 @@ export class OpenAIClient implements ProviderClient {
       usage: completion.usage
         ? { inputTokens: completion.usage.prompt_tokens, outputTokens: completion.usage.completion_tokens }
         : undefined,
+      ...(effortIgnored ? { effortIgnored } : {}),
     }
   }
 
@@ -189,7 +191,7 @@ export class OpenAIClient implements ProviderClient {
       yield* responsesStream(this.sdk, request)
       return
     }
-    const stream = await this.create(request, (params) => this.sdk.chat.completions.create(
+    const { value: stream, effortIgnored } = await this.create(request, (params) => this.sdk.chat.completions.create(
       { ...params, stream: true, stream_options: { include_usage: true } },
       { signal: request.signal },
     ))
@@ -218,7 +220,7 @@ export class OpenAIClient implements ProviderClient {
       }
     }
     const toolCalls = [...calls.values()].map((call) => ({ ...call, arguments: call.arguments || '{}' }))
-    yield { type: 'done', response: { text, toolCalls, finishReason, usage } }
+    yield { type: 'done', response: { text, toolCalls, finishReason, usage, ...(effortIgnored ? { effortIgnored } : {}) } }
   }
 
   async embed(request: EmbedRequest): Promise<EmbedResponse> {

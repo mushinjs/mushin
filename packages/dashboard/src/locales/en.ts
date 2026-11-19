@@ -1174,6 +1174,8 @@ export default {
     },
   },
   agent: {
+    retry: 'Retry',
+    changeModel: 'Change model',
     copy: 'Copy',
     copied: 'Copied',
     copyFailed: 'Could not copy; select the text instead',
@@ -1576,12 +1578,16 @@ export default {
       kbReview: 'Help me review {count} things learned from chats',
     },
   },
+  agentNotice: {
+    effort_ignored: 'This model takes no reasoning effort together with tools, so it answers with its default effort.',
+  },
   agentPicker: {
     title: 'Pick the model and reasoning effort',
     default: 'Default model',
     defaultHint: 'Follows the Agent settings (/model)',
     search: 'Search models',
     noMatch: 'No model matches',
+    noEffort: 'This model has no reasoning effort',
     effort: 'Reasoning effort',
     efforts: { default: 'Default', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' },
     hint: 'Applies in this browser only',

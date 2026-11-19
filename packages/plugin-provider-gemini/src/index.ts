@@ -108,7 +108,8 @@ export class GeminiClient implements ProviderClient {
       body: await this.body(request),
       signal: request.signal,
     })
-    return fromResponse(await response.json() as GeminiResponse)
+    // The Gemini client has no reasoning effort setting yet.
+    return { ...fromResponse(await response.json() as GeminiResponse), ...(request.effort ? { effortIgnored: true } : {}) }
   }
 
   async *stream(request: ChatRequest): AsyncIterable<StreamEvent> {
@@ -132,7 +133,7 @@ export class GeminiClient implements ProviderClient {
       blockReason = chunk.promptFeedback?.blockReason ?? blockReason
       usage = chunk.usageMetadata ?? usage
     }
-    yield { type: 'done', response: fromParts(parts, { finishReason, blockReason, usage }) }
+    yield { type: 'done', response: { ...fromParts(parts, { finishReason, blockReason, usage }), ...(request.effort ? { effortIgnored: true } : {}) } }
   }
 
   async embed(request: EmbedRequest): Promise<EmbedResponse> {

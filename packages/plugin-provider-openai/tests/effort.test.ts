@@ -19,14 +19,14 @@ describe('reasoning effort', () => {
     const client = new OpenAIClient(new OpenAI({ apiKey: 'k', baseURL: 'https://example.test/v1', fetch: fetch as typeof globalThis.fetch, maxRetries: 0 }))
     const messages = [{ role: 'user' as const, content: 'hi' }]
 
-    expect((await client.chat({ model: 'm', messages, tools, effort: 'high' })).text).toBe('ok')
+    expect(await client.chat({ model: 'm', messages, tools, effort: 'high' })).toMatchObject({ text: 'ok', effortIgnored: true })
     expect(bodies.map((body) => body.reasoning_effort)).toEqual(['high', undefined])
 
-    await client.chat({ model: 'm', messages, tools, effort: 'high' })
+    expect((await client.chat({ model: 'm', messages, tools, effort: 'high' })).effortIgnored).toBe(true)
     expect(bodies).toHaveLength(3)
     expect(bodies[2].reasoning_effort).toBeUndefined()
 
-    await client.chat({ model: 'm', messages, effort: 'high' })
+    expect((await client.chat({ model: 'm', messages, effort: 'high' })).effortIgnored).toBeUndefined()
     expect(bodies[3].reasoning_effort).toBe('high')
   })
 })

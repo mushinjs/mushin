@@ -6,7 +6,7 @@ import { useRouter } from 'vue-router'
 import { call } from '../api'
 import { type ChatItem, EFFORTS, useAgentStore } from '../stores/agent'
 import { type Recommendation, useAgentSceneStore } from '../stores/agentScene'
-import { providerOptions as toProviderOptions } from '../models'
+import { modelCapabilities, providerOptions as toProviderOptions } from '../models'
 import { useDataStore } from '../stores/data'
 import type { AgentSkill } from '../types'
 import { pretty } from '../utils'
@@ -98,6 +98,13 @@ const modelGroups = computed(() => {
 })
 const modelCount = computed(() => data.providers.reduce((sum, provider) => sum + provider.models.length, 0))
 
+/** Whether the picked model reasons; the name is all there is to go by, so an unknown model counts as one. */
+const supportsEffort = computed(() => !agent.choice.model || modelCapabilities(agent.choice.model).includes('reasoning'))
+
+function changeModel() {
+  showPicker.value = true
+}
+
 /** 0 is the default effort, then one step per level. */
 const effortStep = computed(() => (agent.choice.effort ? EFFORTS.indexOf(agent.choice.effort) + 1 : 0))
 function setEffortStep(step: number) {
@@ -188,7 +195,7 @@ function runBuiltin(name: string) {
       openModel().catch(() => {})
       break
     case 'status': {
-      const chars = agent.items.reduce((sum, item) => sum + ('text' in item ? item.text.length : JSON.stringify(item.input ?? '').length + JSON.stringify(item.result ?? '').length), 0)
+      const chars = agent.items.reduce((sum, item) => sum + ('text' in item ? item.text.length : item.kind === 'tool' ? JSON.stringify(item.input ?? '').length + JSON.stringify(item.result ?? '').length : 0), 0)
       agent.note(t('agentPalette.statusText', {
         messages: agent.items.filter((item) => item.kind === 'user' || item.kind === 'assistant').length,
         chars,
@@ -442,8 +449,15 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
               <span>{{ t('agent.maxSteps') }}</span>
               <Button v-if="index === rows.length - 1 && !agent.running" size="small" secondary @click="send(t('agent.continuePrompt'))">{{ t('agent.continue') }}</Button>
             </div>
+            <div v-else-if="item.kind === 'notice'" class="msg note">
+              <span class="i-lucide-info" /><span>{{ t(`agentNotice.${item.code}`) }}</span>
+            </div>
             <div v-else-if="item.kind === 'error'" class="msg error">
-              <span class="i-lucide-circle-alert" /> {{ item.text }}
+              <div class="error-text"><span class="i-lucide-circle-alert" /> {{ item.text }}</div>
+              <div v-if="index === rows.length - 1 && !agent.running" class="error-actions">
+                <Button size="tiny" secondary icon="i-lucide-rotate-ccw" @click="agent.retry({ scene: { ...scenes.scene } })">{{ t('agent.retry') }}</Button>
+                <Button size="tiny" secondary icon="i-lucide-replace" @click="changeModel">{{ t('agent.changeModel') }}</Button>
+              </div>
             </div>
             <AgentToolCall
               v-else
@@ -538,7 +552,7 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
                   <span class="picker-title">{{ t('agentPicker.effort') }}</span>
                   <span class="picker-value">{{ t(`agentPicker.efforts.${agent.choice.effort ?? 'default'}`) }}</span>
                 </div>
-                <div class="effort-track" :style="{ '--fill': `${(effortStep / EFFORTS.length) * 100}%` }">
+                <div class="effort-track" :class="{ disabled: !supportsEffort }" :style="{ '--fill': `${(effortStep / EFFORTS.length) * 100}%` }">
                   <button
                     v-for="step in EFFORTS.length + 1"
                     :key="step"
@@ -555,6 +569,7 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
                   <span>{{ t('agentPicker.efforts.default') }}</span>
                   <span>{{ t('agentPicker.efforts.max') }}</span>
                 </div>
+                <p v-if="!supportsEffort" class="effort-off">{{ t('agentPicker.noEffort') }}</p>
               </div>
               <div class="picker-models">
                 <input v-if="modelCount > 8" v-model="modelQuery" class="picker-search" :placeholder="t('agentPicker.search')">
@@ -1043,6 +1058,17 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
   background: var(--s1);
 }
 
+.effort-track.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.effort-off {
+  margin: 8px 0 0;
+  color: var(--warn);
+  font-size: 11px;
+}
+
 .effort-ends {
   display: flex;
   justify-content: space-between;
@@ -1160,7 +1186,24 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
   color: var(--bad);
   background: rgba(208, 48, 80, 0.08);
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.error-text {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  word-break: break-word;
+}
+
+.error-text > span {
+  flex: none;
+  margin-top: 3px;
+}
+
+.error-actions {
+  display: flex;
   gap: 6px;
 }
 
