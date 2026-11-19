@@ -212,7 +212,7 @@ export class Agent extends Service {
    */
   async tools(): Promise<ToolDefinition[]> {
     const actions = await this.allowedActions()
-    const describe = (action: ActionInfo) => ({ name: toToolName(action.name), description: describeTool(action), parameters: action.inputSchema })
+    const describe = (action: ActionInfo) => ({ name: toToolName(action.name), description: describeTool(action), parameters: portableSchema(action.inputSchema) })
     if (actions.length <= MAX_TOOLS) return actions.map(describe)
     return [
       ...actions.slice(0, MAX_TOOLS - 2).map(describe),
@@ -255,7 +255,7 @@ export class Agent extends Service {
       .filter((item) => item.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, Math.min(Math.max(limit, 1), 20))
-      .map(({ action }) => ({ name: toToolName(action.name), description: describeTool(action), inputSchema: action.inputSchema }))
+      .map(({ action }) => ({ name: toToolName(action.name), description: describeTool(action), inputSchema: portableSchema(action.inputSchema) }))
   }
 
   // ---- settings ----
@@ -602,7 +602,7 @@ export class Agent extends Service {
         model,
         ...(options.effort ?? this.config.effort ? { effort: options.effort ?? this.config.effort } : {}),
         messages: history,
-        tools: session.tools,
+        tools: session.tools.map((tool) => ({ ...tool, parameters: portableSchema(tool.parameters) })),
         signal: running.abort.signal,
       })) {
         if (event.type === 'delta') this.emit({ session: session.id, type: 'delta', text: event.text })
@@ -971,6 +971,21 @@ export class Agent extends Service {
       handler: ({ id }) => this.deleteSession(id),
     })
   }
+}
+
+/**
+ * A tool schema every provider accepts. OpenAI rejects regex patterns with Unicode property escapes such as
+ * \p{L}; the action still checks its input with the full pattern, so the pattern is only dropped here.
+ */
+export function portableSchema<T>(schema: T): T {
+  if (Array.isArray(schema)) return schema.map(portableSchema) as T
+  if (!schema || typeof schema !== 'object') return schema
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === 'pattern' && typeof value === 'string' && /\\[pP]\{/.test(value)) continue
+    out[key] = portableSchema(value)
+  }
+  return out as T
 }
 
 function describeTool(action: ActionInfo) {
