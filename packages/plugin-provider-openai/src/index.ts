@@ -3,6 +3,7 @@ import { type Context, field, z } from '@mushinjs/core'
 import type {
   ChatRequest, ChatResponse, EmbedRequest, EmbedResponse, FinishReason, LlmMessage, ProviderClient, StreamEvent, ToolCall,
 } from '@mushinjs/plugin-providers'
+import { responsesChat, responsesStream } from './responses'
 
 export const name = 'provider-openai'
 export const inject = ['llm']
@@ -14,6 +15,9 @@ export const ProviderConfig = z.object({
   apiKey: z.string().default('').meta(field('API key', 'Leave empty for local servers such as Ollama', {
     'zh-CN': { title: 'API 密钥', description: 'Ollama 等本地服务可以留空' },
   })),
+  api: z.enum(['auto', 'responses', 'chat']).default('auto').meta(field('API', 'Responses is the newer OpenAI API, which lets reasoning models use tools with a reasoning effort; most compatible services only have Chat Completions. Auto uses Responses for api.openai.com only', {
+    'zh-CN': { title: '接口类型', description: 'Responses 是 OpenAI 的新接口，推理模型可以同时使用工具和推理强度；大多数兼容服务只有 Chat Completions。自动：只有 api.openai.com 用 Responses', options: { auto: '自动' } },
+  }, { options: { auto: 'Auto', responses: 'Responses', chat: 'Chat Completions' } })),
   headers: z.record(z.string(), z.string()).optional().meta(field('Extra headers', 'Additional HTTP headers as a JSON object', {
     'zh-CN': { title: '额外请求头', description: '以 JSON 对象填写的额外 HTTP 请求头' },
   })),
@@ -87,6 +91,8 @@ function toOpenAIMessages(messages: LlmMessage[]): Params['messages'] {
 export interface OpenAIClientOptions {
   /** Send the token limit as `max_completion_tokens` rather than the older `max_tokens`. */
   completionTokens?: boolean
+  /** Chat through the Responses API instead of Chat Completions. */
+  responses?: boolean
 }
 
 /** Chat, streaming, embeddings and model lists over any OpenAI SDK client, plain or Azure. */
@@ -120,7 +126,8 @@ export class OpenAIClient implements ProviderClient {
       maxRetries: 1,
     })
     // OpenAI's own API wants max_completion_tokens; compatible services still expect max_tokens.
-    return new OpenAIClient(sdk, { completionTokens: new URL(config.baseURL).hostname === 'api.openai.com' })
+    const official = new URL(config.baseURL).hostname === 'api.openai.com'
+    return new OpenAIClient(sdk, { completionTokens: official, responses: config.api === 'responses' || (config.api !== 'chat' && official) })
   }
 
   /** `fetch` replaces the SDK's HTTP client, for tests. */
@@ -158,6 +165,7 @@ export class OpenAIClient implements ProviderClient {
   }
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
+    if (this.options.responses) return responsesChat(this.sdk, request)
     const completion = await this.create(request, (params) => this.sdk.chat.completions.create(
       { ...params, stream: false },
       { signal: request.signal },
@@ -177,6 +185,10 @@ export class OpenAIClient implements ProviderClient {
   }
 
   async *stream(request: ChatRequest): AsyncIterable<StreamEvent> {
+    if (this.options.responses) {
+      yield* responsesStream(this.sdk, request)
+      return
+    }
     const stream = await this.create(request, (params) => this.sdk.chat.completions.create(
       { ...params, stream: true, stream_options: { include_usage: true } },
       { signal: request.signal },
