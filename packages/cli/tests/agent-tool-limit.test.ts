@@ -48,6 +48,9 @@ describe('agent tools', () => {
     await waitFor(async () => !(await app.call('agent.session', { id: session })).running || undefined)
     const request = llm.requests.at(-3)
     expect(request.tools.length).toBeLessThanOrEqual(MAX_TOOLS)
+    // OpenAI refuses patterns with Unicode property escapes.
+    expect(JSON.stringify(request.tools)).not.toMatch(/\\\\p\{/)
+    expect(names).toContain('flows__tables__define')
     const found = llm.requests.at(-2).messages.at(-1).content as string
     expect(found).toContain('zfiller__tool149')
     expect(calls).toEqual([7])
