@@ -1175,6 +1175,11 @@ const zhCN: typeof en = {
     },
   },
   agent: {
+    copy: '复制',
+    copied: '已复制',
+    copyFailed: '复制失败，请手动选中文字',
+    edit: '编辑并重新发送',
+    resend: '重新发送',
     quoted: '引用：{label}',
     float: '浮动窗口',
     dock: '停靠到右侧',
@@ -1571,6 +1576,16 @@ const zhCN: typeof en = {
       kbUse: '让机器人回答时先查这个知识库',
       kbReview: '帮我审核 {count} 条从对话里学到的知识',
     },
+  },
+  agentPicker: {
+    title: '接下来消息使用的模型和推理强度',
+    default: '默认模型',
+    model: '模型',
+    defaultProvider: '智能体设置的提供商',
+    defaultModel: '提供商的默认模型',
+    effort: '推理强度',
+    efforts: { default: '默认', low: '低', medium: '中', high: '高', xhigh: '超高', max: '最高' },
+    hint: '只对从这个浏览器发出的消息生效。不支持推理的模型会忽略推理强度。智能体的默认模型用 /model 设置。',
   },
   agentPalette: {
     agentCommands: '智能体指令',
