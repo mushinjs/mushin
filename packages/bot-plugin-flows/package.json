@@ -1,6 +1,6 @@
 {
   "name": "@mushinjs/bot-plugin-flows",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Runs the conversation flows attached to a bot",
   "type": "module",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "@mushinjs/plugin-terminal",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Flow nodes that run commands in a local terminal or over SSH",
   "type": "module",
   "license": "MIT",

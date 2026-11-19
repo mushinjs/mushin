@@ -1,6 +1,6 @@
 {
   "name": "@mushinjs/plugin-personas",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Personas shared by bots, LLM chat and flows: a character, a voice and example exchanges, chosen per chat",
   "type": "module",
   "license": "MIT",
