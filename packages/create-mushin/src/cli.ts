@@ -1,6 +1,6 @@
 import { relative } from 'node:path'
 import { parseArgs } from 'node:util'
-import { createApp, detectPackageManager, install, type PackageManager, VERSION } from './index'
+import { addSkills, createApp, detectPackageManager, install, type PackageManager, VERSION } from './index'
 
 const usage = `Usage: npm create mushin@latest [folder] [-- options]
 
@@ -38,6 +38,7 @@ try {
   if (!values['no-install']) {
     console.log(`Installing with ${pm}…`)
     await install(dir, pm)
+    await addSkills(dir)
   }
   const cd = relative(process.cwd(), dir) || '.'
   const run = pm === 'npm' ? 'npm' : 'pnpm'
