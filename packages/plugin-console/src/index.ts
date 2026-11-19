@@ -10,9 +10,11 @@ import type {} from '@mushinjs/plugin-providers'
 import type {} from '@mushinjs/plugin-stats'
 import type {} from '@mushinjs/plugin-storage'
 import { ADMIN_TOKEN_ENV, AUTH_KEY, generateToken, isAuthRecord, tokensEqual } from './auth'
+import { McpServer, mcpConfigFields } from './mcp'
 import { dashboardRoot, MISSING_BUILD_PAGE, readStatic } from './static'
 
 export { ADMIN_TOKEN_ENV, readAdminToken, resetAdminToken } from './auth'
+export { CALL_TOOL, DEFAULT_TOOLS, MCP_PATH, McpServer, PROTOCOL_VERSIONS, SEARCH_TOOL } from './mcp'
 
 declare module '@mushinjs/core' {
   interface Context {
@@ -87,6 +89,7 @@ export class Console extends Service {
     path: z.string().default('/api').meta(field('API path', 'Base path of the HTTP API', {
       'zh-CN': { title: 'API 路径', description: 'HTTP API 的基础路径' },
     })),
+    ...mcpConfigFields,
   })
 
   private home: Context
@@ -99,7 +102,7 @@ export class Console extends Service {
   /** Set once the dashboard is being served. */
   ready?: SignInInfo
 
-  constructor(ctx: Context, public config: { path: string }) {
+  constructor(ctx: Context, public config: { path: string; mcp: boolean; mcpTools: string[]; mcpAll: boolean }) {
     super(ctx, 'console')
     this.home = ctx
   }
@@ -150,9 +153,13 @@ export class Console extends Service {
       this.attach(await accept())
     })
 
-    // Everything outside the API is the dashboard (with SPA fallback).
+    if (this.config.mcp !== false) {
+      new McpServer(this.home, { tools: this.config.mcpTools ?? [], all: !!this.config.mcpAll }, (token) => this.authenticate(token)).serve()
+    }
+
+    // Everything outside the API and the MCP endpoint is the dashboard (with SPA fallback).
     const root = dashboardRoot()
-    server.get(/^(?!\/api(?:\/|$)).*/, async (req, res) => {
+    server.get(/^(?!\/(?:api|mcp)(?:\/|$)).*/, async (req, res) => {
       if (devDashboard) {
         res.status = 302
         res.headers.set('location', `${devDashboard}${req.url}`)
@@ -218,7 +225,7 @@ export class Console extends Service {
   }
 
   /** Verifies a token; on a miss, re-reads .env so `mushin token reset` works without a restart. */
-  private async authenticate(token: string | null | undefined) {
+  async authenticate(token: string | null | undefined) {
     if (this.verify(token)) return true
     if (this.envToken || !token || Date.now() - this.reloadedAt < 1000) return false
     this.reloadedAt = Date.now()

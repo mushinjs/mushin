@@ -20,7 +20,7 @@ declare module 'cordis' {
 export type Risk = 'read' | 'write' | 'dangerous'
 
 export interface ActionCaller {
-  kind: 'api' | 'agent' | 'internal'
+  kind: 'api' | 'agent' | 'mcp' | 'internal'
   /** Agent session id, when the Agent made the call. */
   session?: string
   /** Dashboard connection id, used to route client actions back to the right tab. */

@@ -75,6 +75,12 @@ export function appFiles(name: string, version = VERSION, packageManager: Packag
       '',
     ].join('\n'),
     'AGENTS.md': agentsGuide(name),
+    // Connects the AI tool opened in this folder to the running Mushin.js; the token stays in .env.
+    '.mcp.json': json({
+      mcpServers: {
+        mushin: { type: 'stdio', command: 'node', args: ['node_modules/@mushinjs/cli/bin/mushin.js', 'mcp'] },
+      },
+    }),
     'plugins/.gitkeep': '',
     'skills/.gitkeep': '',
     ...(packageManager === 'pnpm' ? { 'pnpm-workspace.yaml': PNPM_SETTINGS } : {}),
@@ -104,11 +110,16 @@ This folder is a [Mushin.js](https://github.com/mushinjs/mushin) app: a chatbot 
 - \`npm run typecheck\` checks the plugins in \`plugins/\`.
 - \`npx mushin token reset\` makes a new admin token for the dashboard.
 
+## Managing Mushin.js from an AI tool
+
+\`.mcp.json\` connects the AI tool you open in this folder (Claude Code and others that read it) to the running Mushin.js through \`mushin mcp\`. Start Mushin.js first. The tools are Mushin.js actions: list bots, read logs, build and test flows, and more. Dangerous ones wait for approval in the dashboard. The admin token is read from \`.env\`; do not copy it anywhere.
+
 ## Layout
 
 | Path | What it is | Who writes it |
 | --- | --- | --- |
 | \`mushin.config.json\` | Which plugins run, and their settings. Holds no secrets. | People, the dashboard, the Agent |
+| \`.mcp.json\` | Connects the AI tool opened here to Mushin.js. Holds no secrets. | create-mushin |
 | \`.env\` | Secrets: the admin token, provider keys, bot tokens. Configuration refers to them as \`\${NAME}\`. | Mushin.js and people |
 | \`plugins/\` | Local plugins, run as TypeScript without a build step | People and AIs |
 | \`skills/\` | Your own skills, one folder each with a \`SKILL.md\` | People and AIs |

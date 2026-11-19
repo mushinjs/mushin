@@ -1,7 +1,7 @@
 {
   "name": "@mushinjs/plugin-console",
   "version": "0.1.0",
-  "description": "HTTP API, WebSocket and dashboard hosting",
+  "description": "HTTP API, WebSocket, dashboard hosting and the MCP server",
   "type": "module",
   "license": "MIT",
   "repository": {
