@@ -52,7 +52,7 @@ function update(name: string, next: any) {
       :schema="field"
       :model-value="modelValue?.[name]"
       :required="required.has(name)"
-      :secret="secrets?.includes(name)"
+      :secret="secrets?.includes(name) || field['x-secret'] === true"
       :compact="compact"
       @update:model-value="(next: any) => update(name, next)"
     />

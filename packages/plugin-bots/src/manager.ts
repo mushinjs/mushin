@@ -1,7 +1,7 @@
 import {
   type ChannelInfo, Context, currentPackageName, describeMissing, dependencyReport, envReference, type LogTag, type MissingDependency, logTag, type Exporter, type Fiber, fiberError, fiberStatus, isMasked, Logger, mask, type Message,
   type MessageRecord, messageType, MushinError, type Plugin, type Provenance, pluginSchema, randomId, resolveEnvReferences, type Segment, segmentsToText, Service, toJsonSchema,
-  type UsageEvent, validatePluginConfig, z,
+  type UsageEvent, validatePluginConfig, z, maskSecrets, restoreMasked, secretFields,
 } from '@mushinjs/core'
 import type {} from '@mushinjs/plugin-storage'
 import { MessageArchive } from './archive'
@@ -346,7 +346,7 @@ export class BotManager extends Service {
     for (const item of input.plugins ?? []) {
       const plugin = await this.loadBotPlugin(item.package)
       validatePluginConfig(plugin, item.config ?? {})
-      record.plugins.push({ package: item.package, enabled: true, config: item.config ?? {} })
+      record.plugins.push({ package: item.package, enabled: true, config: await this.securePlugin(record, item.package, plugin, item.config ?? {}) })
     }
     this.records.push(record)
     await this.save()
@@ -412,7 +412,14 @@ export class BotManager extends Service {
     for (const entry of record.plugins) {
       if (!entry.enabled) continue
       try {
-        loaded.push({ entry, plugin: await this.loadBotPlugin(entry.package) })
+        const plugin = await this.loadBotPlugin(entry.package)
+        // A key an older version or a hand edit left in plain text moves to .env.
+        const secured = await this.securePlugin(record, entry.package, plugin, entry.config ?? {}, entry.config)
+        if (JSON.stringify(secured) !== JSON.stringify(entry.config ?? {})) {
+          entry.config = secured
+          await this.save()
+        }
+        loaded.push({ entry, plugin })
       } catch (error) {
         runtime.pluginErrors.set(entry.package, error instanceof Error ? error.message : String(error))
       }
@@ -531,8 +538,11 @@ export class BotManager extends Service {
     return Promise.all(catalog.map(async (entry) => {
       const configured = record.plugins.find((item) => item.package === entry.package)
       let configSchema
+      let secrets: string[] = []
       try {
-        configSchema = pluginSchema(await this.home.manager.loadPlugin(entry.package))
+        const plugin = await this.home.manager.loadPlugin(entry.package)
+        configSchema = pluginSchema(plugin)
+        secrets = secretFields(plugin)
       } catch {}
       const fiber = runtime?.plugins.get(entry.package)
       const report = dependencyReport(graph, entry.package)
@@ -544,7 +554,7 @@ export class BotManager extends Service {
         version: entry.version,
         manifest: entry.manifest,
         enabled: !!configured?.enabled,
-        config: configured?.config ?? {},
+        config: maskSecrets(configured?.config ?? {}, secrets),
         configSchema,
         status,
         error: runtime?.pluginErrors.get(entry.package) ?? (status === 'missing' ? describeMissing(missing) : fiberError(fiber)),
@@ -569,8 +579,9 @@ export class BotManager extends Service {
       throw new MushinError('unavailable', `${name} cannot run on this bot yet. ${describeMissing(missing)}; enable them on the plugins page`, { missing })
     }
     let entry = record.plugins.find((item) => item.package === name)
-    const nextConfig = config ?? entry?.config ?? {}
+    let nextConfig = restoreMasked(config ?? entry?.config ?? {}, entry?.config, secretFields(plugin))
     validatePluginConfig(plugin, nextConfig)
+    nextConfig = await this.securePlugin(record, name, plugin, nextConfig, entry?.config)
     if (!entry) {
       entry = { package: name, enabled: true, config: nextConfig }
       record.plugins.push(entry)
@@ -602,12 +613,21 @@ export class BotManager extends Service {
     const entry = record.plugins.find((item) => item.package === name)
     if (!entry) return this.enablePlugin(id, name, config)
     const plugin = await this.loadBotPlugin(name)
-    validatePluginConfig(plugin, config)
-    entry.config = config
+    const next = restoreMasked(config, entry.config, secretFields(plugin))
+    validatePluginConfig(plugin, next)
+    entry.config = await this.securePlugin(record, name, plugin, next, entry.config)
     await this.save()
     this.logger.info('config of plugin %s on bot %s changed', name, this.label(record))
     if (entry.enabled) this.reloadPlugin(id, entry, plugin)
     return this.plugins(id).then((list) => list.find((item) => item.package === name))
+  }
+
+  /** Puts the plain values of a bot plugin's secret fields into .env and returns the config with `${NAME}` references. */
+  private async securePlugin(record: Pick<BotRecord, 'id' | 'name'>, name: string, plugin: Plugin, config: Record<string, any>, previous?: Record<string, any>) {
+    const keys = secretFields(plugin)
+    if (!keys.length) return config
+    const short = name.replace(/^@[^/]+\//, '').replace(/^(?:mushin-)?(?:bot-)?plugin-/, '')
+    return (await this.home.storage.secrets.moveIn(config, { keys, name: ['bot', record.name || record.id, short], previous })).config
   }
 
   private reloadPlugin(id: string, entry: BotPluginEntry, plugin: Plugin) {
