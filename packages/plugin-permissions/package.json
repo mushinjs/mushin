@@ -1,6 +1,6 @@
 {
   "name": "@mushinjs/plugin-permissions",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Who is master, admin or user on each bot, and the permission check node for flows",
   "type": "module",
   "license": "MIT",
