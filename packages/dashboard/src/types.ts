@@ -365,6 +365,7 @@ export type AgentEvent = { session: string } & (
   | { type: 'confirm'; id: string; action: string; input: unknown }
   | { type: 'tool-result'; id: string; ok: boolean; result?: unknown; error?: string }
   | { type: 'done'; text: string; usage?: { inputTokens: number; outputTokens: number } }
+  | { type: 'notice'; code: 'effort_ignored' }
   | { type: 'error'; error: string; code?: 'max_steps' }
 )
 

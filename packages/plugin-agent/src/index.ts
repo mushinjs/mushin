@@ -33,6 +33,8 @@ export type AgentEvent = { session: string } & (
   | { type: 'confirm'; id: string; action: string; input: unknown }
   | { type: 'tool-result'; id: string; ok: boolean; result?: unknown; error?: string }
   | { type: 'done'; text: string; usage?: { inputTokens: number; outputTokens: number } }
+  /** Something the user should know about a turn that still goes on; `effort_ignored`: the model ran without the picked effort. */
+  | { type: 'notice'; code: 'effort_ignored' }
   /** `code` is `max_steps` when the turn ran out of tool rounds, so the dashboard can offer to go on. */
   | { type: 'error'; error: string; code?: 'max_steps' }
 )
@@ -143,6 +145,8 @@ interface Running {
   usage: { inputTokens: number; outputTokens: number }
   /** Failed calls per tool in this turn, to tell the model to stop guessing. */
   failures: Map<string, number>
+  /** The user was told that the model ran without the picked effort. */
+  effortIgnored?: boolean
 }
 
 /** The turn used every tool round it may; the dashboard offers to continue. */
@@ -610,6 +614,10 @@ export class Agent extends Service {
       }
       if (!result) throw new Error('The provider returned no result')
       last = result
+      if (result.effortIgnored && !running.effortIgnored) {
+        running.effortIgnored = true
+        this.emit({ session: session.id, type: 'notice', code: 'effort_ignored' })
+      }
       if (result.usage) {
         running.usage.inputTokens += result.usage.inputTokens
         running.usage.outputTokens += result.usage.outputTokens

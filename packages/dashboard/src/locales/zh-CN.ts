@@ -1175,6 +1175,8 @@ const zhCN: typeof en = {
     },
   },
   agent: {
+    retry: '重试',
+    changeModel: '换个模型',
     copy: '复制',
     copied: '已复制',
     copyFailed: '复制失败，请手动选中文字',
@@ -1577,12 +1579,16 @@ const zhCN: typeof en = {
       kbReview: '帮我审核 {count} 条从对话里学到的知识',
     },
   },
+  agentNotice: {
+    effort_ignored: '这个模型不支持带工具时设置推理强度，本次按默认强度回答。',
+  },
   agentPicker: {
     title: '选择模型和推理强度',
     default: '默认模型',
     defaultHint: '跟随智能体设置（/model）',
     search: '搜索模型',
     noMatch: '没有匹配的模型',
+    noEffort: '这个模型不支持推理强度',
     effort: '推理强度',
     efforts: { default: '默认', low: '低', medium: '中', high: '高', xhigh: '超高', max: '最高' },
     hint: '只在这个浏览器里生效',

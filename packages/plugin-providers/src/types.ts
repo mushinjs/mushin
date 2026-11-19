@@ -67,6 +67,8 @@ export interface ChatResponse {
   finishReason?: FinishReason
   /** Native turn to replay on the next request; see {@link RawTurn}. */
   raw?: RawTurn
+  /** The request asked for a reasoning effort that the model would not take with it, so it was sent without. */
+  effortIgnored?: boolean
 }
 
 export type StreamEvent =

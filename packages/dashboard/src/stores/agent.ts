@@ -14,6 +14,8 @@ export type ChatItem =
   | { kind: 'error'; text: string; code?: 'max_steps' }
   /** Shown by the dashboard itself, e.g. for /status; never sent to the model. */
   | { kind: 'note'; text: string }
+  /** A notice from the Agent about the running turn, shown in the user's language. */
+  | { kind: 'notice'; code: 'effort_ignored' }
 
 function parseArgs(json: string) {
   try {
@@ -242,6 +244,10 @@ export const useAgentStore = defineStore('agent', () => {
         dropAsks()
         refreshSessions().catch(() => {})
         break
+      case 'notice':
+        flush()
+        items.value.push({ kind: 'notice', code: event.code })
+        break
       case 'error':
         flush()
         items.value.push({ kind: 'error', text: event.error, ...(event.code === 'max_steps' ? { code: 'max_steps' as const } : {}) })
@@ -260,6 +266,22 @@ export const useAgentStore = defineStore('agent', () => {
     if (at < 0) return
     items.value = items.value.slice(0, at)
     await send(text, { ...options, rewind: ordinal })
+  }
+
+  /** Sends the last user message again, replacing what came after it. */
+  async function retry(options: { scene?: AgentScene } = {}) {
+    let ordinal = -1
+    let last: Extract<ChatItem, { kind: 'user' }> | undefined
+    for (const item of items.value) {
+      if (item.kind !== 'user') continue
+      ordinal++
+      last = item
+    }
+    if (!last || running.value) return
+    if (current.value) return edit(ordinal, last.text, options)
+    // The conversation never started, so there is nothing to rewind.
+    items.value = items.value.slice(0, items.value.indexOf(last))
+    return send(last.text, options)
   }
 
   async function send(text: string, options: { skills?: AgentSkill[]; scene?: AgentScene; rewind?: number } = {}) {
@@ -328,6 +350,6 @@ export const useAgentStore = defineStore('agent', () => {
 
   return {
     open, sessions, current, items, choice, streaming, running, usage, skills, commands, toolsStale, asks, quote,
-    refreshSessions, refreshPickers, load, newChat, note, ask, answer, send, edit, confirm, cancel, remove, bind,
+    refreshSessions, refreshPickers, load, newChat, note, ask, answer, send, edit, retry, confirm, cancel, remove, bind,
   }
 })
