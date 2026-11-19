@@ -316,7 +316,7 @@ export function apply(ctx: Context): void {
     const hello = answers.find((answer) => answer.id === 2)?.result?.content?.[0]?.text ?? ''
     if (!hello.includes('Hello, MCP!')) fail(`the MCP bridge answered ${JSON.stringify(answers)}`)
     console.log('  the AI tool reaches the plugin through .mcp.json and mushin mcp')
-    for (const path of ['mushin.config.json', 'data/mushin.db', 'data/layout.json', 'AGENTS.md', '.gitignore', '.mcp.json']) {
+    for (const path of ['mushin.config.json', 'data/mushin.db', 'data/layout.json', 'AGENTS.md', '.gitignore', '.mcp.json', '.claude/skills/mushin-flows/SKILL.md']) {
       if (!existsSync(join(dir, path))) fail(`the ${pm} app has no ${path} after starting`)
     }
     console.log(`  the app starts, the plugin answers, and the folder matches the layout`)

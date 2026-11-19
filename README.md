@@ -58,6 +58,7 @@ my-bot/
   .env                 secrets: the admin token, provider keys, bot tokens, MCP headers
   AGENTS.md            what this folder is, for you and your AI
   .mcp.json            connects the AI tool you open here to Mushin.js
+  .claude/skills/      the official skills for AI tools
   plugins/             your own plugins
   skills/              your own skills
   data/                everything worth keeping: back up this folder
@@ -78,6 +79,8 @@ An instance from an older version is moved to this layout when it starts, after 
 ### Managing it from your AI tool
 
 Mushin.js serves its actions over MCP at `/mcp`, so an AI tool such as Claude Code can list your bots, read logs, and build and test flows for you. An app made with `npm create mushin` has a `.mcp.json` that does the wiring: open the AI tool in the app folder while Mushin.js runs, and it starts `mushin mcp`, which forwards to the running instance with the admin token from `.env`. Nothing secret is written into `.mcp.json`. For a tool that speaks Streamable HTTP and doesn't read `.mcp.json`, point it at `http://127.0.0.1:5160/mcp` with the header `Authorization: Bearer <admin token>`.
+
+The app also has four official skills in `.claude/skills/`: writing a plugin (it asks you what it needs to know before it writes any code), building and testing flows, finding out why something does not work, and running the app (upgrades, backups, moving machines). `npm run upgrade` replaces them with the new version's; `npx mushin skills` does it on its own.
 
 The MCP tools follow the Agent's tool policy (the **Tool policy** tab of the dashboard's Agent page). Tools turned off are not offered. Dangerous tools, and any you set to ask first, run only after you approve them in an open dashboard. Only a short list of common tools is listed directly, to keep the model's tool list small. The rest are found with `search_tools` and run with `call_tool`. The **Console** plugin's settings choose which tools are listed, list them all, or turn the MCP server off.
 

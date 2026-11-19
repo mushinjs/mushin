@@ -7,6 +7,7 @@ import { resetAdminToken, type SignInInfo } from '@mushinjs/plugin-console'
 import { LAYOUT_VERSION, migrateLayout } from '@mushinjs/plugin-storage'
 import { mcpConfig, runBridge } from './mcp'
 import { appPackageManager, appPackages, CLI_VERSION, newPlugin, run, upgradeCommand, upgradeTag } from './scaffold'
+import { installSkills, SKILLS_TARGET } from './skills'
 import { instanceDirs, start } from './start'
 import { testCommand } from './test'
 
@@ -21,6 +22,7 @@ Commands:
                   Create a TypeScript plugin in plugins/<name> and turn it on
   upgrade         Update the @mushinjs packages of this app, then migrate its data; stop Mushin.js first
   mcp             An MCP server over stdio for the AI tool in this folder; it forwards to the running Mushin.js
+  skills          Put the official skills for AI tools into .claude/skills/, replacing older copies
 
 Options:
   -d, --dir <path>   Instance directory (default: the current directory, or ./instance if it holds one)
@@ -83,6 +85,8 @@ const baseDir = instanceDir()
 if (values.help) {
   console.log(usage)
 } else if (command === 'start') {
+  // An app made before the official skills existed gets them; ones already there are left as they are.
+  if ((await appPackages(baseDir))?.length) await installSkills(baseDir).catch(() => {})
   let signedIn = false
   const instance = await start({
     baseDir,
@@ -162,6 +166,10 @@ if (values.help) {
     console.error((error as Error).message)
     process.exit(1)
   }
+} else if (command === 'skills') {
+  const { added, updated } = await installSkills(baseDir, { overwrite: true })
+  const changed = [...added.map((name) => `added ${name}`), ...updated.map((name) => `updated ${name}`)]
+  console.log(changed.length ? `${SKILLS_TARGET}: ${changed.join(', ')}.` : `The official skills in ${SKILLS_TARGET} are up to date.`)
 } else if (command === 'mcp') {
   await runBridge({ baseDir, port: values.port ? Number(values.port) : undefined })
 } else if (command === 'upgrade') {
@@ -178,6 +186,8 @@ if (values.help) {
     // The new version decides the layout, so its own CLI moves the data.
     const bin = join(baseDir, 'node_modules', '@mushinjs', 'cli', 'bin', 'mushin.js')
     if (existsSync(join(baseDir, CONFIG)) && existsSync(bin)) await run(process.execPath, [bin, 'migrate', '--dir', baseDir], baseDir)
+    // The new version's skills replace the old ones.
+    if (existsSync(bin)) await run(process.execPath, [bin, 'skills', '--dir', baseDir], baseDir)
     const after = await readJson<{ version: string }>(join(baseDir, 'node_modules', '@mushinjs', 'cli', 'package.json'))
     // Apps made before the MCP server get the file that connects their AI tool to it.
     if (!existsSync(join(baseDir, '.mcp.json'))) {
