@@ -1,7 +1,7 @@
 import {
   type ActionInfo, Context, field, fromToolName, MushinError, randomId, segmentsToText, Service, toToolName, z,
 } from '@mushinjs/core'
-import type { LlmMessage, LlmResult, ToolCall, ToolDefinition } from '@mushinjs/plugin-providers'
+import { type Effort, EFFORTS, type LlmMessage, type LlmResult, type ToolCall, type ToolDefinition } from '@mushinjs/plugin-providers'
 import type {} from '@mushinjs/plugin-storage'
 import { contextNote, type SceneInfo, skillBlock, SYSTEM_PROMPT, type TurnContext } from './prompt'
 import {
@@ -90,6 +90,12 @@ export interface SendOptions {
   skills?: string[]
   /** A message of a bot's chat to quote, with a few messages around it. */
   quote?: { bot: string; channel: string; id: string; before?: number; after?: number }
+  /** Provider or profile, model and reasoning effort for this message; the Agent's settings when omitted. */
+  provider?: string
+  model?: string
+  effort?: Effort
+  /** Replaces the conversation from this user message on (0 is the first), to edit and resend it. */
+  rewind?: number
 }
 
 /** Commands the dashboard runs itself, without asking the model. */
@@ -113,6 +119,9 @@ export const Config = z.object({
   }, { choices: 'providers.choices' })),
   model: z.string().optional().meta(field('Model', 'Model for the Agent; empty uses the provider\'s default', {
     'zh-CN': { title: '模型', description: '智能体使用的模型；留空使用提供商默认模型' },
+  })),
+  effort: z.enum(EFFORTS as [Effort, ...Effort[]]).optional().meta(field('Reasoning effort', 'How much a reasoning model thinks; empty uses the model default', {
+    'zh-CN': { title: '推理强度', description: '推理模型思考的程度；留空使用模型默认值' },
   })),
   maxSteps: z.number().int().min(1).max(50).default(20).meta(field('Max steps', 'Most tool-calling rounds in one reply', {
     'zh-CN': { title: '最大步数', description: '一次回复中最多调用工具的轮数' },
@@ -540,6 +549,12 @@ export class Agent extends Service {
     }
     const session = sessionId ? await this.session(sessionId) : await this.createSession()
     if (this.running.has(session.id)) throw new MushinError('conflict', 'The Agent is still working on this conversation')
+    if (options.rewind !== undefined) {
+      let seen = -1
+      const at = session.messages.findIndex((message) => message.role === 'user' && ++seen === options.rewind)
+      if (at < 0) throw new MushinError('not_found', `This conversation has no user message ${options.rewind}`)
+      session.messages = session.messages.slice(0, at)
+    }
     const running: Running = { abort: new AbortController(), confirms: new Map(), usage: { inputTokens: 0, outputTokens: 0 }, failures: new Map() }
     this.running.set(session.id, running)
     const skills = options.skills?.length ? await Promise.all(options.skills.map((id) => this.skill(id))) : []
@@ -577,9 +592,13 @@ export class Agent extends Service {
     for (let step = 0; step < this.config.maxSteps; step++) {
       const history: LlmMessage[] = [{ role: 'system', content: SYSTEM_PROMPT }, ...session.messages.map(stripMeta)]
       let result: LlmResult | undefined
+      // A provider picked for this message comes with its own model choice, not the Agent's.
+      const provider = options.provider ?? this.config.provider
+      const model = options.provider ? options.model : options.model ?? this.config.model
       for await (const event of this.home.llm.stream({
-        provider: this.config.provider,
-        model: this.config.model,
+        provider,
+        model,
+        ...(options.effort ?? this.config.effort ? { effort: options.effort ?? this.config.effort } : {}),
         messages: history,
         tools: session.tools,
         signal: running.abort.signal,
@@ -778,6 +797,10 @@ export class Agent extends Service {
           before: z.number().int().min(0).max(30).optional(),
           after: z.number().int().min(0).max(10).optional(),
         }).optional().describe('A message of a bot\'s chat to quote, with a few messages around it'),
+        provider: z.string().optional().describe('Provider or profile id for this message; the Agent\'s setting when omitted'),
+        model: z.string().optional().describe('Model for this message; the Agent\'s setting or the provider\'s default when omitted'),
+        effort: z.enum(EFFORTS as [Effort, ...Effort[]]).optional().describe('Reasoning effort for this message'),
+        rewind: z.number().int().min(0).optional().describe('Edit: drop the conversation from this user message on (0 is the first) and send text in its place'),
       }).refine((input) => input.text.trim() || input.skills?.length, 'Send some text or pick a skill'),
       handler: ({ session, text, ...options }, caller) => this.send(session, text, { client: caller.client, ...options }),
     })

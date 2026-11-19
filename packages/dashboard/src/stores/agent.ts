@@ -69,6 +69,25 @@ export interface AskItem {
 }
 
 const SESSION_KEY = 'mushin.agent.session'
+const CHOICE_KEY = 'mushin.agent.choice'
+
+export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+export const EFFORTS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max']
+
+/** The model and effort picked in the dock for the next messages; empty fields use the Agent's settings. */
+export interface ModelChoice {
+  provider?: string
+  model?: string
+  effort?: Effort
+}
+
+function readChoice(): ModelChoice {
+  try {
+    return JSON.parse(localStorage.getItem(CHOICE_KEY) ?? '{}') ?? {}
+  } catch {
+    return {}
+  }
+}
 
 function readSession() {
   try {
@@ -91,6 +110,12 @@ export const useAgentStore = defineStore('agent', () => {
     } catch {}
   })
   const items = ref<ChatItem[]>([])
+  const choice = ref<ModelChoice>(readChoice())
+  watch(choice, (value) => {
+    try {
+      localStorage.setItem(CHOICE_KEY, JSON.stringify(value))
+    } catch {}
+  }, { deep: true })
   const streaming = ref('')
   const running = ref(false)
   let adopting = false
@@ -227,7 +252,17 @@ export const useAgentStore = defineStore('agent', () => {
     }
   }
 
-  async function send(text: string, options: { skills?: AgentSkill[]; scene?: AgentScene } = {}) {
+  /** Edits the user message `ordinal` (0 is the first): what follows it goes, and the new text is sent in its place. */
+  async function edit(ordinal: number, text: string, options: { scene?: AgentScene } = {}) {
+    if (running.value || !current.value || !text.trim()) return
+    let seen = -1
+    const at = items.value.findIndex((item) => item.kind === 'user' && ++seen === ordinal)
+    if (at < 0) return
+    items.value = items.value.slice(0, at)
+    await send(text, { ...options, rewind: ordinal })
+  }
+
+  async function send(text: string, options: { skills?: AgentSkill[]; scene?: AgentScene; rewind?: number } = {}) {
     const picked = options.skills ?? []
     const quoted = quote.value
     if (running.value || (!text.trim() && !picked.length && !quoted)) return
@@ -242,6 +277,10 @@ export const useAgentStore = defineStore('agent', () => {
         ...(options.scene ? { scene: options.scene } : {}),
         ...(picked.length ? { skills: picked.map((skill) => skill.id) } : {}),
         ...(quoted ? { quote: { bot: quoted.bot, channel: quoted.channel, id: quoted.id } } : {}),
+        ...(choice.value.provider ? { provider: choice.value.provider } : {}),
+        ...(choice.value.model ? { model: choice.value.model } : {}),
+        ...(choice.value.effort ? { effort: choice.value.effort } : {}),
+        ...(options.rewind !== undefined ? { rewind: options.rewind } : {}),
       })
       current.value ??= result.session
     } catch (error) {
@@ -288,7 +327,7 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   return {
-    open, sessions, current, items, streaming, running, usage, skills, commands, toolsStale, asks, quote,
-    refreshSessions, refreshPickers, load, newChat, note, ask, answer, send, confirm, cancel, remove, bind,
+    open, sessions, current, items, choice, streaming, running, usage, skills, commands, toolsStale, asks, quote,
+    refreshSessions, refreshPickers, load, newChat, note, ask, answer, send, edit, confirm, cancel, remove, bind,
   }
 })

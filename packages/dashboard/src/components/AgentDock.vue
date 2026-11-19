@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { Button, Dropdown, type DropdownOption, Input, Modal, Popover, Select, Spin, Tag, Tooltip } from '@mushinjs/ui'
+import { Button, Dropdown, type DropdownOption, Input, Modal, Popover, Select, Spin, Tag, Tooltip, useToast } from '@mushinjs/ui'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { call } from '../api'
-import { type ChatItem, useAgentStore } from '../stores/agent'
+import { type ChatItem, EFFORTS, useAgentStore } from '../stores/agent'
 import { type Recommendation, useAgentSceneStore } from '../stores/agentScene'
 import { providerOptions as toProviderOptions } from '../models'
 import { useDataStore } from '../stores/data'
@@ -36,6 +36,56 @@ const commandBot = ref<{ name: string; bot: string }>()
 const palette = ref<InstanceType<typeof CommandPalette>>()
 const paletteClosed = ref(false)
 const showHistory = ref(false)
+const toast = useToast()
+
+// ---- copy and edit ----
+
+/** The user message being edited: its place among the user messages, and the draft. */
+const editing = ref<{ ordinal: number; text: string }>()
+
+/** Each user item's place among the user messages, which the server counts the same way. */
+const ordinals = computed(() => {
+  const map = new Map<ChatItem, number>()
+  let n = 0
+  for (const item of agent.items) if (item.kind === 'user') map.set(item, n++)
+  return map
+})
+
+async function copy(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    toast.success(t('agent.copied'))
+  } catch {
+    toast.error(t('agent.copyFailed'))
+  }
+}
+
+function startEdit(item: ChatItem) {
+  if (item.kind !== 'user' || agent.running) return
+  editing.value = { ordinal: ordinals.value.get(item) ?? 0, text: item.text }
+}
+
+async function saveEdit() {
+  const draft = editing.value
+  if (!draft?.text.trim()) return
+  editing.value = undefined
+  await agent.edit(draft.ordinal, draft.text.trim(), { scene: { ...scenes.scene } })
+}
+
+// ---- model and effort for the next messages ----
+
+const showPicker = ref(false)
+const pickerProvider = computed(() => data.providers.find((item) => item.id === agent.choice.provider))
+const pickerLabel = computed(() => {
+  const model = agent.choice.model
+    || (agent.choice.provider ? pickerProvider.value?.defaultModel ?? data.profiles.find((item) => item.id === agent.choice.provider)?.name : undefined)
+    || t('agentPicker.default')
+  return agent.choice.effort ? `${model} · ${t(`agentPicker.efforts.${agent.choice.effort}`)}` : model
+})
+
+function setProvider(value: string | null) {
+  agent.choice = { ...agent.choice, provider: value ?? undefined, model: undefined }
+}
 
 const ALL = '__all__'
 const sessionOptions = computed<DropdownOption[]>(() => [
@@ -326,14 +376,38 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
         </div>
         <template v-else>
           <template v-for="item in [row.item]" :key="index">
-            <div v-if="item.kind === 'user'" class="msg user">
-              <div v-if="item.skills?.length" class="msg-skills">
-                <span v-for="name in item.skills" :key="name" class="msg-skill"><span class="i-lucide-puzzle" />{{ name }}</span>
+            <div v-if="item.kind === 'user' && editing && editing.ordinal === ordinals.get(item)" class="msg-edit">
+              <Input
+                v-model:value="editing.text"
+                type="textarea"
+                :autosize="{ minRows: 2, maxRows: 8 }"
+                @keydown.enter.exact.prevent="saveEdit()"
+                @keydown.esc="editing = undefined"
+              />
+              <div class="msg-edit-actions">
+                <Button size="small" secondary @click="editing = undefined">{{ t('common.cancel') }}</Button>
+                <Button size="small" type="primary" :disabled="!editing.text.trim()" @click="saveEdit()">{{ t('agent.resend') }}</Button>
               </div>
-              <div v-if="item.quote" class="msg-quote"><span class="i-lucide-message-circle-more" />{{ item.quote }}</div>
-              {{ item.text }}
             </div>
-            <div v-else-if="item.kind === 'assistant'" class="msg assistant"><AgentMessage :text="item.text" /></div>
+            <div v-else-if="item.kind === 'user'" class="msg-wrap user">
+              <div class="msg user">
+                <div v-if="item.skills?.length" class="msg-skills">
+                  <span v-for="name in item.skills" :key="name" class="msg-skill"><span class="i-lucide-puzzle" />{{ name }}</span>
+                </div>
+                <div v-if="item.quote" class="msg-quote"><span class="i-lucide-message-circle-more" />{{ item.quote }}</div>
+                {{ item.text }}
+              </div>
+              <div class="msg-actions">
+                <Tooltip><template #trigger><Button size="tiny" quaternary circle icon="i-lucide-copy" :aria-label="t('agent.copy')" @click="copy(item.text)" /></template>{{ t('agent.copy') }}</Tooltip>
+                <Tooltip v-if="!agent.running && item.text"><template #trigger><Button size="tiny" quaternary circle icon="i-lucide-pencil" :aria-label="t('agent.edit')" @click="startEdit(item)" /></template>{{ t('agent.edit') }}</Tooltip>
+              </div>
+            </div>
+            <div v-else-if="item.kind === 'assistant'" class="msg-wrap assistant">
+              <div class="msg assistant"><AgentMessage :text="item.text" /></div>
+              <div class="msg-actions">
+                <Tooltip><template #trigger><Button size="tiny" quaternary circle icon="i-lucide-copy" :aria-label="t('agent.copy')" @click="copy(item.text)" /></template>{{ t('agent.copy') }}</Tooltip>
+              </div>
+            </div>
             <div v-else-if="item.kind === 'note'" class="msg note">
               <span class="i-lucide-info" /><span>{{ item.text }}</span>
             </div>
@@ -424,6 +498,34 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
           :disabled="!data.providers.length"
           @keydown="onKeydown"
         />
+        <div class="input-tools">
+          <Popover v-model:show="showPicker" trigger="click" placement="top">
+            <template #trigger>
+              <button type="button" class="picker-chip" :title="t('agentPicker.title')">
+                <span class="i-lucide-sparkles" />
+                <span class="picker-label">{{ pickerLabel }}</span>
+                <span class="i-lucide-chevron-down" />
+              </button>
+            </template>
+            <div class="picker">
+              <div class="picker-title">{{ t('agentPicker.model') }}</div>
+              <Select :value="agent.choice.provider ?? null" size="small" clearable :options="providerOptions" :placeholder="t('agentPicker.defaultProvider')" @update:value="setProvider" />
+              <ModelSelect
+                size="small"
+                :model-value="agent.choice.model"
+                :provider="agent.choice.provider"
+                :placeholder="t('agentPicker.defaultModel')"
+                @update:model-value="(value) => (agent.choice = { ...agent.choice, model: value ?? undefined })"
+              />
+              <div class="picker-title">{{ t('agentPicker.effort') }}</div>
+              <div class="efforts">
+                <button type="button" :class="{ active: !agent.choice.effort }" @click="agent.choice = { ...agent.choice, effort: undefined }">{{ t('agentPicker.efforts.default') }}</button>
+                <button v-for="level in EFFORTS" :key="level" type="button" :class="{ active: agent.choice.effort === level }" @click="agent.choice = { ...agent.choice, effort: level }">{{ t(`agentPicker.efforts.${level}`) }}</button>
+              </div>
+              <p class="picker-hint">{{ t('agentPicker.hint') }}</p>
+            </div>
+          </Popover>
+        </div>
       </div>
       <Button v-if="agent.running" type="warning" secondary :aria-label="t('agent.stop')" icon="i-lucide-circle-stop" @click="agent.cancel()" />
       <Button v-else type="primary" :disabled="!input.trim() && !picked.length && !agent.quote" :aria-label="t('agent.send')" icon="i-lucide-send" @click="send()" />
@@ -735,6 +837,122 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
   font-size: 14px;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* A message with its copy and edit buttons under it, shown on hover. */
+.msg-wrap {
+  display: flex;
+  flex-direction: column;
+  max-width: 88%;
+}
+
+.msg-wrap.user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.msg-wrap.assistant {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.msg-wrap > .msg {
+  max-width: 100%;
+}
+
+.msg-actions {
+  display: flex;
+  gap: 2px;
+  height: 24px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.msg-wrap:hover .msg-actions,
+.msg-actions:focus-within {
+  opacity: 1;
+}
+
+.msg-edit {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.msg-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.input-tools {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.picker-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 8px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(127, 127, 127, 0.12);
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.picker-chip:hover {
+  background: rgba(127, 127, 127, 0.2);
+}
+
+.picker-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 280px;
+}
+
+.picker-title {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.efforts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.efforts button {
+  padding: 3px 10px;
+  border: 1px solid rgba(127, 127, 127, 0.3);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.efforts button.active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+.picker-hint {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.6;
 }
 
 .msg.user {

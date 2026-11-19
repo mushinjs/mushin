@@ -33,12 +33,19 @@ export interface ToolDefinition {
   parameters: JsonSchema
 }
 
+/** How much a reasoning model thinks before it answers; services that have no such setting ignore it. */
+export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
+export const EFFORTS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max']
+
 export interface ChatRequest {
   model: string
   messages: LlmMessage[]
   tools?: ToolDefinition[]
   maxTokens?: number
   temperature?: number
+  /** Reasoning effort; the model's or provider's default when omitted. */
+  effort?: Effort
   signal?: AbortSignal
 }
 

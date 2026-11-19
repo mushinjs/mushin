@@ -1174,6 +1174,11 @@ export default {
     },
   },
   agent: {
+    copy: 'Copy',
+    copied: 'Copied',
+    copyFailed: 'Could not copy; select the text instead',
+    edit: 'Edit and resend',
+    resend: 'Resend',
     quoted: 'Quoting: {label}',
     float: 'Float in a window',
     dock: 'Dock on the right',
@@ -1570,6 +1575,16 @@ export default {
       kbUse: 'Make bots look up this knowledge base before they answer',
       kbReview: 'Help me review {count} things learned from chats',
     },
+  },
+  agentPicker: {
+    title: 'Model and reasoning effort for your next messages',
+    default: 'Default model',
+    model: 'Model',
+    defaultProvider: 'The Agent\'s provider',
+    defaultModel: 'The provider\'s default model',
+    effort: 'Reasoning effort',
+    efforts: { default: 'Default', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' },
+    hint: 'Used for the messages you send from this browser. Models that do not reason ignore the effort. The Agent\'s default model is set with /model.',
   },
   agentPalette: {
     agentCommands: 'Agent commands',

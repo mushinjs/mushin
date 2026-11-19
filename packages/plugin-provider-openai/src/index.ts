@@ -131,6 +131,8 @@ export class OpenAIClient implements ProviderClient {
         })),
       } : {}),
       ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
+      // OpenAI's highest level is xhigh; compatible services that do not reason ignore the field or reject it.
+      ...(request.effort ? { reasoning_effort: (request.effort === 'max' ? 'xhigh' : request.effort) as 'high' } : {}),
       ...(request.maxTokens !== undefined
         ? this.options.completionTokens ? { max_completion_tokens: request.maxTokens } : { max_tokens: request.maxTokens }
         : {}),

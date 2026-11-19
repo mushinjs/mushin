@@ -169,7 +169,7 @@ export class AnthropicClient implements ProviderClient {
           })),
         } : {}),
         ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
-        ...(this.config.effort ? { output_config: { effort: this.config.effort } } : {}),
+        ...(request.effort ?? this.config.effort ? { output_config: { effort: request.effort ?? this.config.effort } } : {}),
       } satisfies Anthropic.MessageCreateParamsNonStreaming,
     }
   }

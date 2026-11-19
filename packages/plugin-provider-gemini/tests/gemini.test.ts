@@ -162,7 +162,7 @@ describe('GeminiClient', () => {
         ],
         nextPageToken: 'next',
       }))
-    expect(await gemini.listModels()).toEqual(['gemini-b', 'gemini-c'])
+    expect(await gemini.listModels()).toEqual(['gemini-c', 'gemini-b'])
   })
 
   it('embeds texts with batchEmbedContents', async () => {
