@@ -53,6 +53,21 @@ describe('agent tools', () => {
     expect(calls).toEqual([7])
   })
 
+  it('trims the tools of a conversation saved with too many', async () => {
+    llm.enqueue({ text: 'Hi.' })
+    const { session } = await app.call('agent.send', { text: 'Hello' })
+    await waitFor(async () => !(await app.call('agent.session', { id: session })).running || undefined)
+    const agent = app.ctx.agent as any
+    const saved = await agent.session(session)
+    saved.tools = Array.from({ length: 146 }, (_, i) => ({ name: `old__tool${i}`, description: 'Old', parameters: { type: 'object' } }))
+    await agent.save(saved)
+
+    llm.enqueue({ text: 'Still here.' })
+    await app.call('agent.send', { session, text: 'Again' })
+    await waitFor(async () => !(await app.call('agent.session', { id: session })).running || undefined)
+    expect(llm.requests.at(-1).tools.length).toBeLessThanOrEqual(MAX_TOOLS)
+  })
+
   it('lists fetched models newest first, chat models before the rest', async () => {
     llm.setModels([
       { id: 'chatgpt-4o-latest', created: 300 },
