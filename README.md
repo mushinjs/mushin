@@ -57,6 +57,7 @@ my-bot/
   mushin.config.json   which plugins run, and their settings
   .env                 secrets: the admin token, provider keys, bot tokens, MCP headers
   AGENTS.md            what this folder is, for you and your AI
+  .mcp.json            connects the AI tool you open here to Mushin.js
   plugins/             your own plugins
   skills/              your own skills
   data/                everything worth keeping: back up this folder
@@ -73,6 +74,12 @@ my-bot/
 Secrets stay out of `mushin.config.json` and `data/`: a key you enter in the dashboard or through the Agent is written to `.env`, and the record holds a reference such as `${DEEPSEEK_API_KEY}`. You can write such a reference yourself, in a provider form or in any plugin setting in `mushin.config.json`. A variable set in the environment overrides `.env`. Keep `.env` out of git and out of anything you share.
 
 An instance from an older version is moved to this layout when it starts, after a copy of its `data/` folder goes to `data/backups/`, and the keys it kept in plain text move to `.env`. That copy still holds the old keys, so delete it once the instance runs. To see the moves first, run `npx mushin migrate --dry-run`; `mushin migrate` makes them without starting.
+
+### Managing it from your AI tool
+
+Mushin.js serves its actions over MCP at `/mcp`, so an AI tool such as Claude Code can list your bots, read logs, and build and test flows for you. An app made with `npm create mushin` has a `.mcp.json` that does the wiring: open the AI tool in the app folder while Mushin.js runs, and it starts `mushin mcp`, which forwards to the running instance with the admin token from `.env`. Nothing secret is written into `.mcp.json`. For a tool that speaks Streamable HTTP and doesn't read `.mcp.json`, point it at `http://127.0.0.1:5160/mcp` with the header `Authorization: Bearer <admin token>`.
+
+The MCP tools follow the Agent's tool policy (the **Tool policy** tab of the dashboard's Agent page). Tools turned off are not offered. Dangerous tools, and any you set to ask first, run only after you approve them in an open dashboard. Only a short list of common tools is listed directly, to keep the model's tool list small. The rest are found with `search_tools` and run with `call_tool`. The **Console** plugin's settings choose which tools are listed, list them all, or turn the MCP server off.
 
 ### Try it without QQ or an API key
 
@@ -265,7 +272,7 @@ A pull request that changes what users get adds a changeset (`pnpm changeset`). 
 | `@mushinjs/plugin-adapter-onebot` | OneBot v11 adapter |
 | `@mushinjs/plugin-agent` | The Agent's tool loop, skills, page profiles, tool policy and token budget |
 | `@mushinjs/plugin-mcp` | MCP client (stdio and Streamable HTTP); each MCP tool becomes an action |
-| `@mushinjs/plugin-console` | HTTP API, WebSocket, admin token, dashboard hosting |
+| `@mushinjs/plugin-console` | HTTP API, WebSocket, admin token, dashboard hosting, and the MCP server at `/mcp` |
 | `@mushinjs/plugin-flows` | Flow documents, node types, validation and the execution engine |
 | `@mushinjs/plugin-terminal` | Flow nodes that run commands locally or over SSH (opt-in) |
 | `@mushinjs/plugin-stats` | Hourly counts of messages, commands, flow runs and model usage (kept hourly for 30 days, daily for a year, in `data/plugins/stats/`) and process samples for the overview |
