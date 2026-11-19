@@ -422,6 +422,20 @@ export class Bot extends Service {
       timestamp: message.timestamp ?? Date.now(),
       source: options.source ?? { kind: 'user' },
     })
+    // Everything logged or spent while handling the message is tied to its record id.
+    const outer = this.hooks.usageScope?.(this, record)
+    const scope: UsageScope = {
+      botId: this.id,
+      messageId: record.id,
+      report: (event) => {
+        outer?.report(event)
+        this.logUsage(event)
+      },
+    }
+    return usage.run(scope, () => this.handle(record, started))
+  }
+
+  private async handle(record: MessageRecord, started: number) {
     this.ctx.logger('message').info('received from %s%s: %s', who(record.user), record.channel.type === 'group' ? ` in ${chat(record.channel)}` : '', preview(record.segments))
     const session = new Session(this, record)
     const entry = session.command?.entry
@@ -466,16 +480,7 @@ export class Bot extends Service {
         this.ctx.logger('bot').warn('middleware of %s failed: %s', entry.plugin, error)
       }
     }
-    const outer = this.hooks.usageScope?.(this, record)
-    const scope: UsageScope = {
-      botId: this.id,
-      messageId: record.id,
-      report: (event) => {
-        outer?.report(event)
-        this.logUsage(event)
-      },
-    }
-    await usage.run(scope, () => run(0))
+    await run(0)
     this.ctx.logger('bot').info('processed in %s%s', duration(Date.now() - started), stoppedAt ? `; ${stoppedAt} kept it from the plugins after it` : '')
     return session
   }
