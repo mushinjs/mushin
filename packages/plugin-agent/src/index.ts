@@ -146,6 +146,25 @@ class StepLimit extends Error {
 /** After this many failures of one tool in a turn, its errors ask the model to change course. */
 const FAILURE_HINT_AFTER = 3
 
+/** The most tools a request may carry: OpenAI refuses more than 128. */
+export const MAX_TOOLS = 128
+export const SEARCH_TOOL = 'search_tools'
+export const CALL_TOOL = 'call_tool'
+
+/** Namespaces the system prompt names; they are listed first when not every tool fits. */
+const CORE_NAMESPACES = ['ui', 'system', 'logs', 'commands', 'bots', 'flows', 'providers', 'plugins']
+
+/**
+ * Listing order when tools must be cut: the core namespaces and the tools of MCP servers the user connected
+ * on purpose, then the other built-in tools.
+ */
+function toolTier(action: ActionInfo) {
+  const namespace = action.name.split('.')[0]!
+  if (CORE_NAMESPACES.includes(namespace)) return 0
+  if (namespace === 'mcp' && !/^mcp\.(servers|tools)\./.test(action.name)) return 0
+  return 1
+}
+
 /** Runs conversations in which the LLM operates Mushin.js through the action registry. */
 export class Agent extends Service {
   static inject = ['actions', 'llm', 'storage']
@@ -168,16 +187,66 @@ export class Agent extends Service {
     }
   }
 
-  /** Tools offered to the model: every action except the Agent's own and those turned off. */
-  async tools(): Promise<ToolDefinition[]> {
+  /** The actions the model may use: every one except the Agent's own and those turned off, core ones first. */
+  private async allowedActions() {
     const settings = await this.settings()
     return this.home.actions.list()
       .filter((action) => action.agent && !action.name.startsWith('agent.') && this.policyOf(settings, action) !== 'off')
-      .map((action) => ({
-        name: toToolName(action.name),
-        description: describeTool(action),
-        parameters: action.inputSchema,
-      }))
+      .map((action, index) => ({ action, index }))
+      .sort((a, b) => toolTier(a.action) - toolTier(b.action) || a.index - b.index)
+      .map(({ action }) => action)
+  }
+
+  /**
+   * Tools offered to the model. When there are more than a request may carry, the first ones are listed and
+   * the rest are reached through search_tools and call_tool.
+   */
+  async tools(): Promise<ToolDefinition[]> {
+    const actions = await this.allowedActions()
+    const describe = (action: ActionInfo) => ({ name: toToolName(action.name), description: describeTool(action), parameters: action.inputSchema })
+    if (actions.length <= MAX_TOOLS) return actions.map(describe)
+    return [
+      ...actions.slice(0, MAX_TOOLS - 2).map(describe),
+      {
+        name: SEARCH_TOOL,
+        description: `Find tools that are not listed here (${actions.length - MAX_TOOLS + 2} more, such as knowledge bases, personas and permissions) by words of what they do. Returns each tool's name, description and input schema; run one with ${CALL_TOOL}.`,
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Words to look for in tool names and descriptions' },
+            limit: { type: 'integer', minimum: 1, maximum: 20, description: 'Most results (default 8)' },
+          },
+          required: ['query'],
+        },
+      },
+      {
+        name: CALL_TOOL,
+        description: `Run a tool found with ${SEARCH_TOOL}, by its name and its input.`,
+        parameters: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Tool name, e.g. kb__search' },
+            input: { type: 'object', description: 'The tool\'s input, matching its schema', additionalProperties: true },
+          },
+          required: ['name'],
+        },
+      },
+    ]
+  }
+
+  /** Allowed tools matching some words, with their schemas, for search_tools. */
+  async searchTools(query: string, limit = 8) {
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean)
+    return (await this.allowedActions())
+      .map((action) => {
+        const name = action.name.toLowerCase()
+        const text = `${name} ${action.plugin} ${action.description}`.toLowerCase()
+        return { action, score: words.reduce((sum, word) => sum + (name.includes(word) ? 3 : 0) + (text.includes(word) ? 1 : 0), 0) }
+      })
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, Math.min(Math.max(limit, 1), 20))
+      .map(({ action }) => ({ name: toToolName(action.name), description: describeTool(action), inputSchema: action.inputSchema }))
   }
 
   // ---- settings ----
@@ -559,28 +628,41 @@ export class Agent extends Service {
   }
 
   private async runTool(session: AgentSession, running: Running, call: ToolCall, options: SendOptions) {
-    const name = fromToolName(call.name)
-    const info = this.home.actions.get(name)
     const reply = (content: string, isError = false) => {
       session.messages.push({ role: 'tool', toolCallId: call.id, content, ...(isError ? { isError } : {}), at: Date.now() })
     }
 
-    let input: unknown
+    let input: any
     try {
       input = JSON.parse(call.arguments || '{}')
     } catch {
       this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: false, error: 'Arguments are not valid JSON' })
       return reply('The arguments were not valid JSON. Send a JSON object that matches the tool schema.', true)
     }
+
+    if (call.name === SEARCH_TOOL) {
+      const found = await this.searchTools(String(input?.query ?? ''), Number(input?.limit) || 8)
+      this.emit({ session: session.id, type: 'tool-call', id: call.id, action: SEARCH_TOOL, input, risk: 'read' })
+      this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: true, result: { tools: found.map((tool) => tool.name) } })
+      return reply(truncate(JSON.stringify(found.length ? { tools: found } : { tools: [], hint: 'Nothing matched; try other words.' })))
+    }
+    // A tool reached through call_tool runs exactly like a listed one, with the same policy.
+    let toolName = call.name
+    if (call.name === CALL_TOOL) {
+      toolName = typeof input?.name === 'string' ? input.name : ''
+      input = input?.input ?? {}
+    }
+    const name = toolName.includes('.') ? toolName : fromToolName(toolName)
+    const info = this.home.actions.get(name)
     if (!info || !info.agent) {
-      this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: false, error: `Unknown tool ${call.name}` })
-      return reply(`The tool ${call.name} is not available right now.`, true)
+      this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: false, error: `Unknown tool ${toolName}` })
+      return reply(`The tool ${toolName} is not available right now.`, true)
     }
 
     const policy = this.policyOf(await this.settings(), info)
     if (policy === 'off') {
       this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: false, error: 'Turned off in the Agent settings' })
-      return reply(`The user turned ${call.name} off for the Agent. Do not use it; tell them if it is needed.`, true)
+      return reply(`The user turned ${toolName} off for the Agent. Do not use it; tell them if it is needed.`, true)
     }
 
     this.emit({ session: session.id, type: 'tool-call', id: call.id, action: name, input, risk: info.risk })
@@ -604,7 +686,7 @@ export class Agent extends Service {
       const failures = (running.failures.get(name) ?? 0) + 1
       running.failures.set(name, failures)
       const hint = failures >= FAILURE_HINT_AFTER
-        ? `\n${call.name} has failed ${failures} times in this reply. Stop retrying it with guessed inputs: take valid values from the error above or from the tool that lists them, or tell the user what is missing.`
+        ? `\n${toolName} has failed ${failures} times in this reply. Stop retrying it with guessed inputs: take valid values from the error above or from the tool that lists them, or tell the user what is missing.`
         : ''
       reply(`Error: ${message}${hint}`, true)
     }

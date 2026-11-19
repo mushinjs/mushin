@@ -112,6 +112,17 @@ const TEST_DECISION = {
  * Owns provider records and exposes one `chat` entry point.
  * Provider types (OpenAI-compatible, Anthropic, ...) are registered by other plugins.
  */
+/**
+ * Names of models that do not answer chat requests with tools, or that a service keeps only as an alias for its
+ * own app: embeddings, speech, images, moderation, completion-only models, `…-chat-latest` and the like.
+ */
+const NOT_FOR_CHAT = /embed|rerank|tts|whisper|transcri|speech|audio|realtime|dall-e|image|sora|moderation|omni-moderation|search|instruct|babbage|davinci|computer-use|chat-latest|codex|deep-research|ocr/i
+
+/** A model list with the models that look usable for chat first, each part in its own order; the default is the first. */
+export function chatModelsFirst(models: string[]) {
+  return [...models.filter((model) => !NOT_FOR_CHAT.test(model)), ...models.filter((model) => NOT_FOR_CHAT.test(model))]
+}
+
 export class LlmService extends Service {
   static inject = ['storage', 'actions']
 
@@ -265,7 +276,7 @@ export class LlmService extends Service {
       type: input.type,
       config: (await this.secureConfig(type, { id, name: input.name }, this.validateConfig(type, input.config))).config,
       models: input.models ?? [],
-      defaultModel: input.defaultModel || input.models?.[0],
+      defaultModel: input.defaultModel || chatModelsFirst(input.models ?? [])[0],
       createdAt: Date.now(),
     }
     // The first chat provider becomes the default; a decision-only one never takes it on its own.
@@ -634,7 +645,7 @@ export class LlmService extends Service {
       throw new MushinError('invalid_input', 'Pass a provider id, or a type with its config')
     }
     if (!client.listModels) throw new MushinError('unavailable', 'This provider type cannot list models')
-    return client.listModels(AbortSignal.timeout(15_000))
+    return chatModelsFirst(await client.listModels(AbortSignal.timeout(15_000)))
   }
 
   private *defineActions() {
@@ -755,7 +766,7 @@ export class LlmService extends Service {
 
     yield actions.define({
       name: 'providers.models',
-      description: 'Fetch the live model list from a saved provider, or from an unsaved type and config.',
+      description: 'Fetch the live model list from a saved provider, or from an unsaved type and config. Models that look usable for chat come first.',
       risk: 'read',
       input: z.object({
         provider: z.string().optional(),
