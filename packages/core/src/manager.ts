@@ -1,3 +1,4 @@
+import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Context, type Fiber, type Plugin, Service } from 'cordis'
 import { z } from 'zod'
@@ -7,9 +8,9 @@ import {
   injectedServices,
 } from './dependencies'
 import { MushinError } from './errors'
-import { resolveEnvReferences } from './env'
+import { EnvFile, envReference, resolveEnvReferences } from './env'
 import { type CatalogEntry, manifestProblems, MUSHIN_VERSION, type PluginManifest, readPackageJson, resolvePackageEntry, scanCatalog } from './manifest'
-import { writeJsonAtomic } from './utils'
+import { isMasked, mask, writeJsonAtomic } from './utils'
 
 declare module 'cordis' {
   interface Context {
@@ -85,6 +86,32 @@ export function pluginSchema(plugin: Plugin): JsonSchema | undefined {
   if (config && typeof config === 'object' && '_zod' in config) return toJsonSchema(config)
 }
 
+/** The top-level config fields a plugin marks as secret, with `field(…, { secret: true })`. */
+export function secretFields(plugin: Plugin): string[] {
+  const properties: Record<string, JsonSchema> = pluginSchema(plugin)?.properties ?? {}
+  return Object.keys(properties).filter((key) => properties[key]?.['x-secret'] === true)
+}
+
+/** A config with the plain values of `keys` masked, for lists. `${NAME}` references show where the value is. */
+export function maskSecrets<T extends Record<string, any>>(config: T, keys: string[]): T {
+  if (!keys.length) return config
+  const next: Record<string, any> = { ...config }
+  for (const key of keys) {
+    if (typeof next[key] === 'string' && next[key] && envReference(next[key]) === undefined) next[key] = mask(next[key])
+  }
+  return next as T
+}
+
+/** A config sent back from a form: masked values keep what was saved before. */
+export function restoreMasked<T extends Record<string, any>>(config: T, previous: Record<string, any> | undefined, keys: string[]): T {
+  if (!keys.length) return config
+  const next: Record<string, any> = { ...config }
+  for (const key of keys) {
+    if (isMasked(next[key])) next[key] = previous?.[key]
+  }
+  return next as T
+}
+
 export function validatePluginConfig(plugin: Plugin, config: unknown) {
   const schema = (plugin as any).Config
   if (!schema || typeof schema !== 'object' || !('_zod' in schema)) return config
@@ -129,6 +156,20 @@ export class PluginManager extends Service {
   constructor(ctx: Context, public options: ManagerOptions) {
     super(ctx, 'manager')
     this.home = ctx
+  }
+
+  private envFile?: EnvFile
+
+  /** The instance's `.env`, where secret config fields are kept. */
+  private get env() {
+    return this.envFile ??= new EnvFile(join(dirname(this.options.configPath), '.env')).loadSync()
+  }
+
+  /** Moves the plain values of an entry's secret fields into `.env`, leaving `${NAME}` references. */
+  private async secure(entry: PluginEntry, plugin: Plugin, config: Record<string, any>, previous?: Record<string, any>) {
+    const keys = secretFields(plugin)
+    if (!keys.length) return config
+    return (await this.env.moveIn(config, { keys, name: [entry.id], previous })).config
   }
 
   /** Plugin lifecycle lines, tagged `plugin` in the dashboard. */
@@ -294,6 +335,15 @@ export class PluginManager extends Service {
     }
     this.blocked.delete(entry.id)
     const plugin = await this.loadPlugin(entry.package)
+    // A key typed into mushin.config.json by hand moves to .env on the next start.
+    if (entry.config) {
+      const secured = await this.secure(entry, plugin, entry.config, entry.config)
+      if (secured !== entry.config && JSON.stringify(secured) !== JSON.stringify(entry.config)) {
+        entry.config = secured
+        await this.save()
+        this.logger.info('moved the secret settings of %s to .env', entry.id)
+      }
+    }
     for (const { service, provider } of undeclaredServices(this.graphNow(), entry.package, plugin)) {
       const local = this.catalogList.find((item) => item.package === entry.package)?.local
       // Mostly useful to plugin authors, whose plugins are usually local while they work on them.
@@ -405,11 +455,12 @@ export class PluginManager extends Service {
     }
   }
 
-  async configure(id: string, config: Record<string, any>) {
+  async configure(id: string, input: Record<string, any>) {
     const entry = this.require(id)
     const plugin = await this.loadPlugin(entry.package)
+    const config = restoreMasked(input, entry.config, secretFields(plugin))
     validatePluginConfig(plugin, config)
-    entry.config = config
+    entry.config = await this.secure(entry, plugin, config, entry.config)
     await this.save()
     this.logger.info('config of %s changed', id)
     if (entry.enabled !== false) await this.start(entry)
@@ -434,15 +485,18 @@ export class PluginManager extends Service {
   async describe(entry: PluginEntry) {
     const catalog = await this.findPackage(entry.package)
     let configSchema: JsonSchema | undefined
+    let secrets: string[] = []
     try {
-      configSchema = pluginSchema(await this.loadPlugin(entry.package))
+      const plugin = await this.loadPlugin(entry.package)
+      configSchema = pluginSchema(plugin)
+      secrets = secretFields(plugin)
     } catch {}
     const report = dependencyReport(this.graphNow(), entry.package)
     return {
       id: entry.id,
       package: entry.package,
       enabled: entry.enabled !== false,
-      config: entry.config ?? {},
+      config: maskSecrets(entry.config ?? {}, secrets),
       configSchema,
       manifest: catalog?.manifest ?? knownManifests[entry.package],
       version: catalog?.version,

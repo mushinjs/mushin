@@ -41,7 +41,15 @@ Run `npx mushin new plugin <name>` in the app folder (lowercase letters, digits 
 - Ids come with choices so the form offers a list: `field('Group', undefined, {}, { choices: 'bots.groupChoices' })`.
 - Read the settings with `Config.parse(raw ?? {})` at the start of `apply`.
 
-**Secrets.** An API key or token is never a default value, never in the code and never in `mushin.config.json` as plain text. The field holds a reference such as `${WEATHER_API_KEY}`; Mushin.js replaces it with the value from `.env` before `apply` runs. Tell the user to add `WEATHER_API_KEY=...` to `.env` themselves. Never read, print or copy `.env`.
+**Secrets.** An API key or token is a field marked secret, never a default value and never in the code:
+
+```ts
+apiKey: z.string().default('').meta(field('API key', 'Key of the weather service', {
+  'zh-CN': { title: 'API 密钥', description: '天气服务的密钥' },
+}, { secret: true })),
+```
+
+When the user types the key into the plugin's form on the dashboard's Plugins page, Mushin.js puts it into `.env` and the config keeps a reference such as `${WEATHER_API_KEY}`; lists show it masked, and `apply` gets the real value. Ask the user to enter the key there (or to add `NAME=value` to `.env` and write `${NAME}` in the setting). Never ask them to paste a key into the chat, and never read, print or copy `.env`. Check in `apply` that the key is set, and log a warning that names the setting when it is empty.
 
 **Services.** List what the plugin uses in `inject`; it starts once they are all there.
 
