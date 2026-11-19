@@ -23,11 +23,12 @@ Get from the user, or from the records, the exact case: which bot, which chat (g
 
 For a message that should have started a flow or command:
 
-1. `call_tool` with `flows.history` and `{ "bot": "<id>", "message": "<record id>" }` lists the runs that message started. No run means no trigger took it.
-2. `call_tool` with `flows.route` and the same text (and `groupId` or `private` as in the real chat) shows, without sending anything, which triggers it reaches in order, which one keeps it, and which built-in commands and bot plugins still see it after. This is where you see a message caught by an earlier trigger.
-3. `call_tool` with `flows.triggers` and the bot id lists every trigger in the order messages reach them, and which earlier trigger blocks each one. `flows.setTriggerOrder` changes the order, if the user agrees.
-4. For a command, `call_tool` with `commands.list` shows who registered the name (a flow, a bot plugin, the built-in help) and names that two sources register on the same bot. `bots.tryCommand` shows how the text is read against a command's prefixes and arguments.
-5. Permissions: `call_tool` with `permissions.check` tells whether that user passes a role check on the bot, and why not.
+1. `bots__logs` with `{ "id": "<bot id>", "message": "<record id>" }` gives only the lines written while that message was handled: when it arrived, what each plugin and flow said about it, and which plugin kept it from the ones after it (the `processed in …` line). Narrow other searches with `query` (text), `level` (`warn` for problems only), and `since` and `until` (ISO times) for older days.
+2. `call_tool` with `flows.history` and `{ "bot": "<id>", "message": "<record id>" }` lists the runs that message started. No run means no trigger took it.
+3. `call_tool` with `flows.route` and the same text (and `groupId` or `private` as in the real chat) shows, without sending anything, which triggers it reaches in order, which one keeps it, and which built-in commands and bot plugins still see it after. This is where you see a message caught by an earlier trigger.
+4. `call_tool` with `flows.triggers` and the bot id lists every trigger in the order messages reach them, and which earlier trigger blocks each one. `flows.setTriggerOrder` changes the order, if the user agrees.
+5. For a command, `call_tool` with `commands.list` shows who registered the name (a flow, a bot plugin, the built-in help) and names that two sources register on the same bot. `bots.tryCommand` shows how the text is read against a command's prefixes and arguments.
+6. Permissions: `call_tool` with `permissions.check` tells whether that user passes a role check on the bot, and why not.
 
 Also check the flow itself: `flows__get` shows whether it is enabled and which bots run it. A flow that is not on the bot never fires there.
 
