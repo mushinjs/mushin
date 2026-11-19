@@ -199,9 +199,10 @@ export class OpenAIClient implements ProviderClient {
   }
 
   async listModels(signal?: AbortSignal) {
-    const models: string[] = []
-    for await (const model of this.sdk.models.list({ signal })) models.push(model.id)
-    return models.sort()
+    const models: { id: string; created?: number }[] = []
+    for await (const model of this.sdk.models.list({ signal })) models.push({ id: model.id, created: (model as { created?: number }).created })
+    // Newest first, by release time where the service gives one; compatible services that leave it out keep name order.
+    return models.sort((a, b) => (b.created ?? 0) - (a.created ?? 0) || a.id.localeCompare(b.id)).map((model) => model.id)
   }
 }
 

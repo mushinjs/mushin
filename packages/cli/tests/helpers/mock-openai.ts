@@ -23,6 +23,7 @@ export async function createMockOpenAI() {
   const queue: MockReply[] = []
   let fallback: MockReply = { text: 'Hi from LLM' }
   let counter = 0
+  let models: { id: string; created: number }[] = [{ id: 'mock-model', created: 0 }]
 
   const readBody = (req: IncomingMessage) => new Promise<string>((resolve) => {
     let data = ''
@@ -39,7 +40,7 @@ export async function createMockOpenAI() {
     }
     if (req.method === 'GET' && req.url === '/v1/models') {
       res.setHeader('content-type', 'application/json')
-      res.end(JSON.stringify({ object: 'list', data: [{ id: 'mock-model', object: 'model', created: 0, owned_by: 'mock' }] }))
+      res.end(JSON.stringify({ object: 'list', data: models.map((model) => ({ ...model, object: 'model', owned_by: 'mock' })) }))
       return
     }
     if (req.method === 'POST' && req.url === '/v1/embeddings') {
@@ -113,6 +114,8 @@ export async function createMockOpenAI() {
     /** Queues replies for the next requests, in order. */
     enqueue: (...replies: MockReply[]) => queue.push(...replies),
     setFallback: (reply: MockReply) => (fallback = reply),
+    /** What GET /models lists. */
+    setModels: (list: { id: string; created: number }[]) => (models = list),
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   }
 }

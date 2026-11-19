@@ -116,7 +116,7 @@ const TEST_DECISION = {
  * Names of models that do not answer chat requests with tools, or that a service keeps only as an alias for its
  * own app: embeddings, speech, images, moderation, completion-only models, `…-chat-latest` and the like.
  */
-const NOT_FOR_CHAT = /embed|rerank|tts|whisper|transcri|speech|audio|realtime|dall-e|image|sora|moderation|omni-moderation|search|instruct|babbage|davinci|computer-use|chat-latest|codex|deep-research|ocr/i
+const NOT_FOR_CHAT = /embed|rerank|tts|whisper|transcri|speech|audio|realtime|dall-e|image|sora|moderation|omni-moderation|search|instruct|babbage|davinci|computer-use|chat-latest|^chatgpt-|codex|deep-research|ocr/i
 
 /** A model list with the models that look usable for chat first, each part in its own order; the default is the first. */
 export function chatModelsFirst(models: string[]) {

@@ -53,6 +53,18 @@ describe('agent tools', () => {
     expect(calls).toEqual([7])
   })
 
+  it('lists fetched models newest first, chat models before the rest', async () => {
+    llm.setModels([
+      { id: 'chatgpt-4o-latest', created: 300 },
+      { id: 'gpt-old', created: 100 },
+      { id: 'gpt-new', created: 500 },
+      { id: 'text-embedding-3-large', created: 600 },
+    ])
+    const providerId = (await app.call<any>('providers.list')).providers[0].id
+    expect(await app.call('providers.models', { provider: providerId })).toEqual(['gpt-new', 'gpt-old', 'text-embedding-3-large', 'chatgpt-4o-latest'])
+    llm.setModels([{ id: 'mock-model', created: 0 }])
+  })
+
   it('puts models that answer chat first, so the default is one of them', () => {
     expect(chatModelsFirst(['gpt-5-chat-latest', 'text-embedding-3-small', 'gpt-5.1', 'whisper-1', 'gpt-5-mini'])).toEqual(['gpt-5.1', 'gpt-5-mini', 'gpt-5-chat-latest', 'text-embedding-3-small', 'whisper-1'])
   })
