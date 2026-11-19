@@ -555,6 +555,8 @@ export class Agent extends Service {
       if (at < 0) throw new MushinError('not_found', `This conversation has no user message ${options.rewind}`)
       session.messages = session.messages.slice(0, at)
     }
+    // A conversation saved by an older version can hold more tools than a request may carry.
+    if (session.tools.length > MAX_TOOLS) session.tools = await this.tools()
     const running: Running = { abort: new AbortController(), confirms: new Map(), usage: { inputTokens: 0, outputTokens: 0 }, failures: new Map() }
     this.running.set(session.id, running)
     const skills = options.skills?.length ? await Promise.all(options.skills.map((id) => this.skill(id))) : []
