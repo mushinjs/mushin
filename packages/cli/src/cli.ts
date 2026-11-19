@@ -1,9 +1,11 @@
 import { existsSync } from 'node:fs'
+import { writeFile } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { type InstanceConfig, readJson } from '@mushinjs/core'
 import { resetAdminToken, type SignInInfo } from '@mushinjs/plugin-console'
 import { LAYOUT_VERSION, migrateLayout } from '@mushinjs/plugin-storage'
+import { mcpConfig, runBridge } from './mcp'
 import { appPackageManager, appPackages, CLI_VERSION, newPlugin, run, upgradeCommand, upgradeTag } from './scaffold'
 import { instanceDirs, start } from './start'
 import { testCommand } from './test'
@@ -18,6 +20,7 @@ Commands:
   new plugin <name>
                   Create a TypeScript plugin in plugins/<name> and turn it on
   upgrade         Update the @mushinjs packages of this app, then migrate its data; stop Mushin.js first
+  mcp             An MCP server over stdio for the AI tool in this folder; it forwards to the running Mushin.js
 
 Options:
   -d, --dir <path>   Instance directory (default: the current directory, or ./instance if it holds one)
@@ -159,6 +162,8 @@ if (values.help) {
     console.error((error as Error).message)
     process.exit(1)
   }
+} else if (command === 'mcp') {
+  await runBridge({ baseDir, port: values.port ? Number(values.port) : undefined })
 } else if (command === 'upgrade') {
   const packages = await appPackages(baseDir)
   if (!packages?.length) {
@@ -174,6 +179,11 @@ if (values.help) {
     const bin = join(baseDir, 'node_modules', '@mushinjs', 'cli', 'bin', 'mushin.js')
     if (existsSync(join(baseDir, CONFIG)) && existsSync(bin)) await run(process.execPath, [bin, 'migrate', '--dir', baseDir], baseDir)
     const after = await readJson<{ version: string }>(join(baseDir, 'node_modules', '@mushinjs', 'cli', 'package.json'))
+    // Apps made before the MCP server get the file that connects their AI tool to it.
+    if (!existsSync(join(baseDir, '.mcp.json'))) {
+      await writeFile(join(baseDir, '.mcp.json'), JSON.stringify(mcpConfig(), null, 2) + '\n')
+      console.log('Added .mcp.json, which connects the AI tool you open in this folder to Mushin.js.')
+    }
     console.log(`Mushin.js is now ${after?.version ?? 'updated'}. Start it with "${appPackageManager(baseDir)} start".`)
   } catch (error) {
     console.error((error as Error).message)

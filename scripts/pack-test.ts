@@ -188,7 +188,26 @@ registerHooks({
       return list.every((entry) => entry.status === 'active' || entry.status === 'disabled') ? list : undefined
     }, 'every plugin to become active')
 
-    return { base, entries, call, output: () => output }
+    return { base, port, entries, call, output: () => output }
+  }
+
+  /** Runs an MCP stdio server, sends it `messages`, and returns what it answered once stdin closes. */
+  function mcpSession(command: string, args: string[], cwd: string, messages: unknown[]) {
+    return new Promise<any[]>((resolve, reject) => {
+      const bridge = spawn(command, args, { cwd, env: { ...process.env, MUSHIN_ADMIN_TOKEN: TOKEN }, stdio: ['pipe', 'pipe', 'inherit'] })
+      let out = ''
+      bridge.stdout!.on('data', (chunk) => out += chunk)
+      bridge.once('error', reject)
+      bridge.once('exit', () => {
+        try {
+          resolve(out.split('\n').filter((line) => line.trim()).map((line) => JSON.parse(line)))
+        } catch (error) {
+          reject(new Error(`mushin mcp wrote something that is not JSON: ${out}`))
+        }
+      })
+      for (const message of messages) bridge.stdin!.write(JSON.stringify(message) + '\n')
+      bridge.stdin!.end()
+    })
   }
 
   async function stopMushin() {
@@ -283,11 +302,21 @@ export function apply(ctx: Context): void {
     await run(process.execPath, [appBin, 'new', 'plugin', 'demo-tool'], dir)
     await run(pm, ['run', 'typecheck'], dir)
     console.log('  mushin new plugin demo-tool passes the typecheck')
-    const { entries, call } = await startMushin(dir, appBin)
+    const { entries, call, port } = await startMushin(dir, appBin)
     if (entries.find((item) => item.package === 'mushin-plugin-demo-tool')?.status !== 'active') fail(`the new plugin did not start with ${pm}`)
     const reply = await call<{ text: string }>('demoTool.hello', { name: pm })
     if (reply.text !== `Hello, ${pm}!`) fail(`demoTool.hello answered ${JSON.stringify(reply)}`)
-    for (const path of ['mushin.config.json', 'data/mushin.db', 'data/layout.json', 'AGENTS.md', '.gitignore']) {
+    // The AI tool's way in: the command in .mcp.json, run from the app folder.
+    const mcp = JSON.parse(await readFile(join(dir, '.mcp.json'), 'utf8')).mcpServers.mushin
+    const answers = await mcpSession(mcp.command === 'node' ? process.execPath : mcp.command, [...mcp.args, '--port', String(port)], dir, [
+      { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'pack-test', version: '1' } } },
+      { jsonrpc: '2.0', method: 'notifications/initialized' },
+      { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'call_tool', arguments: { name: 'demoTool.hello', input: { name: 'MCP' } } } },
+    ])
+    const hello = answers.find((answer) => answer.id === 2)?.result?.content?.[0]?.text ?? ''
+    if (!hello.includes('Hello, MCP!')) fail(`the MCP bridge answered ${JSON.stringify(answers)}`)
+    console.log('  the AI tool reaches the plugin through .mcp.json and mushin mcp')
+    for (const path of ['mushin.config.json', 'data/mushin.db', 'data/layout.json', 'AGENTS.md', '.gitignore', '.mcp.json']) {
       if (!existsSync(join(dir, path))) fail(`the ${pm} app has no ${path} after starting`)
     }
     console.log(`  the app starts, the plugin answers, and the folder matches the layout`)
