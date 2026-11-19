@@ -75,17 +75,43 @@ async function saveEdit() {
 // ---- model and effort for the next messages ----
 
 const showPicker = ref(false)
-const pickerProvider = computed(() => data.providers.find((item) => item.id === agent.choice.provider))
+const modelQuery = ref('')
 const pickerLabel = computed(() => {
   const model = agent.choice.model
-    || (agent.choice.provider ? pickerProvider.value?.defaultModel ?? data.profiles.find((item) => item.id === agent.choice.provider)?.name : undefined)
+    || (agent.choice.provider ? data.providers.find((item) => item.id === agent.choice.provider)?.defaultModel ?? data.profiles.find((item) => item.id === agent.choice.provider)?.name : undefined)
     || t('agentPicker.default')
   return agent.choice.effort ? `${model} · ${t(`agentPicker.efforts.${agent.choice.effort}`)}` : model
 })
 
-function setProvider(value: string | null) {
-  agent.choice = { ...agent.choice, provider: value ?? undefined, model: undefined }
+/** Chat providers with their models, newest first as fetched, filtered by the search words. */
+const modelGroups = computed(() => {
+  const query = modelQuery.value.trim().toLowerCase()
+  return data.providers
+    .filter((provider) => provider.capabilities?.includes('chat') ?? true)
+    .map((provider) => ({
+      id: provider.id,
+      name: provider.name,
+      models: (provider.models.length ? provider.models : provider.defaultModel ? [provider.defaultModel] : [])
+        .filter((model) => !query || model.toLowerCase().includes(query) || provider.name.toLowerCase().includes(query)),
+    }))
+    .filter((group) => group.models.length)
+})
+const modelCount = computed(() => data.providers.reduce((sum, provider) => sum + provider.models.length, 0))
+
+/** 0 is the default effort, then one step per level. */
+const effortStep = computed(() => (agent.choice.effort ? EFFORTS.indexOf(agent.choice.effort) + 1 : 0))
+function setEffortStep(step: number) {
+  agent.choice = { ...agent.choice, effort: step ? EFFORTS[step - 1] : undefined }
 }
+
+function pickModel(provider?: string, model?: string) {
+  agent.choice = { ...agent.choice, provider, model }
+  showPicker.value = false
+}
+
+watch(showPicker, (open) => {
+  if (!open) modelQuery.value = ''
+})
 
 const ALL = '__all__'
 const sessionOptions = computed<DropdownOption[]>(() => [
@@ -499,28 +525,58 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
           @keydown="onKeydown"
         />
         <div class="input-tools">
-          <Popover v-model:show="showPicker" trigger="click" placement="top">
+          <Popover v-model:show="showPicker" placement="top" align="end" :padded="false" :width="300">
             <template #trigger>
               <button type="button" class="picker-chip" :title="t('agentPicker.title')">
-                <span class="i-lucide-sparkles" />
                 <span class="picker-label">{{ pickerLabel }}</span>
-                <span class="i-lucide-chevron-down" />
+                <span class="i-lucide-chevron-down picker-caret" />
               </button>
             </template>
             <div class="picker">
-              <div class="picker-title">{{ t('agentPicker.model') }}</div>
-              <Select :value="agent.choice.provider ?? null" size="small" clearable :options="providerOptions" :placeholder="t('agentPicker.defaultProvider')" @update:value="setProvider" />
-              <ModelSelect
-                size="small"
-                :model-value="agent.choice.model"
-                :provider="agent.choice.provider"
-                :placeholder="t('agentPicker.defaultModel')"
-                @update:model-value="(value) => (agent.choice = { ...agent.choice, model: value ?? undefined })"
-              />
-              <div class="picker-title">{{ t('agentPicker.effort') }}</div>
-              <div class="efforts">
-                <button type="button" :class="{ active: !agent.choice.effort }" @click="agent.choice = { ...agent.choice, effort: undefined }">{{ t('agentPicker.efforts.default') }}</button>
-                <button v-for="level in EFFORTS" :key="level" type="button" :class="{ active: agent.choice.effort === level }" @click="agent.choice = { ...agent.choice, effort: level }">{{ t(`agentPicker.efforts.${level}`) }}</button>
+              <div class="picker-effort">
+                <div class="picker-row">
+                  <span class="picker-title">{{ t('agentPicker.effort') }}</span>
+                  <span class="picker-value">{{ t(`agentPicker.efforts.${agent.choice.effort ?? 'default'}`) }}</span>
+                </div>
+                <div class="effort-track" :style="{ '--fill': `${(effortStep / EFFORTS.length) * 100}%` }">
+                  <button
+                    v-for="step in EFFORTS.length + 1"
+                    :key="step"
+                    type="button"
+                    class="effort-stop"
+                    :class="{ on: step - 1 <= effortStep, current: step - 1 === effortStep }"
+                    :style="{ left: `${((step - 1) / EFFORTS.length) * 100}%` }"
+                    :aria-label="t(`agentPicker.efforts.${step === 1 ? 'default' : EFFORTS[step - 2]}`)"
+                    :title="t(`agentPicker.efforts.${step === 1 ? 'default' : EFFORTS[step - 2]}`)"
+                    @click="setEffortStep(step - 1)"
+                  />
+                </div>
+                <div class="effort-ends">
+                  <span>{{ t('agentPicker.efforts.default') }}</span>
+                  <span>{{ t('agentPicker.efforts.max') }}</span>
+                </div>
+              </div>
+              <div class="picker-models">
+                <input v-if="modelCount > 8" v-model="modelQuery" class="picker-search" :placeholder="t('agentPicker.search')">
+                <button type="button" class="model-item" :class="{ current: !agent.choice.provider && !agent.choice.model }" @click="pickModel()">
+                  <span class="model-name">{{ t('agentPicker.default') }}<small>{{ t('agentPicker.defaultHint') }}</small></span>
+                  <span v-if="!agent.choice.provider && !agent.choice.model" class="i-lucide-check" />
+                </button>
+                <template v-for="group in modelGroups" :key="group.id">
+                  <div class="model-group">{{ group.name }}</div>
+                  <button
+                    v-for="model in group.models"
+                    :key="model"
+                    type="button"
+                    class="model-item"
+                    :class="{ current: agent.choice.provider === group.id && agent.choice.model === model }"
+                    @click="pickModel(group.id, model)"
+                  >
+                    <span class="model-name">{{ model }}</span>
+                    <span v-if="agent.choice.provider === group.id && agent.choice.model === model" class="i-lucide-check" />
+                  </button>
+                </template>
+                <div v-if="!modelGroups.length && modelQuery" class="model-empty">{{ t('agentPicker.noMatch') }}</div>
               </div>
               <p class="picker-hint">{{ t('agentPicker.hint') }}</p>
             </div>
@@ -894,19 +950,21 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
 .picker-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   max-width: 100%;
-  padding: 2px 8px;
+  padding: 2px 6px;
   border: none;
-  border-radius: 999px;
-  background: rgba(127, 127, 127, 0.12);
-  color: inherit;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg3);
   font-size: 12px;
   cursor: pointer;
 }
 
-.picker-chip:hover {
-  background: rgba(127, 127, 127, 0.2);
+.picker-chip:hover,
+.picker-chip[data-state='open'] {
+  background: var(--s2);
+  color: var(--fg);
 }
 
 .picker-label {
@@ -915,44 +973,162 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
   white-space: nowrap;
 }
 
+.picker-caret {
+  flex: none;
+  font-size: 12px;
+}
+
 .picker {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  width: 280px;
+  font-size: 13px;
+}
+
+.picker-effort {
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.picker-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
 }
 
 .picker-title {
-  font-size: 12px;
-  opacity: 0.7;
+  color: var(--fg2);
 }
 
-.efforts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+.picker-value {
+  color: var(--fg);
+  font-weight: 500;
 }
 
-.efforts button {
-  padding: 3px 10px;
-  border: 1px solid rgba(127, 127, 127, 0.3);
-  border-radius: 999px;
-  background: transparent;
-  color: inherit;
-  font-size: 12px;
+.effort-track {
+  position: relative;
+  height: 4px;
+  margin: 0 7px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--primary) var(--fill), var(--line-strong) var(--fill));
+}
+
+.effort-stop {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 2px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--s1);
+  transform: translate(-50%, -50%);
   cursor: pointer;
 }
 
-.efforts button.active {
+.effort-stop::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+.effort-stop.on {
   border-color: var(--primary);
   background: var(--primary);
-  color: #fff;
+}
+
+.effort-stop.current {
+  width: 14px;
+  height: 14px;
+  background: var(--s1);
+}
+
+.effort-ends {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  color: var(--fg3);
+  font-size: 11px;
+}
+
+.picker-models {
+  display: flex;
+  flex-direction: column;
+  max-height: 280px;
+  padding: 6px;
+  overflow-y: auto;
+}
+
+.picker-search {
+  margin: 0 0 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  outline: none;
+}
+
+.picker-search:focus {
+  border-color: var(--primary);
+}
+
+.model-group {
+  padding: 8px 8px 4px;
+  color: var(--fg3);
+  font-size: 11px;
+}
+
+.model-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.model-item:hover {
+  background: var(--s2);
+}
+
+.model-item .i-lucide-check {
+  flex: none;
+  color: var(--primary);
+}
+
+.model-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-name small {
+  color: var(--fg3);
+  font-size: 11px;
+}
+
+.model-empty {
+  padding: 8px;
+  color: var(--fg3);
 }
 
 .picker-hint {
   margin: 0;
-  font-size: 12px;
-  opacity: 0.6;
+  padding: 8px 14px 10px;
+  border-top: 1px solid var(--line);
+  color: var(--fg3);
+  font-size: 11px;
 }
 
 .msg.user {
