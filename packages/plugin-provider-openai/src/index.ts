@@ -91,7 +91,25 @@ export interface OpenAIClientOptions {
 
 /** Chat, streaming, embeddings and model lists over any OpenAI SDK client, plain or Azure. */
 export class OpenAIClient implements ProviderClient {
+  /** Models that refused reasoning_effort together with tools; their tool requests leave the effort out. */
+  private noEffortWithTools = new Set<string>()
+
   constructor(private sdk: OpenAI, private options: OpenAIClientOptions = {}) {}
+
+  /**
+   * Some models refuse reasoning_effort in a Chat Completions request that carries tools. Such a request is sent
+   * again without it, and later ones for that model leave it out.
+   */
+  private async create<T>(request: ChatRequest, send: (params: ReturnType<OpenAIClient['params']>) => Promise<T>): Promise<T> {
+    const params = this.params(request)
+    try {
+      return await send(params)
+    } catch (error) {
+      if (!('reasoning_effort' in params) || !request.tools?.length || !(error instanceof OpenAI.APIError) || error.status !== 400 || !/reasoning_effort/.test(error.message)) throw error
+      this.noEffortWithTools.add(request.model)
+      return send(this.params(request))
+    }
+  }
 
   static fromConfig(config: ProviderConfig) {
     const sdk = new OpenAI({
@@ -132,7 +150,7 @@ export class OpenAIClient implements ProviderClient {
       } : {}),
       ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
       // OpenAI's highest level is xhigh; compatible services that do not reason ignore the field or reject it.
-      ...(request.effort ? { reasoning_effort: (request.effort === 'max' ? 'xhigh' : request.effort) as 'high' } : {}),
+      ...(request.effort && !(request.tools?.length && this.noEffortWithTools.has(request.model)) ? { reasoning_effort: (request.effort === 'max' ? 'xhigh' : request.effort) as 'high' } : {}),
       ...(request.maxTokens !== undefined
         ? this.options.completionTokens ? { max_completion_tokens: request.maxTokens } : { max_tokens: request.maxTokens }
         : {}),
@@ -140,10 +158,10 @@ export class OpenAIClient implements ProviderClient {
   }
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
-    const completion = await this.sdk.chat.completions.create(
-      { ...this.params(request), stream: false },
+    const completion = await this.create(request, (params) => this.sdk.chat.completions.create(
+      { ...params, stream: false },
       { signal: request.signal },
-    )
+    ))
     const choice = completion.choices[0]
     const toolCalls: ToolCall[] = (choice?.message.tool_calls ?? []).flatMap((call) => call.type === 'function'
       ? [{ id: call.id, name: call.function.name, arguments: call.function.arguments || '{}' }]
@@ -159,10 +177,10 @@ export class OpenAIClient implements ProviderClient {
   }
 
   async *stream(request: ChatRequest): AsyncIterable<StreamEvent> {
-    const stream = await this.sdk.chat.completions.create(
-      { ...this.params(request), stream: true, stream_options: { include_usage: true } },
+    const stream = await this.create(request, (params) => this.sdk.chat.completions.create(
+      { ...params, stream: true, stream_options: { include_usage: true } },
       { signal: request.signal },
-    )
+    ))
     let text = ''
     let finishReason: FinishReason | undefined
     let usage: ChatResponse['usage']
