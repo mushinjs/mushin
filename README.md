@@ -1,6 +1,6 @@
 # Mushin.js 無心
 
-An fairy-powered chatbot framework where everything is a plugin. Describe what you want, in plain words, and the built-in Fairy sets it up: providers, bots, plugins and pages in the dashboard.
+An AI-native chatbot framework where everything is a plugin. Describe what you want, in plain words, and the built-in Fairy sets it up: providers, bots, plugins and pages in the dashboard.
 
 Mushin.js is built on [Cordis](https://github.com/cordiverse/cordis). The MVP ships a OneBot v11 adapter for [NapCat](https://napneko.github.io/), so bots run on QQ.
 
