@@ -129,7 +129,7 @@ describe('bots over OneBot', () => {
     expect(incoming).toMatchObject({ type: 'text', source: { kind: 'user' }, user: { id: '42' } })
     expect(reply).toMatchObject({
       type: 'text',
-      platforms: ['onebot'],
+      platforms: expect.arrayContaining(['onebot', 'qq']),
       source: { kind: 'plugin', plugin: 'echo' },
       replyTo: incoming.id,
       channel: { type: 'group', id: '500' },
