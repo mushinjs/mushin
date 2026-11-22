@@ -338,6 +338,20 @@ export interface FairySessionSummary {
   tags: string[]
   /** From a search: the text around the match. */
   snippet?: string
+  /** Set on a helper's conversation: its role, and the conversation and call that started it. */
+  role?: string
+  parent?: { session: string; call: string }
+}
+
+/** What a helper reports to Fairy at the end of its task. */
+export interface FairyTaskReport {
+  task: string
+  role: string
+  status: 'done' | 'blocked' | 'failed'
+  summary: string
+  findings?: { title: string; detail?: string; where?: string; evidence?: string; fix?: string }[]
+  changes?: string[]
+  next?: string
 }
 
 /** The dashboard page, as Fairy is told about it. */
@@ -367,7 +381,8 @@ export interface FairyCommands {
   bots: { name: string; description?: string; usage?: string; permission?: string; bot: string; botName?: string; source: { kind: string; id: string; name: string } }[]
 }
 
-export type FairyEvent = { session: string } & (
+/** `parent` and `call` are set on a helper's events: the conversation and the fairy.delegate call that started it. */
+export type FairyEvent = { session: string; parent?: string; call?: string } & (
   | { type: 'start' }
   | { type: 'delta'; text: string }
   | { type: 'tool-call'; id: string; action: string; input: unknown; risk: Risk }

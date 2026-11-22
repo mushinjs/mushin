@@ -2,14 +2,37 @@
 import { Button, Spin, Tag } from '@mushinjs/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { ChatItem } from '../../stores/fairy'
+import { type ChatItem, DELEGATE } from '../../stores/fairy'
+import type { FairyTaskReport } from '../../types'
 import { pretty } from '../../utils'
 
-/** One tool call of a Fairy reply: what it called, how it went, and its input and output on demand. */
+/**
+ * One tool call of a Fairy reply: what it called, how it went, and its input and output on demand. A task
+ * handed to a helper shows as a card: the helper, the task, what it is doing, and its report.
+ */
 const props = defineProps<{ item: Extract<ChatItem, { kind: 'tool' }>; expanded: boolean }>()
-const emit = defineEmits<{ toggle: []; confirm: [approved: boolean] }>()
+const emit = defineEmits<{ toggle: []; confirm: [approved: boolean]; confirmTask: [approved: boolean]; openTask: [session: string] }>()
 
-const { t } = useI18n()
+const { t, te } = useI18n()
+
+const isTask = computed(() => props.item.action === DELEGATE)
+const input = computed(() => (props.item.input ?? {}) as { role?: string; task?: string })
+const roleName = computed(() => {
+  const role = input.value.role ?? ''
+  return te(`fairyTask.roles.${role}`) ? t(`fairyTask.roles.${role}`) : role
+})
+const report = computed(() => {
+  const result = props.item.result as Partial<FairyTaskReport> | undefined
+  return result && typeof result === 'object' && typeof result.summary === 'string' ? result as FairyTaskReport : undefined
+})
+const taskState = computed(() => {
+  if (props.item.task?.confirm) return 'confirm'
+  if (props.item.state === 'running' || props.item.state === 'confirm') return 'running'
+  if (report.value) return report.value.status
+  return 'failed'
+})
+/** The last few things the helper did, newest last. */
+const steps = computed(() => props.item.task?.steps.slice(-4) ?? [])
 
 /** The first line of a failure, shown under the row so nobody has to open it to see why. */
 const reason = computed(() => {
@@ -19,7 +42,59 @@ const reason = computed(() => {
 </script>
 
 <template>
-  <div class="tool" :class="item.state">
+  <div v-if="isTask" class="tool task" :class="taskState">
+    <button class="tool-row" type="button" @click="emit('toggle')">
+      <Spin v-if="taskState === 'running'" :size="14" />
+      <span v-else-if="taskState === 'done'" class="i-lucide-circle-check" color="var(--ok)" />
+      <span v-else-if="taskState === 'confirm' || taskState === 'blocked'" class="i-lucide-hand" color="var(--warn)" />
+      <span v-else class="i-lucide-circle-x" color="var(--bad)" />
+      <span class="task-role">{{ roleName }}</span>
+      <span class="tool-name task-text" :title="input.task">{{ input.task }}</span>
+      <span class="tool-state">{{ t(`fairyTask.status.${taskState}`) }}</span>
+    </button>
+    <ul v-if="taskState === 'running' && steps.length" class="task-steps">
+      <li v-for="step in steps" :key="step.id">
+        <Spin v-if="step.state === 'running'" :size="10" />
+        <span v-else-if="step.state === 'ok'" class="i-lucide-check" color="var(--ok)" />
+        <span v-else-if="step.state === 'confirm'" class="i-lucide-hand" color="var(--warn)" />
+        <span v-else class="i-lucide-x" color="var(--bad)" />
+        <span class="mono">{{ step.action }}</span>
+      </li>
+    </ul>
+    <div v-if="item.task?.confirm" class="confirm">
+      <p>{{ t('fairyTask.confirmText', { role: roleName, action: item.task.confirm.action }) }}</p>
+      <pre class="json mono">{{ pretty(item.task.confirm.input) }}</pre>
+      <div class="confirm-actions">
+        <Button size="small" type="error" @click="emit('confirmTask', true)">{{ t('fairy.approve') }}</Button>
+        <Button size="small" @click="emit('confirmTask', false)">{{ t('fairy.deny') }}</Button>
+      </div>
+    </div>
+    <div v-else-if="report && (expanded || taskState !== 'done')" class="task-report">
+      <p class="task-summary">{{ report.summary }}</p>
+      <template v-if="expanded">
+        <div v-if="report.findings?.length" class="label">{{ t('fairyTask.findings') }}</div>
+        <ul v-if="report.findings?.length" class="task-findings">
+          <li v-for="(finding, index) in report.findings" :key="index">
+            <strong>{{ finding.title }}</strong>
+            <span v-if="finding.where" class="mono task-where">{{ finding.where }}</span>
+            <div v-if="finding.detail">{{ finding.detail }}</div>
+            <pre v-if="finding.evidence" class="json mono">{{ finding.evidence }}</pre>
+            <div v-if="finding.fix" class="task-fix">{{ t('fairyTask.fix') }}{{ finding.fix }}</div>
+          </li>
+        </ul>
+        <div v-if="report.changes?.length" class="label">{{ t('fairyTask.changes') }}</div>
+        <ul v-if="report.changes?.length" class="task-findings">
+          <li v-for="(change, index) in report.changes" :key="index">{{ change }}</li>
+        </ul>
+      </template>
+      <p v-if="report.next && (expanded || taskState === 'blocked')" class="task-next">{{ t('fairyTask.next') }}{{ report.next }}</p>
+    </div>
+    <div v-else-if="item.error && !item.task?.session" class="tool-reason" :title="item.error">{{ item.error }}</div>
+    <div v-if="item.task?.session && (expanded || taskState === 'running')" class="task-actions">
+      <Button size="tiny" secondary icon="i-lucide-scroll-text" @click="emit('openTask', item.task.session)">{{ t('fairyTask.open') }}</Button>
+    </div>
+  </div>
+  <div v-else class="tool" :class="item.state">
     <button class="tool-row" type="button" @click="emit('toggle')">
       <Spin v-if="item.state === 'running'" :size="14" />
       <span v-else-if="item.state === 'ok'" class="i-lucide-circle-check" color="var(--ok)" />
@@ -50,6 +125,81 @@ const reason = computed(() => {
 </template>
 
 <style scoped>
+.task.confirm,
+.task.blocked {
+  border-color: var(--warn);
+}
+
+.task-role {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: rgba(127, 127, 127, 0.14);
+  font-size: 12px;
+}
+
+.task-text {
+  font-family: inherit;
+}
+
+.task-steps {
+  margin: -2px 10px 8px 32px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.task-steps li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.task-steps .mono {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.task-report {
+  padding: 0 10px 8px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task-report p {
+  margin: 0;
+}
+
+.task-findings {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task-where {
+  margin-left: 6px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.task-fix,
+.task-next {
+  color: var(--warn);
+}
+
+.task-actions {
+  padding: 0 10px 8px 32px;
+}
+
 .tool {
   border: 1px solid rgba(127, 127, 127, 0.2);
   border-radius: 8px;

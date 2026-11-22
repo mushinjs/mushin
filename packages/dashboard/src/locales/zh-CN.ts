@@ -1624,6 +1624,28 @@ const zhCN: typeof en = {
       kbReview: '帮我审核 {count} 条从对话里学到的知识',
     },
   },
+  fairyTask: {
+    roles: {
+      debug: '排错',
+      setup: '安装对接',
+      builder: '流程搭建',
+    },
+    status: {
+      running: '进行中',
+      confirm: '等你批准',
+      done: '已完成',
+      blocked: '需要你',
+      failed: '失败',
+    },
+    confirmText: '{role}想要执行 {action}，是否批准？',
+    findings: '发现的问题',
+    changes: '做了的改动',
+    fix: '建议：',
+    next: '下一步：',
+    open: '查看过程',
+    viewing: 'Fairy 交给{role}的任务',
+    back: '返回 Fairy',
+  },
   fairyNotice: {
     effort_ignored: '这个模型不支持带工具时设置推理强度，本次按默认强度回答。',
   },

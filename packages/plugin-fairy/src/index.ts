@@ -8,9 +8,11 @@ import {
   type FairySettings, defaultPolicy, formatSkillMarkdown, parseSkillMarkdown, policyInput, profileInput, SCENE_KEYS, type SceneProfile, today,
   type TokenUsage, type ToolPolicy,
 } from './settings'
+import { BUILTIN_ROLES, type FairyRole, type RoleDefinition, roleAllows, rolePrompt, type TaskReport, taskMessage } from './roles'
 import { type FairySkill, BUILTIN_SKILLS, type SkillDefinition, skillFields, skillInput } from './skills'
 
 export * from './prompt'
+export * from './roles'
 export * from './settings'
 export * from './skills'
 
@@ -26,7 +28,11 @@ declare module '@mushinjs/core' {
   }
 }
 
-export type FairyEvent = { session: string } & (
+/**
+ * `parent` and `call` are set on the events of a helper's conversation: the conversation that handed it the
+ * task, and the id of that conversation's fairy__delegate call.
+ */
+export type FairyEvent = { session: string; parent?: string; call?: string } & (
   | { type: 'start' }
   | { type: 'delta'; text: string }
   | { type: 'tool-call'; id: string; action: string; input: unknown; risk: string }
@@ -78,8 +84,14 @@ export interface FairySession {
   messages: FairyMessage[]
   /** The page the conversation was started on. */
   scene?: SessionScene
-  /** What it touched, for search: `scene:<key>`, `skill:<id>`, `command:<name>`, `resource:<kind>:<id>`. */
+  /** What it touched, for search: `scene:<key>`, `skill:<id>`, `command:<name>`, `resource:<kind>:<id>`, `role:<id>`. */
   tags?: string[]
+  /** Set on a helper's conversation: the role it plays. */
+  role?: string
+  /** Set on a helper's conversation: the conversation and the fairy__delegate call that started it. */
+  parent?: { session: string; call: string }
+  /** The system prompt, frozen at creation like the tools; Fairy's own prompt when absent. */
+  system?: string
 }
 
 export interface SendOptions {
@@ -147,6 +159,8 @@ interface Running {
   failures: Map<string, number>
   /** The user was told that the model ran without the picked effort. */
   effortIgnored?: boolean
+  /** A helper's report, once it called fairy__report; the turn ends after that round. */
+  report?: TaskReport
 }
 
 /** The turn used every tool round it may; the dashboard offers to continue. */
@@ -163,6 +177,10 @@ const FAILURE_HINT_AFTER = 3
 export const MAX_TOOLS = 128
 export const SEARCH_TOOL = 'search_tools'
 export const CALL_TOOL = 'call_tool'
+/** Hands a task to a helper role; only in Fairy's own conversations. */
+export const DELEGATE_TOOL = 'fairy__delegate'
+/** Ends a helper's task with its report; only in helpers' conversations. */
+export const REPORT_TOOL = 'fairy__report'
 
 /** Namespaces the system prompt names; they are listed first when not every tool fits. */
 const CORE_NAMESPACES = ['ui', 'system', 'logs', 'commands', 'bots', 'flows', 'providers', 'plugins']
@@ -186,6 +204,9 @@ export class Fairy extends Service {
   private home: Context
   private running = new Map<string, Running>()
   private pluginSkills = new Map<string, FairySkill>()
+  private pluginRoles = new Map<string, FairyRole>()
+  /** Helper conversations that are running, with the conversation and call that started them. */
+  private links = new Map<string, { session: string; call: string }>()
   private settingsCache?: FairySettings
 
   constructor(ctx: Context, public config: Config) {
@@ -217,12 +238,14 @@ export class Fairy extends Service {
   async tools(): Promise<ToolDefinition[]> {
     const actions = await this.allowedActions()
     const describe = (action: ActionInfo) => ({ name: toToolName(action.name), description: describeTool(action), parameters: portableSchema(action.inputSchema) })
-    if (actions.length <= MAX_TOOLS) return actions.map(describe)
+    const delegate = this.delegateTool()
+    if (actions.length + 1 <= MAX_TOOLS) return [...actions.map(describe), delegate]
     return [
-      ...actions.slice(0, MAX_TOOLS - 2).map(describe),
+      ...actions.slice(0, MAX_TOOLS - 3).map(describe),
+      delegate,
       {
         name: SEARCH_TOOL,
-        description: `Find tools that are not listed here (${actions.length - MAX_TOOLS + 2} more, such as knowledge bases, personas and permissions) by words of what they do. Returns each tool's name, description and input schema; run one with ${CALL_TOOL}.`,
+        description: `Find tools that are not listed here (${actions.length - MAX_TOOLS + 3} more, such as knowledge bases, personas and permissions) by words of what they do. Returns each tool's name, description and input schema; run one with ${CALL_TOOL}.`,
         parameters: {
           type: 'object',
           properties: {
@@ -245,6 +268,92 @@ export class Fairy extends Service {
         },
       },
     ]
+  }
+
+  /** fairy__delegate, listing the roles there are when the conversation starts. */
+  private delegateTool(): ToolDefinition {
+    const roles = this.roles()
+    return {
+      name: DELEGATE_TOOL,
+      description: [
+        'Hand a task to a helper. It works in a conversation of its own with its own tools, and returns its report: status, summary, findings, changes and what to do next. Roles:',
+        ...roles.map((role) => `- ${role.id}: ${role.description}`),
+      ].join('\n'),
+      parameters: {
+        type: 'object',
+        properties: {
+          role: { type: 'string', enum: roles.map((role) => role.id) },
+          task: { type: 'string', description: 'What to do, in the user\'s language: the goal, and what counts as done' },
+          context: { type: 'string', description: 'What the helper should know: the page the user is on, ids you already have, what the user said or saw, what earlier helpers found' },
+        },
+        required: ['role', 'task'],
+      },
+    }
+  }
+
+  /** The tools of a role's conversation: the actions it may use under the user's policies, and fairy__report. */
+  async roleTools(role: FairyRole): Promise<ToolDefinition[]> {
+    const actions = (await this.allowedActions()).filter((action) => roleAllows(role, action)).slice(0, MAX_TOOLS - 1)
+    return [
+      ...actions.map((action) => ({ name: toToolName(action.name), description: describeTool(action), parameters: portableSchema(action.inputSchema) })),
+      {
+        name: REPORT_TOOL,
+        description: 'Finish the task and report to Fairy. Call it once, at the end.',
+        parameters: {
+          type: 'object',
+          properties: {
+            status: { type: 'string', enum: ['done', 'blocked', 'failed'], description: 'done; blocked: you need something only the user can give (say what in next); failed: it could not be done' },
+            summary: { type: 'string', description: 'What you found or did, in a few sentences' },
+            findings: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string' },
+                  detail: { type: 'string' },
+                  where: { type: 'string', description: 'Plugin package, bot id, flow id, provider id or file' },
+                  evidence: { type: 'string', description: 'A log line or value you read' },
+                  fix: { type: 'string', description: 'The fix you suggest' },
+                },
+                required: ['title'],
+              },
+            },
+            changes: { type: 'array', items: { type: 'string' }, description: 'What you changed, one line each' },
+            next: { type: 'string', description: 'What Fairy should do or ask the user next' },
+          },
+          required: ['status', 'summary'],
+        },
+      },
+    ]
+  }
+
+  // ---- roles ----
+
+  /** Adds a helper role from a plugin; removed when the plugin unloads. A plugin role replaces a built-in one with its id. */
+  defineRole(definition: RoleDefinition) {
+    const ctx = this.ctx
+    const role: FairyRole = { ...definition, source: 'plugin', plugin: ctx.fiber.name }
+    return ctx.effect(() => {
+      this.pluginRoles.set(role.id, role)
+      this.home.emit('fairy/changed')
+      return () => {
+        if (this.pluginRoles.get(role.id) === role) this.pluginRoles.delete(role.id)
+        this.home.emit('fairy/changed')
+      }
+    }, `fairy.defineRole(${definition.id})`)
+  }
+
+  roles(): FairyRole[] {
+    const byId = new Map<string, FairyRole>()
+    for (const role of BUILTIN_ROLES) byId.set(role.id, { ...role, source: 'builtin' })
+    for (const role of this.pluginRoles.values()) byId.set(role.id, role)
+    return [...byId.values()]
+  }
+
+  role(id: string) {
+    const role = this.roles().find((item) => item.id === id)
+    if (!role) throw new MushinError('not_found', `No role "${id}"; roles: ${this.roles().map((item) => item.id).join(', ')}`)
+    return role
   }
 
   /** Allowed tools matching some words, with their schemas, for search_tools. */
@@ -336,7 +445,8 @@ export class Fairy extends Service {
   }
 
   private emit(event: FairyEvent) {
-    this.home.emit('fairy/event', event)
+    const link = this.links.get(event.session)
+    this.home.emit('fairy/event', link ? { ...event, parent: link.session, call: link.call } : event)
   }
 
   private async allSessions() {
@@ -347,12 +457,13 @@ export class Fairy extends Service {
       .sort((a, b) => b.updatedAt - a.updatedAt)
   }
 
-  private summary({ id, title, createdAt, updatedAt, scene, tags }: FairySession) {
-    return { id, title, createdAt, updatedAt, scene, tags: tags ?? [], running: this.running.has(id) }
+  private summary({ id, title, createdAt, updatedAt, scene, tags, role, parent }: FairySession) {
+    return { id, title, createdAt, updatedAt, scene, tags: tags ?? [], running: this.running.has(id), ...(role ? { role } : {}), ...(parent ? { parent } : {}) }
   }
 
+  /** Fairy's own conversations; a helper's conversation is reached from the task that started it. */
   async sessions() {
-    return (await this.allSessions()).map((session) => this.summary(session))
+    return (await this.allSessions()).filter((session) => !session.parent).map((session) => this.summary(session))
   }
 
   /**
@@ -363,6 +474,7 @@ export class Fairy extends Service {
     const query = options.query?.trim().toLowerCase()
     const results = []
     for (const session of await this.allSessions()) {
+      if (session.parent) continue
       const summary = this.summary(session)
       const tags = [...summary.tags, `status:${summary.running ? 'running' : 'idle'}`]
       if (options.tags?.some((tag) => !tags.includes(tag))) continue
@@ -493,8 +605,12 @@ export class Fairy extends Service {
     return session
   }
 
+  /** Deletes a conversation and the conversations of the helpers it started. */
   async deleteSession(id: string) {
     this.cancel(id)
+    for (const session of await this.allSessions()) {
+      if (session.parent?.session === id) await this.deleteSession(session.id)
+    }
     await this.home.storage.delete(`fairy/${id}`)
     return { deleted: id }
   }
@@ -560,7 +676,7 @@ export class Fairy extends Service {
       session.messages = session.messages.slice(0, at)
     }
     // A conversation saved by an older version can hold more tools than a request may carry.
-    if (session.tools.length > MAX_TOOLS) session.tools = await this.tools()
+    if (session.tools.length > MAX_TOOLS) session.tools = session.role ? await this.roleTools(this.role(session.role)) : await this.tools()
     const running: Running = { abort: new AbortController(), confirms: new Map(), usage: { inputTokens: 0, outputTokens: 0 }, failures: new Map() }
     this.running.set(session.id, running)
     const skills = options.skills?.length ? await Promise.all(options.skills.map((id) => this.skill(id))) : []
@@ -596,7 +712,7 @@ export class Fairy extends Service {
   private async loop(session: FairySession, running: Running, options: SendOptions) {
     let last: LlmResult | undefined
     for (let step = 0; step < this.config.maxSteps; step++) {
-      const history: LlmMessage[] = [{ role: 'system', content: SYSTEM_PROMPT }, ...session.messages.map(stripMeta)]
+      const history: LlmMessage[] = [{ role: 'system', content: session.system ?? SYSTEM_PROMPT }, ...session.messages.map(stripMeta)]
       let result: LlmResult | undefined
       // A provider picked for this message comes with its own model choice, not Fairy's.
       const provider = options.provider ?? this.config.provider
@@ -646,10 +762,13 @@ export class Fairy extends Service {
       for (const call of result.toolCalls) {
         await this.runTool(session, running, call, options)
       }
+      if (running.report) return result
       // One round is left: ask for a summary instead of a turn that just stops mid-way.
       if (step === this.config.maxSteps - 2) {
         const last = session.messages.at(-1)!
-        last.content += `\n\n[This was the last tool round for this message (the limit is ${this.config.maxSteps}). Do not call tools now: tell the user what is done, what is left, and that they can send another message to continue.]`
+        last.content += session.parent
+          ? `\n\n[This was your last tool round (the limit is ${this.config.maxSteps}). Call only ${REPORT_TOOL} now: report what you found or did, and what is left.]`
+          : `\n\n[This was the last tool round for this message (the limit is ${this.config.maxSteps}). Do not call tools now: tell the user what is done, what is left, and that they can send another message to continue.]`
       }
       await this.save(session)
     }
@@ -669,6 +788,26 @@ export class Fairy extends Service {
       return reply('The arguments were not valid JSON. Send a JSON object that matches the tool schema.', true)
     }
 
+    if (call.name === DELEGATE_TOOL && !session.parent) {
+      this.emit({ session: session.id, type: 'tool-call', id: call.id, action: 'fairy.delegate', input, risk: 'write' })
+      let report: Awaited<ReturnType<Fairy['delegate']>>
+      try {
+        report = await this.delegate(session, running, call.id, input, options)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: false, error: message })
+        return reply(`Error: ${message}`, true)
+      }
+      this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: report.status !== 'failed', result: report, ...(report.status === 'failed' ? { error: report.summary } : {}) })
+      return reply(truncate(JSON.stringify(report)), report.status === 'failed')
+    }
+    if (call.name === REPORT_TOOL && session.parent) {
+      const report = parseReport(input)
+      running.report = report
+      this.emit({ session: session.id, type: 'tool-call', id: call.id, action: 'fairy.report', input, risk: 'read' })
+      this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: true, result: { ok: true } })
+      return reply('Report sent to Fairy.')
+    }
     if (call.name === SEARCH_TOOL) {
       const found = await this.searchTools(String(input?.query ?? ''), Number(input?.limit) || 8)
       this.emit({ session: session.id, type: 'tool-call', id: call.id, action: SEARCH_TOOL, input, risk: 'read' })
@@ -719,6 +858,55 @@ export class Fairy extends Service {
         : ''
       reply(`Error: ${message}${hint}`, true)
     }
+  }
+
+  /**
+   * Runs a helper on a task in a conversation of its own and returns its report. The helper uses the model
+   * of the turn that started it, stops when that turn stops, and its tokens count toward that turn.
+   */
+  private async delegate(parent: FairySession, parentRunning: Running, callId: string, input: any, options: SendOptions) {
+    const role = this.role(String(input?.role ?? ''))
+    const task = typeof input?.task === 'string' ? input.task.trim() : ''
+    if (!task) throw new MushinError('invalid_input', 'Say what the helper should do in task')
+    const now = Date.now()
+    const child: FairySession = {
+      id: randomId(),
+      title: task.replace(/\s+/g, ' ').slice(0, 48),
+      createdAt: now,
+      updatedAt: now,
+      tools: await this.roleTools(role),
+      system: rolePrompt(role),
+      role: role.id,
+      parent: { session: parent.id, call: callId },
+      tags: [`role:${role.id}`],
+      messages: [{ role: 'user', content: taskMessage(task, typeof input?.context === 'string' ? input.context : undefined, new Date(now)), display: task, at: now }],
+    }
+    const running: Running = { abort: new AbortController(), confirms: new Map(), usage: { inputTokens: 0, outputTokens: 0 }, failures: new Map() }
+    const stop = () => running.abort.abort()
+    parentRunning.abort.signal.addEventListener('abort', stop, { once: true })
+    this.running.set(child.id, running)
+    this.links.set(child.id, child.parent!)
+    await this.save(child)
+    this.emit({ session: child.id, type: 'start' })
+    let report: TaskReport
+    try {
+      const final = await this.loop(child, running, { provider: options.provider, model: options.model, effort: options.effort })
+      report = running.report ?? { status: 'done', summary: final?.text || 'The helper finished without a report.' }
+      this.emit({ session: child.id, type: 'done', text: report.summary, usage: running.usage })
+    } catch (error) {
+      const message = running.abort.signal.aborted ? 'Stopped' : error instanceof Error ? error.message : String(error)
+      report = running.report ?? { status: 'failed', summary: message }
+      this.emit({ session: child.id, type: 'error', error: message, ...(error instanceof StepLimit && !running.abort.signal.aborted ? { code: 'max_steps' as const } : {}) })
+    } finally {
+      parentRunning.abort.signal.removeEventListener('abort', stop)
+      this.running.delete(child.id)
+      this.links.delete(child.id)
+      parentRunning.usage.inputTokens += running.usage.inputTokens
+      parentRunning.usage.outputTokens += running.usage.outputTokens
+      await this.save(child)
+    }
+    if (parentRunning.abort.signal.aborted) throw new Error('Stopped')
+    return { task: child.id, role: role.id, ...report }
   }
 
   private waitForApproval(running: Running, callId: string) {
@@ -777,8 +965,9 @@ export class Fairy extends Service {
       risk: 'read',
       input: z.object({ id: z.string() }),
       handler: async ({ id }) => {
-        const { tools, ...session } = await this.session(id)
-        const now = new Set((await this.tools()).map((tool) => tool.name))
+        const { tools, system, ...session } = await this.session(id)
+        const role = session.role ? this.roles().find((item) => item.id === session.role) : undefined
+        const now = new Set((role ? await this.roleTools(role) : await this.tools()).map((tool) => tool.name))
         const toolsStale = tools.length !== now.size || tools.some((tool) => !now.has(tool.name))
         return { ...session, messages: session.messages.map(({ raw, ...message }: any) => message), running: this.running.has(id), toolsStale }
       },
@@ -916,6 +1105,17 @@ export class Fairy extends Service {
     })
 
     yield actions.define({
+      name: 'fairy.roles.list',
+      description: 'The helpers Fairy can hand tasks to, with what each is for and which tools it may use.',
+      risk: 'read',
+      input: z.object({}),
+      handler: async () => Promise.all(this.roles().map(async (role) => ({
+        ...role,
+        toolNames: (await this.roleTools(role)).map((tool) => tool.name).filter((name) => name !== REPORT_TOOL),
+      }))),
+    })
+
+    yield actions.define({
       name: 'fairy.profiles.list',
       description: 'What Fairy says and offers on each dashboard page, as the user changed it: hint, welcome line, own suggestions, hidden built-in suggestions, recommended skills.',
       risk: 'read',
@@ -1028,6 +1228,26 @@ function turnTags(text: string, options: SendOptions, skills: FairySkill[]) {
   const command = /^\s*\/([\p{L}\p{N}_-]+)/u.exec(text)
   if (command) tags.push(`command:${command[1]}`)
   return tags
+}
+
+/** A report as a helper sent it, with the fields Fairy reads; anything malformed is dropped. */
+function parseReport(input: any): TaskReport {
+  const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : undefined)
+  const status = ['done', 'blocked', 'failed'].includes(input?.status) ? input.status : 'done'
+  const findings = Array.isArray(input?.findings)
+    ? input.findings.filter((item: any) => text(item?.title)).map((item: any) => ({
+        title: text(item.title)!,
+        ...Object.fromEntries((['detail', 'where', 'evidence', 'fix'] as const).flatMap((key) => (text(item[key]) ? [[key, text(item[key])]] : []))),
+      }))
+    : []
+  const changes = Array.isArray(input?.changes) ? input.changes.map(text).filter(Boolean) as string[] : []
+  return {
+    status,
+    summary: text(input?.summary) ?? '',
+    ...(findings.length ? { findings } : {}),
+    ...(changes.length ? { changes } : {}),
+    ...(text(input?.next) ? { next: text(input.next) } : {}),
+  }
 }
 
 function stripMeta(message: FairyMessage): LlmMessage {
