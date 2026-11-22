@@ -50,7 +50,8 @@ function emit(name: string, data: unknown) {
   }
 }
 
-type ClientHandler = (input: any) => unknown
+/** `meta.session` is the Fairy conversation that made the call. */
+type ClientHandler = (input: any, meta: { session?: string }) => unknown
 const clientHandlers = new Map<string, ClientHandler>()
 
 /** Handles a client action (e.g. `ui.navigate`) that the server relays from Fairy. */
@@ -97,7 +98,7 @@ export function connect() {
         const handler = clientHandlers.get(message.action)
         try {
           if (!handler) throw new Error(`This dashboard cannot run ${message.action}`)
-          const result = await handler(message.input)
+          const result = await handler(message.input, { session: typeof message.session === 'string' ? message.session : undefined })
           send({ type: 'client-result', id: message.id, ok: true, result: result ?? { ok: true } })
         } catch (error) {
           send({ type: 'client-result', id: message.id, ok: false, error: { message: String((error as Error)?.message ?? error) } })

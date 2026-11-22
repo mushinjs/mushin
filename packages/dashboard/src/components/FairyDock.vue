@@ -4,7 +4,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { call } from '../api'
-import { type ChatItem, DELEGATE, EFFORTS, useFairyStore } from '../stores/fairy'
+import { type ChatItem, DELEGATE, EFFORTS, useConversation } from '../stores/fairy'
 import { type Recommendation, useFairySceneStore } from '../stores/fairyScene'
 import { modelCapabilities, providerOptions as toProviderOptions } from '../models'
 import { useDataStore } from '../stores/data'
@@ -23,7 +23,7 @@ const emit = defineEmits<{ close: []; toggleMode: [] }>()
 
 const { t, te } = useI18n()
 const router = useRouter()
-const fairy = useFairyStore()
+const fairy = useConversation()
 const scenes = useFairySceneStore()
 const data = useDataStore()
 

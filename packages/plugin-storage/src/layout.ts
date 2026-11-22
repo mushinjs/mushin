@@ -42,6 +42,7 @@ const RULES: Rule[] = [
   rule('messages/:bot/*', 'data:bots/:bot/messages/*'),
   rule('logs/:bot/*', 'logs:bots/:bot/*'),
   rule('fairy/skills/*', 'data:fairy/skills/*'),
+  rule('fairy/groups/*', 'data:fairy/groups/*'),
   rule('fairy/settings/*', 'data:fairy/settings/*'),
   rule('fairy/*', 'data:fairy/sessions/*'),
   rule('flows/*', 'data:plugins/flows/documents/*'),

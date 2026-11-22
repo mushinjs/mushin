@@ -17,8 +17,10 @@ export const router = createRouter({
     { path: '/personas', component: () => import('./views/PersonasView.vue') },
     { path: '/knowledge/:id?/:tab(docs|chunks|search|graph|learn|settings)?', component: () => import('./views/KnowledgeView.vue') },
     { path: '/settings/:section(appearance|features|fairy|about)?/:tab(scenes|skills|mcp|tools|model|styles)?', component: () => import('./views/SettingsView.vue') },
+    // Fairy's workspace has a layout of its own, without the dashboard's sidebar.
+    { path: '/fairy', component: () => import('./views/FairyWorkspace.vue'), meta: { workspace: true } },
     // The Fairy settings used to be a page of their own.
-    { path: '/fairy/:tab(scenes|skills|mcp|tools|model|styles)?', redirect: (to) => `/settings/fairy${to.params.tab ? `/${to.params.tab}` : ''}` },
+    { path: '/fairy/:tab(scenes|skills|mcp|tools|model|styles)', redirect: (to) => `/settings/fairy/${to.params.tab}` },
     { path: '/database', component: () => import('./views/DatabaseView.vue') },
     { path: '/plugins', component: () => import('./views/PluginsView.vue') },
     { path: '/logs', component: () => import('./views/LogsView.vue') },

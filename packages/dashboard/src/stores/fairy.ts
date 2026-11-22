@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { inject, type InjectionKey, ref, watch } from 'vue'
 import { call, on } from '../api'
 import { prefs } from '../prefs'
-import type { FairyCommands, FairyEvent, FairyMessage, FairyScene, FairySessionSummary, FairySkill, FairyTaskReport, Risk } from '../types'
+import type { FairyCommands, FairyEvent, FairyGroup, FairyMessage, FairyScene, FairySessionSummary, FairySkill, FairyTaskReport, Risk } from '../types'
 
 export type ToolState = 'running' | 'confirm' | 'ok' | 'error' | 'declined'
 
@@ -107,26 +107,32 @@ function readChoice(): ModelChoice {
   }
 }
 
-function readSession() {
+function readSession(key: string) {
   try {
-    return localStorage.getItem(SESSION_KEY) ?? undefined
+    return localStorage.getItem(key) ?? undefined
   } catch {
     return undefined
   }
 }
 
-export const useFairyStore = defineStore('fairy', () => {
+/**
+ * One open conversation and what it needs: its messages, the reply streaming in, the questions and approvals
+ * it waits on. The dock and the workspace's main pane share one; a split pane has its own. `pane` names it.
+ */
+function conversation(pane: string) {
+  const sessionKey = pane === 'main' ? SESSION_KEY : `${SESSION_KEY}.${pane}`
   const open = ref(prefs.fairyOpenOnStart)
   const sessions = ref<FairySessionSummary[]>([])
-  const current = ref<string | undefined>(readSession())
+  const groups = ref<FairyGroup[]>([])
+  const current = ref<string | undefined>(readSession(sessionKey))
   /** Set while a helper's conversation is open: its role, and the conversation and call that started it. */
   const task = ref<{ role: string; parent: { session: string; call: string } }>()
 
   // Reopen the same conversation after a reload.
   watch(current, (id) => {
     try {
-      if (id) localStorage.setItem(SESSION_KEY, id)
-      else localStorage.removeItem(SESSION_KEY)
+      if (id) localStorage.setItem(sessionKey, id)
+      else localStorage.removeItem(sessionKey)
     } catch {}
   })
   const items = ref<ChatItem[]>([])
@@ -152,7 +158,15 @@ export const useFairyStore = defineStore('fairy', () => {
   const quote = ref<{ bot: string; channel: string; id: string; label: string }>()
 
   async function refreshSessions() {
-    sessions.value = await call<FairySessionSummary[]>('fairy.sessions')
+    const [list, groupList] = await Promise.all([call<FairySessionSummary[]>('fairy.sessions'), call<FairyGroup[]>('fairy.groups.list')])
+    sessions.value = list
+    groups.value = groupList
+  }
+
+  /** Renames a conversation, files it under a group (null: none), or marks it done. */
+  async function updateSession(id: string, patch: { title?: string; group?: string | null; done?: boolean }) {
+    await call('fairy.sessions.update', { id, ...patch })
+    await refreshSessions()
   }
 
   /** Skills and commands for the `$` and `/` pickers. */
@@ -408,6 +422,11 @@ export const useFairyStore = defineStore('fairy', () => {
       timer = setTimeout(() => refreshPickers().catch(() => {}), 500)
     }
     for (const name of ['flows/changed', 'bots/changed', 'actions/changed', 'fairy/changed']) on(name, later)
+    let listTimer: ReturnType<typeof setTimeout> | undefined
+    on('fairy/sessions', () => {
+      clearTimeout(listTimer)
+      listTimer = setTimeout(() => refreshSessions().catch(() => {}), 200)
+    })
     on('connected', () => {
       refreshSessions().catch(() => {})
       refreshPickers().catch(() => {})
@@ -416,7 +435,42 @@ export const useFairyStore = defineStore('fairy', () => {
   }
 
   return {
-    open, sessions, current, task, items, choice, streaming, running, usage, skills, commands, toolsStale, asks, quote,
-    refreshSessions, refreshPickers, load, newChat, note, ask, answer, send, edit, retry, confirm, confirmTask, cancel, remove, bind,
+    pane, open, sessions, groups, current, task, items, choice, streaming, running, usage, skills, commands, toolsStale, asks, quote,
+    refreshSessions, updateSession, refreshPickers, load, newChat, note, ask, answer, send, edit, retry, confirm, confirmTask, cancel, remove, bind,
   }
-})
+}
+
+export const useFairyStore = defineStore('fairy', () => conversation('main'))
+
+export type FairyConversation = ReturnType<typeof useFairyStore>
+
+const panes = new Map<string, () => FairyConversation>()
+
+/** The conversation of a workspace pane other than the main one, made the first time it is asked for. */
+export function useFairyPane(pane: string): FairyConversation {
+  if (pane === 'main') return useFairyStore()
+  let use = panes.get(pane)
+  if (!use) {
+    use = defineStore(`fairy-pane-${pane}`, () => conversation(pane)) as unknown as () => FairyConversation
+    panes.set(pane, use)
+  }
+  return use()
+}
+
+/** The conversation a component shows: the one a workspace pane provides, or the dock's. */
+export const FAIRY_CONVERSATION: InjectionKey<FairyConversation> = Symbol('fairy-conversation')
+
+export function useConversation() {
+  return inject(FAIRY_CONVERSATION, null) ?? useFairyStore()
+}
+
+/** The open conversation showing a session, for questions Fairy asks from it; the dock's when none does. */
+export function conversationOf(session?: string): FairyConversation {
+  const main = useFairyStore()
+  if (!session || main.current === session) return main
+  for (const use of panes.values()) {
+    const pane = use()
+    if (pane.current === session) return pane
+  }
+  return main
+}
