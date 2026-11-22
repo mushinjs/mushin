@@ -10,10 +10,10 @@ export const highlightState = reactive({
 let hideTimer: number | undefined
 
 function find(target: string) {
-  return document.querySelector<HTMLElement>(`[data-agent-target="${CSS.escape(target)}"]`)
+  return document.querySelector<HTMLElement>(`[data-fairy-target="${CSS.escape(target)}"]`)
 }
 
-/** Scrolls to a control marked `data-agent-target` and pulses it, with an optional hint bubble. */
+/** Scrolls to a control marked `data-fairy-target` and pulses it, with an optional hint bubble. */
 export async function highlight(target: string, message?: string) {
   await nextTick()
   let element = find(target)
@@ -23,9 +23,9 @@ export async function highlight(target: string, message?: string) {
   }
   if (!element) return { ok: false, reason: `Nothing on this page is marked "${target}"` }
   element.scrollIntoView({ block: 'center', behavior: 'smooth' })
-  element.classList.remove('agent-highlight')
+  element.classList.remove('fairy-highlight')
   void element.offsetWidth
-  element.classList.add('agent-highlight')
+  element.classList.add('fairy-highlight')
   window.clearTimeout(hideTimer)
   await new Promise((resolve) => setTimeout(resolve, 350))
   const rect = element.getBoundingClientRect()
@@ -34,7 +34,7 @@ export async function highlight(target: string, message?: string) {
   highlightState.left = Math.max(16, Math.min(rect.left, window.innerWidth - 296))
   highlightState.visible = !!message
   hideTimer = window.setTimeout(() => {
-    element!.classList.remove('agent-highlight')
+    element!.classList.remove('fairy-highlight')
     highlightState.visible = false
   }, 5000)
   return { ok: true }

@@ -1,5 +1,5 @@
 /**
- * Where the Agent sits: docked on the right at a width you drag, or floating over the page where
+ * Where Fairy sits: docked on the right at a width you drag, or floating over the page where
  * you put it. Remembered in this browser.
  */
 import { reactive, watch } from 'vue'
@@ -12,7 +12,7 @@ export interface DockLayout {
   float: { x: number; y: number; w: number; h: number }
 }
 
-const KEY = 'mushin.agent.dock'
+const KEY = 'mushin.fairy.dock'
 export const DOCK_WIDTH = 400
 export const MIN_WIDTH = 320
 export const MIN_HEIGHT = 360
@@ -46,7 +46,7 @@ watch(dockLayout, (value) => {
   } catch {}
 }, { deep: true })
 
-/** The widest the docked Agent may be: it never takes more than half the window. */
+/** The widest the docked Fairy may be: it never takes more than half the window. */
 export const maxDockWidth = () => Math.max(MIN_WIDTH, Math.min(720, Math.round(window.innerWidth * 0.5)))
 export const clampWidth = (width: number) => Math.round(Math.min(maxDockWidth(), Math.max(MIN_WIDTH, width)))
 

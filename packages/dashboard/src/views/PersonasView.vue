@@ -285,7 +285,7 @@ const initial = (name: string) => [...name.trim()][0] ?? '?'
         <Button :disabled="!personas.length" icon="i-lucide-cloud-download" @click="exportPersonas()">
           {{ t('personas.exportAll') }}
         </Button>
-        <Button type="primary" data-agent-target="personas.add" icon="i-lucide-plus" @click="openCreate">
+        <Button type="primary" data-fairy-target="personas.add" icon="i-lucide-plus" @click="openCreate">
           {{ t('personas.add') }}
         </Button>
       </div>

@@ -2,10 +2,10 @@
 import { Button, Spin, Tag } from '@mushinjs/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { ChatItem } from '../../stores/agent'
+import type { ChatItem } from '../../stores/fairy'
 import { pretty } from '../../utils'
 
-/** One tool call of an Agent reply: what it called, how it went, and its input and output on demand. */
+/** One tool call of a Fairy reply: what it called, how it went, and its input and output on demand. */
 const props = defineProps<{ item: Extract<ChatItem, { kind: 'tool' }>; expanded: boolean }>()
 const emit = defineEmits<{ toggle: []; confirm: [approved: boolean] }>()
 
@@ -26,23 +26,23 @@ const reason = computed(() => {
       <span v-else-if="item.state === 'confirm'" class="i-lucide-hand" color="var(--warn)" />
       <span v-else class="i-lucide-circle-x" color="var(--bad)" />
       <span class="mono tool-name">{{ item.action }}</span>
-      <Tag v-if="item.risk === 'dangerous'" size="tiny" type="error">{{ t('agent.dangerous') }}</Tag>
-      <span class="tool-state">{{ t(`agent.state.${item.state}`) }}</span>
+      <Tag v-if="item.risk === 'dangerous'" size="tiny" type="error">{{ t('fairy.dangerous') }}</Tag>
+      <span class="tool-state">{{ t(`fairy.state.${item.state}`) }}</span>
     </button>
     <div v-if="reason && !expanded" class="tool-reason" :title="reason">{{ reason }}</div>
     <div v-if="item.state === 'confirm'" class="confirm">
-      <p>{{ t('agent.confirmText', { action: item.action }) }}</p>
+      <p>{{ t('fairy.confirmText', { action: item.action }) }}</p>
       <pre class="json mono">{{ pretty(item.input) }}</pre>
       <div class="confirm-actions">
-        <Button size="small" type="error" @click="emit('confirm', true)">{{ t('agent.approve') }}</Button>
-        <Button size="small" @click="emit('confirm', false)">{{ t('agent.deny') }}</Button>
+        <Button size="small" type="error" @click="emit('confirm', true)">{{ t('fairy.approve') }}</Button>
+        <Button size="small" @click="emit('confirm', false)">{{ t('fairy.deny') }}</Button>
       </div>
     </div>
     <div v-else-if="expanded" class="tool-detail">
-      <div class="label">{{ t('agent.input') }}</div>
+      <div class="label">{{ t('fairy.input') }}</div>
       <pre class="json mono">{{ pretty(item.input) }}</pre>
       <template v-if="item.result !== undefined || item.error">
-        <div class="label">{{ t('agent.output') }}</div>
+        <div class="label">{{ t('fairy.output') }}</div>
         <pre class="json mono">{{ item.error ?? pretty(item.result) }}</pre>
       </template>
     </div>

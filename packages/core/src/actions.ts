@@ -20,8 +20,8 @@ declare module 'cordis' {
 export type Risk = 'read' | 'write' | 'dangerous'
 
 export interface ActionCaller {
-  kind: 'api' | 'agent' | 'mcp' | 'internal'
-  /** Agent session id, when the Agent made the call. */
+  kind: 'api' | 'fairy' | 'mcp' | 'internal'
+  /** Fairy session id, when Fairy made the call. */
   session?: string
   /** Dashboard connection id, used to route client actions back to the right tab. */
   client?: string
@@ -30,7 +30,7 @@ export interface ActionCaller {
 export interface ActionDefinition<S extends z.ZodType = z.ZodType, R = unknown> {
   /** Dotted lowercase name, such as `bots.create`. */
   name: string
-  /** Written for the Agent: what the action does and what it returns. */
+  /** Written for Fairy: what the action does and what it returns. */
   description: string
   input: S
   /** JSON Schema shown instead of the one made from `input`, for tools described elsewhere (such as MCP tools). */
@@ -39,10 +39,10 @@ export interface ActionDefinition<S extends z.ZodType = z.ZodType, R = unknown> 
   /** Client actions run in the dashboard; the server relays them to the caller's tab. */
   client?: boolean
   /**
-   * False keeps the action away from the Agent: dashboard plumbing (editor previews, debugger
+   * False keeps the action away from Fairy: dashboard plumbing (editor previews, debugger
    * controls) that only makes sense next to a screen and would only distract the model.
    */
-  agent?: false
+  fairy?: false
   handler?: (input: z.output<S>, caller: ActionCaller) => R | Promise<R>
 }
 
@@ -51,8 +51,8 @@ export interface ActionInfo {
   description: string
   risk: Risk
   client: boolean
-  /** False when the Agent never sees the action; see `ActionDefinition.agent`. */
-  agent: boolean
+  /** False when Fairy never sees the action; see `ActionDefinition.fairy`. */
+  fairy: boolean
   plugin: string
   inputSchema: JsonSchema
 }
@@ -83,7 +83,7 @@ export function toJsonSchema(schema: z.ZodType): JsonSchema {
 const namePattern = /^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)+$/
 
 /**
- * The registry of typed operations. The HTTP API and the Agent both call actions,
+ * The registry of typed operations. The HTTP API and Fairy both call actions,
  * so a feature a plugin exposes here is reachable from the dashboard and by conversation.
  */
 export class Actions extends Service {
@@ -146,7 +146,7 @@ export class Actions extends Service {
       description: action.description,
       risk: action.risk,
       client: !!action.client,
-      agent: action.agent !== false,
+      fairy: action.fairy !== false,
       plugin: action.plugin,
       inputSchema: action.schema,
     }

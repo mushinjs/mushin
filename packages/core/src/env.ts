@@ -4,7 +4,7 @@ import { isMasked, writeTextAtomic } from './utils'
 
 /**
  * Secrets live in the instance's `.env` file. Configuration refers to them as `${NAME}`: the whole
- * value of a field, so `mushin.config.json`, `data/` and anything shown to the Agent hold only names.
+ * value of a field, so `mushin.config.json`, `data/` and anything shown to Fairy hold only names.
  */
 
 const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/

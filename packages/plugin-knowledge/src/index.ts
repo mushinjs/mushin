@@ -223,7 +223,7 @@ function publicChunk({ vector, ...row }: ChunkRow): KnowledgeChunk {
 
 /**
  * Knowledge bases: documents split into chunks, searched by keywords and (with an embedding
- * model) by meaning. Flows search them with a node, the Agent with `kb.search`, admins add to
+ * model) by meaning. Flows search them with a node, Fairy with `kb.search`, admins add to
  * them from chat, and they can learn candidate knowledge from chats for review.
  */
 export class Knowledge extends Service {
@@ -287,8 +287,8 @@ export class Knowledge extends Service {
     this.home.inject(['flows'], (ctx) => {
       ctx.flows.defineNode(searchNode(this))
     })
-    this.home.inject(['agent'], (ctx) => {
-      ctx.agent.defineSkill({
+    this.home.inject(['fairy'], (ctx) => {
+      ctx.fairy.defineSkill({
         id: 'answer-from-knowledge',
         name: '根据知识库回答',
         description: '先在知识库里查资料，再根据查到的内容回答，并说明出处',

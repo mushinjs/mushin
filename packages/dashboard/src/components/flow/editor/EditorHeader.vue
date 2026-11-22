@@ -39,7 +39,7 @@ function nextProblem() {
       :placeholder="t('flows.adapterAny')"
       :clearable="adapterOptions.length > 1"
       :title="t('flows.adapter')"
-      data-agent-target="flows.adapter"
+      data-fairy-target="flows.adapter"
       @update:value="setAdapter"
     />
     <Select
@@ -49,10 +49,10 @@ function nextProblem() {
       :options="botOptions"
       :placeholder="t('flows.runsOnNone')"
       max-tag-count="responsive"
-      data-agent-target="flows.bots"
+      data-fairy-target="flows.bots"
     />
-    <Toggle class="enabled" variant="button" size="small" :value="enabled" :loading="toggling" :title="enabled ? t('flows.enabledHint') : t('flows.disabledHint')" data-agent-target="flows.enabled" @update:value="setEnabled" />
-    <button v-if="problemNodes.length" type="button" class="problems" :title="t('flows.nextProblem')" data-agent-target="flows.problems" @click="nextProblem">
+    <Toggle class="enabled" variant="button" size="small" :value="enabled" :loading="toggling" :title="enabled ? t('flows.enabledHint') : t('flows.disabledHint')" data-fairy-target="flows.enabled" @update:value="setEnabled" />
+    <button v-if="problemNodes.length" type="button" class="problems" :title="t('flows.nextProblem')" data-fairy-target="flows.problems" @click="nextProblem">
       <Tag :type="problemLevel" size="small">{{ t('flows.nodesWithProblems', problemNodes.length) }}</Tag>
     </button>
     <Tag v-else-if="errorCount" type="error" size="small">{{ t('flows.errorCount', errorCount) }}</Tag>
@@ -87,7 +87,7 @@ function nextProblem() {
         {{ immersive ? t('flows.exitFullscreenHint') : t('flows.fullscreenHint') }}
       </Tooltip>
     </div>
-    <Button type="primary" :loading="saving" :disabled="!dirty" data-agent-target="flows.save" @click="save">{{ t('common.save') }}</Button>
+    <Button type="primary" :loading="saving" :disabled="!dirty" data-fairy-target="flows.save" @click="save">{{ t('common.save') }}</Button>
   </header>
 </template>
 
@@ -157,7 +157,7 @@ function nextProblem() {
   color: var(--fg);
 }
 
-/* Sized by the editor, not the window: beside the app's sidebar and the Agent it can be narrow. */
+/* Sized by the editor, not the window: beside the app's sidebar and Fairy it can be narrow. */
 @container flow-editor (max-width: 900px) {
   .editor-head {
     flex-wrap: wrap;

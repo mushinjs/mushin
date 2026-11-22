@@ -1,7 +1,7 @@
 import { type Risk, z } from '@mushinjs/core'
-import type { AgentSkill } from './skills'
+import type { FairySkill } from './skills'
 
-/** Whether the Agent runs a tool on its own, asks first, or never sees it. */
+/** Whether Fairy runs a tool on its own, asks first, or never sees it. */
 export type ToolPolicy = 'auto' | 'confirm' | 'off'
 
 /** The default for a risk level: dangerous actions ask first, the rest run. */
@@ -17,7 +17,7 @@ export interface CustomRecommendation {
   skill?: string
 }
 
-/** What the Agent says and offers on one dashboard page; empty fields keep the dashboard's defaults. */
+/** What Fairy says and offers on one dashboard page; empty fields keep the dashboard's defaults. */
 export interface SceneProfile {
   /** Replaces the page's hint, which goes into the <context> block. */
   hint?: string
@@ -33,7 +33,7 @@ export interface SceneProfile {
   autoShow?: boolean
 }
 
-export interface AgentSettings {
+export interface FairySettings {
   profiles: Record<string, SceneProfile>
   /** Overrides of the default policy, by action name. */
   toolPolicy: Record<string, ToolPolicy>
@@ -41,7 +41,7 @@ export interface AgentSettings {
   disabledSkills: string[]
 }
 
-export const SCENE_KEYS = ['overview', 'setup', 'providers', 'bots', 'botDetail', 'flows', 'flowEditor', 'personas', 'knowledge', 'database', 'plugins', 'logs', 'settings', 'agent'] as const
+export const SCENE_KEYS = ['overview', 'setup', 'providers', 'bots', 'botDetail', 'flows', 'flowEditor', 'personas', 'knowledge', 'database', 'plugins', 'logs', 'settings', 'fairy'] as const
 
 export const profileInput = z.object({
   hint: z.string().max(1000).optional(),
@@ -148,7 +148,7 @@ export function parseSkillMarkdown(source: string) {
 const yamlString = (value: string) => (/^[\w\s一-鿿,.()（）、，。-]*$/.test(value) && value.trim() === value ? value : JSON.stringify(value))
 
 /** Writes a skill as a `SKILL.md` file. */
-export function formatSkillMarkdown(skill: Pick<AgentSkill, 'id' | 'name' | 'description' | 'instructions' | 'whenToUse' | 'tools' | 'scenes'>) {
+export function formatSkillMarkdown(skill: Pick<FairySkill, 'id' | 'name' | 'description' | 'instructions' | 'whenToUse' | 'tools' | 'scenes'>) {
   const lines = ['---', `name: ${yamlString(skill.name)}`, `description: ${yamlString(skill.description)}`]
   if (skill.whenToUse) lines.push(`when_to_use: ${yamlString(skill.whenToUse)}`)
   if (skill.tools?.length) lines.push(`tools: [${skill.tools.join(', ')}]`)

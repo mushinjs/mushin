@@ -65,8 +65,8 @@ export const Config = z.object({
   maxOutput: z.number().int().min(1).max(4096).default(64).meta(field('Output limit (KB)', 'Keep at most this much of stdout and of stderr', {
     'zh-CN': { title: '输出上限（KB）', description: 'stdout 和 stderr 各最多保留这么多' },
   })),
-  runInTests: z.boolean().default(false).meta(field('Run commands in test runs', 'Off: test runs (from the editor or the Agent) show the command instead of running it', {
-    'zh-CN': { title: '测试运行时执行命令', description: '关闭时，测试运行（编辑器或智能体发起）只显示将要执行的命令，不实际执行' },
+  runInTests: z.boolean().default(false).meta(field('Run commands in test runs', 'Off: test runs (from the editor or Fairy) show the command instead of running it', {
+    'zh-CN': { title: '测试运行时执行命令', description: '关闭时，测试运行（编辑器或 Fairy 发起）只显示将要执行的命令，不实际执行' },
   }, { widget: 'switch' })),
 })
 
@@ -192,8 +192,8 @@ export function terminalNodes(env: TerminalEnv): NodeType[] {
     restricted: true,
     title: text('Run command', '运行命令'),
     description: text(
-      'Runs a command in a terminal on the machine running Mushin.js. Continues on "ok" when it exits with 0, else on "failed". Only people can add it in the editor, not the Agent.',
-      '在运行 Mushin.js 的电脑上的终端里执行命令。退出码为 0 时走“ok”，否则走“failed”。只能由人在编辑器中添加，智能体不能。',
+      'Runs a command in a terminal on the machine running Mushin.js. Continues on "ok" when it exits with 0, else on "failed". Only people can add it in the editor, not Fairy.',
+      '在运行 Mushin.js 的电脑上的终端里执行命令。退出码为 0 时走“ok”，否则走“failed”。只能由人在编辑器中添加，Fairy 不能。',
     ),
     config: z.object({
       command: commandField('Runs in the shell below.', '在下面选择的 Shell 中运行。'),
@@ -233,8 +233,8 @@ export function terminalNodes(env: TerminalEnv): NodeType[] {
     restricted: true,
     title: text('Run over SSH', 'SSH 执行命令'),
     description: text(
-      'Signs in to a server set up in the Terminal plugin and runs a command there. Continues on "ok" when it exits with 0, else on "failed". Only people can add it in the editor, not the Agent.',
-      '登录终端插件中设置的服务器并在上面执行命令。退出码为 0 时走“ok”，否则走“failed”。只能由人在编辑器中添加，智能体不能。',
+      'Signs in to a server set up in the Terminal plugin and runs a command there. Continues on "ok" when it exits with 0, else on "failed". Only people can add it in the editor, not Fairy.',
+      '登录终端插件中设置的服务器并在上面执行命令。退出码为 0 时走“ok”，否则走“failed”。只能由人在编辑器中添加，Fairy 不能。',
     ),
     config: z.object({
       host: hostField,

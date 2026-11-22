@@ -101,7 +101,7 @@ async function save() {
           <li>{{ t('permissions.usageCommands') }}</li>
           <li>{{ t('permissions.usageNode') }}</li>
           <li>{{ groupRoles ? t('permissions.groupRolesYes') : t('permissions.groupRolesNo') }}</li>
-          <li>{{ t('permissions.usageAgent') }}</li>
+          <li>{{ t('permissions.usageFairy') }}</li>
         </ul>
       </Card>
     </div>

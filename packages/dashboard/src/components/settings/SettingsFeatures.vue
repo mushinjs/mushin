@@ -18,8 +18,8 @@ function showPage(page: string, shown: boolean) {
 
 <template>
   <Form class="form">
-    <FormItem :label="t('settings.features.agentOpen')" :feedback="t('settings.features.agentOpenHelp')">
-      <Toggle v-model:value="prefs.agentOpenOnStart" />
+    <FormItem :label="t('settings.features.fairyOpen')" :feedback="t('settings.features.fairyOpenHelp')">
+      <Toggle v-model:value="prefs.fairyOpenOnStart" />
     </FormItem>
     <FormItem :label="t('settings.features.pages')" :feedback="t('settings.features.pagesHelp')">
       <div class="pages">

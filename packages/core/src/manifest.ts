@@ -10,7 +10,7 @@ export interface PluginManifest {
   kind: 'app' | 'bot'
   displayName?: LocalizedText
   description?: LocalizedText
-  /** Essential app plugins cannot be disabled from the dashboard or by the Agent. */
+  /** Essential app plugins cannot be disabled from the dashboard or by Fairy. */
   essential?: boolean
   platforms?: string[]
   category?: string

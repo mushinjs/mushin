@@ -8,7 +8,7 @@ import { readJson, writeJsonAtomic } from '@mushinjs/core'
  *
  *   data/core/                small documents of the core plugins: bots, providers, permissions, sign-in
  *   data/bots/<id>/messages/  one bot's message log
- *   data/agents/              Agent sessions, skills and settings
+ *   data/fairy/               Fairy sessions, skills and settings
  *   data/plugins/<name>/      everything else, one folder per plugin
  *   logs/bots/<id>/           bot logs, safe to delete
  *
@@ -41,9 +41,9 @@ const RULES: Rule[] = [
   rule('auth', 'data:core/auth'),
   rule('messages/:bot/*', 'data:bots/:bot/messages/*'),
   rule('logs/:bot/*', 'logs:bots/:bot/*'),
-  rule('agent/skills/*', 'data:agents/skills/*'),
-  rule('agent/settings/*', 'data:agents/settings/*'),
-  rule('agent/*', 'data:agents/sessions/*'),
+  rule('fairy/skills/*', 'data:fairy/skills/*'),
+  rule('fairy/settings/*', 'data:fairy/settings/*'),
+  rule('fairy/*', 'data:fairy/sessions/*'),
   rule('flows/*', 'data:plugins/flows/documents/*'),
   rule('flows-tests/*', 'data:plugins/flows/tests/*'),
   rule('flows-tables', 'data:plugins/flows/tables'),
@@ -94,7 +94,7 @@ export function pathOf(dirs: LayoutDirs, key: string) {
 
 /**
  * Names directly under a key prefix. Under `messages` (a `:bot` segment) these are the bots that
- * have a message folder; under `agent/skills` they are the names in that folder.
+ * have a message folder; under `fairy/skills` they are the names in that folder.
  */
 export async function childrenOf(dirs: LayoutDirs, prefix: string): Promise<string[]> {
   const segments = prefix.split('/')

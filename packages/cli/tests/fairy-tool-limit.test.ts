@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { z } from '@mushinjs/core'
-import { CALL_TOOL, MAX_TOOLS, SEARCH_TOOL } from '@mushinjs/plugin-agent'
+import { CALL_TOOL, MAX_TOOLS, SEARCH_TOOL } from '@mushinjs/plugin-fairy'
 import { chatModelsFirst } from '@mushinjs/plugin-providers'
 import { startInstance, type TestInstance, waitFor } from './helpers/instance'
 import { createMockOpenAI } from './helpers/mock-openai'
@@ -33,9 +33,9 @@ afterAll(async () => {
   await llm?.close()
 })
 
-describe('agent tools', () => {
+describe('fairy tools', () => {
   it('lists at most 128 tools, core ones first, and reaches the rest through search and call', async () => {
-    const tools = await app.ctx.agent.tools()
+    const tools = await app.ctx.fairy.tools()
     expect(tools.length).toBe(MAX_TOOLS)
     const names = tools.map((tool) => tool.name)
     expect(names).toEqual(expect.arrayContaining(['bots__list', 'flows__create', 'providers__list', SEARCH_TOOL, CALL_TOOL]))
@@ -44,8 +44,8 @@ describe('agent tools', () => {
     llm.enqueue({ toolCalls: [{ name: SEARCH_TOOL, arguments: { query: 'lighthouses' } }] })
     llm.enqueue({ toolCalls: [{ name: CALL_TOOL, arguments: { name: 'zfiller__tool149', input: { n: 7 } } }] })
     llm.enqueue({ text: 'Done.' })
-    const { session } = await app.call('agent.send', { text: 'Count the lighthouses' })
-    await waitFor(async () => !(await app.call('agent.session', { id: session })).running || undefined)
+    const { session } = await app.call('fairy.send', { text: 'Count the lighthouses' })
+    await waitFor(async () => !(await app.call('fairy.session', { id: session })).running || undefined)
     const request = llm.requests.at(-3)
     expect(request.tools.length).toBeLessThanOrEqual(MAX_TOOLS)
     // OpenAI refuses patterns with Unicode property escapes.
@@ -58,16 +58,16 @@ describe('agent tools', () => {
 
   it('trims the tools of a conversation saved with too many', async () => {
     llm.enqueue({ text: 'Hi.' })
-    const { session } = await app.call('agent.send', { text: 'Hello' })
-    await waitFor(async () => !(await app.call('agent.session', { id: session })).running || undefined)
-    const agent = app.ctx.agent as any
-    const saved = await agent.session(session)
+    const { session } = await app.call('fairy.send', { text: 'Hello' })
+    await waitFor(async () => !(await app.call('fairy.session', { id: session })).running || undefined)
+    const fairy = app.ctx.fairy as any
+    const saved = await fairy.session(session)
     saved.tools = Array.from({ length: 146 }, (_, i) => ({ name: `old__tool${i}`, description: 'Old', parameters: { type: 'object' } }))
-    await agent.save(saved)
+    await fairy.save(saved)
 
     llm.enqueue({ text: 'Still here.' })
-    await app.call('agent.send', { session, text: 'Again' })
-    await waitFor(async () => !(await app.call('agent.session', { id: session })).running || undefined)
+    await app.call('fairy.send', { session, text: 'Again' })
+    await waitFor(async () => !(await app.call('fairy.session', { id: session })).running || undefined)
     expect(llm.requests.at(-1).tools.length).toBeLessThanOrEqual(MAX_TOOLS)
   })
 

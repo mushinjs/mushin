@@ -34,28 +34,28 @@ afterAll(async () => {
   await llm?.close()
 })
 
-describe('agent scenes and skills', () => {
+describe('fairy scenes and skills', () => {
   it('quotes a chat around the picked message, with its record id for samples', async () => {
     await app.call('demo.say', { text: '第一句', userId: '30001', userName: 'Cat' })
     await app.call('demo.say', { text: '我想要签到功能', userId: '30001', userName: 'Cat' })
     const record = await waitFor(async () => (await app.call<any[]>('bots.messages', { id: botId, limit: 500 }))
       .find((item) => item.direction === 'in' && JSON.stringify(item.segments).includes('我想要签到功能')))
     llm.enqueue({ text: 'Sure.' })
-    const { session } = await app.call('agent.send', { text: 'Make a flow for this', quote: { bot: botId, channel: record.channel.id, id: record.id } })
-    await waitFor(async () => !(await app.call('agent.session', { id: session })).running || undefined)
+    const { session } = await app.call('fairy.send', { text: 'Make a flow for this', quote: { bot: botId, channel: record.channel.id, id: record.id } })
+    await waitFor(async () => !(await app.call('fairy.session', { id: session })).running || undefined)
     const user = llm.requests.at(-1).messages.at(-1).content as string
     expect(user).toContain(`<quote bot="${botId}" chat="${record.channel.id}" message="${record.id}">`)
     expect(user).toMatch(/ {2}\[\d\d:\d\d\] Cat \(30001\): 第一句/)
     expect(user).toMatch(/→ \[\d\d:\d\d\] Cat \(30001\): 我想要签到功能/)
     expect(user.endsWith('\n\nMake a flow for this')).toBe(true)
-    const stored = await app.call('agent.session', { id: session })
+    const stored = await app.call('fairy.session', { id: session })
     expect(stored.messages[0]).toMatchObject({ display: 'Make a flow for this', quote: { bot: botId, focus: record.id } })
-    await app.call('agent.deleteSession', { id: session })
+    await app.call('fairy.deleteSession', { id: session })
   })
 
   it('puts the scene and the picked skill into the user message, and tags the conversation', async () => {
     llm.enqueue({ text: 'Looking at the logs.' })
-    const { session } = await app.call('agent.send', {
+    const { session } = await app.call('fairy.send', {
       text: 'Why is it offline?',
       page: `/bots/${botId}`,
       scene: { key: 'botDetail', label: 'Bot · Demo (offline)', hint: 'Diagnose the connection', state: { status: 'offline' }, resource: `bot:${botId}` },
@@ -70,38 +70,38 @@ describe('agent scenes and skills', () => {
     // The system prompt does not change with the scene.
     expect(sent[0].content).not.toContain('Diagnose the connection')
 
-    const stored = await app.call('agent.session', { id: session })
+    const stored = await app.call('fairy.session', { id: session })
     expect(stored.scene).toEqual({ key: 'botDetail', label: 'Bot · Demo (offline)', page: `/bots/${botId}` })
     expect(stored.tags).toEqual(expect.arrayContaining(['scene:botDetail', `resource:bot:${botId}`, 'skill:diagnose-bot']))
     expect(stored.messages[0]).toMatchObject({ display: 'Why is it offline?', skills: ['排查机器人连接'] })
   })
 
   it('lists skills and rejects unknown ones', async () => {
-    const skills = await app.call<any[]>('agent.skills.list')
+    const skills = await app.call<any[]>('fairy.skills.list')
     expect(skills.map((skill) => skill.id)).toEqual(expect.arrayContaining(['diagnose-bot', 'build-flow', 'fix-flow', 'connect-provider']))
     expect(skills.every((skill) => skill.source === (skill.plugin ? 'plugin' : 'builtin') && skill.enabled)).toBe(true)
     // Plugins add their own, such as the knowledge base's.
     expect(skills.find((skill) => skill.id === 'answer-from-knowledge')).toMatchObject({ source: 'plugin' })
-    await expect(app.call('agent.send', { text: 'hi', skills: ['nope'] })).rejects.toMatchObject({ code: 'not_found' })
-    await expect(app.call('agent.send', { text: '  ' })).rejects.toMatchObject({ code: 'invalid_input' })
+    await expect(app.call('fairy.send', { text: 'hi', skills: ['nope'] })).rejects.toMatchObject({ code: 'not_found' })
+    await expect(app.call('fairy.send', { text: '  ' })).rejects.toMatchObject({ code: 'invalid_input' })
   })
 
   it('searches conversations by text and tags', async () => {
     llm.enqueue({ text: 'The check-in flow replies with a greeting.' })
-    await app.call('agent.send', { text: 'Explain this flow', scene: { key: 'flowEditor', label: 'Flow editor · Check-in' } })
-    expect((await app.call<any[]>('agent.search', { query: 'offline' })).map((item) => item.title)).toEqual(['Why is it offline?'])
-    const byAnswer = await app.call<any[]>('agent.search', { query: 'greeting' })
+    await app.call('fairy.send', { text: 'Explain this flow', scene: { key: 'flowEditor', label: 'Flow editor · Check-in' } })
+    expect((await app.call<any[]>('fairy.search', { query: 'offline' })).map((item) => item.title)).toEqual(['Why is it offline?'])
+    const byAnswer = await app.call<any[]>('fairy.search', { query: 'greeting' })
     expect(byAnswer).toHaveLength(1)
     expect(byAnswer[0].snippet).toContain('greeting')
-    expect((await app.call<any[]>('agent.search', { tags: ['scene:flowEditor'] })).map((item) => item.title)).toEqual(['Explain this flow'])
-    expect(await app.call('agent.search', { tags: ['scene:flowEditor', 'skill:diagnose-bot'] })).toEqual([])
-    expect(await app.call<any[]>('agent.search', { tags: ['status:idle'] })).toHaveLength(2)
+    expect((await app.call<any[]>('fairy.search', { tags: ['scene:flowEditor'] })).map((item) => item.title)).toEqual(['Explain this flow'])
+    expect(await app.call('fairy.search', { tags: ['scene:flowEditor', 'skill:diagnose-bot'] })).toEqual([])
+    expect(await app.call<any[]>('fairy.search', { tags: ['status:idle'] })).toHaveLength(2)
   })
 })
 
-describe('bot commands from the Agent', () => {
-  it('lists the Agent\'s own commands and every bot\'s', async () => {
-    const { builtin, bots } = await app.call('agent.commands')
+describe('bot commands from Fairy', () => {
+  it('lists Fairy\'s own commands and every bot\'s', async () => {
+    const { builtin, bots } = await app.call('fairy.commands')
     expect(builtin.map((command: any) => command.name)).toEqual(['new', 'history', 'model', 'status', 'clear', 'help'])
     expect(bots).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'checkin', bot: botId, description: 'Daily check-in', source: expect.objectContaining({ kind: 'flow' }) })]))
   })
@@ -125,14 +125,14 @@ describe('bot commands from the Agent', () => {
     })
   })
 
-  it('marks a command the Agent ran as coming from the Agent and tags the conversation', async () => {
+  it('marks a command Fairy ran as coming from Fairy and tags the conversation', async () => {
     llm.enqueue(
       { toolCalls: [{ name: 'bots__commands__run', arguments: { bot: botId, command: '/checkin', target: 'master' } }] },
       { text: 'Done.' },
     )
-    const { session } = await app.call('agent.send', { text: '/checkin for the master' })
+    const { session } = await app.call('fairy.send', { text: '/checkin for the master' })
     const incoming = (await app.call<any[]>('bots.messages', { id: botId, limit: 500 })).filter((record) => record.direction === 'in').at(-1)
-    expect(incoming.source).toEqual({ kind: 'agent', session })
-    expect((await app.call('agent.session', { id: session })).tags).toContain('command:checkin')
+    expect(incoming.source).toEqual({ kind: 'fairy', session })
+    expect((await app.call('fairy.session', { id: session })).tags).toContain('command:checkin')
   })
 })

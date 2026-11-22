@@ -75,7 +75,7 @@ export class Storage extends Service {
     await rm(this.file(key, '.json'), { force: true })
   }
 
-  /** Keys of the JSON documents directly under a prefix, such as `agent`. */
+  /** Keys of the JSON documents directly under a prefix, such as `fairy`. */
   async list(prefix: string) {
     const dir = dirname(this.path(`${prefix}/_`))
     const names = await readdir(dir).catch(() => [] as string[])

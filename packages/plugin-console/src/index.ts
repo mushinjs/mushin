@@ -3,7 +3,7 @@ import {
   type ActionCaller, Context, type Exporter, field, Logger, LOG_TAGS, type LogTag, logTag, type Message, MushinError, randomId, Service, toErrorPayload, z,
 } from '@mushinjs/core'
 import type {} from '@cordisjs/plugin-server'
-import type {} from '@mushinjs/plugin-agent'
+import type {} from '@mushinjs/plugin-fairy'
 import type {} from '@mushinjs/plugin-bots'
 import type {} from '@mushinjs/plugin-flows'
 import type {} from '@mushinjs/plugin-providers'
@@ -61,7 +61,7 @@ const CLIENT_CALL_TIMEOUTS: Record<string, number> = { 'ui.ask': 15 * 60_000 }
 /** Events forwarded to every signed-in dashboard. */
 const FORWARDED_EVENTS = [
   'actions/changed', 'manager/changed', 'providers/changed',
-  'bots/changed', 'bots/status', 'bots/message', 'bots/log', 'agent/event', 'agent/changed',
+  'bots/changed', 'bots/status', 'bots/message', 'bots/log', 'fairy/event', 'fairy/changed',
   'flows/changed', 'flows/run', 'flows/step', 'flows/tests', 'flows/activity', 'flows/paused', 'stats/sample', 'permissions/changed', 'personas/changed',
   'knowledge/changed', 'knowledge/progress',
 ] as const
@@ -185,7 +185,7 @@ export class Console extends Service {
     }
 
     // The launcher prints the sign-in link from this event; the token never goes to the log buffer,
-    // which the dashboard and the Agent can read.
+    // which the dashboard and Fairy can read.
     this.ready = { url: devDashboard ?? server.baseUrl, token: this.envToken ?? this.token!, fromEnv: !!this.envToken }
     this.home.emit('console/ready', this.ready)
     this.home.logger('console').info('dashboard at %s', this.ready.url)
@@ -312,7 +312,7 @@ export class Console extends Service {
         case 'call': {
           const caller: ActionCaller = { kind: 'api', client: client.id }
           try {
-            const input = message.action === 'agent.send' ? { page: client.page, ...message.input } : message.input
+            const input = message.action === 'fairy.send' ? { page: client.page, ...message.input } : message.input
             const result = await this.home.actions.call(String(message.action), input ?? {}, caller)
             send({ type: 'result', id: message.id, ok: true, result: result ?? null })
           } catch (error) {
@@ -364,7 +364,7 @@ export class Console extends Service {
 
     yield actions.define({
       name: 'ui.highlight',
-      description: 'Point at a control on the current dashboard page. Targets: providers.add, bots.add, bot.connection, bot.plugins, bot.runs, bot.live, bot.logs, flows.add, flows.bots, flows.save, flows.test, agent.input.',
+      description: 'Point at a control on the current dashboard page. Targets: providers.add, bots.add, bot.connection, bot.plugins, bot.runs, bot.live, bot.logs, flows.add, flows.bots, flows.save, flows.test, fairy.input.',
       risk: 'read',
       client: true,
       input: z.object({
@@ -375,7 +375,7 @@ export class Console extends Service {
 
     yield actions.define({
       name: 'ui.ask',
-      description: 'Ask the user a multiple-choice question in the Agent panel and wait for the answer. Use it when a choice is theirs to make (which bot, which provider, whether to overwrite). Returns { choice, label } or { other } when they type their own answer.',
+      description: 'Ask the user a multiple-choice question in the Fairy panel and wait for the answer. Use it when a choice is theirs to make (which bot, which provider, whether to overwrite). Returns { choice, label } or { other } when they type their own answer.',
       risk: 'read',
       client: true,
       input: z.object({
@@ -408,7 +408,7 @@ export class Console extends Service {
       risk: 'read',
       input: z.object({
         limit: z.number().int().min(1).max(1000).optional(),
-        tag: z.enum(LOG_TAGS).optional().describe('Only lines from this source: plugin, bot, adapter, flow, provider, agent, system or other'),
+        tag: z.enum(LOG_TAGS).optional().describe('Only lines from this source: plugin, bot, adapter, flow, provider, fairy, system or other'),
       }),
       handler: ({ limit, tag }) => this.home.logger.buffer
         .filter((message) => !this.isBotLog(message) && (!tag || logTag(message.name) === tag))

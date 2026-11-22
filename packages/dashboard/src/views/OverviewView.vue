@@ -6,7 +6,7 @@ import { useRouter } from 'vue-router'
 import { call, on } from '../api'
 import EChart, { type ChartOption } from '../components/EChart.vue'
 import PageHeader from '../components/PageHeader.vue'
-import { useAgentStore } from '../stores/agent'
+import { useFairyStore } from '../stores/fairy'
 import { useDataStore } from '../stores/data'
 import { chartColors, palettes, useTheme } from '../theme'
 import type { FlowSummary, LogLine, PerfSample, StatsOverview, StatsSeries, StatsTopRow } from '../types'
@@ -15,7 +15,7 @@ import { formatTime } from '../utils'
 const { t } = useI18n()
 const router = useRouter()
 const message = useToast()
-const agent = useAgentStore()
+const fairy = useFairyStore()
 const data = useDataStore()
 const { isDark } = useTheme()
 
@@ -75,7 +75,7 @@ async function refreshShortcuts() {
 }
 
 onMounted(async () => {
-  agent.refreshSessions().catch(() => {})
+  fairy.refreshSessions().catch(() => {})
   await Promise.all([refreshOverview(), refreshActivity(), refreshTrends(), refreshRanking(), refreshShortcuts()])
   samples.value = await call<PerfSample[]>('stats.performance').catch(() => [])
 })
@@ -291,8 +291,8 @@ function rankDetail(row: StatsTopRow) {
 const recentFlows = computed(() => [...allFlows.value].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 4))
 
 function openSession(id: string) {
-  agent.open = true
-  agent.load(id).catch(() => {})
+  fairy.open = true
+  fairy.load(id).catch(() => {})
 }
 </script>
 
@@ -302,7 +302,7 @@ function openSession(id: string) {
 
     <p v-if="unavailable" class="notice">{{ t('overview.unavailable') }}</p>
 
-    <section v-if="attention.length" class="attention" data-agent-target="overview.attention">
+    <section v-if="attention.length" class="attention" data-fairy-target="overview.attention">
       <header class="attention-head">
         <span class="i-lucide-circle-alert attention-icon text-[16px]" />
         {{ t('overview.attention') }}
@@ -327,7 +327,7 @@ function openSession(id: string) {
         :to="card.to"
         class="kpi"
         :class="{ link: !!card.to }"
-        :data-agent-target="`overview.${card.key}`"
+        :data-fairy-target="`overview.${card.key}`"
       >
         <span class="kpi-label"><span class="text-[15px]" :class="card.icon" />{{ card.label }}</span>
         <span class="kpi-value">{{ card.value }}<small v-if="card.total !== undefined">/ {{ card.total }}</small></span>
@@ -341,7 +341,7 @@ function openSession(id: string) {
     </div>
 
     <div class="grid-2">
-      <section class="panel" data-agent-target="overview.activity">
+      <section class="panel" data-fairy-target="overview.activity">
         <header class="panel-head">
           <h2>{{ t('overview.activity') }}</h2>
           <RadioGroup v-model:value="range" size="small">
@@ -353,7 +353,7 @@ function openSession(id: string) {
         <Empty v-else :description="t('overview.noMessages')" class="empty" />
       </section>
 
-      <section class="panel" data-agent-target="overview.ranking">
+      <section class="panel" data-fairy-target="overview.ranking">
         <header class="panel-head">
           <h2>{{ t('overview.ranking') }}</h2>
           <Select v-model:value="dimension" :options="dimensions" size="small" class="rank-select" />
@@ -374,11 +374,11 @@ function openSession(id: string) {
     <div class="grid-3">
       <section class="panel compact">
         <h2 class="list-title">{{ t('overview.recentChats') }}</h2>
-        <button v-for="session in agent.sessions.slice(0, 4)" :key="session.id" type="button" class="shortcut hover-row" @click="openSession(session.id)">
+        <button v-for="session in fairy.sessions.slice(0, 4)" :key="session.id" type="button" class="shortcut hover-row" @click="openSession(session.id)">
           <span class="shortcut-name">{{ session.title || t('overview.untitled') }}</span>
           <span class="shortcut-meta">{{ formatTime(session.updatedAt) }}</span>
         </button>
-        <p v-if="!agent.sessions.length" class="none">{{ t('overview.noChats') }}</p>
+        <p v-if="!fairy.sessions.length" class="none">{{ t('overview.noChats') }}</p>
       </section>
       <section class="panel compact">
         <h2 class="list-title">{{ t('overview.recentFlows') }}</h2>
@@ -398,7 +398,7 @@ function openSession(id: string) {
       </section>
     </div>
 
-    <section v-if="overview" class="panel runtime" data-agent-target="overview.system">
+    <section v-if="overview" class="panel runtime" data-fairy-target="overview.system">
       <button type="button" class="runtime-head" :aria-expanded="showRuntime" @click="showRuntime = !showRuntime">
         <h2>{{ t('overview.runtime') }}</h2>
         <span class="runtime-summary">{{ runtimeSummary }}</span>

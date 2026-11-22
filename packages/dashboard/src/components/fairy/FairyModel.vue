@@ -7,7 +7,7 @@ import { providerOptions as toProviderOptions } from '../../models'
 import { useDataStore } from '../../stores/data'
 import ModelSelect from '../ModelSelect.vue'
 
-interface AgentConfig {
+interface FairyConfig {
   provider?: string
   model?: string
   maxSteps?: number
@@ -20,16 +20,16 @@ const message = useToast()
 const data = useDataStore()
 
 const entryId = ref<string>()
-const config = ref<AgentConfig>({})
+const config = ref<FairyConfig>({})
 const usage = ref<{ input: number; output: number; budget: number }>()
 const saving = ref(false)
 
 async function load() {
-  const plugins = await call<{ id: string; package: string; config: AgentConfig }[]>('plugins.list')
-  const entry = plugins.find((plugin) => plugin.package === '@mushinjs/plugin-agent')
+  const plugins = await call<{ id: string; package: string; config: FairyConfig }[]>('plugins.list')
+  const entry = plugins.find((plugin) => plugin.package === '@mushinjs/plugin-fairy')
   entryId.value = entry?.id
   config.value = { maxSteps: 20, confirmTimeout: 600, dailyTokens: 0, ...entry?.config }
-  usage.value = await call('agent.usage').catch(() => undefined)
+  usage.value = await call('fairy.usage').catch(() => undefined)
 }
 
 onMounted(() => load().catch((error) => message.error(error.message)))
@@ -57,44 +57,44 @@ async function save() {
 
 <template>
   <div class="model">
-    <Card :title="t('agentPage.model.title')">
+    <Card :title="t('fairyPage.model.title')">
       <Form>
         <div class="row">
-          <FormItem :label="t('agentPage.model.provider')">
-            <Select v-model:value="config.provider" clearable :options="providerOptions" :placeholder="t('agentPalette.defaultProvider')" />
+          <FormItem :label="t('fairyPage.model.provider')">
+            <Select v-model:value="config.provider" clearable :options="providerOptions" :placeholder="t('fairyPalette.defaultProvider')" />
           </FormItem>
-          <FormItem :label="t('agentPage.model.model')">
-            <ModelSelect :model-value="config.model" :provider="config.provider" :placeholder="t('agentPalette.defaultModel')" @update:model-value="(value) => (config.model = value ?? undefined)" />
+          <FormItem :label="t('fairyPage.model.model')">
+            <ModelSelect :model-value="config.model" :provider="config.provider" :placeholder="t('fairyPalette.defaultModel')" @update:model-value="(value) => (config.model = value ?? undefined)" />
           </FormItem>
         </div>
         <div class="row">
-          <FormItem :label="t('agentPage.model.maxSteps')" :feedback="t('agentPage.model.maxStepsHelp')">
+          <FormItem :label="t('fairyPage.model.maxSteps')" :feedback="t('fairyPage.model.maxStepsHelp')">
             <NumberInput v-model:value="config.maxSteps" :min="1" :max="50" />
           </FormItem>
-          <FormItem :label="t('agentPage.model.confirmTimeout')" :feedback="t('agentPage.model.confirmTimeoutHelp')">
+          <FormItem :label="t('fairyPage.model.confirmTimeout')" :feedback="t('fairyPage.model.confirmTimeoutHelp')">
             <NumberInput v-model:value="config.confirmTimeout" :min="10" />
           </FormItem>
         </div>
-        <FormItem :label="t('agentPage.model.dailyTokens')" :feedback="t('agentPage.model.dailyTokensHelp')">
+        <FormItem :label="t('fairyPage.model.dailyTokens')" :feedback="t('fairyPage.model.dailyTokensHelp')">
           <NumberInput v-model:value="config.dailyTokens" :min="0" :step="10000" />
         </FormItem>
       </Form>
       <template #action>
         <div class="flex flex-wrap gap-x-3 gap-y-2 items-center justify-between">
-          <span class="hint small">{{ t('agentPage.model.restartNote') }}</span>
+          <span class="hint small">{{ t('fairyPage.model.restartNote') }}</span>
           <Button type="primary" :loading="saving" :disabled="!entryId" @click="save">{{ t('common.save') }}</Button>
         </div>
       </template>
     </Card>
 
-    <Card v-if="usage" :title="t('agentPage.model.usageTitle')">
-      <p class="usage">{{ t('agentPage.model.usage', { input: usage.input.toLocaleString(), output: usage.output.toLocaleString() }) }}</p>
+    <Card v-if="usage" :title="t('fairyPage.model.usageTitle')">
+      <p class="usage">{{ t('fairyPage.model.usage', { input: usage.input.toLocaleString(), output: usage.output.toLocaleString() }) }}</p>
       <template v-if="usage.budget">
         <Progress :percentage="percent" :status="percent >= 100 ? 'error' : percent >= 80 ? 'warning' : 'success'">{{ Math.round(percent) }}%</Progress>
-        <p class="hint small">{{ t('agentPage.model.budget', { used: used.toLocaleString(), budget: usage.budget.toLocaleString() }) }}</p>
-        <Alert v-if="percent >= 100" type="error" :show-icon="false">{{ t('agentPage.model.exhausted') }}</Alert>
+        <p class="hint small">{{ t('fairyPage.model.budget', { used: used.toLocaleString(), budget: usage.budget.toLocaleString() }) }}</p>
+        <Alert v-if="percent >= 100" type="error" :show-icon="false">{{ t('fairyPage.model.exhausted') }}</Alert>
       </template>
-      <p v-else class="hint small">{{ t('agentPage.model.noBudget') }}</p>
+      <p v-else class="hint small">{{ t('fairyPage.model.noBudget') }}</p>
     </Card>
   </div>
 </template>

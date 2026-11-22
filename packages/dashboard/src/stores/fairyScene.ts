@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { call, on } from '../api'
 import { i18n } from '../i18n'
 import { router } from '../router'
-import type { AgentScene } from '../types'
+import type { FairyScene } from '../types'
 import { useDataStore } from './data'
 
 /** A suggestion for the current page: clicking it sends `prompt`, with `skill` applied when set. */
@@ -16,7 +16,7 @@ export interface Recommendation {
   urgent?: boolean
 }
 
-/** What the user changed for one page on the Agent page. */
+/** What the user changed for one page on the Fairy page. */
 export interface SceneProfile {
   hint?: string
   welcome?: string
@@ -33,10 +33,10 @@ export interface PageFacts {
   resource?: string
 }
 
-/** Pages the Agent knows, in the order the Agent page lists them. */
-export const SCENES = ['overview', 'setup', 'providers', 'bots', 'botDetail', 'flows', 'flowEditor', 'personas', 'knowledge', 'database', 'plugins', 'logs', 'settings', 'agent'] as const
+/** Pages Fairy knows, in the order the Fairy page lists them. */
+export const SCENES = ['overview', 'setup', 'providers', 'bots', 'botDetail', 'flows', 'flowEditor', 'personas', 'knowledge', 'database', 'plugins', 'logs', 'settings', 'fairy'] as const
 
-/** The built-in suggestions each page can show (each only when its condition holds), for the Agent page. */
+/** The built-in suggestions each page can show (each only when its condition holds), for the Fairy page. */
 export const SCENE_RECOMMENDATIONS: Record<string, string[]> = {
   overview: ['connect', 'status', 'provider'],
   setup: ['connectDeepSeek', 'connectOllama', 'providerFailed'],
@@ -51,7 +51,7 @@ export const SCENE_RECOMMENDATIONS: Record<string, string[]> = {
   plugins: ['pluginsFailed'],
   logs: ['connect', 'status', 'provider'],
   settings: ['connect', 'status', 'provider'],
-  agent: ['connect', 'status', 'provider'],
+  fairy: ['connect', 'status', 'provider'],
 }
 
 const t = (key: string, values: Record<string, unknown> = {}) => i18n.global.t(key, values)
@@ -61,15 +61,15 @@ export function sceneKey(path: string) {
   const [, first, id] = path.split('/')
   if (first === 'bots') return id ? 'botDetail' : 'bots'
   if (first === 'flows') return id ? 'flowEditor' : 'flows'
-  if (first === 'settings') return id === 'agent' ? 'agent' : 'settings'
+  if (first === 'settings') return id === 'fairy' ? 'fairy' : 'settings'
   return (SCENES as readonly string[]).includes(first) ? first : 'overview'
 }
 
 /**
- * Works out which page the user is on and what the Agent should offer there. Recommendations come
+ * Works out which page the user is on and what Fairy should offer there. Recommendations come
  * from the local rules below, so they cost no tokens.
  */
-export const useAgentSceneStore = defineStore('agentScene', () => {
+export const useFairySceneStore = defineStore('fairyScene', () => {
   const data = useDataStore()
   const path = computed(() => router.currentRoute.value.path)
   const key = computed(() => sceneKey(path.value))
@@ -81,14 +81,14 @@ export const useAgentSceneStore = defineStore('agentScene', () => {
   const profile = computed<SceneProfile>(() => profiles.value[key.value] ?? {})
 
   async function refreshProfiles() {
-    profiles.value = (await call<{ profiles: Record<string, SceneProfile> }>('agent.profiles.list')).profiles
+    profiles.value = (await call<{ profiles: Record<string, SceneProfile> }>('fairy.profiles.list')).profiles
   }
 
   let bound = false
   function bind() {
     if (bound) return
     bound = true
-    on('agent/changed', () => refreshProfiles().catch(() => {}))
+    on('fairy/changed', () => refreshProfiles().catch(() => {}))
     refreshProfiles().catch(() => {})
   }
 
@@ -109,8 +109,8 @@ export const useAgentSceneStore = defineStore('agentScene', () => {
 
   const bot = computed(() => (key.value === 'botDetail' ? data.bots.find((item) => item.id === path.value.split('/')[2]) : undefined))
 
-  const scene = computed<AgentScene>(() => {
-    const name = t(`agentScene.name.${key.value}`)
+  const scene = computed<FairyScene>(() => {
+    const name = t(`fairyScene.name.${key.value}`)
     let label = name
     const state: Record<string, string | number | boolean> = { ...facts.value?.state }
     let resource = facts.value?.resource
@@ -123,13 +123,13 @@ export const useAgentSceneStore = defineStore('agentScene', () => {
     } else if (facts.value?.label) {
       label = `${name} · ${facts.value.label}`
     }
-    return { key: key.value, label, hint: profile.value.hint?.trim() || t(`agentScene.hint.${key.value}`), ...(Object.keys(state).length ? { state } : {}), ...(resource ? { resource } : {}) }
+    return { key: key.value, label, hint: profile.value.hint?.trim() || t(`fairyScene.hint.${key.value}`), ...(Object.keys(state).length ? { state } : {}), ...(resource ? { resource } : {}) }
   })
 
   const recommendations = computed<Recommendation[]>(() => {
     const list: Recommendation[] = []
     const add = (id: string, prompt: string, options: { skill?: string; urgent?: boolean; values?: Record<string, unknown> } = {}) => {
-      list.push({ id, text: t(`agentScene.rec.${id}`, options.values), prompt: prompt || t(`agentScene.rec.${id}`, options.values), skill: options.skill, urgent: options.urgent })
+      list.push({ id, text: t(`fairyScene.rec.${id}`, options.values), prompt: prompt || t(`fairyScene.rec.${id}`, options.values), skill: options.skill, urgent: options.urgent })
     }
     const failedProvider = data.providers.find((provider) => provider.lastTest && !provider.lastTest.ok)
     switch (key.value) {

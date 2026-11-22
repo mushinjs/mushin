@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { call, on } from '../api'
 import { avatarColor, initial } from '../botAvatar'
-import { useAgentStore } from '../stores/agent'
+import { useFairyStore } from '../stores/fairy'
 import { useDataStore } from '../stores/data'
 import type { ChannelSummary, Contact, MessageRecord, Segment } from '../types'
 import { formatTime, segmentsText } from '../utils'
@@ -16,7 +16,7 @@ const { t } = useI18n()
 const message = useToast()
 const data = useDataStore()
 const router = useRouter()
-const agent = useAgentStore()
+const fairy = useFairyStore()
 
 /** The chat that only exists in Mushin, where the dashboard plays a test user; see `bots.sandbox`. */
 const SANDBOX_ID = '@sandbox'
@@ -36,7 +36,7 @@ function avatarOf(kind: 'user' | 'group', id: string) {
   return template.replaceAll('{id}', encodeURIComponent(id))
 }
 
-// ---- what to do with a message: a new flow from it, or quote it to the Agent ----
+// ---- what to do with a message: a new flow from it, or quote it to Fairy ----
 
 const sampleQuery = (record: MessageRecord) => `${record.botId}:${record.channel.id}:${record.id}`
 
@@ -76,14 +76,14 @@ async function newFlow(record: MessageRecord) {
   }
 }
 
-function quoteToAgent(record: MessageRecord) {
-  agent.quote = {
+function quoteToFairy(record: MessageRecord) {
+  fairy.quote = {
     bot: props.botId,
     channel: record.channel.id,
     id: record.id,
     label: `${senderName(record)}：${segmentsText(record.segments).slice(0, 40)}`,
   }
-  agent.open = true
+  fairy.open = true
 }
 
 // ---- the channel list: the sandbox on top, then chats with messages, then the account's other friends and groups ----
@@ -302,7 +302,7 @@ async function send() {
             :avatar="senderAvatar(record)"
             :name="senderName(record)"
             @new-flow="newFlow(record)"
-            @quote="quoteToAgent(record)"
+            @quote="quoteToFairy(record)"
           />
         </div>
         <footer v-if="current" class="composer">

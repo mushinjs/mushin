@@ -16,7 +16,7 @@ const interceptLabel = (value: Intercept) => t(`flows.intercept.${value}`)
 </script>
 
 <template>
-  <div v-if="selected" class="order" data-agent-target="flows.triggerOrder">
+  <div v-if="selected" class="order" data-fairy-target="flows.triggerOrder">
     <div class="inputs-title">{{ t('flows.triggerOrder') }}</div>
     <Form label-placement="top" size="small">
       <FormItem>
@@ -33,7 +33,7 @@ const interceptLabel = (value: Intercept) => t(`flows.intercept.${value}`)
           <NumberInput :value="selected.data!.priority ?? 0" :precision="0" @update:value="(value: number | null) => updateSelected({ priority: value || undefined })" />
         </div>
       </FormItem>
-      <FormItem :label="t('flows.interceptTitle')" :feedback="t(`flows.interceptHint.${selected.data!.intercept ?? 'none'}`)" data-agent-target="flows.intercept">
+      <FormItem :label="t('flows.interceptTitle')" :feedback="t(`flows.interceptHint.${selected.data!.intercept ?? 'none'}`)" data-fairy-target="flows.intercept">
         <RadioGroup :value="selected.data!.intercept ?? 'none'" size="small" @update:value="(value: Intercept) => updateSelected({ intercept: value === 'none' ? undefined : value })">
           <RadioButton v-for="value in intercepts" :key="value" :value="value">{{ interceptLabel(value) }}</RadioButton>
         </RadioGroup>

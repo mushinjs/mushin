@@ -1,5 +1,5 @@
 // A local demo: a Mushin.js instance wired to a mock NapCat and a mock OpenAI-compatible LLM,
-// seeded with a provider, two bots, a flow, chat traffic and one Agent conversation.
+// seeded with a provider, two bots, a flow, chat traffic and one Fairy conversation.
 // Run: pnpm --filter @mushinjs/cli exec tsx tests/helpers/demo.ts  (then open http://127.0.0.1:5160, token "demo")
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -71,7 +71,7 @@ llm.enqueue(
   { toolCalls: [{ name: 'bots__list', arguments: {} }] },
   { text: 'You have 2 bots. Alpha is online with Echo and LLM chat enabled. Beta is waiting for NapCat to connect in reverse mode.' },
 )
-await call('agent.send', { text: 'Which bots do I have, and are they online?' })
+await call('fairy.send', { text: 'Which bots do I have, and are they online?' })
 
 console.log(`Mushin.js demo running at http://127.0.0.1:${port} (admin token: ${process.env.MUSHIN_ADMIN_TOKEN})`)
 console.log(`Mock LLM: POST scripted replies to ${llm.baseURL.replace(/\/v1$/, '')}/__enqueue`)

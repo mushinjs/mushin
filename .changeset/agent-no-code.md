@@ -1,5 +1,5 @@
 ---
-'@mushinjs/plugin-agent': patch
+'@mushinjs/plugin-fairy': patch
 ---
 
-The Agent says when a job needs a code plugin, and points to a coding agent with the mushin MCP server, instead of asking the user for plugin docs.
+Fairy says when a job needs a code plugin, and points to a coding agent with the mushin MCP server, instead of asking the user for plugin docs.

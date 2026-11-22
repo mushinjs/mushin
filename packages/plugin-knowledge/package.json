@@ -1,7 +1,7 @@
 {
   "name": "@mushinjs/plugin-knowledge",
   "version": "0.2.0",
-  "description": "Knowledge bases: documents searched by keywords and meaning, from flows, the Agent and chat",
+  "description": "Knowledge bases: documents searched by keywords and meaning, from flows, Fairy and chat",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -37,8 +37,8 @@
       "zh-CN": "知识库"
     },
     "description": {
-      "en": "Upload documents and let bots and the Agent answer from them; admins add knowledge from chat, and bases can learn from chats for review",
-      "zh-CN": "上传资料，让机器人和智能体据此回答；管理员可以在聊天里补充知识，也可以从对话里学习，审核后加入"
+      "en": "Upload documents and let bots and Fairy answer from them; admins add knowledge from chat, and bases can learn from chats for review",
+      "zh-CN": "上传资料，让机器人和 Fairy 据此回答；管理员可以在聊天里补充知识，也可以从对话里学习，审核后加入"
     },
     "provides": [
       "knowledge"
@@ -55,7 +55,7 @@
     "optional": {
       "plugins": {
         "@mushinjs/plugin-flows": "*",
-        "@mushinjs/plugin-agent": "*"
+        "@mushinjs/plugin-fairy": "*"
       }
     },
     "nodes": [
@@ -72,6 +72,6 @@
     "minato": "catalog:"
   },
   "devDependencies": {
-    "@mushinjs/plugin-agent": "workspace:*"
+    "@mushinjs/plugin-fairy": "workspace:*"
   }
 }

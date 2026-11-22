@@ -168,7 +168,7 @@ const otherFields = (schema: { properties?: Record<string, unknown> }, keep: str
         :title="selected.data!.skip ? t('flows.unskipNode') : `${t('flows.skipNode')}：${t('flows.skipNodeHint')}`"
         :aria-label="selected.data!.skip ? t('flows.unskipNode') : t('flows.skipNode')"
         :aria-pressed="!!selected.data!.skip"
-        data-agent-target="flows.skipNode"
+        data-fairy-target="flows.skipNode"
         @click="toggleSkip([selected.id])" icon="i-lucide-ban" />
       <Button quaternary circle size="small" type="error" :title="t('flows.deleteNode')" :aria-label="t('flows.deleteNode')" @click="deleteSelected" icon="i-lucide-trash-2" />
     </div>

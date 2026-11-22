@@ -126,7 +126,7 @@ const sourceDetail = computed(() => {
         ...(s.model ? [[t('hover.provider'), s.provider ?? ''], [t('hover.model'), s.model]] : []),
         ...(s.persona ? [[t('hover.persona'), s.persona]] : []),
       ]
-    case 'agent':
+    case 'fairy':
       return [[t('hover.session'), s.session]]
     default:
       return []
@@ -258,7 +258,7 @@ const bare = computed(() => {
               <span class="i-lucide-network" />{{ t('live.actionNewFlow') }}
             </button>
             <button type="button" class="link" @click="open = false; emit('quote')">
-              <span class="i-lucide-quote" />{{ t('live.actionAgent') }}
+              <span class="i-lucide-quote" />{{ t('live.actionFairy') }}
             </button>
           </div>
         </template>

@@ -52,7 +52,7 @@
     "optional": {
       "plugins": {
         "@mushinjs/plugin-bots": "*",
-        "@mushinjs/plugin-agent": "*",
+        "@mushinjs/plugin-fairy": "*",
         "@mushinjs/plugin-providers": "*",
         "@mushinjs/plugin-flows": "*",
         "@mushinjs/plugin-stats": "*"
@@ -63,7 +63,7 @@
     "@mushinjs/core": "workspace:*",
     "@mushinjs/plugin-storage": "workspace:*",
     "@mushinjs/plugin-bots": "workspace:*",
-    "@mushinjs/plugin-agent": "workspace:*",
+    "@mushinjs/plugin-fairy": "workspace:*",
     "@cordisjs/plugin-server": "catalog:",
     "ws": "catalog:",
     "@mushinjs/dashboard": "workspace:*",

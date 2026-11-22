@@ -5,8 +5,8 @@ export const OPTIONAL_PAGES = ['flows', 'personas', 'knowledge', 'database', 'pl
 
 /** Preferences of this browser, set under Settings → Features. */
 export interface Prefs {
-  /** Open the Agent panel when the dashboard loads (wide windows only). */
-  agentOpenOnStart: boolean
+  /** Open the Fairy panel when the dashboard loads (wide windows only). */
+  fairyOpenOnStart: boolean
   /** Sidebar entries the user hid; the pages still open by link. */
   hiddenPages: string[]
 }
@@ -14,10 +14,10 @@ export interface Prefs {
 const KEY = 'mushin.prefs'
 
 function read(): Prefs {
-  const prefs: Prefs = { agentOpenOnStart: true, hiddenPages: [] }
+  const prefs: Prefs = { fairyOpenOnStart: true, hiddenPages: [] }
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}')
-    if (typeof saved.agentOpenOnStart === 'boolean') prefs.agentOpenOnStart = saved.agentOpenOnStart
+    if (typeof saved.fairyOpenOnStart === 'boolean') prefs.fairyOpenOnStart = saved.fairyOpenOnStart
     if (Array.isArray(saved.hiddenPages)) prefs.hiddenPages = saved.hiddenPages.filter((page: unknown) => typeof page === 'string')
   } catch {}
   return prefs

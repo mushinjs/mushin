@@ -53,7 +53,7 @@ export function apply(ctx: Context, raw: z.input<typeof Config>) {
   const config = Config.parse(raw ?? {})
   const logger = ctx.logger('${name}')
 
-  // An action can be called from the dashboard, flows, the Agent and the HTTP API.
+  // An action can be called from the dashboard, flows, Fairy and the HTTP API.
   ctx.actions.define({
     name: '${action}',
     description: 'Greets someone by name. Returns the greeting as text.',

@@ -72,7 +72,7 @@ export interface CaseResult {
 export interface TestRunSummary {
   flowId: string
   at: number
-  /** Who asked: the editor, saving the flow, the Agent, the CLI or a task. */
+  /** Who asked: the editor, saving the flow, Fairy, the CLI or a task. */
   source: string
   passed: number
   failed: number

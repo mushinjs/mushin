@@ -112,8 +112,8 @@ async function save() {
       ? await call<McpServer>('mcp.servers.update', { id: value.id, ...body })
       : await call<McpServer>('mcp.servers.create', body)
     form.value = undefined
-    if (result.status === 'error') message.warning(t('agentPage.mcp.savedError', { error: result.error }))
-    else message.success(t('agentPage.mcp.connected', { count: result.tools.length }))
+    if (result.status === 'error') message.warning(t('fairyPage.mcp.savedError', { error: result.error }))
+    else message.success(t('fairyPage.mcp.connected', { count: result.tools.length }))
     await refresh()
   } catch (error) {
     message.error((error as Error).message)
@@ -143,32 +143,32 @@ function remove(server: McpServer) {
   })
 }
 
-const riskOptions = ['read', 'write', 'dangerous'].map((risk) => ({ label: t(`agentPage.tools.risk.${risk}`), value: risk }))
+const riskOptions = ['read', 'write', 'dangerous'].map((risk) => ({ label: t(`fairyPage.tools.risk.${risk}`), value: risk }))
 const statusType = { connected: 'success', connecting: 'info', error: 'error', stopped: 'default' } as const
 </script>
 
 <template>
   <div class="mcp">
-    <Alert v-if="available === false" type="warning" :title="t('agentPage.mcp.unavailable')">
-      {{ t('agentPage.mcp.unavailableHint') }}
+    <Alert v-if="available === false" type="warning" :title="t('fairyPage.mcp.unavailable')">
+      {{ t('fairyPage.mcp.unavailableHint') }}
       <RouterLink to="/plugins?highlight=@mushinjs/plugin-mcp">{{ t('permissions.openPlugins') }}</RouterLink>
     </Alert>
     <template v-else>
       <div class="toolbar">
-        <p class="hint">{{ t('agentPage.mcp.lead') }}</p>
+        <p class="hint">{{ t('fairyPage.mcp.lead') }}</p>
         <Button type="primary" icon="i-lucide-plus" @click="openNew">
-          {{ t('agentPage.mcp.add') }}
+          {{ t('fairyPage.mcp.add') }}
         </Button>
       </div>
       <Spin :show="loading && !servers.length">
-        <Empty v-if="!servers.length && !loading" :description="t('agentPage.mcp.empty')" />
+        <Empty v-if="!servers.length && !loading" :description="t('fairyPage.mcp.empty')" />
         <div class="list">
           <Card v-for="server in servers" :key="server.id" size="small">
             <div class="server-head">
               <div class="server-name">
                 <span>{{ server.name }}</span>
                 <Tag size="tiny">{{ server.transport === 'stdio' ? 'stdio' : 'HTTP' }}</Tag>
-                <Tag size="tiny" :type="statusType[server.status]">{{ t(`agentPage.mcp.status.${server.status}`) }}</Tag>
+                <Tag size="tiny" :type="statusType[server.status]">{{ t(`fairyPage.mcp.status.${server.status}`) }}</Tag>
                 <span v-if="server.serverInfo?.name" class="hint small">{{ server.serverInfo.name }} {{ server.serverInfo.version }}</span>
               </div>
               <div class="server-actions">
@@ -179,7 +179,7 @@ const statusType = { connected: 'success', connecting: 'info', error: 'error', s
                   :loading="busy === server.id"
                   @update:value="(enabled: boolean) => run(server.id, () => call('mcp.servers.update', { id: server.id, enabled }))"
                 />
-                <IconAction icon="i-lucide-refresh-cw" :label="t('agentPage.mcp.restart')" :disabled="!server.enabled" :loading="busy === server.id" @click="run(server.id, () => call('mcp.servers.restart', { id: server.id }))" />
+                <IconAction icon="i-lucide-refresh-cw" :label="t('fairyPage.mcp.restart')" :disabled="!server.enabled" :loading="busy === server.id" @click="run(server.id, () => call('mcp.servers.restart', { id: server.id }))" />
                 <IconAction icon="i-lucide-pencil" :label="t('common.edit')" @click="openEdit(server)" />
                 <IconAction icon="i-lucide-trash-2" type="error" :label="t('common.delete')" @click="remove(server)" />
               </div>
@@ -210,45 +210,45 @@ const statusType = { connected: 'success', connecting: 'info', error: 'error', s
       </Spin>
     </template>
 
-    <Modal :show="!!form" :title="form?.id ? t('agentPage.mcp.edit') : t('agentPage.mcp.add')" :style="{ width: '600px', maxWidth: '95vw' }" @update:show="(show: boolean) => !show && (form = undefined)">
+    <Modal :show="!!form" :title="form?.id ? t('fairyPage.mcp.edit') : t('fairyPage.mcp.add')" :style="{ width: '600px', maxWidth: '95vw' }" @update:show="(show: boolean) => !show && (form = undefined)">
       <Form v-if="form">
         <FormItem :label="t('common.name')" required>
           <Input v-model:value="form.name" placeholder="filesystem" />
         </FormItem>
-        <FormItem :label="t('agentPage.mcp.transport')">
+        <FormItem :label="t('fairyPage.mcp.transport')">
           <RadioGroup v-model:value="form.transport">
-            <RadioButton value="stdio">{{ t('agentPage.mcp.stdio') }}</RadioButton>
-            <RadioButton value="http">{{ t('agentPage.mcp.http') }}</RadioButton>
+            <RadioButton value="stdio">{{ t('fairyPage.mcp.stdio') }}</RadioButton>
+            <RadioButton value="http">{{ t('fairyPage.mcp.http') }}</RadioButton>
           </RadioGroup>
         </FormItem>
         <template v-if="form.transport === 'stdio'">
-          <FormItem :label="t('agentPage.mcp.command')" required>
+          <FormItem :label="t('fairyPage.mcp.command')" required>
             <Input v-model:value="form.command" class="mono" placeholder="npx" />
           </FormItem>
-          <FormItem :label="t('agentPage.mcp.args')" :feedback="t('agentPage.mcp.argsHelp')">
+          <FormItem :label="t('fairyPage.mcp.args')" :feedback="t('fairyPage.mcp.argsHelp')">
             <TagsInput v-model:value="form.args" />
           </FormItem>
-          <FormItem :label="t('agentPage.mcp.env')" :feedback="t('agentPage.mcp.secretHelp')">
-            <KeyValueInput v-model:value="form.env" key-placeholder="API_KEY" :value-placeholder="t('agentPage.mcp.value')" />
+          <FormItem :label="t('fairyPage.mcp.env')" :feedback="t('fairyPage.mcp.secretHelp')">
+            <KeyValueInput v-model:value="form.env" key-placeholder="API_KEY" :value-placeholder="t('fairyPage.mcp.value')" />
           </FormItem>
-          <FormItem :label="t('agentPage.mcp.cwd')">
+          <FormItem :label="t('fairyPage.mcp.cwd')">
             <Input v-model:value="form.cwd" class="mono" />
           </FormItem>
         </template>
         <template v-else>
-          <FormItem :label="t('agentPage.mcp.url')" required>
+          <FormItem :label="t('fairyPage.mcp.url')" required>
             <Input v-model:value="form.url" class="mono" placeholder="https://example.com/mcp" />
           </FormItem>
-          <FormItem :label="t('agentPage.mcp.headers')" :feedback="t('agentPage.mcp.secretHelp')">
-            <KeyValueInput v-model:value="form.headers" key-placeholder="Authorization" :value-placeholder="t('agentPage.mcp.value')" />
+          <FormItem :label="t('fairyPage.mcp.headers')" :feedback="t('fairyPage.mcp.secretHelp')">
+            <KeyValueInput v-model:value="form.headers" key-placeholder="Authorization" :value-placeholder="t('fairyPage.mcp.value')" />
           </FormItem>
         </template>
-        <p class="hint small">{{ t('agentPage.mcp.newTools') }}</p>
+        <p class="hint small">{{ t('fairyPage.mcp.newTools') }}</p>
       </Form>
       <template #action>
         <div class="flex flex-wrap gap-x-3 gap-y-2 items-center justify-end">
           <Button @click="form = undefined">{{ t('common.cancel') }}</Button>
-          <Button type="primary" :loading="saving" @click="save">{{ t('agentPage.mcp.saveConnect') }}</Button>
+          <Button type="primary" :loading="saving" @click="save">{{ t('fairyPage.mcp.saveConnect') }}</Button>
         </div>
       </template>
     </Modal>

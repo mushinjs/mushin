@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, watch } from 'vue'
 import { call, on } from '../../../api'
 import { schemaDefaults } from '../../../flow'
-import { useAgentSceneStore } from '../../../stores/agentScene'
+import { useFairySceneStore } from '../../../stores/fairyScene'
 import type { FlowDoc, FlowIssue, NodeTypeInfo, RunTrace } from '../../../types'
 import { clone, localize } from '../../../utils'
 import type { EditorState } from './state'
@@ -24,14 +24,14 @@ export function useDocument(
 ) {
   const { t, locale, message, flowId, data, nodes, edges, types, loaded, saving, dirty, adapter, bots, issues, blockedSlots } = s
 
-  // Tells the Agent which flow is open and how many problems it has.
-  const agentScene = useAgentSceneStore()
-  watch([s.name, issues, flowId], () => agentScene.publish({
+  // Tells Fairy which flow is open and how many problems it has.
+  const fairyScene = useFairySceneStore()
+  watch([s.name, issues, flowId], () => fairyScene.publish({
     label: s.name.value,
     state: { errors: s.errorCount.value, warnings: s.warningCount.value },
     resource: `flow:${flowId.value}`,
   }), { immediate: true })
-  onBeforeUnmount(() => agentScene.publish(undefined))
+  onBeforeUnmount(() => fairyScene.publish(undefined))
 
   let savedAt = 0
   let pendingFit = false
@@ -118,7 +118,7 @@ export function useDocument(
 
   const reload = () => load().catch((error) => message.error(error.message))
 
-  // Someone else (usually the Agent) changed the flow: follow along unless there are local edits.
+  // Someone else (usually Fairy) changed the flow: follow along unless there are local edits.
   const offChanged = on('flows/changed', async () => {
     if (!loaded.value || dirty.value || saving.value) return
     try {

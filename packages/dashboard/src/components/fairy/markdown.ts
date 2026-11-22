@@ -13,14 +13,14 @@ import xml from 'highlight.js/lib/languages/xml'
 import yaml from 'highlight.js/lib/languages/yaml'
 import MarkdownIt from 'markdown-it'
 
-// The languages the Agent is likely to write: configs, scripts and snippets for plugins.
+// The languages Fairy is likely to write: configs, scripts and snippets for plugins.
 for (const [name, language] of Object.entries({ bash, css, ini, javascript, json, markdown, python, shell, sql, typescript, xml, yaml })) {
   hljs.registerLanguage(name, language)
 }
 hljs.registerAliases(['sh', 'zsh'], { languageName: 'bash' })
 hljs.registerAliases(['toml'], { languageName: 'ini' })
 
-/** A piece of an Agent reply: Markdown as HTML, or a block the dashboard draws itself. */
+/** A piece of a Fairy reply: Markdown as HTML, or a block the dashboard draws itself. */
 export type Segment =
   | { kind: 'html'; html: string }
   | { kind: 'code'; lang: string; code: string; html: string }
@@ -97,7 +97,7 @@ function asSteps(value: any): MushinStep[] | undefined {
   return list.map((step: any) => (typeof step === 'string' ? { text: step } : { text: String(step?.text ?? ''), done: !!step?.done }))
 }
 
-/** Splits an Agent reply into Markdown HTML and the blocks the dashboard draws as components. */
+/** Splits a Fairy reply into Markdown HTML and the blocks the dashboard draws as components. */
 export function renderSegments(text: string): Segment[] {
   const tokens = md.parse(text, {})
   const segments: Segment[] = []

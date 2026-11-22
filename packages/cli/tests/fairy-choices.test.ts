@@ -18,12 +18,12 @@ afterAll(async () => {
 })
 
 async function turn(input: Record<string, unknown>) {
-  const { session } = await app.call('agent.send', input)
-  await waitFor(async () => !(await app.call('agent.session', { id: session })).running || undefined)
+  const { session } = await app.call('fairy.send', input)
+  await waitFor(async () => !(await app.call('fairy.session', { id: session })).running || undefined)
   return session as string
 }
 
-describe('agent model, effort and edits', () => {
+describe('fairy model, effort and edits', () => {
   it('uses the model and effort picked for a message', async () => {
     llm.enqueue({ text: 'One.' })
     await turn({ text: 'hi', provider, model: 'mock-big', effort: 'high' })
@@ -45,11 +45,11 @@ describe('agent model, effort and edits', () => {
 
     llm.enqueue({ text: 'Answer to the edit.' })
     await turn({ session, text: 'first question, edited', rewind: 0 })
-    const { messages } = await app.call('agent.session', { id: session })
+    const { messages } = await app.call('fairy.session', { id: session })
     expect(messages.filter((message: any) => message.role === 'user').map((message: any) => message.display)).toEqual(['first question, edited'])
     expect(messages.at(-1).content).toBe('Answer to the edit.')
     const sent = llm.requests.at(-1).messages.map((message: any) => message.content).join('\n')
     expect(sent).not.toContain('second question')
-    await expect(app.call('agent.send', { session, text: 'x', rewind: 5 })).rejects.toThrow(/no user message 5/)
+    await expect(app.call('fairy.send', { session, text: 'x', rewind: 5 })).rejects.toThrow(/no user message 5/)
   })
 })

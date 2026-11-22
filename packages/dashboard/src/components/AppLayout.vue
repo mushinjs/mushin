@@ -5,14 +5,14 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { connection, logout } from '../api'
 import { setLocale } from '../i18n'
-import { clampFloat, clampWidth, DOCK_WIDTH, dockLayout, maxDockWidth } from '../agentDock'
+import { clampFloat, clampWidth, DOCK_WIDTH, dockLayout, maxDockWidth } from '../fairyDock'
 import { prefs } from '../prefs'
-import { useAgentStore } from '../stores/agent'
-import { useAgentSceneStore } from '../stores/agentScene'
+import { useFairyStore } from '../stores/fairy'
+import { useFairySceneStore } from '../stores/fairyScene'
 import { useDataStore } from '../stores/data'
 import { useRunsStore } from '../stores/runs'
 import { themeMode, useTheme } from '../theme'
-import AgentDock from './AgentDock.vue'
+import FairyDock from './FairyDock.vue'
 import GlobalSearch from './GlobalSearch.vue'
 import type { NavGroup, NavItem } from './nav'
 import SideNav from './SideNav.vue'
@@ -21,8 +21,8 @@ const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const data = useDataStore()
-const agent = useAgentStore()
-const agentScene = useAgentSceneStore()
+const fairy = useFairyStore()
+const fairyScene = useFairySceneStore()
 const runs = useRunsStore()
 const { isDark } = useTheme()
 
@@ -50,20 +50,20 @@ watch(collapsed, (value) => {
     localStorage.setItem(SIDEBAR_KEY, value ? 'collapsed' : 'expanded')
   } catch {}
 })
-if (window.innerWidth < 1100) agent.open = false
+if (window.innerWidth < 1100) fairy.open = false
 
 data.bind()
-agent.bind()
-agentScene.bind()
+fairy.bind()
+fairyScene.bind()
 runs.bind()
 onMounted(() => {
   data.refreshProviders().catch(() => {})
   data.refreshBots().catch(() => {})
-  agent.refreshSessions().catch(() => {})
-  agent.refreshPickers().catch(() => {})
+  fairy.refreshSessions().catch(() => {})
+  fairy.refreshPickers().catch(() => {})
 })
 
-// ---- the Agent: docked at a width you drag, or floating where you put it ----
+// ---- Fairy: docked at a width you drag, or floating where you put it ----
 
 const dockWidth = computed(() => {
   void width.value
@@ -250,20 +250,20 @@ function onAccount(key: string) {
           </template>
         </nav>
         <span v-if="!connection.connected" class="offline">{{ t('layout.reconnecting') }}</span>
-        <button type="button" class="search-button" :aria-label="t('search.title')" data-agent-target="search.open" @click="searching = true">
+        <button type="button" class="search-button" :aria-label="t('search.title')" data-fairy-target="search.open" @click="searching = true">
           <span class="i-lucide-search search-icon" />
           <span class="search-label">{{ t('search.button') }}</span>
           <span class="search-keys"><kbd>{{ isMac ? '⌘' : 'Ctrl' }}</kbd><kbd>K</kbd></span>
         </button>
         <Button
-          :type="agent.open ? 'primary' : 'default'"
-          :secondary="agent.open"
+          :type="fairy.open ? 'primary' : 'default'"
+          :secondary="fairy.open"
           icon="i-lucide-sparkles"
-          data-agent-target="agent.toggle"
-          :pressed="agent.open"
-          @click="agent.open = !agent.open"
+          data-fairy-target="fairy.toggle"
+          :pressed="fairy.open"
+          @click="fairy.open = !fairy.open"
         >
-          {{ t('nav.agent') }}
+          {{ t('nav.fairy') }}
         </Button>
         <Dropdown placement="bottom" align="end" :options="accountMenu" @select="onAccount">
           <button type="button" class="account" :aria-label="t('layout.account')" :title="t('layout.account')">
@@ -276,32 +276,32 @@ function onAccount(key: string) {
         <main class="content">
           <RouterView />
         </main>
-        <aside v-if="agent.open && !narrow && dockLayout.mode === 'docked'" class="dock" :style="{ width: `${dockWidth}px` }">
+        <aside v-if="fairy.open && !narrow && dockLayout.mode === 'docked'" class="dock" :style="{ width: `${dockWidth}px` }">
           <div
             class="dock-resizer"
             :class="{ active: dragging === 'resize' }"
             role="separator"
             aria-orientation="vertical"
             tabindex="0"
-            :aria-label="t('agent.resize')"
+            :aria-label="t('fairy.resize')"
             :aria-valuenow="dockWidth"
-            :title="t('agent.resize')"
+            :title="t('fairy.resize')"
             @pointerdown="startResize"
             @dblclick="dockLayout.width = DOCK_WIDTH"
             @keydown="nudgeWidth"
           />
-          <AgentDock mode="docked" @toggle-mode="toggleDockMode" />
+          <FairyDock mode="docked" @toggle-mode="toggleDockMode" />
         </aside>
       </div>
       <aside
-        v-if="agent.open && !narrow && dockLayout.mode === 'floating'"
+        v-if="fairy.open && !narrow && dockLayout.mode === 'floating'"
         class="dock floating"
         :class="{ moving: dragging === 'move' }"
         :style="floatStyle"
         @pointerdown="startMove"
       >
-        <AgentDock mode="floating" closable @toggle-mode="toggleDockMode" @close="agent.open = false" />
-        <div class="float-resizer" :title="t('agent.resizeFloat')" @pointerdown.stop="startSize" />
+        <FairyDock mode="floating" closable @toggle-mode="toggleDockMode" @close="fairy.open = false" />
+        <div class="float-resizer" :title="t('fairy.resizeFloat')" @pointerdown.stop="startSize" />
       </aside>
       <!-- While dragging, a sheet over the page keeps the pointer from selecting text or entering frames. -->
       <div v-if="dragging" class="drag-sheet" :class="dragging" />
@@ -309,8 +309,8 @@ function onAccount(key: string) {
 
     <GlobalSearch v-model:show="searching" :pages="navGroups" />
 
-    <Drawer v-if="narrow" v-model:show="agent.open" :width="Math.min(420, width)" :label="t('nav.agent')">
-      <AgentDock closable @close="agent.open = false" />
+    <Drawer v-if="narrow" v-model:show="fairy.open" :width="Math.min(420, width)" :label="t('nav.fairy')">
+      <FairyDock closable @close="fairy.open = false" />
     </Drawer>
   </div>
 </template>
@@ -503,7 +503,7 @@ a.crumb:hover {
   background: var(--s1);
 }
 
-/* The left edge of the docked Agent: a thin line that thickens under the pointer. */
+/* The left edge of the docked Fairy: a thin line that thickens under the pointer. */
 .dock-resizer {
   position: absolute;
   top: 0;
@@ -554,7 +554,7 @@ a.crumb:hover {
   cursor: grabbing;
 }
 
-/* The bottom-right corner of the floating Agent, drawn as two short diagonal lines. */
+/* The bottom-right corner of the floating Fairy, drawn as two short diagonal lines. */
 .float-resizer {
   position: absolute;
   right: 0;

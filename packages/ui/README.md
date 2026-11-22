@@ -42,7 +42,7 @@ Alert, Avatar, Button, Card, Checkbox, DataTable, Drawer, Dropdown, Empty, Form,
 
 The props follow the Naive UI ones the dashboard used before: `value` with `update:value` (so `v-model:value`), `type` (`default`, `primary`, `info`, `success`, `warning`, `error`), `size` (`tiny`, `small`, `medium`, `large`), and `secondary`, `quaternary`, `circle` on buttons. Overlays use Reka UI, which handles focus and the keyboard.
 
-Every component passes its attributes through, so `class`, `title`, `aria-*` and `data-agent-target` reach the element. The agent highlights controls by `data-agent-target`; keep it on the controls it points at.
+Every component passes its attributes through, so `class`, `title`, `aria-*` and `data-fairy-target` reach the element. The fairy highlights controls by `data-fairy-target`; keep it on the controls it points at.
 
 Run the dashboard in development and open `/dev/ui` to see every component in its states.
 

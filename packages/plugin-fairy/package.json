@@ -1,13 +1,13 @@
 {
-  "name": "@mushinjs/plugin-agent",
+  "name": "@mushinjs/plugin-fairy",
   "version": "0.2.0",
-  "description": "The Mushin.js Agent",
+  "description": "Fairy, the assistant built into Mushin.js",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mushinjs/mushin.git",
-    "directory": "packages/plugin-agent"
+    "directory": "packages/plugin-fairy"
   },
   "exports": {
     ".": "./src/index.ts",
@@ -32,15 +32,15 @@
   "mushin": {
     "kind": "app",
     "displayName": {
-      "en": "Agent",
-      "zh-CN": "智能体"
+      "en": "Fairy",
+      "zh-CN": "Fairy"
     },
     "description": {
       "en": "Operate Mushin.js through natural-language conversation",
       "zh-CN": "通过自然语言对话操作 Mushin.js"
     },
     "provides": [
-      "agent"
+      "fairy"
     ],
     "requires": {
       "plugins": {
