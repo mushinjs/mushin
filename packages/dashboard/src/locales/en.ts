@@ -1578,6 +1578,28 @@ export default {
       kbReview: 'Help me review {count} things learned from chats',
     },
   },
+  fairyTask: {
+    roles: {
+      debug: 'Debug',
+      setup: 'Setup',
+      builder: 'Builder',
+    },
+    status: {
+      running: 'Working',
+      confirm: 'Needs approval',
+      done: 'Done',
+      blocked: 'Needs you',
+      failed: 'Failed',
+    },
+    confirmText: '{role} wants to run {action}. Approve?',
+    findings: 'Findings',
+    changes: 'Changes',
+    fix: 'Fix: ',
+    next: 'Next: ',
+    open: 'View the work',
+    viewing: 'A task Fairy handed to {role}',
+    back: 'Back to Fairy',
+  },
   fairyNotice: {
     effort_ignored: 'This model takes no reasoning effort together with tools, so it answers with its default effort.',
   },

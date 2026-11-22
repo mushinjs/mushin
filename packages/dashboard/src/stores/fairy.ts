@@ -2,14 +2,24 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { call, on } from '../api'
 import { prefs } from '../prefs'
-import type { FairyCommands, FairyEvent, FairyMessage, FairyScene, FairySessionSummary, FairySkill, Risk } from '../types'
+import type { FairyCommands, FairyEvent, FairyMessage, FairyScene, FairySessionSummary, FairySkill, FairyTaskReport, Risk } from '../types'
 
 export type ToolState = 'running' | 'confirm' | 'ok' | 'error' | 'declined'
+
+/** The action of the tool call that hands a task to a helper. */
+export const DELEGATE = 'fairy.delegate'
+
+/** A helper's task under its fairy.delegate call: its conversation, what it is doing, and an approval it waits for. */
+export interface TaskView {
+  session?: string
+  steps: { id: string; action: string; state: ToolState }[]
+  confirm?: { id: string; action: string; input: unknown }
+}
 
 export type ChatItem =
   | { kind: 'user'; text: string; skills?: string[]; quote?: string }
   | { kind: 'assistant'; text: string }
-  | { kind: 'tool'; id: string; action: string; input: unknown; risk?: Risk; state: ToolState; result?: unknown; error?: string }
+  | { kind: 'tool'; id: string; action: string; input: unknown; risk?: Risk; state: ToolState; result?: unknown; error?: string; task?: TaskView }
   /** `code` is `max_steps` when the reply ran out of tool rounds; the dock offers to continue. */
   | { kind: 'error'; text: string; code?: 'max_steps' }
   /** Shown by the dashboard itself, e.g. for /status; never sent to the model. */
@@ -51,6 +61,12 @@ function toItems(messages: FairyMessage[]): ChatItem[] {
       } else {
         item.state = 'ok'
         item.result = parseArgs(message.content)
+      }
+      if (item.action === DELEGATE) {
+        const report = parseArgs(message.content) as Partial<FairyTaskReport>
+        item.result = report
+        if (report?.task) item.task = { session: report.task, steps: [] }
+        if (report?.status === 'failed') item.state = 'error'
       }
     }
   }
@@ -103,6 +119,8 @@ export const useFairyStore = defineStore('fairy', () => {
   const open = ref(prefs.fairyOpenOnStart)
   const sessions = ref<FairySessionSummary[]>([])
   const current = ref<string | undefined>(readSession())
+  /** Set while a helper's conversation is open: its role, and the conversation and call that started it. */
+  const task = ref<{ role: string; parent: { session: string; call: string } }>()
 
   // Reopen the same conversation after a reload.
   watch(current, (id) => {
@@ -148,9 +166,10 @@ export const useFairyStore = defineStore('fairy', () => {
   }
 
   async function load(id: string) {
-    const session = await call<{ id: string; messages: FairyMessage[]; running: boolean; toolsStale?: boolean }>('fairy.session', { id })
+    const session = await call<{ id: string; messages: FairyMessage[]; running: boolean; toolsStale?: boolean; role?: string; parent?: { session: string; call: string } }>('fairy.session', { id })
     toolsStale.value = !!session.toolsStale
     current.value = session.id
+    task.value = session.role && session.parent ? { role: session.role, parent: session.parent } : undefined
     items.value = toItems(session.messages)
     running.value = session.running
     streaming.value = ''
@@ -186,6 +205,7 @@ export const useFairyStore = defineStore('fairy', () => {
     dropAsks()
     toolsStale.value = false
     current.value = undefined
+    task.value = undefined
     usage.value = undefined
     items.value = []
     streaming.value = ''
@@ -201,7 +221,41 @@ export const useFairyStore = defineStore('fairy', () => {
     return items.value.find((item): item is Extract<ChatItem, { kind: 'tool' }> => item.kind === 'tool' && item.id === id)
   }
 
+  /** A helper's event, shown under the fairy.delegate call of the open conversation that started it. */
+  function handleTask(event: FairyEvent) {
+    const item = event.call ? tool(event.call) : undefined
+    if (!item) return
+    const view = item.task ??= { steps: [] }
+    view.session = event.session
+    const step = (id: string) => view.steps.find((entry) => entry.id === id)
+    switch (event.type) {
+      case 'tool-call':
+        if (event.action !== 'fairy.report') view.steps.push({ id: event.id, action: event.action, state: 'running' })
+        break
+      case 'confirm': {
+        view.confirm = { id: event.id, action: event.action, input: event.input }
+        const entry = step(event.id)
+        if (entry) entry.state = 'confirm'
+        break
+      }
+      case 'tool-result': {
+        const entry = step(event.id)
+        if (entry) entry.state = event.ok ? 'ok' : event.error === 'Declined by the user' ? 'declined' : 'error'
+        if (view.confirm?.id === event.id) view.confirm = undefined
+        break
+      }
+      case 'done':
+      case 'error':
+        view.confirm = undefined
+        break
+    }
+  }
+
   function handle(event: FairyEvent) {
+    if (event.parent) {
+      if (event.parent === current.value) handleTask(event)
+      if (event.session !== current.value) return
+    }
     if (adopting && event.type === 'start' && event.session !== current.value) {
       current.value = event.session
       adopting = false
@@ -233,7 +287,9 @@ export const useFairyStore = defineStore('fairy', () => {
         } else {
           item.state = event.error === 'Declined by the user' ? 'declined' : 'error'
           item.error = event.error
+          if (item.action === DELEGATE && event.result !== undefined) item.result = event.result
         }
+        if (item.task) item.task.confirm = undefined
         break
       }
       case 'done':
@@ -319,6 +375,17 @@ export const useFairyStore = defineStore('fairy', () => {
     await call('fairy.confirm', { session: current.value, id, approved })
   }
 
+  /** Approves or declines what a helper waits for, from its task under the fairy.delegate call. */
+  async function confirmTask(id: string, approved: boolean) {
+    const view = tool(id)?.task
+    const pending = view?.confirm
+    if (!view?.session || !pending) return
+    view.confirm = undefined
+    const step = view.steps.find((entry) => entry.id === pending.id)
+    if (step) step.state = approved ? 'running' : 'declined'
+    await call('fairy.confirm', { session: view.session, id: pending.id, approved })
+  }
+
   async function cancel() {
     if (current.value) await call('fairy.cancel', { session: current.value })
   }
@@ -349,7 +416,7 @@ export const useFairyStore = defineStore('fairy', () => {
   }
 
   return {
-    open, sessions, current, items, choice, streaming, running, usage, skills, commands, toolsStale, asks, quote,
-    refreshSessions, refreshPickers, load, newChat, note, ask, answer, send, edit, retry, confirm, cancel, remove, bind,
+    open, sessions, current, task, items, choice, streaming, running, usage, skills, commands, toolsStale, asks, quote,
+    refreshSessions, refreshPickers, load, newChat, note, ask, answer, send, edit, retry, confirm, confirmTask, cancel, remove, bind,
   }
 })

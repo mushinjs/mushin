@@ -4,7 +4,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { call } from '../api'
-import { type ChatItem, EFFORTS, useFairyStore } from '../stores/fairy'
+import { type ChatItem, DELEGATE, EFFORTS, useFairyStore } from '../stores/fairy'
 import { type Recommendation, useFairySceneStore } from '../stores/fairyScene'
 import { modelCapabilities, providerOptions as toProviderOptions } from '../models'
 import { useDataStore } from '../stores/data'
@@ -21,7 +21,7 @@ import ModelSelect from './ModelSelect.vue'
 defineProps<{ closable?: boolean; mode?: 'docked' | 'floating' }>()
 const emit = defineEmits<{ close: []; toggleMode: [] }>()
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const router = useRouter()
 const fairy = useFairyStore()
 const scenes = useFairySceneStore()
@@ -280,7 +280,7 @@ const rows = computed<Row[]>(() => {
       while (end < items.length && items[end].kind === 'tool' && (items[end] as ToolItem).action === item.action) end++
     }
     const run = items.slice(index, end) as ToolItem[]
-    if (run.length >= GROUP_FROM && !run.some((call) => call.state === 'confirm')) {
+    if (run.length >= GROUP_FROM && !run.some((call) => call.state === 'confirm' || call.action === DELEGATE)) {
       const failures = run.filter((call) => call.state === 'error' || call.state === 'declined')
       const reason = failures.at(-1)?.error?.replace(/^Error:\s*/, '').split('\n')[0] ?? ''
       out.push({ kind: 'group', key: `group:${item.kind === 'tool' ? item.id : index}`, action: item.kind === 'tool' ? item.action : '', items: run, failed: failures.length, running: run.some((call) => call.state === 'running'), reason })
@@ -366,6 +366,11 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
     </header>
 
     <div ref="list" class="dock-list">
+      <div v-if="fairy.task" class="task-bar">
+        <span class="i-lucide-scroll-text" />
+        <span>{{ t('fairyTask.viewing', { role: te(`fairyTask.roles.${fairy.task.role}`) ? t(`fairyTask.roles.${fairy.task.role}`) : fairy.task.role }) }}</span>
+        <Button size="tiny" secondary icon="i-lucide-arrow-left" @click="fairy.load(fairy.task.parent.session)">{{ t('fairyTask.back') }}</Button>
+      </div>
       <div v-if="data.loadedProviders && !data.providers.length" class="dock-empty">
         <p>{{ t('fairy.needProvider') }}</p>
         <Button type="primary" @click="router.push('/setup')">{{ t('fairy.goSetup') }}</Button>
@@ -404,6 +409,8 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
               :expanded="expanded.has(item.id)"
               @toggle="toggle(item.id)"
               @confirm="(approved) => fairy.confirm(item.id, approved)"
+              @confirm-task="(approved) => fairy.confirmTask(item.id, approved)"
+              @open-task="(session) => fairy.load(session)"
             />
           </div>
         </div>
@@ -465,6 +472,8 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
               :expanded="expanded.has(item.id)"
               @toggle="toggle(item.id)"
               @confirm="(approved) => fairy.confirm(item.id, approved)"
+              @confirm-task="(approved) => fairy.confirmTask(item.id, approved)"
+              @open-task="(session) => fairy.load(session)"
             />
           </template>
         </template>
@@ -660,6 +669,21 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
   gap: 8px;
   align-items: stretch;
   text-align: center;
+}
+
+.task-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(127, 127, 127, 0.1);
+  font-size: 13px;
+}
+
+.task-bar > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
 }
 
 .dock-hello {
