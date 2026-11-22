@@ -1,0 +1,54 @@
+{
+  "name": "@mushinjs/plugin-adapter-telegram",
+  "version": "0.3.0",
+  "description": "Telegram bot adapter (long polling and webhook)",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mushinjs/mushin.git",
+    "directory": "packages/plugin-adapter-telegram"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "displayName": {
+      "en": "Telegram adapter",
+      "zh-CN": "Telegram 适配器"
+    },
+    "description": {
+      "en": "Connects Telegram bots made with @BotFather, by long polling or webhook",
+      "zh-CN": "通过长轮询或 Webhook 连接用 @BotFather 创建的 Telegram 机器人"
+    },
+    "requires": {
+      "plugins": {
+        "@mushinjs/plugin-bots": "*",
+        "@cordisjs/plugin-server": "*"
+      }
+    }
+  },
+  "dependencies": {
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-bots": "workspace:*",
+    "@cordisjs/plugin-server": "catalog:"
+  }
+}

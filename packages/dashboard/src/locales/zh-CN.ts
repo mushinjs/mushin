@@ -416,6 +416,10 @@ const zhCN: typeof en = {
         websocket: '在 QQ 开放平台（q.qq.com）创建机器人，在「开发 → 开发设置」中复制 AppID 和 AppSecret。同一页面的 IP 白名单要加入本机的公网 IP，否则 QQ 会拒绝接口调用。群聊机器人只有被 @ 时才收到消息，而且一般只能在收到消息后五分钟内回复。',
         webhook: 'QQ 会把事件推送到下方地址，这个地址需要能从公网通过 HTTPS 访问（端口 443、80、8080 或 8443），例如通过反向代理。在 QQ 开放平台的「开发 → 回调配置」中把它设为回调地址，并勾选要接收的事件。AppSecret 用于签名。',
       },
+      telegram: {
+        polling: '在 Telegram 里找 @BotFather，发送 /newbot 创建机器人，把它给的令牌填在这里。要接收群里的所有消息（而不只是命令和 @），向 @BotFather 发送 /setprivacy 关闭隐私模式。本机无法访问 api.telegram.org 时，把 API 地址设为反向代理或自建的 Bot API 服务器。',
+        webhook: 'Telegram 会把更新推送到 <公网地址><路径>，这个地址需要能通过 HTTPS 访问（端口 443、80、88 或 8443）。Mushin 会自动登记 Webhook，并使用由令牌派生的密钥校验请求，无需其他设置。切回长轮询时会自动删除 Webhook。',
+      },
     },
     initialPlugins: '要启用的机器人插件',
     forwardTo: '连接到 {url}',
