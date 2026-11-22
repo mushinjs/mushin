@@ -90,14 +90,23 @@ function track(event: PointerEvent, kind: 'left' | 'right' | 'split', apply: (dx
 
 const clampSide = (value: number) => Math.round(Math.min(Math.max(value, MIN_SIDE), Math.max(MIN_SIDE, width.value * 0.45)))
 
-function resizeLeft(event: PointerEvent) {
-  const start = sides.value.left
-  track(event, 'left', (dx) => (layout.leftWidth = clampSide(start + dx)))
-}
-
-function resizeRight(event: PointerEvent) {
-  const start = sides.value.right
-  track(event, 'right', (dx) => (layout.rightWidth = clampSide(start - dx)))
+/**
+ * Like VS Code: dragged half its minimum width past the minimum, a side folds away, and dragged back out (or out
+ * from the window's edge while folded) it opens again, all within one drag.
+ */
+function resizeSide(event: PointerEvent, side: 'left' | 'right') {
+  const start = side === 'left' ? sides.value.left : sides.value.right
+  track(event, side, (dx) => {
+    const wanted = start + (side === 'left' ? dx : -dx)
+    const open = wanted >= MIN_SIDE / 2
+    if (side === 'left') {
+      layout.leftOpen = open
+      if (open) layout.leftWidth = clampSide(wanted)
+    } else {
+      layout.rightOpen = open
+      if (open) layout.rightWidth = clampSide(wanted)
+    }
+  })
 }
 
 function resizeSplit(event: PointerEvent) {
@@ -110,8 +119,18 @@ function nudge(event: KeyboardEvent, side: 'left' | 'right') {
   const step = (event.shiftKey ? 48 : 16) * (event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0)
   if (!step) return
   event.preventDefault()
-  if (side === 'left') layout.leftWidth = clampSide(sides.value.left + step)
-  else layout.rightWidth = clampSide(sides.value.right - step)
+  // Arrows past the minimum fold the side; the other way opens it at its minimum.
+  const grow = side === 'left' ? step : -step
+  const current = side === 'left' ? sides.value.left : sides.value.right
+  const open = current > 0 ? current > MIN_SIDE || grow > 0 : grow > 0
+  const next = current > 0 ? clampSide(current + grow) : MIN_SIDE
+  if (side === 'left') [layout.leftOpen, layout.leftWidth] = [open, open ? next : layout.leftWidth]
+  else [layout.rightOpen, layout.rightWidth] = [open, open ? next : layout.rightWidth]
+}
+
+function resetSide(side: 'left' | 'right') {
+  if (side === 'left') [layout.leftOpen, layout.leftWidth] = [true, LEFT_WIDTH]
+  else [layout.rightOpen, layout.rightWidth] = [true, RIGHT_WIDTH]
 }
 
 // ---- split view: drop a conversation from the list onto the middle ----
@@ -173,7 +192,7 @@ function toggleSplit() {
           </template>
           {{ t('workspace.togglePanel') }}
         </Tooltip>
-        <Button size="small" secondary icon="i-lucide-layout-grid" @click="router.push('/overview')">{{ t('workspace.dashboard') }}</Button>
+        <Button type="primary" secondary icon="i-lucide-layout-dashboard" :title="t('workspace.dashboardHint')" @click="router.push(workspace.returnTo)">{{ t('workspace.dashboard') }}</Button>
       </div>
     </header>
 
@@ -182,16 +201,15 @@ function toggleSplit() {
         <WorkspaceSidebar @dragging="(id) => (draggingSession = id)" />
       </aside>
       <div
-        v-if="layout.leftOpen"
         class="resizer"
-        :class="{ active: dragging === 'left' }"
+        :class="{ active: dragging === 'left', edge: !layout.leftOpen }"
         role="separator"
         aria-orientation="vertical"
         tabindex="0"
         :aria-label="t('workspace.resize')"
-        :title="t('workspace.resize')"
-        @pointerdown="resizeLeft"
-        @dblclick="layout.leftWidth = LEFT_WIDTH"
+        :title="t('workspace.resizeHint')"
+        @pointerdown="resizeSide($event, 'left')"
+        @dblclick="resetSide('left')"
         @keydown="nudge($event, 'left')"
       />
 
@@ -223,16 +241,15 @@ function toggleSplit() {
       </main>
 
       <div
-        v-if="layout.rightOpen"
         class="resizer"
-        :class="{ active: dragging === 'right' }"
+        :class="{ active: dragging === 'right', edge: !layout.rightOpen }"
         role="separator"
         aria-orientation="vertical"
         tabindex="0"
         :aria-label="t('workspace.resize')"
-        :title="t('workspace.resize')"
-        @pointerdown="resizeRight"
-        @dblclick="layout.rightWidth = RIGHT_WIDTH"
+        :title="t('workspace.resizeHint')"
+        @pointerdown="resizeSide($event, 'right')"
+        @dblclick="resetSide('right')"
         @keydown="nudge($event, 'right')"
       />
       <aside v-if="layout.rightOpen" class="ws-right" :style="{ width: `${sides.right}px` }">
@@ -261,11 +278,11 @@ function toggleSplit() {
 
 .ws-top {
   flex: none;
-  height: 48px;
+  height: 56px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 12px;
+  padding: 0 16px 0 12px;
   border-bottom: 1px solid var(--line);
   background: var(--s1);
 }
@@ -326,6 +343,11 @@ function toggleSplit() {
   z-index: 2;
   cursor: col-resize;
   background: linear-gradient(to right, transparent 2px, var(--line) 2px, var(--line) 3px, transparent 3px);
+}
+
+.resizer.edge {
+  margin: 0;
+  background: none;
 }
 
 .resizer:hover,

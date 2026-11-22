@@ -62,6 +62,7 @@ export default {
     breadcrumb: 'You are here',
     collapse: 'Collapse sidebar',
     expand: 'Expand sidebar',
+    toggleDock: 'Show or hide Fairy beside the page',
   },
   promptEditor: {
     title: 'Prompt',
@@ -1095,6 +1096,11 @@ export default {
     disableBots: 'These bot plugins stop working on every bot:',
     disableDegraded: 'These keep running with fewer features:',
     proceed: 'Continue',
+    remove: 'Remove',
+    removeTitle: 'Remove {name}?',
+    removeBody: 'Its entry and settings are taken out of the config. The package stays installed and can be enabled again with default settings.',
+    removed: '{name} removed',
+    notInstalledEntry: 'This package is not installed. Install it again, or remove the entry.',
     mushinVersion: 'Needs Mushin.js {range}; this is {version}',
     botPluginDeps: 'Needs {list}',
   },
@@ -1562,9 +1568,9 @@ export default {
   },
   workspace: {
     title: 'Fairy workspace',
-    enter: 'Workspace',
     enterHint: 'Open the Fairy workspace: conversations by group, the chat, and a panel for pages and status',
     dashboard: 'Dashboard',
+    dashboardHint: 'Back to the dashboard',
     newChat: 'New conversation',
     skills: 'Skills',
     settings: 'Fairy settings',
@@ -1601,6 +1607,7 @@ export default {
     closeSplit: 'Close split view',
     dropToSplit: 'Drop here to open in split view',
     resize: 'Drag to resize, double-click to reset',
+    resizeHint: 'Drag to resize, past the narrowest to hide; double-click to reset',
     panel: {
       status: 'Status',
       web: 'Web page',

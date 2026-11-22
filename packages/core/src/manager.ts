@@ -152,6 +152,8 @@ export class PluginManager extends Service {
   private catalogList: CatalogEntry[] = []
   /** Entries that were not started because a dependency is missing or they form a cycle. */
   private blocked = new Map<string, MissingDependency[]>()
+  /** Entries whose package could not be imported, such as one that is no longer installed. */
+  private loadErrors = new Map<string, string>()
 
   constructor(ctx: Context, public options: ManagerOptions) {
     super(ctx, 'manager')
@@ -269,6 +271,8 @@ export class PluginManager extends Service {
     const blocked = this.blocked.get(id)
     if (blocked) return { status: 'missing', error: describeMissing(blocked), missing: blocked }
     const fiber = this.fibers.get(id)
+    const loadError = this.loadErrors.get(id)
+    if (loadError && !fiber) return { status: 'failed', error: loadError }
     const status = fiberStatus(fiber)
     const entry = this.get(id)
     if (status === 'pending' && entry) {
@@ -334,7 +338,15 @@ export class PluginManager extends Service {
       return
     }
     this.blocked.delete(entry.id)
-    const plugin = await this.loadPlugin(entry.package)
+    let plugin: Plugin
+    try {
+      plugin = await this.loadPlugin(entry.package)
+      this.loadErrors.delete(entry.id)
+    } catch (error) {
+      this.loadErrors.set(entry.id, loadErrorMessage(entry.package, error))
+      this.home.emit('manager/changed', entry.id)
+      throw error
+    }
     // A key typed into mushin.config.json by hand moves to .env on the next start.
     if (entry.config) {
       const secured = await this.secure(entry, plugin, entry.config, entry.config)
@@ -360,7 +372,8 @@ export class PluginManager extends Service {
 
   private async stop(id: string) {
     const fiber = this.fibers.get(id)
-    if (this.blocked.delete(id)) this.home.emit('manager/changed', id)
+    const cleared = this.loadErrors.delete(id)
+    if (this.blocked.delete(id) || cleared) this.home.emit('manager/changed', id)
     if (!fiber) return
     this.fibers.delete(id)
     await fiber.dispose()
@@ -443,6 +456,22 @@ export class PluginManager extends Service {
     this.logger.info('disabled %s', id)
     await this.stop(id)
     return entry
+  }
+
+  /**
+   * Takes an entry out of the config, with its settings. An enabled entry is disabled first, under the same
+   * rules as `disable`: essential plugins stay, and plugins that require it are refused unless `cascade` is set.
+   */
+  async remove(id: string, options: { cascade?: boolean } = {}) {
+    const entry = this.require(id)
+    if (entry.enabled !== false) await this.disable(id, options)
+    else await this.assertNotEssential(entry)
+    await this.stop(id)
+    this.entries.splice(this.entries.indexOf(entry), 1)
+    await this.save()
+    this.logger.info('removed %s (%s)', id, entry.package)
+    this.home.emit('manager/changed', id)
+    return { id, package: entry.package }
   }
 
   /** Starts entries that were held back for a missing dependency, once it is there. */
@@ -561,6 +590,14 @@ export class PluginManager extends Service {
     })
 
     yield actions.define({
+      name: 'plugins.remove',
+      description: 'Remove an app plugin entry from the config, settings included, for example one whose package is no longer installed. An enabled entry is disabled first, under the same rules as plugins.disable (essential plugins stay; plugins that require it need cascade). The package stays installed and can be enabled again with default settings.',
+      risk: 'dangerous',
+      input: entryInput.extend({ cascade: z.boolean().optional().describe('Also disable the plugins that require it') }),
+      handler: ({ id, cascade }) => this.remove(id, { cascade }),
+    })
+
+    yield actions.define({
       name: 'plugins.configure',
       description: 'Replace the config of an app plugin entry and restart it.',
       risk: 'write',
@@ -576,6 +613,12 @@ export class PluginManager extends Service {
       handler: async ({ id }) => this.describe(await this.reload(id)),
     })
   }
+}
+
+/** Why a package could not be imported, in one line: a missing package says so plainly. */
+function loadErrorMessage(name: string, error: unknown) {
+  if ((error as any)?.code === 'ERR_MODULE_NOT_FOUND' && String((error as Error).message).includes(`'${name}'`)) return `${name} is not installed`
+  return error instanceof Error ? error.message : String(error)
 }
 
 /** One line naming what keeps a plugin from running, for logs and status tooltips. */

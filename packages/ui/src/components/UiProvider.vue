@@ -4,8 +4,7 @@
  * confirmation dialogs (see feedback.ts).
  */
 import {
-  AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogOverlay, AlertDialogPortal, AlertDialogRoot,
-  AlertDialogTitle, TooltipProvider,
+  AlertDialogContent, AlertDialogDescription, AlertDialogOverlay, AlertDialogPortal, AlertDialogRoot, AlertDialogTitle, TooltipProvider,
 } from 'reka-ui'
 import { provideText, type UiText, useText } from '../config'
 import { type Confirm, feedback } from '../feedback'
@@ -78,15 +77,13 @@ function removeToast(id: number) {
         </div>
         <AlertDialogDescription v-if="typeof item.content === 'string'" class="mu-confirm__body">{{ item.content }}</AlertDialogDescription>
         <AlertDialogDescription v-else-if="item.content" as="div" class="mu-confirm__body"><component :is="item.content" /></AlertDialogDescription>
+        <!-- Plain buttons: reka's Action and Cancel close the dialog before their click runs, which made every
+             button count as Cancel and kept onPositiveClick from holding the dialog open. -->
         <div class="mu-modal__footer">
-          <AlertDialogCancel v-if="item.negativeText !== ''" as-child @click.prevent="negative(item)">
-            <Button size="small">{{ item.negativeText ?? words.cancel }}</Button>
-          </AlertDialogCancel>
-          <AlertDialogAction as-child @click.prevent="positive(item)">
-            <Button size="small" :type="item.type === 'warning' || item.type === 'error' ? 'error' : 'primary'" :loading="item.loading">
-              {{ item.positiveText ?? words.ok }}
-            </Button>
-          </AlertDialogAction>
+          <Button v-if="item.negativeText !== ''" size="small" @click="negative(item)">{{ item.negativeText ?? words.cancel }}</Button>
+          <Button size="small" :type="item.type === 'warning' || item.type === 'error' ? 'error' : 'primary'" :loading="item.loading" @click="positive(item)">
+            {{ item.positiveText ?? words.ok }}
+          </Button>
         </div>
       </AlertDialogContent>
     </AlertDialogPortal>

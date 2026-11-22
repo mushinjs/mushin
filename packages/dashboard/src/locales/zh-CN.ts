@@ -63,6 +63,7 @@ const zhCN: typeof en = {
     breadcrumb: '当前位置',
     collapse: '收起侧栏',
     expand: '展开侧栏',
+    toggleDock: '显示或隐藏页面旁的 Fairy',
   },
   promptEditor: {
     title: '提示词结构',
@@ -1096,6 +1097,11 @@ const zhCN: typeof en = {
     disableBots: '以下机器人插件将在所有机器人上不可用：',
     disableDegraded: '以下插件继续运行，但部分功能不可用：',
     proceed: '继续',
+    remove: '移除',
+    removeTitle: '移除 {name}？',
+    removeBody: '这一条和它的设置会从配置文件里删掉。插件包本身不会卸载，之后可以用默认设置重新启用。',
+    removed: '已移除 {name}',
+    notInstalledEntry: '这个插件包没有安装。重新安装，或者移除这一条。',
     mushinVersion: '需要 Mushin.js {range}，当前是 {version}',
     botPluginDeps: '需要 {list}',
   },
@@ -1563,9 +1569,9 @@ const zhCN: typeof en = {
   },
   workspace: {
     title: 'Fairy 工作区',
-    enter: '工作区',
     enterHint: '打开 Fairy 工作区：分组的会话、对话，以及显示页面和状态的面板',
     dashboard: '控制台',
+    dashboardHint: '回到控制台',
     newChat: '新会话',
     skills: '技能',
     settings: 'Fairy 设置',
@@ -1602,6 +1608,7 @@ const zhCN: typeof en = {
     closeSplit: '关闭分屏',
     dropToSplit: '拖放到此处，在分屏中打开',
     resize: '拖动调整宽度，双击恢复默认',
+    resizeHint: '拖动调整宽度，拖过最窄处会收起；双击恢复默认',
     panel: {
       status: '状态',
       web: '网页',
