@@ -17,7 +17,7 @@ const statusCodes: Record<ErrorCode, number> = {
   failed: 500,
 }
 
-/** An error whose message is safe to show to users and to the Agent. */
+/** An error whose message is safe to show to users and to Fairy. */
 export class MushinError extends Error {
   name = 'MushinError'
 

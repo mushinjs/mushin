@@ -9,7 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { call } from '../api'
 import { avatarColor, initial } from '../botAvatar'
-import { useAgentStore } from '../stores/agent'
+import { useFairyStore } from '../stores/fairy'
 import { useDataStore } from '../stores/data'
 import { themeMode, useTheme } from '../theme'
 import type { AppPlugin, FlowSummary, Persona } from '../types'
@@ -22,7 +22,7 @@ const show = defineModel<boolean>('show', { default: false })
 const { t, locale } = useI18n()
 const router = useRouter()
 const data = useDataStore()
-const agent = useAgentStore()
+const fairy = useFairyStore()
 const { isDark } = useTheme()
 
 interface Result {
@@ -88,7 +88,7 @@ const all = computed<Result[]>(() => {
     { key: 'action:flow', group: g.action, label: t('flows.add'), icon: 'i-lucide-plus', words: 'new flow', run: go({ path: '/flows', query: { new: '1' } }) },
     { key: 'action:bot', group: g.action, label: t('bots.add'), icon: 'i-lucide-plus', words: 'new bot napcat', run: go({ path: '/bots', query: { new: '1' } }) },
     { key: 'action:persona', group: g.action, label: t('personas.add'), icon: 'i-lucide-plus', words: 'new persona', run: go({ path: '/personas', query: { persona: 'new' } }) },
-    { key: 'action:agent', group: g.action, label: t('search.askAgent'), icon: 'i-lucide-sparkles', words: 'agent ai', run: () => (agent.open = true) },
+    { key: 'action:fairy', group: g.action, label: t('search.askFairy'), icon: 'i-lucide-sparkles', words: 'fairy ai', run: () => (fairy.open = true) },
     {
       key: 'action:theme',
       group: g.action,

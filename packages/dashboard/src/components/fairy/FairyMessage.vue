@@ -86,14 +86,14 @@ const statusType = { ok: 'success', warning: 'warning', error: 'error', info: 'i
 </script>
 
 <template>
-  <div class="agent-md" @click="onClick">
+  <div class="fairy-md" @click="onClick">
     <template v-for="(segment, index) in segments" :key="index">
       <div v-if="segment.kind === 'html'" class="md" v-html="segment.html" />
       <div v-else-if="segment.kind === 'code'" class="code-block">
         <div class="code-head">
-          <span>{{ segment.lang || t('agentMessage.code') }}</span>
+          <span>{{ segment.lang || t('fairyMessage.code') }}</span>
           <Button size="tiny" quaternary :icon="copied === index ? 'i-lucide-circle-check' : 'i-lucide-copy'" @click="copy(segment.code, index)">
-            {{ copied === index ? t('agentMessage.copied') : t('agentMessage.copy') }}
+            {{ copied === index ? t('fairyMessage.copied') : t('fairyMessage.copy') }}
           </Button>
         </div>
         <pre class="hljs mono"><code v-html="segment.html" /></pre>
@@ -101,10 +101,10 @@ const statusType = { ok: 'success', warning: 'warning', error: 'error', info: 'i
       <div v-else-if="segment.kind === 'mermaid'" class="diagram">
         <div v-if="diagramOf(segment.code)?.svg" class="diagram-svg" v-html="diagramOf(segment.code)!.svg" />
         <template v-else-if="diagramOf(segment.code)?.error">
-          <div class="diagram-error">{{ t('agentMessage.diagramFailed') }}</div>
+          <div class="diagram-error">{{ t('fairyMessage.diagramFailed') }}</div>
           <pre class="mono">{{ segment.code }}</pre>
         </template>
-        <div v-else class="diagram-loading">{{ t('agentMessage.diagramLoading') }}</div>
+        <div v-else class="diagram-loading">{{ t('fairyMessage.diagramLoading') }}</div>
       </div>
       <div v-else-if="segment.kind === 'card'" class="card" :class="segment.card.status">
         <div class="card-head">
@@ -113,7 +113,7 @@ const statusType = { ok: 'success', warning: 'warning', error: 'error', info: 'i
             <div v-if="segment.card.subtitle" class="card-subtitle">{{ segment.card.subtitle }}</div>
           </div>
           <Tag v-if="segment.card.status" size="small" :type="statusType[segment.card.status]">
-            {{ t(`agentMessage.status.${segment.card.status}`) }}
+            {{ t(`fairyMessage.status.${segment.card.status}`) }}
           </Tag>
         </div>
         <dl v-if="segment.card.fields?.length" class="card-fields">
@@ -138,7 +138,7 @@ const statusType = { ok: 'success', warning: 'warning', error: 'error', info: 'i
 </template>
 
 <style scoped>
-.agent-md {
+.fairy-md {
   display: flex;
   flex-direction: column;
   gap: 8px;

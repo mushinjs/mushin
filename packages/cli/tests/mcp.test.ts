@@ -111,9 +111,9 @@ describe('MCP servers', () => {
     expect(server.error).toContain('401')
   })
 
-  it('gives the Agent the tools in new conversations and removes them with the server', async () => {
+  it('gives Fairy the tools in new conversations and removes them with the server', async () => {
     llm.enqueue({ text: 'ok' })
-    await app.call('agent.send', { text: 'hello' })
+    await app.call('fairy.send', { text: 'hello' })
     const names = llm.requests.at(-1).tools.map((tool: any) => tool.function.name)
     expect(names).toEqual(expect.arrayContaining(['mcp__mockTools__echoText', 'mcp__remote__lookup']))
     expect(llm.requests.at(-1).tools.find((tool: any) => tool.function.name === 'mcp__mockTools__echoText').function.parameters).toMatchObject({ required: ['text'] })

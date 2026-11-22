@@ -343,7 +343,7 @@ function sourceTag(flow: FlowSummary) {
       icon: 'i-lucide-puzzle',
     }, { default: () => t('flows.sourcePlugin', { name }) })
   }
-  if (source?.kind === 'agent') return h(Tag, { size: 'small', icon: 'i-lucide-sparkles' }, { default: () => t('flows.sourceAgent') })
+  if (source?.kind === 'fairy') return h(Tag, { size: 'small', icon: 'i-lucide-sparkles' }, { default: () => t('flows.sourceFairy') })
   return undefined
 }
 
@@ -429,12 +429,12 @@ function remove(flow: FlowSummary) {
         <RadioButton value="cards" :title="t('flows.viewCards')" :aria-label="t('flows.viewCards')"><span class="i-lucide-layout-grid view-icon" /></RadioButton>
         <RadioButton value="list" :title="t('flows.viewList')" :aria-label="t('flows.viewList')"><span class="i-lucide-list view-icon" /></RadioButton>
       </RadioGroup>
-      <Button type="primary" data-agent-target="flows.add" icon="i-lucide-plus" @click="openCreate">
+      <Button type="primary" data-fairy-target="flows.add" icon="i-lucide-plus" @click="openCreate">
         {{ t('flows.add') }}
       </Button>
     </PageHeader>
 
-    <div v-if="flows.length" class="toolbar" data-agent-target="flows.filters">
+    <div v-if="flows.length" class="toolbar" data-fairy-target="flows.filters">
       <Input v-model:value="search" clearable :placeholder="t('flows.searchPlaceholder')" class="search">
         <template #prefix><span class="i-lucide-search" /></template>
       </Input>
@@ -563,8 +563,8 @@ function remove(flow: FlowSummary) {
                 <button v-if="ownedByPlugin(flow)" type="button" class="source" :title="`${t('flows.sourcePlugin', { name: pluginName(flow) })}\n${t('flows.sourcePluginHint')}`" @click="openPlugin(flow)">
                   <span class="i-lucide-puzzle text-[14px]" />{{ t('flows.sourcePluginShort') }}
                 </button>
-                <span v-else-if="flow.source?.kind === 'agent'" class="source" :title="t('flows.sourceAgent')">
-                  <span class="i-lucide-sparkles text-[14px]" />{{ t('flows.sourceAgentShort') }}
+                <span v-else-if="flow.source?.kind === 'fairy'" class="source" :title="t('flows.sourceFairy')">
+                  <span class="i-lucide-sparkles text-[14px]" />{{ t('flows.sourceFairyShort') }}
                 </span>
                 <Toggle variant="button" size="small" :value="flow.enabled" :title="flow.enabled ? t('flows.enabledHint') : t('flows.disabledHint')" @update:value="(value: boolean) => setEnabled(flow, value)" />
                 <IconAction v-if="!ownedByPlugin(flow)" icon="i-lucide-trash-2" :label="t('common.delete')" type="error" @click="remove(flow)" />

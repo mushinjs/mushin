@@ -55,7 +55,7 @@ interface NodeTypeBase<C> {
   escapeConfig?: Record<string, (value: string, config: C, at: { text: string; offset: number }) => string>
   /**
    * Only people in the flow editor may add these nodes or change their config and inputs; the
-   * Agent cannot. For nodes that reach outside the chat, such as running commands.
+   * Fairy cannot. For nodes that reach outside the chat, such as running commands.
    */
   restricted?: boolean
   /**
@@ -361,9 +361,9 @@ export interface FlowNode {
 
 export type Intercept = 'none' | 'flow' | 'flows' | 'global'
 
-/** `user`: made in the dashboard or the API. `agent`: made by the Agent. `plugin`: made by the plugin `plugin` (its package). */
+/** `user`: made in the dashboard or the API. `fairy`: made by Fairy. `plugin`: made by the plugin `plugin` (its package). */
 export interface FlowSource {
-  kind: 'user' | 'agent' | 'plugin'
+  kind: 'user' | 'fairy' | 'plugin'
   plugin?: string
 }
 

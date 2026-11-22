@@ -7,7 +7,7 @@ import { call, on } from '../api'
 import BrowserStorage from '../components/BrowserStorage.vue'
 import PageHeader from '../components/PageHeader.vue'
 import IconAction from '../components/IconAction.vue'
-import { useAgentSceneStore } from '../stores/agentScene'
+import { useFairySceneStore } from '../stores/fairyScene'
 import type { AppPlugin, DatabaseStatus, DatabaseTable } from '../types'
 import { formatBytes, pretty } from '../utils'
 
@@ -16,7 +16,7 @@ const message = useToast()
 const dialog = useConfirm()
 const route = useRoute()
 const router = useRouter()
-const scene = useAgentSceneStore()
+const scene = useFairySceneStore()
 
 /** `server` for the plugins' tables, `browser` for what this browser keeps. */
 const source = computed(() => (route.query.source === 'browser' ? 'browser' : 'server'))

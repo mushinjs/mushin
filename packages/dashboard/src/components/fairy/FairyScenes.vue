@@ -3,14 +3,14 @@ import { Button, Card, Form, FormItem, Input, Select, Tag, Toggle, useToast } fr
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
-import { useAgentStore } from '../../stores/agent'
-import { SCENE_RECOMMENDATIONS, SCENES, type SceneProfile, useAgentSceneStore } from '../../stores/agentScene'
+import { useFairyStore } from '../../stores/fairy'
+import { SCENE_RECOMMENDATIONS, SCENES, type SceneProfile, useFairySceneStore } from '../../stores/fairyScene'
 import { clone } from '../../utils'
 
 const { t } = useI18n()
 const message = useToast()
-const agent = useAgentStore()
-const scenes = useAgentSceneStore()
+const fairy = useFairyStore()
+const scenes = useFairySceneStore()
 
 const selected = ref<string>('overview')
 const draft = ref<SceneProfile>({})
@@ -20,7 +20,7 @@ watch([selected, () => scenes.profiles], () => {
   draft.value = clone(scenes.profiles[selected.value] ?? {})
 }, { immediate: true, deep: true })
 
-const skillOptions = computed(() => agent.skills.map((skill) => ({ label: skill.name, value: skill.id })))
+const skillOptions = computed(() => fairy.skills.map((skill) => ({ label: skill.name, value: skill.id })))
 const builtins = computed(() => SCENE_RECOMMENDATIONS[selected.value] ?? [])
 const changed = (scene: string) => Object.keys(scenes.profiles[scene] ?? {}).length > 0
 
@@ -51,9 +51,9 @@ function cleaned(profile: SceneProfile): SceneProfile | null {
 async function save(reset = false) {
   saving.value = true
   try {
-    await call('agent.profiles.update', { scene: selected.value, profile: reset ? null : cleaned(draft.value) })
+    await call('fairy.profiles.update', { scene: selected.value, profile: reset ? null : cleaned(draft.value) })
     await scenes.refreshProfiles()
-    message.success(reset ? t('agentPage.scenes.restored') : t('common.saved'))
+    message.success(reset ? t('fairyPage.scenes.restored') : t('common.saved'))
   } catch (error) {
     message.error((error as Error).message)
   } finally {
@@ -73,50 +73,50 @@ async function save(reset = false) {
         :class="{ active: scene === selected }"
         @click="selected = scene"
       >
-        <span>{{ t(`agentScene.name.${scene}`) }}</span>
-        <Tag v-if="changed(scene)" size="tiny" type="info">{{ t('agentPage.scenes.custom') }}</Tag>
+        <span>{{ t(`fairyScene.name.${scene}`) }}</span>
+        <Tag v-if="changed(scene)" size="tiny" type="info">{{ t('fairyPage.scenes.custom') }}</Tag>
       </button>
     </nav>
 
-    <Card :title="t(`agentScene.name.${selected}`)" class="scene-editor">
+    <Card :title="t(`fairyScene.name.${selected}`)" class="scene-editor">
       <Form>
-        <FormItem :label="t('agentPage.scenes.hint')" :feedback="t('agentPage.scenes.hintHelp')">
-          <Input v-model:value="draft.hint" type="textarea" :autosize="{ minRows: 2, maxRows: 5 }" :placeholder="t(`agentScene.hint.${selected}`)" />
+        <FormItem :label="t('fairyPage.scenes.hint')" :feedback="t('fairyPage.scenes.hintHelp')">
+          <Input v-model:value="draft.hint" type="textarea" :autosize="{ minRows: 2, maxRows: 5 }" :placeholder="t(`fairyScene.hint.${selected}`)" />
         </FormItem>
-        <FormItem :label="t('agentPage.scenes.welcome')">
-          <Input v-model:value="draft.welcome" :placeholder="t('agent.hello')" />
+        <FormItem :label="t('fairyPage.scenes.welcome')">
+          <Input v-model:value="draft.welcome" :placeholder="t('fairy.hello')" />
         </FormItem>
-        <FormItem :label="t('agentPage.scenes.builtin')" :feedback="t('agentPage.scenes.builtinHelp')">
+        <FormItem :label="t('fairyPage.scenes.builtin')" :feedback="t('fairyPage.scenes.builtinHelp')">
           <div class="builtin-list">
             <label v-for="id in builtins" :key="id" class="builtin">
               <Toggle size="small" :value="!draft.hidden?.includes(id)" @update:value="(on: boolean) => toggleBuiltin(id, on)" />
-              <span>{{ t(`agentScene.rec.${id}`, { name: '…', count: 'N', names: '…' }) }}</span>
+              <span>{{ t(`fairyScene.rec.${id}`, { name: '…', count: 'N', names: '…' }) }}</span>
             </label>
           </div>
         </FormItem>
-        <FormItem :label="t('agentPage.scenes.own')">
+        <FormItem :label="t('fairyPage.scenes.own')">
           <div class="own-list">
             <div v-for="(item, index) in draft.recommendations ?? []" :key="index" class="own">
-              <Input v-model:value="item.text" :placeholder="t('agentPage.scenes.ownText')" />
-              <Input v-model:value="item.prompt" :placeholder="t('agentPage.scenes.ownPrompt')" />
-              <Select v-model:value="item.skill" clearable :options="skillOptions" :placeholder="t('agentPage.scenes.ownSkill')" />
+              <Input v-model:value="item.text" :placeholder="t('fairyPage.scenes.ownText')" />
+              <Input v-model:value="item.prompt" :placeholder="t('fairyPage.scenes.ownPrompt')" />
+              <Select v-model:value="item.skill" clearable :options="skillOptions" :placeholder="t('fairyPage.scenes.ownSkill')" />
               <Button quaternary circle :aria-label="t('common.remove')" icon="i-lucide-trash-2" @click="draft.recommendations!.splice(index, 1)" />
             </div>
             <Button dashed size="small" icon="i-lucide-plus" @click="addRecommendation">
-              {{ t('agentPage.scenes.addOwn') }}
+              {{ t('fairyPage.scenes.addOwn') }}
             </Button>
           </div>
         </FormItem>
-        <FormItem :label="t('agentPage.scenes.skills')" :feedback="t('agentPage.scenes.skillsHelp')">
+        <FormItem :label="t('fairyPage.scenes.skills')" :feedback="t('fairyPage.scenes.skillsHelp')">
           <Select v-model:value="draft.skills" multiple clearable :options="skillOptions" />
         </FormItem>
-        <FormItem :label="t('agentPage.scenes.autoShow')" :feedback="t('agentPage.scenes.autoShowHelp')">
+        <FormItem :label="t('fairyPage.scenes.autoShow')" :feedback="t('fairyPage.scenes.autoShowHelp')">
           <Toggle :value="draft.autoShow !== false" @update:value="(on: boolean) => (draft.autoShow = on ? undefined : false)" />
         </FormItem>
       </Form>
       <template #action>
         <div class="flex flex-wrap gap-x-3 gap-y-2 items-center justify-end">
-          <Button :disabled="!changed(selected)" :loading="saving" @click="save(true)">{{ t('agentPage.scenes.restore') }}</Button>
+          <Button :disabled="!changed(selected)" :loading="saving" @click="save(true)">{{ t('fairyPage.scenes.restore') }}</Button>
           <Button type="primary" :loading="saving" @click="save()">{{ t('common.save') }}</Button>
         </div>
       </template>

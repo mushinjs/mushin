@@ -173,7 +173,7 @@ const initial = (provider: Provider) => [...provider.name.trim()][0]?.toUpperCas
 <template>
   <div class="page">
     <PageHeader :title="t('nav.providers')" :lead="t('providers.lead')">
-      <Button type="primary" data-agent-target="providers.add" icon="i-lucide-plus" @click="openCreate">
+      <Button type="primary" data-fairy-target="providers.add" icon="i-lucide-plus" @click="openCreate">
         {{ t('providers.add') }}
       </Button>
     </PageHeader>

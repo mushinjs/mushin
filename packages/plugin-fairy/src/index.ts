@@ -5,10 +5,10 @@ import { type Effort, EFFORTS, type LlmMessage, type LlmResult, type ToolCall, t
 import type {} from '@mushinjs/plugin-storage'
 import { contextNote, type SceneInfo, skillBlock, SYSTEM_PROMPT, type TurnContext } from './prompt'
 import {
-  type AgentSettings, defaultPolicy, formatSkillMarkdown, parseSkillMarkdown, policyInput, profileInput, SCENE_KEYS, type SceneProfile, today,
+  type FairySettings, defaultPolicy, formatSkillMarkdown, parseSkillMarkdown, policyInput, profileInput, SCENE_KEYS, type SceneProfile, today,
   type TokenUsage, type ToolPolicy,
 } from './settings'
-import { type AgentSkill, BUILTIN_SKILLS, type SkillDefinition, skillFields, skillInput } from './skills'
+import { type FairySkill, BUILTIN_SKILLS, type SkillDefinition, skillFields, skillInput } from './skills'
 
 export * from './prompt'
 export * from './settings'
@@ -16,17 +16,17 @@ export * from './skills'
 
 declare module '@mushinjs/core' {
   interface Context {
-    agent: Agent
+    fairy: Fairy
   }
 
   interface Events {
-    'agent/event'(event: AgentEvent): void
+    'fairy/event'(event: FairyEvent): void
     /** Skills, page profiles or tool policies changed. */
-    'agent/changed'(): void
+    'fairy/changed'(): void
   }
 }
 
-export type AgentEvent = { session: string } & (
+export type FairyEvent = { session: string } & (
   | { type: 'start' }
   | { type: 'delta'; text: string }
   | { type: 'tool-call'; id: string; action: string; input: unknown; risk: string }
@@ -43,7 +43,7 @@ export type AgentEvent = { session: string } & (
  * A stored message; `display` holds the user's own words when the content carries a context note,
  * and `skills` the names of the skills picked for it.
  */
-export type AgentMessage = LlmMessage & {
+export type FairyMessage = LlmMessage & {
   display?: string
   skills?: string[]
   /** A chat quoted into the message, as the dashboard shows it: who said what, and where. */
@@ -51,7 +51,7 @@ export type AgentMessage = LlmMessage & {
   at: number
 }
 
-/** Messages of a bot's chat quoted into an Agent message, around one picked message. */
+/** Messages of a bot's chat quoted into a Fairy message, around one picked message. */
 export interface QuotedChat {
   bot: string
   botName: string
@@ -68,14 +68,14 @@ export interface SessionScene {
   page?: string
 }
 
-export interface AgentSession {
+export interface FairySession {
   id: string
   title: string
   createdAt: number
   updatedAt: number
   /** Tool list frozen at creation, so every request in the session sends identical tools. */
   tools: ToolDefinition[]
-  messages: AgentMessage[]
+  messages: FairyMessage[]
   /** The page the conversation was started on. */
   scene?: SessionScene
   /** What it touched, for search: `scene:<key>`, `skill:<id>`, `command:<name>`, `resource:<kind>:<id>`. */
@@ -92,7 +92,7 @@ export interface SendOptions {
   skills?: string[]
   /** A message of a bot's chat to quote, with a few messages around it. */
   quote?: { bot: string; channel: string; id: string; before?: number; after?: number }
-  /** Provider or profile, model and reasoning effort for this message; the Agent's settings when omitted. */
+  /** Provider or profile, model and reasoning effort for this message; Fairy's settings when omitted. */
   provider?: string
   model?: string
   effort?: Effort
@@ -104,23 +104,23 @@ export interface SendOptions {
 export const BUILTIN_COMMANDS = [
   { name: 'new', description: 'Start a new conversation', 'zh-CN': '开始新对话' },
   { name: 'history', description: 'Open the full conversation history', 'zh-CN': '打开完整历史' },
-  { name: 'model', description: 'Switch the Agent\'s model', 'zh-CN': '切换模型' },
+  { name: 'model', description: 'Switch Fairy\'s model', 'zh-CN': '切换模型' },
   { name: 'status', description: 'Show how much context this conversation uses', 'zh-CN': '查看上下文用量' },
   { name: 'clear', description: 'Clear the input and close the conversation', 'zh-CN': '清空当前对话视图' },
   { name: 'help', description: 'Show what you can type', 'zh-CN': '查看可用的指令和技能' },
 ]
 
-const SETTINGS_KEY = 'agent/settings/main'
-const USAGE_KEY = 'agent/settings/usage'
+const SETTINGS_KEY = 'fairy/settings/main'
+const USAGE_KEY = 'fairy/settings/usage'
 
 const MAX_RESULT_CHARS = 16_000
 
 export const Config = z.object({
-  provider: z.string().optional().meta(field('Provider', 'Provider or model profile for the Agent; empty uses the default provider', {
-    'zh-CN': { title: '提供商', description: '智能体使用的提供商或配置方案；留空使用默认提供商' },
+  provider: z.string().optional().meta(field('Provider', 'Provider or model profile for Fairy; empty uses the default provider', {
+    'zh-CN': { title: '提供商', description: 'Fairy 使用的提供商或配置方案；留空使用默认提供商' },
   }, { choices: 'providers.choices' })),
-  model: z.string().optional().meta(field('Model', 'Model for the Agent; empty uses the provider\'s default', {
-    'zh-CN': { title: '模型', description: '智能体使用的模型；留空使用提供商默认模型' },
+  model: z.string().optional().meta(field('Model', 'Model for Fairy; empty uses the provider\'s default', {
+    'zh-CN': { title: '模型', description: 'Fairy 使用的模型；留空使用提供商默认模型' },
   })),
   effort: z.enum(EFFORTS as [Effort, ...Effort[]]).optional().meta(field('Reasoning effort', 'How much a reasoning model thinks; empty uses the model default', {
     'zh-CN': { title: '推理强度', description: '推理模型思考的程度；留空使用模型默认值' },
@@ -131,8 +131,8 @@ export const Config = z.object({
   confirmTimeout: z.number().int().min(10).default(600).meta(field('Approval timeout', 'Seconds to wait for approval of a dangerous action', {
     'zh-CN': { title: '确认超时', description: '等待用户批准危险操作的秒数' },
   })),
-  dailyTokens: z.number().int().min(0).default(0).meta(field('Daily token budget', 'Input and output tokens the Agent may use per day; 0 means no limit', {
-    'zh-CN': { title: '每日 Token 预算', description: '智能体每天最多使用的输入和输出 Token；0 表示不限制' },
+  dailyTokens: z.number().int().min(0).default(0).meta(field('Daily token budget', 'Input and output tokens Fairy may use per day; 0 means no limit', {
+    'zh-CN': { title: '每日 Token 预算', description: 'Fairy 每天最多使用的输入和输出 Token；0 表示不限制' },
   })),
 })
 
@@ -179,17 +179,17 @@ function toolTier(action: ActionInfo) {
 }
 
 /** Runs conversations in which the LLM operates Mushin.js through the action registry. */
-export class Agent extends Service {
+export class Fairy extends Service {
   static inject = ['actions', 'llm', 'storage']
   static Config = Config
 
   private home: Context
   private running = new Map<string, Running>()
-  private pluginSkills = new Map<string, AgentSkill>()
-  private settingsCache?: AgentSettings
+  private pluginSkills = new Map<string, FairySkill>()
+  private settingsCache?: FairySettings
 
   constructor(ctx: Context, public config: Config) {
-    super(ctx, 'agent')
+    super(ctx, 'fairy')
     this.home = ctx
   }
 
@@ -200,11 +200,11 @@ export class Agent extends Service {
     }
   }
 
-  /** The actions the model may use: every one except the Agent's own and those turned off, core ones first. */
+  /** The actions the model may use: every one except Fairy's own and those turned off, core ones first. */
   private async allowedActions() {
     const settings = await this.settings()
     return this.home.actions.list()
-      .filter((action) => action.agent && !action.name.startsWith('agent.') && this.policyOf(settings, action) !== 'off')
+      .filter((action) => action.fairy && !action.name.startsWith('fairy.') && this.policyOf(settings, action) !== 'off')
       .map((action, index) => ({ action, index }))
       .sort((a, b) => toolTier(a.action) - toolTier(b.action) || a.index - b.index)
       .map(({ action }) => action)
@@ -264,23 +264,23 @@ export class Agent extends Service {
 
   // ---- settings ----
 
-  async settings(): Promise<AgentSettings> {
+  async settings(): Promise<FairySettings> {
     if (!this.settingsCache) {
-      const saved = await this.home.storage.get<Partial<AgentSettings>>(SETTINGS_KEY)
+      const saved = await this.home.storage.get<Partial<FairySettings>>(SETTINGS_KEY)
       this.settingsCache = { profiles: {}, toolPolicy: {}, disabledSkills: [], ...saved }
     }
     return this.settingsCache
   }
 
-  private async updateSettings(change: (settings: AgentSettings) => void) {
+  private async updateSettings(change: (settings: FairySettings) => void) {
     const settings = await this.settings()
     change(settings)
     await this.home.storage.set(SETTINGS_KEY, settings)
-    this.home.emit('agent/changed')
+    this.home.emit('fairy/changed')
     return settings
   }
 
-  private policyOf(settings: AgentSettings, action: Pick<ActionInfo, 'name' | 'risk'>): ToolPolicy {
+  private policyOf(settings: FairySettings, action: Pick<ActionInfo, 'name' | 'risk'>): ToolPolicy {
     return settings.toolPolicy[action.name] ?? defaultPolicy(action.risk)
   }
 
@@ -288,7 +288,7 @@ export class Agent extends Service {
   async policies() {
     const settings = await this.settings()
     return this.home.actions.list()
-      .filter((action) => action.agent && !action.name.startsWith('agent.'))
+      .filter((action) => action.fairy && !action.name.startsWith('fairy.'))
       .map((action) => ({
         name: action.name,
         description: action.description,
@@ -335,19 +335,19 @@ export class Agent extends Service {
     await this.home.storage.set(USAGE_KEY, { day: current.day, input: current.input + usage.inputTokens, output: current.output + usage.outputTokens })
   }
 
-  private emit(event: AgentEvent) {
-    this.home.emit('agent/event', event)
+  private emit(event: FairyEvent) {
+    this.home.emit('fairy/event', event)
   }
 
   private async allSessions() {
-    const keys = await this.home.storage.list('agent')
-    const sessions = await Promise.all(keys.map((key) => this.home.storage.get<AgentSession>(key)))
+    const keys = await this.home.storage.list('fairy')
+    const sessions = await Promise.all(keys.map((key) => this.home.storage.get<FairySession>(key)))
     return sessions
-      .filter((session): session is AgentSession => !!session && Array.isArray(session.messages))
+      .filter((session): session is FairySession => !!session && Array.isArray(session.messages))
       .sort((a, b) => b.updatedAt - a.updatedAt)
   }
 
-  private summary({ id, title, createdAt, updatedAt, scene, tags }: AgentSession) {
+  private summary({ id, title, createdAt, updatedAt, scene, tags }: FairySession) {
     return { id, title, createdAt, updatedAt, scene, tags: tags ?? [], running: this.running.has(id) }
   }
 
@@ -357,7 +357,7 @@ export class Agent extends Service {
 
   /**
    * Conversations matching every tag (`scene:flowEditor`, `skill:<id>`, `status:running`, …) and
-   * containing the query in the title or in what the user or the Agent wrote.
+   * containing the query in the title or in what the user or Fairy wrote.
    */
   async search(options: { query?: string; tags?: string[]; limit?: number } = {}) {
     const query = options.query?.trim().toLowerCase()
@@ -389,23 +389,23 @@ export class Agent extends Service {
   /** Adds a skill from a plugin; removed when the plugin unloads. */
   defineSkill(definition: SkillDefinition) {
     const ctx = this.ctx
-    const skill: AgentSkill = { ...definition, source: 'plugin', plugin: ctx.fiber.name, enabled: true }
+    const skill: FairySkill = { ...definition, source: 'plugin', plugin: ctx.fiber.name, enabled: true }
     return ctx.effect(() => {
       this.pluginSkills.set(skill.id, skill)
       return () => {
         if (this.pluginSkills.get(skill.id) === skill) this.pluginSkills.delete(skill.id)
       }
-    }, `agent.defineSkill(${definition.id})`)
+    }, `fairy.defineSkill(${definition.id})`)
   }
 
   /** Built-in, plugin and user skills; user skills win on the same id. */
-  async skills(): Promise<AgentSkill[]> {
+  async skills(): Promise<FairySkill[]> {
     const disabled = new Set((await this.settings()).disabledSkills)
-    const byId = new Map<string, AgentSkill>()
+    const byId = new Map<string, FairySkill>()
     for (const skill of BUILTIN_SKILLS) byId.set(skill.id, { ...skill, source: 'builtin', enabled: true })
     for (const skill of this.pluginSkills.values()) byId.set(skill.id, { ...skill })
-    const keys = await this.home.storage.list('agent/skills')
-    for (const skill of await Promise.all(keys.map((key) => this.home.storage.get<AgentSkill>(key)))) {
+    const keys = await this.home.storage.list('fairy/skills')
+    for (const skill of await Promise.all(keys.map((key) => this.home.storage.get<FairySkill>(key)))) {
       if (skill?.id) byId.set(skill.id, { ...skill, source: 'user', enabled: skill.enabled !== false })
     }
     return [...byId.values()].map((skill) => (skill.source !== 'user' && disabled.has(skill.id) ? { ...skill, enabled: false } : skill))
@@ -419,9 +419,9 @@ export class Agent extends Service {
 
   /** Saves a user skill. With the id of a built-in or plugin skill it replaces that one until deleted. */
   async saveSkill(input: SkillDefinition & { enabled?: boolean }) {
-    const skill: AgentSkill = { ...input, source: 'user', enabled: input.enabled !== false }
-    await this.home.storage.set(`agent/skills/${skill.id}`, skill)
-    this.home.emit('agent/changed')
+    const skill: FairySkill = { ...input, source: 'user', enabled: input.enabled !== false }
+    await this.home.storage.set(`fairy/skills/${skill.id}`, skill)
+    this.home.emit('fairy/changed')
     return this.skill(skill.id)
   }
 
@@ -443,16 +443,16 @@ export class Agent extends Service {
   async deleteSkill(id: string) {
     const current = await this.skill(id)
     if (current.source !== 'user') throw new MushinError('forbidden', 'Built-in and plugin skills cannot be deleted; turn them off instead')
-    await this.home.storage.delete(`agent/skills/${id}`)
-    this.home.emit('agent/changed')
+    await this.home.storage.delete(`fairy/skills/${id}`)
+    this.home.emit('fairy/changed')
     return { deleted: id, restored: (await this.skills()).some((skill) => skill.id === id) }
   }
 
   async setSkillEnabled(id: string, enabled: boolean) {
     const current = await this.skill(id)
     if (current.source === 'user') {
-      await this.home.storage.set(`agent/skills/${id}`, { ...current, enabled })
-      this.home.emit('agent/changed')
+      await this.home.storage.set(`fairy/skills/${id}`, { ...current, enabled })
+      this.home.emit('fairy/changed')
       return this.skill(id)
     }
     await this.updateSettings((settings) => {
@@ -461,7 +461,7 @@ export class Agent extends Service {
     return this.skill(id)
   }
 
-  /** Agent commands and the commands of every bot, for the `/` picker. */
+  /** Fairy commands and the commands of every bot, for the `/` picker. */
   commands() {
     const bots = this.home.get('bots')
     const names = new Map<string, string>((bots?.list() ?? []).map((bot: { id: string; name: string }) => [bot.id, bot.name]))
@@ -481,27 +481,27 @@ export class Agent extends Service {
   }
 
   async session(id: string) {
-    const session = await this.home.storage.get<AgentSession>(`agent/${id}`)
-    if (!session) throw new MushinError('not_found', `No Agent session "${id}"`)
+    const session = await this.home.storage.get<FairySession>(`fairy/${id}`)
+    if (!session) throw new MushinError('not_found', `No Fairy session "${id}"`)
     return session
   }
 
-  async createSession(): Promise<AgentSession> {
+  async createSession(): Promise<FairySession> {
     const now = Date.now()
-    const session: AgentSession = { id: randomId(), title: '', createdAt: now, updatedAt: now, tools: await this.tools(), messages: [] }
+    const session: FairySession = { id: randomId(), title: '', createdAt: now, updatedAt: now, tools: await this.tools(), messages: [] }
     await this.save(session)
     return session
   }
 
   async deleteSession(id: string) {
     this.cancel(id)
-    await this.home.storage.delete(`agent/${id}`)
+    await this.home.storage.delete(`fairy/${id}`)
     return { deleted: id }
   }
 
-  private save(session: AgentSession) {
+  private save(session: FairySession) {
     session.updatedAt = Date.now()
-    return this.home.storage.set(`agent/${session.id}`, session)
+    return this.home.storage.set(`fairy/${session.id}`, session)
   }
 
   private turnContext(page?: string, scene?: SceneInfo): TurnContext {
@@ -517,7 +517,7 @@ export class Agent extends Service {
     }
   }
 
-  /** A bot's chat around one message, for quoting into an Agent message. */
+  /** A bot's chat around one message, for quoting into a Fairy message. */
   private async quoteChat(input: NonNullable<SendOptions['quote']>): Promise<QuotedChat> {
     const bots = this.home.get('bots')
     if (!bots) throw new MushinError('unavailable', 'Quoting a chat needs the bots plugin')
@@ -542,17 +542,17 @@ export class Agent extends Service {
     }
   }
 
-  /** Starts a turn and returns once it finishes. Progress streams as `agent/event` events. */
+  /** Starts a turn and returns once it finishes. Progress streams as `fairy/event` events. */
   async send(sessionId: string | undefined, text: string, options: SendOptions = {}) {
     if (!this.home.llm.list().length) {
-      throw new MushinError('unavailable', 'Add an LLM provider before using the Agent')
+      throw new MushinError('unavailable', 'Add an LLM provider before using Fairy')
     }
     const usage = await this.usage()
     if (usage.budget && usage.input + usage.output >= usage.budget) {
-      throw new MushinError('unavailable', `The Agent used its daily budget of ${usage.budget} tokens; raise it in the Agent settings or wait until tomorrow`)
+      throw new MushinError('unavailable', `Fairy used its daily budget of ${usage.budget} tokens; raise it in the Fairy settings or wait until tomorrow`)
     }
     const session = sessionId ? await this.session(sessionId) : await this.createSession()
-    if (this.running.has(session.id)) throw new MushinError('conflict', 'The Agent is still working on this conversation')
+    if (this.running.has(session.id)) throw new MushinError('conflict', 'Fairy is still working on this conversation')
     if (options.rewind !== undefined) {
       let seen = -1
       const at = session.messages.findIndex((message) => message.role === 'user' && ++seen === options.rewind)
@@ -593,12 +593,12 @@ export class Agent extends Service {
     return { session: session.id }
   }
 
-  private async loop(session: AgentSession, running: Running, options: SendOptions) {
+  private async loop(session: FairySession, running: Running, options: SendOptions) {
     let last: LlmResult | undefined
     for (let step = 0; step < this.config.maxSteps; step++) {
       const history: LlmMessage[] = [{ role: 'system', content: SYSTEM_PROMPT }, ...session.messages.map(stripMeta)]
       let result: LlmResult | undefined
-      // A provider picked for this message comes with its own model choice, not the Agent's.
+      // A provider picked for this message comes with its own model choice, not Fairy's.
       const provider = options.provider ?? this.config.provider
       const model = options.provider ? options.model : options.model ?? this.config.model
       for await (const event of this.home.llm.stream({
@@ -656,7 +656,7 @@ export class Agent extends Service {
     throw new StepLimit(this.config.maxSteps)
   }
 
-  private async runTool(session: AgentSession, running: Running, call: ToolCall, options: SendOptions) {
+  private async runTool(session: FairySession, running: Running, call: ToolCall, options: SendOptions) {
     const reply = (content: string, isError = false) => {
       session.messages.push({ role: 'tool', toolCallId: call.id, content, ...(isError ? { isError } : {}), at: Date.now() })
     }
@@ -683,15 +683,15 @@ export class Agent extends Service {
     }
     const name = toolName.includes('.') ? toolName : fromToolName(toolName)
     const info = this.home.actions.get(name)
-    if (!info || !info.agent) {
+    if (!info || !info.fairy) {
       this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: false, error: `Unknown tool ${toolName}` })
       return reply(`The tool ${toolName} is not available right now.`, true)
     }
 
     const policy = this.policyOf(await this.settings(), info)
     if (policy === 'off') {
-      this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: false, error: 'Turned off in the Agent settings' })
-      return reply(`The user turned ${toolName} off for the Agent. Do not use it; tell them if it is needed.`, true)
+      this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: false, error: 'Turned off in the Fairy settings' })
+      return reply(`The user turned ${toolName} off for Fairy. Do not use it; tell them if it is needed.`, true)
     }
 
     this.emit({ session: session.id, type: 'tool-call', id: call.id, action: name, input, risk: info.risk })
@@ -706,7 +706,7 @@ export class Agent extends Service {
     }
 
     try {
-      const result = await this.home.actions.call(name, input, { kind: 'agent', session: session.id, client: options.client })
+      const result = await this.home.actions.call(name, input, { kind: 'fairy', session: session.id, client: options.client })
       this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: true, result })
       reply(truncate(JSON.stringify(result ?? { ok: true })))
     } catch (error) {
@@ -756,24 +756,24 @@ export class Agent extends Service {
     const actions = this.home.actions
 
     yield actions.define({
-      name: 'agent.status',
-      description: 'Whether the Agent can run (a provider exists and passed its test).',
+      name: 'fairy.status',
+      description: 'Whether Fairy can run (a provider exists and passed its test).',
       risk: 'read',
       input: z.object({}),
       handler: () => this.status(),
     })
 
     yield actions.define({
-      name: 'agent.sessions',
-      description: 'List Agent conversations, newest first.',
+      name: 'fairy.sessions',
+      description: 'List Fairy conversations, newest first.',
       risk: 'read',
       input: z.object({}),
       handler: () => this.sessions(),
     })
 
     yield actions.define({
-      name: 'agent.session',
-      description: 'Get one Agent conversation with its messages.',
+      name: 'fairy.session',
+      description: 'Get one Fairy conversation with its messages.',
       risk: 'read',
       input: z.object({ id: z.string() }),
       handler: async ({ id }) => {
@@ -785,8 +785,8 @@ export class Agent extends Service {
     })
 
     yield actions.define({
-      name: 'agent.send',
-      description: 'Send a message to the Agent. Omit session to start a new conversation. Progress streams over the WebSocket.',
+      name: 'fairy.send',
+      description: 'Send a message to Fairy. Omit session to start a new conversation. Progress streams over the WebSocket.',
       risk: 'write',
       input: z.object({
         session: z.string().optional(),
@@ -807,8 +807,8 @@ export class Agent extends Service {
           before: z.number().int().min(0).max(30).optional(),
           after: z.number().int().min(0).max(10).optional(),
         }).optional().describe('A message of a bot\'s chat to quote, with a few messages around it'),
-        provider: z.string().optional().describe('Provider or profile id for this message; the Agent\'s setting when omitted'),
-        model: z.string().optional().describe('Model for this message; the Agent\'s setting or the provider\'s default when omitted'),
+        provider: z.string().optional().describe('Provider or profile id for this message; Fairy\'s setting when omitted'),
+        model: z.string().optional().describe('Model for this message; Fairy\'s setting or the provider\'s default when omitted'),
         effort: z.enum(EFFORTS as [Effort, ...Effort[]]).optional().describe('Reasoning effort for this message'),
         rewind: z.number().int().min(0).optional().describe('Edit: drop the conversation from this user message on (0 is the first) and send text in its place'),
       }).refine((input) => input.text.trim() || input.skills?.length, 'Send some text or pick a skill'),
@@ -816,32 +816,32 @@ export class Agent extends Service {
     })
 
     yield actions.define({
-      name: 'agent.search',
-      description: 'Search Agent conversations by text and tags (scene:<page kind>, skill:<id>, command:<name>, resource:<kind>:<id>, status:running).',
+      name: 'fairy.search',
+      description: 'Search Fairy conversations by text and tags (scene:<page kind>, skill:<id>, command:<name>, resource:<kind>:<id>, status:running).',
       risk: 'read',
       input: z.object({ query: z.string().optional(), tags: z.array(z.string()).optional(), limit: z.number().int().min(1).max(200).optional() }),
       handler: (input) => this.search(input),
     })
 
     yield actions.define({
-      name: 'agent.commands',
-      description: 'Commands for the Agent\'s "/" picker: its own (new, history, …) and every bot\'s commands.',
+      name: 'fairy.commands',
+      description: 'Commands for Fairy\'s "/" picker: its own (new, history, …) and every bot\'s commands.',
       risk: 'read',
       input: z.object({}),
       handler: () => this.commands(),
     })
 
     yield actions.define({
-      name: 'agent.skills.list',
-      description: 'List the Agent\'s skills: built in, from plugins, and written by the user.',
+      name: 'fairy.skills.list',
+      description: 'List Fairy\'s skills: built in, from plugins, and written by the user.',
       risk: 'read',
       input: z.object({}),
       handler: () => this.skills(),
     })
 
     yield actions.define({
-      name: 'agent.skills.get',
-      description: 'Get one Agent skill with its instructions.',
+      name: 'fairy.skills.get',
+      description: 'Get one Fairy skill with its instructions.',
       risk: 'read',
       input: z.object({ id: z.string() }),
       handler: ({ id }) => this.skill(id),
@@ -850,7 +850,7 @@ export class Agent extends Service {
     const skillId = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/).describe('Lowercase letters, digits and dashes')
 
     yield actions.define({
-      name: 'agent.skills.create',
+      name: 'fairy.skills.create',
       description: 'Create a user skill. Omit id to make one from the name.',
       risk: 'write',
       input: skillInput.extend({ id: skillId.optional() }),
@@ -858,7 +858,7 @@ export class Agent extends Service {
     })
 
     yield actions.define({
-      name: 'agent.skills.update',
+      name: 'fairy.skills.update',
       description: 'Change a skill. Changing a built-in or plugin skill saves your own copy that replaces it until deleted.',
       risk: 'write',
       input: z.object({
@@ -874,7 +874,7 @@ export class Agent extends Service {
     })
 
     yield actions.define({
-      name: 'agent.skills.delete',
+      name: 'fairy.skills.delete',
       description: 'Delete a user skill. A built-in or plugin skill it replaced comes back.',
       risk: 'write',
       input: z.object({ id: z.string() }),
@@ -882,7 +882,7 @@ export class Agent extends Service {
     })
 
     yield actions.define({
-      name: 'agent.skills.setEnabled',
+      name: 'fairy.skills.setEnabled',
       description: 'Turn a skill on or off; off skills are not offered with $.',
       risk: 'write',
       input: z.object({ id: z.string(), enabled: z.boolean() }),
@@ -890,7 +890,7 @@ export class Agent extends Service {
     })
 
     yield actions.define({
-      name: 'agent.skills.import',
+      name: 'fairy.skills.import',
       description: 'Import a skill from a SKILL.md file (YAML frontmatter with name and description, then Markdown instructions), as used by Claude and Codex skills.',
       risk: 'write',
       input: z.object({ markdown: z.string().min(1).max(40_000), replace: z.boolean().optional().describe('Overwrite a skill with the same id') }),
@@ -908,7 +908,7 @@ export class Agent extends Service {
     })
 
     yield actions.define({
-      name: 'agent.skills.export',
+      name: 'fairy.skills.export',
       description: 'A skill as a SKILL.md file.',
       risk: 'read',
       input: z.object({ id: z.string() }),
@@ -916,31 +916,31 @@ export class Agent extends Service {
     })
 
     yield actions.define({
-      name: 'agent.profiles.list',
-      description: 'What the Agent says and offers on each dashboard page, as the user changed it: hint, welcome line, own suggestions, hidden built-in suggestions, recommended skills.',
+      name: 'fairy.profiles.list',
+      description: 'What Fairy says and offers on each dashboard page, as the user changed it: hint, welcome line, own suggestions, hidden built-in suggestions, recommended skills.',
       risk: 'read',
       input: z.object({}),
       handler: async () => ({ scenes: SCENE_KEYS, profiles: await this.profiles() }),
     })
 
     yield actions.define({
-      name: 'agent.profiles.update',
-      description: 'Change what the Agent says and offers on one dashboard page. Send the whole profile; null goes back to the defaults.',
+      name: 'fairy.profiles.update',
+      description: 'Change what Fairy says and offers on one dashboard page. Send the whole profile; null goes back to the defaults.',
       risk: 'write',
       input: z.object({ scene: z.enum(SCENE_KEYS), profile: profileInput.nullable() }),
       handler: ({ scene, profile }) => this.setProfile(scene, profile),
     })
 
     yield actions.define({
-      name: 'agent.policy.list',
-      description: 'Every tool the Agent can use, with its plugin, risk and policy: auto (runs), confirm (asks the user first) or off (not offered).',
+      name: 'fairy.policy.list',
+      description: 'Every tool Fairy can use, with its plugin, risk and policy: auto (runs), confirm (asks the user first) or off (not offered).',
       risk: 'read',
       input: z.object({}),
       handler: () => this.policies(),
     })
 
     yield actions.define({
-      name: 'agent.policy.set',
+      name: 'fairy.policy.set',
       description: 'Set the policy of tools by action name: auto, confirm, or off; null goes back to the default (dangerous actions ask, others run). Off tools leave new conversations only.',
       risk: 'dangerous',
       input: z.object({ policies: z.record(z.string(), policyInput.nullable()) }),
@@ -948,32 +948,32 @@ export class Agent extends Service {
     })
 
     yield actions.define({
-      name: 'agent.usage',
-      description: 'Tokens the Agent used today and its daily budget (0 means no limit).',
+      name: 'fairy.usage',
+      description: 'Tokens Fairy used today and its daily budget (0 means no limit).',
       risk: 'read',
       input: z.object({}),
       handler: () => this.usage(),
     })
 
     yield actions.define({
-      name: 'agent.confirm',
-      description: 'Approve or decline an action the Agent is waiting on.',
+      name: 'fairy.confirm',
+      description: 'Approve or decline an action Fairy is waiting on.',
       risk: 'write',
       input: z.object({ session: z.string(), id: z.string(), approved: z.boolean() }),
       handler: ({ session, id, approved }) => this.confirm(session, id, approved),
     })
 
     yield actions.define({
-      name: 'agent.cancel',
-      description: 'Stop the Agent\'s current reply in a conversation.',
+      name: 'fairy.cancel',
+      description: 'Stop Fairy\'s current reply in a conversation.',
       risk: 'write',
       input: z.object({ session: z.string() }),
       handler: ({ session }) => this.cancel(session),
     })
 
     yield actions.define({
-      name: 'agent.deleteSession',
-      description: 'Delete an Agent conversation.',
+      name: 'fairy.deleteSession',
+      description: 'Delete a Fairy conversation.',
       risk: 'write',
       input: z.object({ id: z.string() }),
       handler: ({ id }) => this.deleteSession(id),
@@ -1020,7 +1020,7 @@ function quoteBlock(quote: QuotedChat) {
   ].join('\n')
 }
 
-function turnTags(text: string, options: SendOptions, skills: AgentSkill[]) {
+function turnTags(text: string, options: SendOptions, skills: FairySkill[]) {
   const tags: string[] = []
   if (options.scene) tags.push(`scene:${options.scene.key}`)
   if (options.scene?.resource) tags.push(`resource:${options.scene.resource}`)
@@ -1030,7 +1030,7 @@ function turnTags(text: string, options: SendOptions, skills: AgentSkill[]) {
   return tags
 }
 
-function stripMeta(message: AgentMessage): LlmMessage {
+function stripMeta(message: FairyMessage): LlmMessage {
   const { display, skills, quote, at, ...rest } = message
   return rest as LlmMessage
 }
@@ -1040,4 +1040,4 @@ function truncate(text: string) {
   return `${text.slice(0, MAX_RESULT_CHARS)}… [truncated ${text.length - MAX_RESULT_CHARS} characters; ask for less, e.g. with a filter or limit]`
 }
 
-export default Agent
+export default Fairy

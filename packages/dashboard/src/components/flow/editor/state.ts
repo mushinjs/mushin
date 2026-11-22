@@ -110,7 +110,7 @@ export function createEditorState() {
   const showPanel = ref(true)
   const showLogs = ref(true)
   const logsTab = ref<'logs' | 'tests'>('logs')
-  /** The editor fills the window, over the app's sidebar, top bar and Agent. */
+  /** The editor fills the window, over the app's sidebar, top bar and Fairy. */
   const immersive = ref(false)
 
   const realNodes = computed(() => nodes.value.filter((node) => !isBox(node)))

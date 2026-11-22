@@ -25,7 +25,7 @@ const box = ref<HTMLElement>()
 /** Selected source tags; none selected shows every source. */
 const tags = ref<string[]>([])
 
-const tagOrder = ['message', 'plugin', 'bot', 'adapter', 'flow', 'provider', 'agent', 'system', 'other']
+const tagOrder = ['message', 'plugin', 'bot', 'adapter', 'flow', 'provider', 'fairy', 'system', 'other']
 const tagOf = (line: LogLine) => line.tag ?? 'other'
 // Only sources that have lines get a chip, so a bot's log shows its own few.
 const presentTags = computed(() => {
@@ -672,7 +672,7 @@ function onClick(event: MouseEvent) {
   --log-src-adapter: #0e8a8a;
   --log-src-flow: #2d8a4e;
   --log-src-provider: #c46a12;
-  --log-src-agent: #c2417a;
+  --log-src-fairy: #c2417a;
   --log-src-system: #6b7280;
   --log-src-other: #8a8f98;
 }
@@ -708,7 +708,7 @@ html[data-theme='dark'] .log-view {
   --log-src-adapter: #4fc4c4;
   --log-src-flow: #7ccf8f;
   --log-src-provider: #e89a52;
-  --log-src-agent: #ec7fb0;
+  --log-src-fairy: #ec7fb0;
   --log-src-system: #9aa0aa;
   --log-src-other: #7d828c;
 }
@@ -719,7 +719,7 @@ html[data-theme='dark'] .log-view {
 .log-view .src-adapter { color: var(--log-src-adapter); }
 .log-view .src-flow { color: var(--log-src-flow); }
 .log-view .src-provider { color: var(--log-src-provider); }
-.log-view .src-agent { color: var(--log-src-agent); }
+.log-view .src-fairy { color: var(--log-src-fairy); }
 .log-view .src-system { color: var(--log-src-system); }
 .log-view .src-other { color: var(--log-src-other); }
 

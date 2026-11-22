@@ -2,16 +2,16 @@
 import { Button, Card, TabPane, Tabs, useToast } from '@mushinjs/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useAgentStore } from '../../stores/agent'
-import AgentMessage from './AgentMessage.vue'
+import { useFairyStore } from '../../stores/fairy'
+import FairyMessage from './FairyMessage.vue'
 
 const { t, locale } = useI18n()
 const message = useToast()
-const agent = useAgentStore()
+const fairy = useFairyStore()
 
 const fence = '```'
 
-/** Each example is what the Agent would write; the preview is how the dock shows it. */
+/** Each example is what Fairy would write; the preview is how the dock shows it. */
 const examples = computed(() => {
   const zh = locale.value === 'zh-CN'
   return [
@@ -48,52 +48,52 @@ const examples = computed(() => {
   ]
 })
 
-/** Shows an example in the dock as an Agent reply, without calling the model. */
+/** Shows an example in the dock as a Fairy reply, without calling the model. */
 function tryInDock(source: string) {
-  agent.newChat()
-  agent.items.push({ kind: 'user', text: t('agentPage.styles.demoQuestion') })
-  agent.items.push({ kind: 'assistant', text: source })
-  agent.open = true
+  fairy.newChat()
+  fairy.items.push({ kind: 'user', text: t('fairyPage.styles.demoQuestion') })
+  fairy.items.push({ kind: 'assistant', text: source })
+  fairy.open = true
 }
 
 async function tryAsk() {
-  agent.newChat()
-  agent.open = true
-  const answer = await agent.ask({
-    question: t('agentPage.styles.askQuestion'),
+  fairy.newChat()
+  fairy.open = true
+  const answer = await fairy.ask({
+    question: t('fairyPage.styles.askQuestion'),
     options: [
-      { label: 'DeepSeek', description: t('agentPage.styles.askDeepSeek') },
-      { label: 'Ollama', description: t('agentPage.styles.askOllama') },
+      { label: 'DeepSeek', description: t('fairyPage.styles.askDeepSeek') },
+      { label: 'Ollama', description: t('fairyPage.styles.askOllama') },
       { label: 'OpenAI' },
     ],
     recommended: 0,
     allowOther: true,
   }) as { label?: string; other?: string; cancelled?: boolean }
-  if (!answer.cancelled) message.info(t('agentPage.styles.askAnswer', { answer: answer.label ?? answer.other }))
+  if (!answer.cancelled) message.info(t('fairyPage.styles.askAnswer', { answer: answer.label ?? answer.other }))
 }
 </script>
 
 <template>
   <div class="styles">
-    <p class="hint">{{ t('agentPage.styles.lead') }}</p>
-    <Card v-for="example in examples" :key="example.id" size="small" :title="t(`agentPage.styles.kind.${example.id}`)">
+    <p class="hint">{{ t('fairyPage.styles.lead') }}</p>
+    <Card v-for="example in examples" :key="example.id" size="small" :title="t(`fairyPage.styles.kind.${example.id}`)">
       <template #header-extra>
-        <Button size="small" secondary @click="tryInDock(example.source)">{{ t('agentPage.styles.try') }}</Button>
+        <Button size="small" secondary @click="tryInDock(example.source)">{{ t('fairyPage.styles.try') }}</Button>
       </template>
       <Tabs type="segment" size="small" default-value="preview">
-        <TabPane name="preview" :tab="t('agentPage.styles.preview')">
-          <div class="preview"><AgentMessage :text="example.source" /></div>
+        <TabPane name="preview" :tab="t('fairyPage.styles.preview')">
+          <div class="preview"><FairyMessage :text="example.source" /></div>
         </TabPane>
-        <TabPane name="source" :tab="t('agentPage.styles.source')">
+        <TabPane name="source" :tab="t('fairyPage.styles.source')">
           <pre class="mono source">{{ example.source }}</pre>
         </TabPane>
       </Tabs>
     </Card>
-    <Card size="small" :title="t('agentPage.styles.kind.ask')">
+    <Card size="small" :title="t('fairyPage.styles.kind.ask')">
       <template #header-extra>
-        <Button size="small" secondary @click="tryAsk">{{ t('agentPage.styles.try') }}</Button>
+        <Button size="small" secondary @click="tryAsk">{{ t('fairyPage.styles.try') }}</Button>
       </template>
-      <p class="hint small">{{ t('agentPage.styles.askLead') }}</p>
+      <p class="hint small">{{ t('fairyPage.styles.askLead') }}</p>
     </Card>
   </div>
 </template>

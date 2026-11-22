@@ -270,12 +270,12 @@ describe('upgrading an instance', () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'mushin-upgrade-'))
     const old = defaultConfig()
     old.plugins = old.plugins.filter((entry) => entry.package !== '@mushinjs/plugin-flows')
-    old.plugins.find((entry) => entry.package === '@mushinjs/plugin-agent')!.enabled = false
+    old.plugins.find((entry) => entry.package === '@mushinjs/plugin-fairy')!.enabled = false
     await writeFile(join(baseDir, 'mushin.config.json'), JSON.stringify(old))
     const instance = await start({ baseDir, port: 0, quiet: true })
     const saved = JSON.parse(await readFile(join(baseDir, 'mushin.config.json'), 'utf8'))
     expect(saved.plugins.map((entry: any) => entry.package)).toContain('@mushinjs/plugin-flows')
-    expect(saved.plugins.find((entry: any) => entry.package === '@mushinjs/plugin-agent').enabled).toBe(false)
+    expect(saved.plugins.find((entry: any) => entry.package === '@mushinjs/plugin-fairy').enabled).toBe(false)
     await instance.stop()
     await rm(baseDir, { recursive: true, force: true }).catch(() => {})
   })

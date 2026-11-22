@@ -1093,7 +1093,7 @@ export class BotManager extends Service {
         group: z.string().optional().describe('Group id, with target "group"'),
         user: z.string().optional().describe('Run as this user id instead of the first master'),
       }),
-      handler: (input, caller) => this.runCommand(input, caller.kind === 'agent' && caller.session ? { kind: 'agent', session: caller.session } : undefined),
+      handler: (input, caller) => this.runCommand(input, caller.kind === 'fairy' && caller.session ? { kind: 'fairy', session: caller.session } : undefined),
     })
 
     yield actions.define({

@@ -207,7 +207,7 @@ const iconOf = (nodeId: string) => {
           <span class="logs-title">{{ t('flows.logs') }}</span>
           <Tag v-if="run && tab === 'logs'" size="tiny" :type="status(run).type">{{ status(run).text }}</Tag>
         </button>
-        <button type="button" role="tab" class="tab" :class="{ active: tab === 'tests' }" :aria-selected="tab === 'tests'" data-agent-target="flows.tests" @click="pickTab('tests')">
+        <button type="button" role="tab" class="tab" :class="{ active: tab === 'tests' }" :aria-selected="tab === 'tests'" data-fairy-target="flows.tests" @click="pickTab('tests')">
           <span class="logs-title">{{ t('flowTests.tab') }}</span>
           <Tag v-if="tests?.total" size="tiny" :type="tests.failed ? 'error' : 'default'">
             {{ tests.failed ? t('flowTests.failedCount', { n: tests.failed }) : tests.total }}
@@ -311,7 +311,7 @@ const iconOf = (nodeId: string) => {
           type="primary"
           :loading="testing"
           :disabled="!ready"
-          data-agent-target="flows.test"
+          data-fairy-target="flows.test"
           @click="emit('run')" icon="i-lucide-play">
           {{ t('flows.runFlow') }}
         </Button>

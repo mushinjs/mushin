@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { call, on } from '../api'
 import type { AdapterType, Bot, BotStatusInfo, ModelProfile, Provider, ProviderType } from '../types'
 
-/** Providers and bots, shared by pages and the Agent dock, kept fresh by server events. */
+/** Providers and bots, shared by pages and the Fairy dock, kept fresh by server events. */
 export const useDataStore = defineStore('data', () => {
   const providers = ref<Provider[]>([])
   const profiles = ref<ModelProfile[]>([])

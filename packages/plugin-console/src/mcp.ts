@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { type ActionInfo, type Context, field, fromToolName, MushinError, type Risk, toErrorPayload, toToolName, z } from '@mushinjs/core'
 import type {} from '@cordisjs/plugin-server'
-import type {} from '@mushinjs/plugin-agent'
+import type {} from '@mushinjs/plugin-fairy'
 
 /** The MCP versions this server speaks, newest first. */
 export const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05']
@@ -28,8 +28,8 @@ export const MCP_PATH = '/mcp'
 
 /** The console settings for the MCP server; they sit beside the console's own in its config. */
 export const mcpConfigFields = {
-  mcp: z.boolean().default(true).meta(field('MCP server', 'Serve the actions at /mcp for AI tools such as Claude Code, with the admin token and the Agent\'s tool policy', {
-    'zh-CN': { title: 'MCP 服务端', description: '在 /mcp 向 Claude Code 等 AI 工具提供 action，使用管理员令牌并遵守智能体的工具策略' },
+  mcp: z.boolean().default(true).meta(field('MCP server', 'Serve the actions at /mcp for AI tools such as Claude Code, with the admin token and Fairy\'s tool policy', {
+    'zh-CN': { title: 'MCP 服务端', description: '在 /mcp 向 Claude Code 等 AI 工具提供 action，使用管理员令牌并遵守 Fairy 的工具策略' },
   })),
   mcpTools: z.array(z.string()).default(DEFAULT_TOOLS).meta(field('MCP listed tools', 'Actions listed as MCP tools of their own. The others are found with search_tools and run with call_tool, which keeps the list short for the model.', {
     'zh-CN': { title: 'MCP 直接列出的工具', description: '单独列为 MCP 工具的 action。其余的通过 search_tools 查找、call_tool 调用，让模型看到的工具列表保持简短。' },
@@ -67,7 +67,7 @@ interface ToolInfo {
 
 /**
  * Serves the actions over MCP (Streamable HTTP, JSON responses), so the AI tool a user opens in the app folder
- * can manage the instance. It needs the admin token and follows the Agent's tool policy: tools turned off are not
+ * can manage the instance. It needs the admin token and follows Fairy's tool policy: tools turned off are not
  * offered, and tools that ask first wait for an answer in the dashboard.
  */
 export class McpServer {
@@ -174,7 +174,7 @@ export class McpServer {
 
   private instructions() {
     return [
-      'This server is a running Mushin.js instance: a QQ chatbot framework with bots, conversation flows, plugins and an Agent.',
+      'This server is a running Mushin.js instance: a QQ chatbot framework with bots, conversation flows, plugins and Fairy, its built-in assistant.',
       'Its tools are Mushin.js actions; a tool name is the action name with "." written as "__" (bots__list is bots.list).',
       `Only some tools are listed. Use ${SEARCH_TOOL} to find the others by what they do, then run them with ${CALL_TOOL}.`,
       'Tools marked dangerous, and any the user set to ask first, wait for the user to approve them in the dashboard.',
@@ -185,10 +185,10 @@ export class McpServer {
 
   /** Every action this server may run, with its policy. Turned-off and dashboard-only actions are left out. */
   async tools(): Promise<ToolInfo[]> {
-    const agent = this.home.get('agent')
-    const policies = new Map((await agent?.policies() ?? []).map((item) => [item.name, item.policy as ToolPolicy]))
+    const fairy = this.home.get('fairy')
+    const policies = new Map((await fairy?.policies() ?? []).map((item) => [item.name, item.policy as ToolPolicy]))
     return this.home.actions.list()
-      .filter((action) => action.agent && !action.client && !action.name.startsWith('agent.'))
+      .filter((action) => action.fairy && !action.client && !action.name.startsWith('fairy.'))
       .map((action) => ({ action, policy: policies.get(action.name) ?? defaultPolicy(action.risk) }))
       .filter((tool) => tool.policy !== 'off')
   }
@@ -287,7 +287,7 @@ export class McpServer {
   }
 }
 
-/** The default for a risk level, as the Agent has it: dangerous actions ask first, the rest run. */
+/** The default for a risk level, as Fairy has it: dangerous actions ask first, the rest run. */
 function defaultPolicy(risk: Risk): ToolPolicy {
   return risk === 'dangerous' ? 'confirm' : 'auto'
 }

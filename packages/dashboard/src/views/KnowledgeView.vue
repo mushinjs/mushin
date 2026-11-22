@@ -13,7 +13,7 @@ import KnowledgeGraph from '../components/knowledge/KnowledgeGraph.vue'
 import KnowledgeLearn from '../components/knowledge/KnowledgeLearn.vue'
 import KnowledgeSearch from '../components/knowledge/KnowledgeSearch.vue'
 import KnowledgeSettings from '../components/knowledge/KnowledgeSettings.vue'
-import { useAgentSceneStore } from '../stores/agentScene'
+import { useFairySceneStore } from '../stores/fairyScene'
 import { useDataStore } from '../stores/data'
 import type { AppPlugin, KnowledgeSummary } from '../types'
 
@@ -59,16 +59,16 @@ const offs = [
 ]
 onBeforeUnmount(() => offs.forEach((off) => off()))
 
-// Tells the Agent which base is open and what waits for review.
-const agentScene = useAgentSceneStore()
-watch([bases, base], () => agentScene.publish(base.value
+// Tells Fairy which base is open and what waits for review.
+const fairyScene = useFairySceneStore()
+watch([bases, base], () => fairyScene.publish(base.value
   ? {
       label: base.value.name,
       state: { base: base.value.name, docs: base.value.docs, chunks: base.value.chunks, candidates: base.value.candidates, embedding: base.value.model || 'none' },
       resource: `kb:${base.value.id}`,
     }
   : { state: { bases: bases.value.length } }), { immediate: true })
-onBeforeUnmount(() => agentScene.publish(undefined))
+onBeforeUnmount(() => fairyScene.publish(undefined))
 
 // ---- creating ----
 
@@ -114,7 +114,7 @@ const botNames = (ids: string[]) => ids.map((bot) => data.bots.find((item) => it
   <div class="page">
     <template v-if="!id">
       <PageHeader :title="t('nav.knowledge')" :lead="t('knowledge.lead')">
-        <Button v-if="available" type="primary" data-agent-target="knowledge.add" icon="i-lucide-plus" @click="openCreate">
+        <Button v-if="available" type="primary" data-fairy-target="knowledge.add" icon="i-lucide-plus" @click="openCreate">
           {{ t('knowledge.add') }}
         </Button>
       </PageHeader>
@@ -171,22 +171,22 @@ const botNames = (ids: string[]) => ids.map((bot) => data.bots.find((item) => it
       <Spin :show="loading && !base">
         <Alert v-if="!loading && !base" type="warning">{{ t('knowledge.notFound') }}</Alert>
         <Tabs v-if="base" :value="tab" type="line" @update:value="(next: string) => router.replace(`/knowledge/${id}/${next}`)">
-          <TabPane name="docs" :tab="t('knowledge.tab.docs')" data-agent-target="knowledge.docs">
+          <TabPane name="docs" :tab="t('knowledge.tab.docs')" data-fairy-target="knowledge.docs">
             <KnowledgeDocs :base="base" />
           </TabPane>
-          <TabPane name="chunks" :tab="t('knowledge.tab.chunks')" data-agent-target="knowledge.chunks">
+          <TabPane name="chunks" :tab="t('knowledge.tab.chunks')" data-fairy-target="knowledge.chunks">
             <KnowledgeChunks :base="base" />
           </TabPane>
-          <TabPane name="search" :tab="t('knowledge.tab.search')" data-agent-target="knowledge.search">
+          <TabPane name="search" :tab="t('knowledge.tab.search')" data-fairy-target="knowledge.search">
             <KnowledgeSearch :base="base" />
           </TabPane>
-          <TabPane name="graph" :tab="t('knowledge.tab.graph')" data-agent-target="knowledge.graph">
+          <TabPane name="graph" :tab="t('knowledge.tab.graph')" data-fairy-target="knowledge.graph">
             <KnowledgeGraph v-if="tab === 'graph'" :base="base" />
           </TabPane>
-          <TabPane name="learn" :tab="base.candidates ? `${t('knowledge.tab.learn')} (${base.candidates})` : t('knowledge.tab.learn')" data-agent-target="knowledge.learn">
+          <TabPane name="learn" :tab="base.candidates ? `${t('knowledge.tab.learn')} (${base.candidates})` : t('knowledge.tab.learn')" data-fairy-target="knowledge.learn">
             <KnowledgeLearn :base="base" />
           </TabPane>
-          <TabPane name="settings" :tab="t('knowledge.tab.settings')" data-agent-target="knowledge.settings">
+          <TabPane name="settings" :tab="t('knowledge.tab.settings')" data-fairy-target="knowledge.settings">
             <KnowledgeSettings :base="base" @deleted="router.push('/knowledge')" />
           </TabPane>
         </Tabs>

@@ -264,7 +264,7 @@ export type Provenance =
   | { kind: 'plugin'; plugin: string }
   | { kind: 'llm'; plugin?: string; provider: string; model: string; latencyMs: number; tokens?: number; persona?: string }
   | { kind: 'flow'; flow: string; node: string; provider?: string; model?: string; persona?: string; knowledge?: KnowledgeSource[] }
-  | { kind: 'agent'; session: string }
+  | { kind: 'fairy'; session: string }
   | { kind: 'manual' }
 
 export interface ChannelInfo {
@@ -305,7 +305,7 @@ export interface ToolCall {
   arguments: string
 }
 
-export interface AgentMessage {
+export interface FairyMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: any
   display?: string
@@ -319,7 +319,7 @@ export interface AgentMessage {
   at: number
 }
 
-export interface AgentSessionSummary {
+export interface FairySessionSummary {
   id: string
   title: string
   createdAt: number
@@ -331,8 +331,8 @@ export interface AgentSessionSummary {
   snippet?: string
 }
 
-/** The dashboard page, as the Agent is told about it. */
-export interface AgentScene {
+/** The dashboard page, as Fairy is told about it. */
+export interface FairyScene {
   key: string
   label?: string
   hint?: string
@@ -340,7 +340,7 @@ export interface AgentScene {
   resource?: string
 }
 
-export interface AgentSkill {
+export interface FairySkill {
   id: string
   name: string
   description: string
@@ -353,12 +353,12 @@ export interface AgentSkill {
   enabled: boolean
 }
 
-export interface AgentCommands {
+export interface FairyCommands {
   builtin: { name: string; description: string; 'zh-CN'?: string }[]
   bots: { name: string; description?: string; usage?: string; permission?: string; bot: string; botName?: string; source: { kind: string; id: string; name: string } }[]
 }
 
-export type AgentEvent = { session: string } & (
+export type FairyEvent = { session: string } & (
   | { type: 'start' }
   | { type: 'delta'; text: string }
   | { type: 'tool-call'; id: string; action: string; input: unknown; risk: Risk }
@@ -376,7 +376,7 @@ export interface LogLine {
   ts: number
   type: string
   name: string
-  /** Source category: plugin, bot, adapter, flow, provider, agent, system or other. */
+  /** Source category: plugin, bot, adapter, flow, provider, fairy, system or other. */
   tag?: string
   text: string
 }
@@ -532,7 +532,7 @@ export interface FlowSummary {
   errors: number
   warnings: number
   /** Who made it; a plugin's flows can only be removed through that plugin. */
-  source?: { kind: 'user' | 'agent' | 'plugin'; plugin?: string }
+  source?: { kind: 'user' | 'fairy' | 'plugin'; plugin?: string }
   /** `all`: on some bot none of the flow's triggers can run; `some`: a few cannot. */
   blocked?: 'all' | 'some'
   triggers: { id: string; type: string; source: 'message' | 'event' | 'schedule'; summary: string; skip: boolean }[]

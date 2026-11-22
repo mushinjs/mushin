@@ -1,4 +1,6 @@
-# @mushinjs/plugin-agent
+# @mushinjs/plugin-fairy
+
+Formerly `@mushinjs/plugin-agent`.
 
 ## 0.3.0
 

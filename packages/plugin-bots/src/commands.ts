@@ -1,6 +1,6 @@
 /**
  * Commands such as `/score 85`: a name after a prefix, then arguments. Flows, bot plugins and the
- * built-in `/help` all register commands per bot, so help menus, the Agent and the overview can
+ * built-in `/help` all register commands per bot, so help menus, Fairy and the overview can
  * list them in one place.
  */
 

@@ -53,7 +53,7 @@ function emit(name: string, data: unknown) {
 type ClientHandler = (input: any) => unknown
 const clientHandlers = new Map<string, ClientHandler>()
 
-/** Handles a client action (e.g. `ui.navigate`) that the server relays from the Agent. */
+/** Handles a client action (e.g. `ui.navigate`) that the server relays from Fairy. */
 export function handleClientAction(name: string, handler: ClientHandler) {
   clientHandlers.set(name, handler)
 }
@@ -121,7 +121,7 @@ export function connect() {
   }
 }
 
-/** Tells the server which page is open, so the Agent knows where the user is. */
+/** Tells the server which page is open, so Fairy knows where the user is. */
 export function setPage(path: string) {
   currentPage = path
   send({ type: 'page', path })

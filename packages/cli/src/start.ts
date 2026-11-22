@@ -41,7 +41,7 @@ export function defaultConfig(): InstanceConfig {
       { id: 'adapter-onebot', package: '@mushinjs/plugin-adapter-onebot', config: {} },
       { id: 'flows', package: '@mushinjs/plugin-flows', config: {} },
       { id: 'knowledge', package: '@mushinjs/plugin-knowledge', config: {} },
-      { id: 'agent', package: '@mushinjs/plugin-agent', config: {} },
+      { id: 'fairy', package: '@mushinjs/plugin-fairy', config: {} },
       { id: 'mcp', package: '@mushinjs/plugin-mcp', config: {} },
       { id: 'stats', package: '@mushinjs/plugin-stats', config: {} },
       { id: 'console', package: '@mushinjs/plugin-console', config: {} },
@@ -81,14 +81,14 @@ export interface StartOptions {
   /** Called when the dashboard is up, with the sign-in link details. */
   onSignIn?: (info: SignInInfo) => void
   /**
-   * For `mushin test`: bots stay offline, the web server, dashboard, Agent, MCP servers and
+   * For `mushin test`: bots stay offline, the web server, dashboard, Fairy, MCP servers and
    * statistics do not load, the database lives in memory, and the config file is never written.
    */
   offline?: boolean
 }
 
 /** Plugins `mushin test` leaves out: they serve people or reach other programs, and flows do not need them. */
-const OFFLINE_SKIP = new Set(['@cordisjs/plugin-server', '@mushinjs/plugin-console', '@mushinjs/plugin-agent', '@mushinjs/plugin-mcp', '@mushinjs/plugin-stats'])
+const OFFLINE_SKIP = new Set(['@cordisjs/plugin-server', '@mushinjs/plugin-console', '@mushinjs/plugin-fairy', '@mushinjs/plugin-mcp', '@mushinjs/plugin-stats'])
 
 function offlineConfig(config: InstanceConfig): InstanceConfig {
   return {

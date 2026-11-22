@@ -36,8 +36,8 @@
       "zh-CN": "终端"
     },
     "description": {
-      "en": "Flow nodes that run commands on this machine or on servers over SSH; only you can add them, not the Agent",
-      "zh-CN": "在本机或通过 SSH 在服务器上运行命令的流程节点；只能由你添加，智能体不能"
+      "en": "Flow nodes that run commands on this machine or on servers over SSH; only you can add them, not Fairy",
+      "zh-CN": "在本机或通过 SSH 在服务器上运行命令的流程节点；只能由你添加，Fairy 不能"
     },
     "requires": {
       "mushin": ">=0.1.0",

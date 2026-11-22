@@ -85,7 +85,7 @@ describe('admin token', () => {
     expect(await login(info.token)).toBe(401)
   })
 
-  it('keeps the token out of the log buffer the dashboard and the Agent can read', async () => {
+  it('keeps the token out of the log buffer the dashboard and Fairy can read', async () => {
     const { ctx, info } = await boot()
     const lines = await ctx.actions.call('logs.recent', {}) as { text: string }[]
     expect(lines.some((line) => line.text.includes('dashboard at'))).toBe(true)

@@ -6,7 +6,7 @@ import { useRouter } from 'vue-router'
 import { call } from '../api'
 import PageHeader from '../components/PageHeader.vue'
 import ProviderForm from '../components/ProviderForm.vue'
-import { useAgentStore } from '../stores/agent'
+import { useFairyStore } from '../stores/fairy'
 import { useDataStore } from '../stores/data'
 import type { Provider, ProviderDraft, ProviderTest } from '../types'
 
@@ -14,7 +14,7 @@ const { t } = useI18n()
 const router = useRouter()
 const message = useToast()
 const data = useDataStore()
-const agent = useAgentStore()
+const fairy = useFairyStore()
 
 const draft = ref<ProviderDraft>({ name: '', type: 'openai', config: {}, models: [] })
 const saving = ref(false)
@@ -48,8 +48,8 @@ async function save() {
   }
 }
 
-function startAgent() {
-  agent.open = true
+function startFairy() {
+  fairy.open = true
   router.push('/bots')
 }
 </script>
@@ -84,7 +84,7 @@ function startAgent() {
         <h2>{{ t('setup.doneTitle') }}</h2>
         <p>{{ t('setup.doneLead') }}</p>
         <div class="done-actions">
-          <Button type="primary" @click="startAgent">{{ t('setup.talkToAgent') }}</Button>
+          <Button type="primary" @click="startFairy">{{ t('setup.talkToFairy') }}</Button>
           <Button @click="router.push('/bots')">{{ t('setup.goBots') }}</Button>
         </div>
       </div>

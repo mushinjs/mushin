@@ -63,8 +63,8 @@ describe('MCP server', () => {
 
     const names = await toolNames()
     expect(names).toEqual(expect.arrayContaining(['bots__list', 'flows__test', 'search_tools', 'call_tool']))
-    // The Agent's own tools and dashboard-only actions are not offered.
-    expect(names.some((name) => name.startsWith('agent__') || name.startsWith('ui__'))).toBe(false)
+    // Fairy's own tools and dashboard-only actions are not offered.
+    expect(names.some((name) => name.startsWith('fairy__') || name.startsWith('ui__'))).toBe(false)
     // Tools not listed directly are found and run through search and call.
     expect(names).not.toContain('providers__types')
     const found = JSON.parse((await tool('search_tools', { query: 'provider types' })).text)
@@ -75,7 +75,7 @@ describe('MCP server', () => {
   })
 
   it('leaves out tools the policy turns off', async () => {
-    await app.call('agent.policy.set', { policies: { 'bots.list': 'off' } })
+    await app.call('fairy.policy.set', { policies: { 'bots.list': 'off' } })
     try {
       expect(await toolNames()).not.toContain('bots__list')
       const found = JSON.parse((await tool('search_tools', { query: 'bots.list' })).text)
@@ -84,7 +84,7 @@ describe('MCP server', () => {
       expect(called.isError).toBe(true)
       expect(called.text).toMatch(/not_found/)
     } finally {
-      await app.call('agent.policy.set', { policies: { 'bots.list': null } })
+      await app.call('fairy.policy.set', { policies: { 'bots.list': null } })
     }
   })
 
