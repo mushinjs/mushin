@@ -1,5 +1,52 @@
 # @mushinjs/cli
 
+## 0.3.0
+
+### Minor Changes
+
+- 70a7af1: Mushin.js serves its actions over MCP at `/mcp`, for AI tools such as Claude Code. Requests need the admin token, and the tools follow the Agent's tool policy: tools turned off are not offered, and dangerous ones run only after the user approves them in the dashboard. A short list of tools is listed directly; `search_tools` and `call_tool` reach the rest. `mushin mcp` is a stdio bridge to it that reads the token from `.env`, and new apps (and `mushin upgrade`) get a `.mcp.json` that starts it.
+- 51f6ffe: Four official skills for AI tools ship with the CLI: writing a plugin (starting with the questions to ask the user), building and testing flows, troubleshooting from logs and run records, and running the app (upgrades, backups, moving machines). New apps get them in `.claude/skills/`, `mushin upgrade` replaces them with the new version's, `mushin start` adds any that are missing, and `mushin skills` installs them on demand.
+
+### Patch Changes
+
+- 88a8c85: Plugin settings can be marked secret with `field(…, { secret: true })`. The plugin manager keeps their values in `.env` with a `${NAME}` reference in the config, for app plugins and bot plugins alike: keys saved from the dashboard move there right away, keys typed into `mushin.config.json` move on the next start, lists (and so the Agent and MCP tools) show them masked, and forms show a password input.
+- Updated dependencies [5952012]
+- Updated dependencies [8b89584]
+- Updated dependencies [4015d84]
+- Updated dependencies [afbb235]
+- Updated dependencies [c31a9a8]
+- Updated dependencies [8ef908a]
+- Updated dependencies [70a7af1]
+- Updated dependencies [51f6ffe]
+- Updated dependencies [ccbd24d]
+- Updated dependencies [efb9f23]
+- Updated dependencies [e4f7ee8]
+- Updated dependencies [88a8c85]
+  - @mushinjs/plugin-agent@0.3.0
+  - @mushinjs/plugin-providers@0.3.0
+  - @mushinjs/plugin-provider-openai@0.3.0
+  - @mushinjs/plugin-provider-gemini@0.3.0
+  - @mushinjs/plugin-provider-anthropic@0.3.0
+  - @mushinjs/plugin-bots@0.3.0
+  - @mushinjs/plugin-console@0.3.0
+  - @mushinjs/core@0.3.0
+  - @mushinjs/plugin-knowledge@0.3.0
+  - @mushinjs/bot-plugin-companion@0.3.0
+  - @mushinjs/bot-plugin-llm-chat@0.3.0
+  - @mushinjs/plugin-demo@0.3.0
+  - @mushinjs/plugin-flows@0.3.0
+  - @mushinjs/plugin-provider-typesafe@0.3.0
+  - @mushinjs/plugin-stats@0.3.0
+  - @mushinjs/bot-plugin-echo@0.3.0
+  - @mushinjs/bot-plugin-flows@0.3.0
+  - @mushinjs/plugin-adapter-onebot@0.3.0
+  - @mushinjs/plugin-permissions@0.3.0
+  - @mushinjs/plugin-personas@0.3.0
+  - @mushinjs/plugin-database@0.3.0
+  - @mushinjs/plugin-mcp@0.3.0
+  - @mushinjs/plugin-storage@0.3.0
+  - @mushinjs/plugin-terminal@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes
