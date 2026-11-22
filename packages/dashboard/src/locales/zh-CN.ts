@@ -423,6 +423,10 @@ const zhCN: typeof en = {
       discord: {
         default: '在 Discord 开发者门户（discord.com/developers/applications）创建应用，打开 Bot 页面重置令牌并粘贴到这里。在 Privileged Gateway Intents 中打开 Message Content（需要成员事件的话再打开 Server Members）。在 OAuth2 → URL Generator 勾选 bot 范围和 Send Messages 权限，用生成的链接把机器人拉进服务器。本机需要能访问 discord.com。',
       },
+      kook: {
+        websocket: '在 KOOK 开发者中心（developer.kookapp.cn）创建应用并添加机器人，连接模式保持 WebSocket，把它的 Token 填在这里。用机器人页面上的邀请链接把它拉进服务器。',
+        webhook: '在 KOOK 开发者中心把机器人的连接模式改为 Webhook，把 Callback URL 设为下方地址（需要能从公网访问），并把 Verify Token 填在这里；开启了消息加密的话，也要填写 Encrypt Key。',
+      },
     },
     initialPlugins: '要启用的机器人插件',
     forwardTo: '连接到 {url}',

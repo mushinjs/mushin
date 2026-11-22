@@ -252,6 +252,9 @@ importers:
       '@mushinjs/plugin-adapter-discord':
         specifier: workspace:*
         version: link:../plugin-adapter-discord
+      '@mushinjs/plugin-adapter-kook':
+        specifier: workspace:*
+        version: link:../plugin-adapter-kook
       '@mushinjs/plugin-adapter-onebot':
         specifier: workspace:*
         version: link:../plugin-adapter-onebot
@@ -411,6 +414,21 @@ importers:
 
   packages/plugin-adapter-discord:
     dependencies:
+      '@mushinjs/core':
+        specifier: workspace:*
+        version: link:../core
+      '@mushinjs/plugin-bots':
+        specifier: workspace:*
+        version: link:../plugin-bots
+      ws:
+        specifier: 'catalog:'
+        version: 8.22.0
+
+  packages/plugin-adapter-kook:
+    dependencies:
+      '@cordisjs/plugin-server':
+        specifier: 'catalog:'
+        version: 1.7.0(cordis@4.0.0-rc.11)
       '@mushinjs/core':
         specifier: workspace:*
         version: link:../core

@@ -1,0 +1,55 @@
+{
+  "name": "@mushinjs/plugin-adapter-kook",
+  "version": "0.3.0",
+  "description": "KOOK bot adapter (WebSocket and webhook)",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mushinjs/mushin.git",
+    "directory": "packages/plugin-adapter-kook"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "displayName": {
+      "en": "KOOK adapter",
+      "zh-CN": "KOOK 适配器"
+    },
+    "description": {
+      "en": "Connects KOOK (formerly Kaiheila) bots, over WebSocket or webhook",
+      "zh-CN": "通过 WebSocket 或 Webhook 连接 KOOK（开黑啦）机器人"
+    },
+    "requires": {
+      "plugins": {
+        "@mushinjs/plugin-bots": "*",
+        "@cordisjs/plugin-server": "*"
+      }
+    }
+  },
+  "dependencies": {
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-bots": "workspace:*",
+    "@cordisjs/plugin-server": "catalog:",
+    "ws": "catalog:"
+  }
+}

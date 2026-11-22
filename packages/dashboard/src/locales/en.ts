@@ -422,6 +422,10 @@ export default {
       discord: {
         default: 'In the Discord Developer Portal (discord.com/developers/applications), create an application, open Bot, reset the token and paste it here. Under Privileged Gateway Intents turn on Message Content (and Server Members if you want member events). Invite the bot from OAuth2 → URL Generator with the "bot" scope and the Send Messages permission. This machine must reach discord.com.',
       },
+      kook: {
+        websocket: 'In the KOOK developer center (developer.kookapp.cn), create an application, add a bot, keep its connection mode on WebSocket and paste its Token here. Invite it to your server with the invite link on the bot\'s page.',
+        webhook: 'Switch the bot\'s connection mode to Webhook in the KOOK developer center, set its Callback URL to the address below (reachable from the internet), and copy the Verify Token here; if message encryption is on, copy the Encrypt Key too.',
+      },
     },
     initialPlugins: 'Bot plugins to enable',
     forwardTo: 'Connects to {url}',
