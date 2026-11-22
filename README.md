@@ -15,6 +15,7 @@ Mushin.js is built on [Cordis](https://github.com/cordiverse/cordis). The MVP sh
 | Overview | The start page: bots online, today's messages and model tokens, flows with errors, commands, providers and plugins; a message chart for 24 hours or 7 days per bot; the busiest chats, users, commands, flows and models; live CPU, memory and event loop delay; versions, uptime and data directory size. |
 | Bots | Create, start, stop and configure bots; enable bot plugins per bot; each bot's commands and `/help`. |
 | OneBot adapter | OneBot v11 over WebSocket, in forward mode (Mushin dials NapCat) or reverse mode (NapCat dials Mushin), or over HTTP (API calls plus signed event reports). |
+| Platform adapters | QQ official bots (WebSocket gateway or signed webhook), Discord (gateway), Telegram (long polling or webhook) and KOOK (WebSocket or webhook), each a plugin of its own. |
 | Conversation flows | A visual editor for bot behavior: wire triggers, conditions, variables, LLM calls and replies into a graph, test it with a made-up message, and watch live runs light up the path. The Agent can build flows too. |
 | Live conversation view | Messages appear as they arrive. Hover a message to see its type, supported platforms and what generated it (an LLM with provider and model, a plugin, or a flow). |
 | Dashboard | Vue 3 + Reka UI + UnoCSS, English and Simplified Chinese, light and dark themes, works on phones. |
@@ -127,6 +128,20 @@ Set NapCat's message format to `array` and use the same access token on both sid
 The bots list shows each bot's connection mode and address, with a switch to start or stop it. A bot's **Flow overview** tab lists, in order, everything a message passes on that bot: the flow triggers by priority, the built-in commands and the bot plugins. Type a message there and pick who sends it (group member, admin, owner, the bot's admin, or a private chat) to see which triggers it starts, the path each run takes, what it replies and which plugins never see it, all in test mode; LLM nodes answer with a placeholder unless you allow real calls. The Agent can do the same with `flows.route`.
 
 If Mushin.js and NapCat run on different machines, bind Mushin.js to a reachable address (`host` in the server entry) and keep the admin token private.
+
+## Connecting other platforms
+
+Each platform has its own adapter plugin, loaded by default. Pick it as the bot's adapter when you add a bot; the form shows only the fields the chosen connection mode uses, and a short guide for the platform.
+
+**QQ official bot** (`qq`). Create a bot on the [QQ Open Platform](https://q.qq.com), copy its AppID and AppSecret, and add Mushin's public IP to the platform's IP allowlist. In `websocket` mode Mushin connects to QQ's gateway; in `webhook` mode QQ posts Ed25519-signed events to `https://<your domain>/qq/<bot id>` (behind an HTTPS reverse proxy), and Mushin answers the callback check itself. Group chats and C2C chats use openids; guild channels and guild DMs use numeric ids. Group bots only see messages that @-mention them and mostly answer within five minutes of a message, so replies name the message they answer.
+
+**Discord** (`discord`). Create an application in the [Developer Portal](https://discord.com/developers/applications), reset the bot token and paste it, turn on the Message Content intent (and Server Members for member events), and invite the bot with the `bot` scope. Guild channels are group chats; a private chat's id is the person's user id, and Mushin opens the DM channel itself.
+
+**Telegram** (`telegram`). Create a bot with [@BotFather](https://t.me/BotFather) and paste its token. `polling` mode needs no public address; `webhook` mode registers `<public address>/telegram/<bot id>` with Telegram and checks a secret token derived from the bot token. Set **API address** to a self-hosted Bot API server or a reverse proxy when api.telegram.org cannot be reached. Turn privacy mode off with `/setprivacy` to see every group message.
+
+**KOOK** (`kook`). Create a bot in the [KOOK developer center](https://developer.kookapp.cn) and paste its token. In `websocket` mode Mushin connects and resumes after drops; in `webhook` mode set the bot's Callback URL to `http(s)://<your address>/kook/<bot id>` and copy its Verify Token (and Encrypt Key, when encryption is on).
+
+Platform API calls from flows and the Agent go through the bot's `call`: Telegram takes Bot API method names (`getChat`), and QQ, Discord and KOOK take `"METHOD /path"` (`GET /users/@me`).
 
 When a bot misbehaves, open its **Logs** tab. It lists what happened inside that bot only: every connection attempt (address, NapCat self id, client role, and why a token was rejected), logins, status changes, and plugin warnings. The same lines are saved in `instance/logs/bots/<bot id>/` and the Agent can read them.
 
