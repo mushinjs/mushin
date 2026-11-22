@@ -252,6 +252,9 @@ importers:
       '@mushinjs/plugin-adapter-onebot':
         specifier: workspace:*
         version: link:../plugin-adapter-onebot
+      '@mushinjs/plugin-adapter-qq':
+        specifier: workspace:*
+        version: link:../plugin-adapter-qq
       '@mushinjs/plugin-agent':
         specifier: workspace:*
         version: link:../plugin-agent
@@ -414,6 +417,21 @@ importers:
       '@mushinjs/plugin-flows':
         specifier: workspace:*
         version: link:../plugin-flows
+      ws:
+        specifier: 'catalog:'
+        version: 8.22.0
+
+  packages/plugin-adapter-qq:
+    dependencies:
+      '@cordisjs/plugin-server':
+        specifier: 'catalog:'
+        version: 1.7.0(cordis@4.0.0-rc.11)
+      '@mushinjs/core':
+        specifier: workspace:*
+        version: link:../core
+      '@mushinjs/plugin-bots':
+        specifier: workspace:*
+        version: link:../plugin-bots
       ws:
         specifier: 'catalog:'
         version: 8.22.0

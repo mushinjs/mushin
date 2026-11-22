@@ -49,6 +49,7 @@
     "@mushinjs/plugin-provider-typesafe": "workspace:*",
     "@mushinjs/plugin-bots": "workspace:*",
     "@mushinjs/plugin-adapter-onebot": "workspace:*",
+    "@mushinjs/plugin-adapter-qq": "workspace:*",
     "@mushinjs/plugin-agent": "workspace:*",
     "@mushinjs/plugin-console": "workspace:*",
     "@mushinjs/bot-plugin-echo": "workspace:*",

@@ -1,0 +1,55 @@
+{
+  "name": "@mushinjs/plugin-adapter-qq",
+  "version": "0.3.0",
+  "description": "QQ official bot adapter (WebSocket and webhook)",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mushinjs/mushin.git",
+    "directory": "packages/plugin-adapter-qq"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "displayName": {
+      "en": "QQ official bot adapter",
+      "zh-CN": "QQ 官方机器人适配器"
+    },
+    "description": {
+      "en": "Connects bots registered on the QQ Open Platform, over WebSocket or webhook",
+      "zh-CN": "通过 WebSocket 或 Webhook 连接在 QQ 开放平台注册的官方机器人"
+    },
+    "requires": {
+      "plugins": {
+        "@mushinjs/plugin-bots": "*",
+        "@cordisjs/plugin-server": "*"
+      }
+    }
+  },
+  "dependencies": {
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-bots": "workspace:*",
+    "@cordisjs/plugin-server": "catalog:",
+    "ws": "catalog:"
+  }
+}

@@ -39,6 +39,7 @@ export function defaultConfig(): InstanceConfig {
       { id: 'permissions', package: '@mushinjs/plugin-permissions', config: {} },
       { id: 'personas', package: '@mushinjs/plugin-personas', config: {} },
       { id: 'adapter-onebot', package: '@mushinjs/plugin-adapter-onebot', config: {} },
+      { id: 'adapter-qq', package: '@mushinjs/plugin-adapter-qq', config: {} },
       { id: 'flows', package: '@mushinjs/plugin-flows', config: {} },
       { id: 'knowledge', package: '@mushinjs/plugin-knowledge', config: {} },
       { id: 'agent', package: '@mushinjs/plugin-agent', config: {} },
