@@ -15,7 +15,8 @@ describe('official skills', () => {
     const names = (await readdir(SKILLS_SOURCE)).sort()
     expect(names).toEqual(['mushin-flows', 'mushin-operations', 'mushin-plugin-dev', 'mushin-troubleshoot'])
     for (const name of names) {
-      const text = await readFile(join(SKILLS_SOURCE, name, 'SKILL.md'), 'utf8')
+      // Git on Windows may check the files out with CRLF line ends.
+      const text = (await readFile(join(SKILLS_SOURCE, name, 'SKILL.md'), 'utf8')).replace(/\r\n/g, '\n')
       const front = /^---\n([\s\S]*?)\n---\n/.exec(text)?.[1] ?? ''
       expect(front).toContain(`name: ${name}`)
       expect(front).toMatch(/description: .{40,}/)
