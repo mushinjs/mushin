@@ -266,6 +266,7 @@ export class BotManager extends Service {
       segments: adapter.segments,
       groupRoles: !!adapter.groupRoles,
       avatars: adapter.avatars ?? {},
+      hiddenFields: adapter.hiddenFields ?? {},
     }))
   }
 

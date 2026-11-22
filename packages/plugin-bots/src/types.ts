@@ -49,6 +49,11 @@ export interface AdapterType<C = any> {
    */
   avatars?: { user?: string; group?: string }
   /**
+   * Config fields the dashboard leaves out, by the value of the config's `mode` field (its schema
+   * default when unset); `*` lists fields hidden in every mode, such as API addresses for tests.
+   */
+  hiddenFields?: Record<string, string[]>
+  /**
    * Loaded inside each bot's isolated context with the bot's adapter config.
    * It injects `bot`, opens the connection and registers a transport.
    */

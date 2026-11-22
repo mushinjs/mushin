@@ -410,6 +410,7 @@ export function apply(ctx: Context) {
     segments: ONEBOT_SEGMENTS,
     groupRoles: true,
     avatars: { user: 'https://q1.qlogo.cn/g?b=qq&nk={id}&s=100', group: 'https://p.qlogo.cn/gh/{id}/{id}/100' },
+    hiddenFields: { forward: ['path', 'secret'], reverse: ['url', 'secret'], http: [] },
     plugin: Connection,
     describe: (config, botId) => describeConnection(AdapterConfig.parse(config), botId),
   })

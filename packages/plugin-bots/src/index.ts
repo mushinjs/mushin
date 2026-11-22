@@ -4,6 +4,7 @@ export * from './archive'
 export * from './bot'
 export * from './commands'
 export * from './manager'
+export * from './media'
 export * from './types'
 
 export default BotManager

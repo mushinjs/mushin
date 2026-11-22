@@ -231,6 +231,8 @@ export interface AdapterType {
   groupRoles?: boolean
   /** Picture addresses with `{id}` for the user or group id. */
   avatars?: { user?: string; group?: string }
+  /** Fields the form leaves out, by connection mode; `*` in every mode. */
+  hiddenFields?: Record<string, string[]>
 }
 
 export interface BotPluginInfo {

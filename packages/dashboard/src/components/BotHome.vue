@@ -49,7 +49,7 @@ const connection = computed(() => {
   const info = props.bot.connection
   if (!info) return { mode: '', tag: props.bot.adapter.type, address: '' }
   const tag = t(`bots.mode.${info.mode}`) === `bots.mode.${info.mode}` ? info.mode : t(`bots.mode.${info.mode}`)
-  return { mode: info.mode, tag, address: info.address ?? '' }
+  return { mode: info.mode, tag, address: info.address ?? info.inbound ?? '' }
 })
 </script>
 
@@ -83,7 +83,7 @@ const connection = computed(() => {
           <RouterLink :to="`/bots/${bot.id}/connection`" class="more">{{ t('botHome.edit') }}<span class="i-lucide-chevron-right text-[14px]" /></RouterLink>
         </header>
         <div class="conn">
-          <span class="conn-icon text-[16px]" :class="connection.mode === 'ws-reverse' ? 'i-lucide-arrow-left' : 'i-lucide-arrow-right'" />
+          <span class="conn-icon text-[16px]" :class="['ws-reverse', 'webhook'].includes(connection.mode) ? 'i-lucide-arrow-left' : 'i-lucide-arrow-right'" />
           <span class="conn-mode">{{ connection.tag }}</span>
           <span class="mono conn-address" :title="connection.address">{{ connection.address }}</span>
         </div>

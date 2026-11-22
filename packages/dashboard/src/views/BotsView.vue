@@ -49,6 +49,8 @@ function connectionOf(bot: Bot) {
   const tag = t(`bots.mode.${info.mode}`) === `bots.mode.${info.mode}` ? info.mode : t(`bots.mode.${info.mode}`)
   if (info.mode === 'ws-reverse') return { mode: info.mode, tag, address: t('bots.reverseTo', { path: info.address }) }
   if (info.mode === 'http') return { mode: info.mode, tag, address: t('bots.httpTo', { url: info.address, path: info.inbound }) }
+  if (info.mode === 'webhook') return { mode: info.mode, tag, address: t('bots.webhookAt', { path: info.inbound }) }
+  if (!info.address) return { mode: info.mode, tag, address: '' }
   return { mode: info.mode, tag, address: t('bots.forwardTo', { url: info.address }) }
 }
 
@@ -166,7 +168,7 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
 
         <div class="bot-body">
           <div class="conn" :title="connectionOf(bot).address">
-            <span class="conn-icon text-[15px]" :class="connectionOf(bot).mode === 'ws-reverse' ? 'i-lucide-arrow-left' : 'i-lucide-arrow-right'" />
+            <span class="conn-icon text-[15px]" :class="['ws-reverse', 'webhook'].includes(connectionOf(bot).mode) ? 'i-lucide-arrow-left' : 'i-lucide-arrow-right'" />
             <span class="mode">{{ connectionOf(bot).tag }}</span>
             <span class="mono address">{{ connectionOf(bot).address }}</span>
           </div>

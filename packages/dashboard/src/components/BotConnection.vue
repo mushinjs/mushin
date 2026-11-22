@@ -6,12 +6,13 @@ import { call } from '../api'
 import { providerOptions as toProviderOptions } from '../models'
 import { useDataStore } from '../stores/data'
 import type { Bot } from '../types'
+import { adapterMode, guideKey, hiddenFields, isInbound } from '../adapters'
 import { clone } from '../utils'
 import SchemaForm from './SchemaForm.vue'
 import SaveBar from './SaveBar.vue'
 
 const props = defineProps<{ bot: Bot }>()
-const { t } = useI18n()
+const { t, te } = useI18n()
 const data = useDataStore()
 const message = useToast()
 
@@ -38,12 +39,15 @@ const dirty = computed(() => snapshot() !== saved.value)
 watch(() => props.bot.id, reset, { immediate: true })
 
 const adapter = computed(() => data.adapters.find((item) => item.id === props.bot.adapter.type))
-const mode = computed(() => config.value.mode ?? 'forward')
-// Fields each connection mode does not use.
-const hidden = computed(() => (mode.value === 'reverse' ? ['url', 'secret'] : mode.value === 'http' ? [] : ['path', 'secret']))
-const reverseUrl = computed(() => {
-  const base = (serverUrl.value || location.origin).replace(/^http/, 'ws')
-  return `${base}${config.value.path || `/onebot/${props.bot.id}`}`
+const mode = computed(() => adapterMode(adapter.value, config.value))
+const hidden = computed(() => hiddenFields(adapter.value, config.value))
+const guide = computed(() => (te(guideKey(props.bot.adapter.type, mode.value)) ? t(guideKey(props.bot.adapter.type, mode.value)) : ''))
+// Where the platform reaches Mushin: a WebSocket address for reverse mode, else an HTTP one.
+const inboundUrl = computed(() => {
+  if (!isInbound(mode.value)) return ''
+  const base = serverUrl.value || location.origin
+  const url = `${base}${config.value.path || `/${props.bot.adapter.type}/${props.bot.id}`}`
+  return mode.value === 'reverse' ? url.replace(/^http/, 'ws') : url
 })
 const providerOptions = computed(() => toProviderOptions(data.providers, data.profiles, t))
 
@@ -76,16 +80,9 @@ async function save() {
         </FormItem>
       </Form>
 
-      <Alert v-if="bot.adapter.type === 'onebot'" type="info" :show-icon="false" class="hint">
-        <template v-if="mode === 'reverse'">
-          {{ t('bots.napcatReverse') }}
-          <div class="url mono">{{ reverseUrl }}</div>
-        </template>
-        <template v-else-if="mode === 'http'">
-          {{ t('bots.napcatHttp') }}
-          <div class="url mono">{{ reverseUrl.replace(/^ws/, 'http') }}</div>
-        </template>
-        <template v-else>{{ t('bots.napcatForward') }}</template>
+      <Alert v-if="guide || inboundUrl" type="info" :show-icon="false" class="hint">
+        {{ guide }}
+        <div v-if="inboundUrl" class="url mono">{{ inboundUrl }}</div>
       </Alert>
 
       <SchemaForm v-if="adapter" v-model="config" :schema="adapter.configSchema" :secrets="adapter.secrets" :hidden="hidden" />

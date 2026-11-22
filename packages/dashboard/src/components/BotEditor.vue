@@ -5,13 +5,14 @@ import { useI18n } from 'vue-i18n'
 import { call } from '../api'
 import { useDataStore } from '../stores/data'
 import type { Bot, CatalogEntry } from '../types'
+import { adapterMode, guideKey, hiddenFields } from '../adapters'
 import { localize } from '../utils'
 import SchemaForm from './SchemaForm.vue'
 
 const show = defineModel<boolean>('show', { required: true })
 const emit = defineEmits<{ created: [bot: Bot] }>()
 
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
 const data = useDataStore()
 const message = useToast()
 
@@ -33,9 +34,11 @@ watch(show, async (visible) => {
 
 const adapter = computed(() => data.adapters.find((item) => item.id === adapterType.value))
 const adapterOptions = computed(() => data.adapters.map((item) => ({ label: localize(item.displayName, locale.value), value: item.id })))
-const mode = computed(() => config.value.mode ?? 'forward')
-// Fields each connection mode does not use.
-const hidden = computed(() => (mode.value === 'reverse' ? ['url', 'secret'] : mode.value === 'http' ? [] : ['path', 'secret']))
+const mode = computed(() => adapterMode(adapter.value, config.value))
+const hidden = computed(() => hiddenFields(adapter.value, config.value))
+const guide = computed(() => (te(guideKey(adapterType.value, mode.value)) ? t(guideKey(adapterType.value, mode.value)) : ''))
+// Another adapter has other fields; start its form from its defaults.
+watch(adapterType, () => (config.value = {}))
 
 async function create() {
   saving.value = true
@@ -68,9 +71,7 @@ async function create() {
         </FormItem>
       </Form>
 
-      <Alert v-if="adapterType === 'onebot'" type="info" :show-icon="false" class="hint">
-        {{ mode === 'reverse' ? t('bots.napcatReverse') : mode === 'http' ? t('bots.napcatHttp') : t('bots.napcatForward') }}
-      </Alert>
+      <Alert v-if="guide" type="info" :show-icon="false" class="hint">{{ guide }}</Alert>
 
       <SchemaForm v-if="adapter" v-model="config" :schema="adapter.configSchema" :secrets="adapter.secrets" :hidden="hidden" />
 
