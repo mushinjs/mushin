@@ -249,6 +249,9 @@ importers:
       '@mushinjs/core':
         specifier: workspace:*
         version: link:../core
+      '@mushinjs/plugin-adapter-discord':
+        specifier: workspace:*
+        version: link:../plugin-adapter-discord
       '@mushinjs/plugin-adapter-onebot':
         specifier: workspace:*
         version: link:../plugin-adapter-onebot
@@ -405,6 +408,18 @@ importers:
       vue-tsc:
         specifier: 'catalog:'
         version: 3.3.13(typescript@6.0.3)
+
+  packages/plugin-adapter-discord:
+    dependencies:
+      '@mushinjs/core':
+        specifier: workspace:*
+        version: link:../core
+      '@mushinjs/plugin-bots':
+        specifier: workspace:*
+        version: link:../plugin-bots
+      ws:
+        specifier: 'catalog:'
+        version: 8.22.0
 
   packages/plugin-adapter-onebot:
     dependencies:

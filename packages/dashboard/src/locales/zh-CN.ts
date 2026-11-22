@@ -420,6 +420,9 @@ const zhCN: typeof en = {
         polling: '在 Telegram 里找 @BotFather，发送 /newbot 创建机器人，把它给的令牌填在这里。要接收群里的所有消息（而不只是命令和 @），向 @BotFather 发送 /setprivacy 关闭隐私模式。本机无法访问 api.telegram.org 时，把 API 地址设为反向代理或自建的 Bot API 服务器。',
         webhook: 'Telegram 会把更新推送到 <公网地址><路径>，这个地址需要能通过 HTTPS 访问（端口 443、80、88 或 8443）。Mushin 会自动登记 Webhook，并使用由令牌派生的密钥校验请求，无需其他设置。切回长轮询时会自动删除 Webhook。',
       },
+      discord: {
+        default: '在 Discord 开发者门户（discord.com/developers/applications）创建应用，打开 Bot 页面重置令牌并粘贴到这里。在 Privileged Gateway Intents 中打开 Message Content（需要成员事件的话再打开 Server Members）。在 OAuth2 → URL Generator 勾选 bot 范围和 Send Messages 权限，用生成的链接把机器人拉进服务器。本机需要能访问 discord.com。',
+      },
     },
     initialPlugins: '要启用的机器人插件',
     forwardTo: '连接到 {url}',

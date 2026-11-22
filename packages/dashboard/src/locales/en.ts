@@ -419,6 +419,9 @@ export default {
         polling: 'Talk to @BotFather on Telegram, send /newbot and paste the token it gives. To read every group message, not only commands and mentions, send /setprivacy to @BotFather and turn privacy mode off. If api.telegram.org cannot be reached from this machine, set the API address to a reverse proxy or a self-hosted Bot API server.',
         webhook: 'Telegram posts updates to <public address><path>, which must be reachable over HTTPS (port 443, 80, 88 or 8443). Mushin registers the webhook itself with a secret token derived from the bot token, so nothing else needs setting up. Switching back to long polling removes the webhook.',
       },
+      discord: {
+        default: 'In the Discord Developer Portal (discord.com/developers/applications), create an application, open Bot, reset the token and paste it here. Under Privileged Gateway Intents turn on Message Content (and Server Members if you want member events). Invite the bot from OAuth2 → URL Generator with the "bot" scope and the Send Messages permission. This machine must reach discord.com.',
+      },
     },
     initialPlugins: 'Bot plugins to enable',
     forwardTo: 'Connects to {url}',

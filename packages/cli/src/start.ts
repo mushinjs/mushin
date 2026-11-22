@@ -41,6 +41,7 @@ export function defaultConfig(): InstanceConfig {
       { id: 'adapter-onebot', package: '@mushinjs/plugin-adapter-onebot', config: {} },
       { id: 'adapter-qq', package: '@mushinjs/plugin-adapter-qq', config: {} },
       { id: 'adapter-telegram', package: '@mushinjs/plugin-adapter-telegram', config: {} },
+      { id: 'adapter-discord', package: '@mushinjs/plugin-adapter-discord', config: {} },
       { id: 'flows', package: '@mushinjs/plugin-flows', config: {} },
       { id: 'knowledge', package: '@mushinjs/plugin-knowledge', config: {} },
       { id: 'agent', package: '@mushinjs/plugin-agent', config: {} },

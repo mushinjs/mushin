@@ -1,0 +1,53 @@
+{
+  "name": "@mushinjs/plugin-adapter-discord",
+  "version": "0.3.0",
+  "description": "Discord bot adapter (gateway)",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mushinjs/mushin.git",
+    "directory": "packages/plugin-adapter-discord"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "displayName": {
+      "en": "Discord adapter",
+      "zh-CN": "Discord 适配器"
+    },
+    "description": {
+      "en": "Connects Discord bots through the Discord gateway",
+      "zh-CN": "通过 Discord 网关连接 Discord 机器人"
+    },
+    "requires": {
+      "plugins": {
+        "@mushinjs/plugin-bots": "*"
+      }
+    }
+  },
+  "dependencies": {
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-bots": "workspace:*",
+    "ws": "catalog:"
+  }
+}
