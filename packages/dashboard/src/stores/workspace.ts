@@ -70,17 +70,26 @@ function read(): WorkspaceLayout {
 
 let seq = 0
 
+/** A page address without its query and hash. */
+const pageOf = (path?: string) => path?.split(/[?#]/)[0]
+
 export const workspace = reactive({
   layout: read(),
   /** The workspace page is open in this tab, so Fairy's pages go to the panel. */
   active: false,
   /** The pane that takes a conversation picked in the sessions column. */
   focused: 'main' as 'main' | 'split',
+  /** The dashboard page you came from, where the Console button goes back to. */
+  returnTo: '/overview',
 
-  /** Shows a view in the panel, reusing a tab that shows the same thing, and opens the panel. */
+  /**
+   * Shows a view in the panel and opens the panel. A tab that shows the same thing is reused; for pages, the same
+   * page with other query parameters counts, and moves to the new address.
+   */
   openView(input: Omit<PanelView, 'id'>): PanelView {
     const layout = this.layout
-    let view = layout.views.find((item) => item.kind === input.kind && (input.kind === 'status' || (input.kind === 'page' ? item.path === input.path : item.url === input.url)))
+    let view = layout.views.find((item) => item.kind === input.kind && (input.kind === 'status' || (input.kind === 'page' ? pageOf(item.path) === pageOf(input.path) : item.url === input.url)))
+    if (view?.kind === 'page' && input.path) view.path = input.path
     if (!view) {
       view = { ...input, id: `${input.kind}-${Date.now().toString(36)}-${++seq}` }
       layout.views.push(view)

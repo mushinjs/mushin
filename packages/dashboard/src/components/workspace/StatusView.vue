@@ -36,6 +36,13 @@ const failed = computed(() => plugins.value.filter((plugin) => RANK[plugin.statu
 const liveRuns = computed(() => [...runs.live.values()].sort((a, b) => b.startedAt - a.startedAt).slice(0, 8))
 const working = computed(() => fairy.sessions.filter((session) => session.running))
 
+// Narrow, the badges shrink to colored dots so names have room; the status is on hover.
+const root = ref<HTMLElement>()
+const narrow = ref(false)
+const observer = new ResizeObserver(([entry]) => (narrow.value = (entry?.contentRect.width ?? 0) < 320))
+onMounted(() => root.value && observer.observe(root.value))
+onBeforeUnmount(() => observer.disconnect())
+
 let off: (() => void) | undefined
 onMounted(() => {
   refreshPlugins()
@@ -48,7 +55,7 @@ const show = (path: string, title?: string) => workspace.openView({ kind: 'page'
 </script>
 
 <template>
-  <div class="status">
+  <div ref="root" class="status">
     <section>
       <h3>{{ t('workspace.status.bots') }} <span class="count">{{ data.bots.length }}</span></h3>
       <p v-if="!data.bots.length" class="muted">{{ t('workspace.status.noBots') }}</p>
@@ -56,7 +63,7 @@ const show = (path: string, title?: string) => workspace.openView({ kind: 'page'
         <span class="i-lucide-bot item-icon" />
         <span class="item-name">{{ bot.name }}</span>
         <span v-if="runs.activityOf(bot.id).state !== 'idle'" class="activity">{{ t(`workspace.status.activity.${runs.activityOf(bot.id).state}`) }}</span>
-        <StatusBadge :status="bot.status" :error="bot.error" />
+        <StatusBadge :status="bot.status" :error="bot.error" :dot="narrow" />
       </button>
     </section>
 
@@ -66,10 +73,10 @@ const show = (path: string, title?: string) => workspace.openView({ kind: 'page'
         <span v-if="failed" class="bad">{{ t('workspace.status.failed', { n: failed }) }}</span>
         <Button size="tiny" quaternary circle icon="i-lucide-refresh-cw" :loading="loading" :aria-label="t('workspace.status.refresh')" @click="refreshPlugins" />
       </h3>
-      <button v-for="plugin in sortedPlugins" :key="plugin.id" type="button" class="item" :title="plugin.error ?? plugin.package" @click="show('/plugins')">
+      <button v-for="plugin in sortedPlugins" :key="plugin.id" type="button" class="item" :title="plugin.error ?? plugin.package" @click="show(`/plugins?highlight=${encodeURIComponent(plugin.package)}`)">
         <span class="i-lucide-puzzle item-icon" />
         <span class="item-name">{{ localize(plugin.manifest?.displayName, locale) || plugin.package }}</span>
-        <StatusBadge :status="plugin.status" :error="plugin.error" />
+        <StatusBadge :status="plugin.status" :error="plugin.error" :dot="narrow" />
       </button>
     </section>
 

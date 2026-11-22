@@ -1,26 +1,27 @@
 <script setup lang="ts">
-import { Button, Dropdown, type DropdownOption, Input, Spin, Tooltip, useToast } from '@mushinjs/ui'
+import { Button, Dropdown, type DropdownOption, Input, Modal, Spin, Tooltip, useToast } from '@mushinjs/ui'
 import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
 import { call } from '../../api'
 import { useFairyPane, useFairyStore } from '../../stores/fairy'
 import { workspace } from '../../stores/workspace'
 import type { FairyGroup, FairySessionSummary } from '../../types'
+import SettingsFairy from '../settings/SettingsFairy.vue'
 
 /**
- * The sessions column: a new conversation, links to the dashboard and Fairy's settings, and the conversations
+ * The sessions column: a new conversation, Fairy's skills and settings (in a dialog), and the conversations
  * by group. Fairy files a conversation under the group of what it works on; drag one onto a group to move it,
  * or onto the middle to open it beside the other.
  */
 const emit = defineEmits<{ dragging: [session: string | undefined] }>()
 
 const { t, locale } = useI18n()
-const router = useRouter()
 const toast = useToast()
 const fairy = useFairyStore()
 
 const query = ref('')
+/** The Fairy settings dialog's tab, or undefined while it is closed. */
+const settingsTab = ref<string>()
 
 const matches = (session: FairySessionSummary) => !query.value.trim() || (session.title || t('fairy.untitled')).toLowerCase().includes(query.value.trim().toLowerCase())
 
@@ -238,13 +239,10 @@ const relative = (ts: number) => {
       <button type="button" class="nav-item" @click="newChat">
         <span class="i-lucide-square-pen" />{{ t('workspace.newChat') }}
       </button>
-      <button type="button" class="nav-item" @click="router.push('/overview')">
-        <span class="i-lucide-layout-grid" />{{ t('workspace.dashboard') }}
-      </button>
-      <button type="button" class="nav-item" @click="workspace.openView({ kind: 'page', path: '/settings/fairy/skills' })">
+      <button type="button" class="nav-item" @click="settingsTab = 'skills'">
         <span class="i-lucide-puzzle" />{{ t('workspace.skills') }}
       </button>
-      <button type="button" class="nav-item" @click="workspace.openView({ kind: 'page', path: '/settings/fairy' })">
+      <button type="button" class="nav-item" @click="settingsTab = 'scenes'">
         <span class="i-lucide-settings" />{{ t('workspace.settings') }}
       </button>
     </nav>
@@ -325,6 +323,9 @@ const relative = (ts: number) => {
         </template>
       </section>
     </div>
+    <Modal :show="!!settingsTab" :title="t('workspace.settings')" width="min(960px, calc(100vw - 48px))" style="height: min(760px, calc(100vh - 48px))" @update:show="(value: boolean) => !value && (settingsTab = undefined)">
+      <SettingsFairy v-if="settingsTab" v-model:tab="settingsTab" />
+    </Modal>
   </div>
 </template>
 

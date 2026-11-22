@@ -4,7 +4,8 @@
  * nothing jumps. It moves in two steps driven by two flags, so no word is ever seen half cut:
  * closing, the words fade out first (`quiet`) and only then the panel narrows (`narrow`); opening,
  * the panel widens first and the words fade in once there is room for them. Both steps are CSS
- * transitions on classes, so they hold whatever Vue re-renders in between.
+ * transitions on classes, so they hold whatever Vue re-renders in between. The button that collapses it is
+ * in the top bar.
  */
 import { Tooltip } from '@mushinjs/ui'
 import { onBeforeUnmount, ref, watch } from 'vue'
@@ -63,17 +64,6 @@ onBeforeUnmount(() => clearTimeout(timer))
         </Tooltip>
       </div>
     </nav>
-
-    <div class="foot">
-      <Tooltip placement="right" :disabled="!collapsed" :show-arrow="false">
-        <template #trigger>
-          <button type="button" class="toggle" :aria-label="collapsed ? t('layout.expand') : t('layout.collapse')" :aria-expanded="!collapsed" @click="collapsed = !collapsed">
-            <span class="i-lucide-chevron-left toggle-icon" />
-          </button>
-        </template>
-        {{ t('layout.expand') }}
-      </Tooltip>
-    </div>
   </aside>
 </template>
 
@@ -208,8 +198,7 @@ onBeforeUnmount(() => clearTimeout(timer))
   font-weight: 600;
 }
 
-.item:focus-visible,
-.toggle:focus-visible {
+.item:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: -2px;
 }
@@ -219,50 +208,12 @@ onBeforeUnmount(() => clearTimeout(timer))
   font-size: 18px;
 }
 
-.toggle-icon {
-  font-size: 16px;
-  transition: transform 0.26s var(--side-ease);
-}
-
-.side.narrow .toggle-icon {
-  transform: rotate(180deg);
-}
-
-.foot {
-  position: relative;
-  flex: none;
-  height: 48px;
-  border-top: 1px solid var(--line);
-}
-
-/* Anchored to the right edge, so it slides with the panel and ends up centred in the rail. */
-.toggle {
-  position: absolute;
-  right: 16px;
-  top: 10px;
-  width: 32px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--fg2);
-  cursor: pointer;
-}
-
-.toggle:hover {
-  background: var(--s2);
-  color: var(--fg);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .side,
   [data-fade],
   .side.quiet [data-fade],
   .divider,
-  .side.narrow .divider,
-  .toggle-icon {
+  .side.narrow .divider {
     transition: none;
   }
 }

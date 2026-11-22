@@ -10,16 +10,25 @@ import FairySkills from '../fairy/FairySkills.vue'
 import FairyStyles from '../fairy/FairyStyles.vue'
 import FairyTools from '../fairy/FairyTools.vue'
 
+/** On the settings page the tab is in the address; in a dialog, pass `tab` and follow `update:tab`. */
+const props = defineProps<{ tab?: string }>()
+const emit = defineEmits<{ 'update:tab': [tab: string] }>()
+
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const tab = computed(() => String(route.params.tab || 'scenes'))
+const tab = computed(() => props.tab ?? String(route.params.tab || 'scenes'))
+
+function select(next: string) {
+  if (props.tab !== undefined) emit('update:tab', next)
+  else router.replace(`/settings/fairy/${next}`)
+}
 </script>
 
 <template>
   <div>
     <p class="section-lead">{{ t('fairyPage.lead') }}</p>
-    <Tabs :value="tab" @update:value="(next: string) => router.replace(`/settings/fairy/${next}`)">
+    <Tabs :value="tab" @update:value="select">
       <TabPane name="scenes" :tab="t('fairyPage.tabs.scenes')"><FairyScenes /></TabPane>
       <TabPane name="skills" :tab="t('fairyPage.tabs.skills')"><FairySkills /></TabPane>
       <TabPane name="mcp" :tab="t('fairyPage.tabs.mcp')"><FairyMcp /></TabPane>

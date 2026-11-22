@@ -178,6 +178,29 @@ async function reload(plugin: AppPlugin) {
   }
 }
 
+/** Takes an entry out of the config, after saying what goes with it. */
+async function remove(plugin: AppPlugin) {
+  busy.value = keyOf(plugin)
+  try {
+    const name = nameOf(plugin.package)
+    const plan = plugin.enabled ? (await call<DependencyPlan>('plugins.dependencies', { package: plugin.package })).disable : undefined
+    const also = (plan?.disable ?? []).filter((item) => item.id !== plugin.id).map((item) => nameOf(item.package))
+    const ok = await confirmPlan(t('plugins.removeTitle', { name }), [
+      h('p', { style: 'margin: 0' }, t('plugins.removeBody')),
+      ...listOf(t('plugins.disableAlso'), also),
+      ...listOf(t('plugins.disableBots'), (plan?.botPlugins ?? []).map(nameOf)),
+    ], t('plugins.remove'))
+    if (!ok) return
+    await call('plugins.remove', { id: plugin.id, cascade: also.length > 0 })
+    message.success(t('plugins.removed', { name }))
+    await refresh()
+  } catch (error) {
+    message.error((error as Error).message)
+  } finally {
+    busy.value = undefined
+  }
+}
+
 function configure(plugin: AppPlugin) {
   editing.value = plugin
   draft.value = clone(plugin.config)
@@ -329,6 +352,7 @@ async function save() {
             <div class="actions">
               <IconAction icon="i-lucide-refresh-cw" :label="t('common.reload')" :disabled="!plugin.enabled" @click="reload(plugin)" />
               <IconAction icon="i-lucide-settings" :label="t('common.configure')" :disabled="!plugin.id" @click="configure(plugin)" />
+              <IconAction v-if="plugin.id && !plugin.manifest?.essential" icon="i-lucide-trash-2" :label="t('plugins.remove')" @click="remove(plugin)" />
               <Toggle
                 variant="button"
                 :value="plugin.enabled"
@@ -339,6 +363,11 @@ async function save() {
               />
             </div>
             <div v-if="expanded.has(keyOf(plugin)) || hasProblem(plugin)" class="details">
+              <div v-if="plugin.id && plugin.status === 'failed' && !plugin.version" class="gone">
+                <span class="i-lucide-package-x" />
+                <span>{{ t('plugins.notInstalledEntry') }}</span>
+                <Button size="tiny" type="error" secondary :loading="busy === keyOf(plugin)" @click="remove(plugin)">{{ t('plugins.remove') }}</Button>
+              </div>
               <DependencyTags :deps="depsOf(plugin)" :catalog="catalog" :show-dependents="expanded.has(keyOf(plugin))" @enable-deps="enableDeps(plugin)" />
               <p v-if="expanded.has(keyOf(plugin)) && !depsOf(plugin)?.requires.length && !depsOf(plugin)?.optional.length && !dependentCount(plugin)" class="faint">{{ t('plugins.noDeps') }}</p>
             </div>
@@ -581,6 +610,15 @@ async function save() {
 .details {
   grid-column: 1 / -1;
   margin-top: 8px;
+}
+
+.gone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  color: var(--bad);
 }
 
 .details:empty {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Drawer, Dropdown, type DropdownOption } from '@mushinjs/ui'
+import { Button, Drawer, Dropdown, type DropdownOption, Tooltip } from '@mushinjs/ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -11,6 +11,7 @@ import { useFairyStore } from '../stores/fairy'
 import { useFairySceneStore } from '../stores/fairyScene'
 import { useDataStore } from '../stores/data'
 import { useRunsStore } from '../stores/runs'
+import { workspace } from '../stores/workspace'
 import { themeMode, useTheme } from '../theme'
 import FairyDock from './FairyDock.vue'
 import GlobalSearch from './GlobalSearch.vue'
@@ -54,6 +55,9 @@ watch(collapsed, (value) => {
   } catch {}
 })
 if (window.innerWidth < 1100 || props.embedded) fairy.open = false
+
+// The workspace's Console button comes back to the page you left.
+watch(() => route.fullPath, (path) => !props.embedded && (workspace.returnTo = path), { immediate: true })
 
 data.bind()
 fairy.bind()
@@ -250,6 +254,20 @@ function onAccount(key: string) {
 
     <div class="main">
       <header class="topbar">
+        <Tooltip>
+          <template #trigger>
+            <Button
+              size="small"
+              quaternary
+              circle
+              :icon="collapsed ? 'i-lucide-panel-left-open' : 'i-lucide-panel-left-close'"
+              :aria-label="collapsed ? t('layout.expand') : t('layout.collapse')"
+              :aria-expanded="!collapsed"
+              @click="collapsed = !collapsed"
+            />
+          </template>
+          {{ collapsed ? t('layout.expand') : t('layout.collapse') }}
+        </Tooltip>
         <nav class="crumbs" :aria-label="t('layout.breadcrumb')">
           <template v-for="(crumb, index) in crumbs" :key="index">
             <span v-if="index" class="sep" aria-hidden="true">/</span>
@@ -263,17 +281,22 @@ function onAccount(key: string) {
           <span class="search-label">{{ t('search.button') }}</span>
           <span class="search-keys"><kbd>{{ isMac ? '⌘' : 'Ctrl' }}</kbd><kbd>K</kbd></span>
         </button>
-        <Button secondary icon="i-lucide-panels-top-left" data-fairy-target="fairy.workspace" :title="t('workspace.enterHint')" @click="router.push('/fairy')">
-          {{ t('workspace.enter') }}
-        </Button>
-        <Button
-          :type="fairy.open ? 'primary' : 'default'"
-          :secondary="fairy.open"
-          icon="i-lucide-sparkles"
-          data-fairy-target="fairy.toggle"
-          :pressed="fairy.open"
-          @click="fairy.open = !fairy.open"
-        >
+        <Tooltip>
+          <template #trigger>
+            <Button
+              size="small"
+              quaternary
+              circle
+              :icon="fairy.open ? 'i-lucide-panel-right-close' : 'i-lucide-panel-right-open'"
+              data-fairy-target="fairy.toggle"
+              :aria-label="t('layout.toggleDock')"
+              :pressed="fairy.open"
+              @click="fairy.open = !fairy.open"
+            />
+          </template>
+          {{ t('layout.toggleDock') }}
+        </Tooltip>
+        <Button type="primary" secondary icon="i-lucide-sparkles" class="fairy-button" data-fairy-target="fairy.workspace" :title="t('workspace.enterHint')" @click="router.push('/fairy')">
           {{ t('nav.fairy') }}
         </Button>
         <Dropdown placement="bottom" align="end" :options="accountMenu" @select="onAccount">
@@ -348,7 +371,7 @@ function onAccount(key: string) {
   flex: none;
   display: flex;
   align-items: center;
-  padding: 0 16px 0 24px;
+  padding: 0 16px 0 12px;
   gap: 10px;
   border-bottom: 1px solid var(--line);
   background: var(--s1);
@@ -597,5 +620,42 @@ a.crumb:hover {
 
 .drag-sheet.size {
   cursor: nwse-resize;
+}
+
+/* Fairy's button: a band of light sweeps across it from the top left now and then, and at once on hover. */
+.fairy-button {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.fairy-button::after {
+  content: '';
+  position: absolute;
+  inset: -50%;
+  background: linear-gradient(135deg, transparent 42%, rgba(255, 255, 255, 0.55) 50%, transparent 58%);
+  transform: translate(-50%, -50%);
+  animation: fairy-shine 6s ease-in-out 1.5s infinite;
+  pointer-events: none;
+}
+
+.fairy-button:hover::after {
+  animation: fairy-shine-once 0.8s ease-out;
+}
+
+@keyframes fairy-shine {
+  0%, 82% { transform: translate(-50%, -50%); }
+  100% { transform: translate(50%, 50%); }
+}
+
+@keyframes fairy-shine-once {
+  from { transform: translate(-50%, -50%); }
+  to { transform: translate(50%, 50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fairy-button::after {
+    display: none;
+  }
 }
 </style>
