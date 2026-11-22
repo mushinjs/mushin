@@ -25,6 +25,8 @@ declare module '@mushinjs/core' {
     'fairy/event'(event: FairyEvent): void
     /** Skills, page profiles or tool policies changed. */
     'fairy/changed'(): void
+    /** Conversations or their groups changed: titles, groups, done. */
+    'fairy/sessions'(): void
   }
 }
 
@@ -92,6 +94,24 @@ export interface FairySession {
   parent?: { session: string; call: string }
   /** The system prompt, frozen at creation like the tools; Fairy's own prompt when absent. */
   system?: string
+  /** The group it is filed under. */
+  group?: string
+  /** Marked done: listed apart from the open conversations. */
+  done?: boolean
+}
+
+/**
+ * A group of conversations. Fairy files a conversation under the group of the first thing it works on
+ * (a bot, a flow, a plugin, …), making the group when there is none; people make and rename groups too.
+ */
+export interface FairyGroup {
+  id: string
+  name: string
+  /** What the group is about, e.g. `plugin:@mushinjs/plugin-weather` or `bot:<id>`; groups made by hand have none. */
+  resource?: string
+  /** The name in other languages, e.g. a plugin's display names. */
+  labels?: Record<string, string>
+  createdAt: number
 }
 
 export interface SendOptions {
@@ -206,7 +226,9 @@ export class Fairy extends Service {
   private pluginSkills = new Map<string, FairySkill>()
   private pluginRoles = new Map<string, FairyRole>()
   /** Helper conversations that are running, with the conversation and call that started them. */
-  private links = new Map<string, { session: string; call: string }>()
+  private links = new Map<string, { session: string; call: string; parent: FairySession }>()
+  /** Conversations with a turn running, as the turn holds them; changes from elsewhere go into these. */
+  private live = new Map<string, FairySession>()
   private settingsCache?: FairySettings
 
   constructor(ctx: Context, public config: Config) {
@@ -449,6 +471,99 @@ export class Fairy extends Service {
     this.home.emit('fairy/event', link ? { ...event, parent: link.session, call: link.call } : event)
   }
 
+  // ---- groups ----
+
+  async groups(): Promise<FairyGroup[]> {
+    const keys = await this.home.storage.list('fairy/groups')
+    const groups = await Promise.all(keys.map((key) => this.home.storage.get<FairyGroup>(key)))
+    return groups.filter((group): group is FairyGroup => !!group?.id).sort((a, b) => a.createdAt - b.createdAt)
+  }
+
+  async createGroup(input: { name: string; resource?: string; labels?: Record<string, string> }) {
+    const group: FairyGroup = { id: randomId(8), name: input.name.trim().slice(0, 60), ...(input.resource ? { resource: input.resource } : {}), ...(input.labels ? { labels: input.labels } : {}), createdAt: Date.now() }
+    await this.home.storage.set(`fairy/groups/${group.id}`, group)
+    this.home.emit('fairy/sessions')
+    return group
+  }
+
+  async updateGroup(id: string, patch: { name?: string }) {
+    const group = (await this.groups()).find((item) => item.id === id)
+    if (!group) throw new MushinError('not_found', `No group "${id}"`)
+    // A renamed group keeps its name in every language.
+    const next: FairyGroup = { ...group, ...(patch.name?.trim() ? { name: patch.name.trim().slice(0, 60), labels: undefined } : {}) }
+    await this.home.storage.set(`fairy/groups/${id}`, next)
+    this.home.emit('fairy/sessions')
+    return next
+  }
+
+  /** Deletes a group; its conversations stay, ungrouped. */
+  async deleteGroup(id: string) {
+    for (const stored of await this.allSessions()) {
+      const session = this.live.get(stored.id) ?? stored
+      if (session.group !== id) continue
+      session.group = undefined
+      await this.home.storage.set(`fairy/${session.id}`, session)
+    }
+    await this.home.storage.delete(`fairy/groups/${id}`)
+    this.home.emit('fairy/sessions')
+    return { deleted: id }
+  }
+
+  /** Renames a conversation, files it under a group (null: none), or marks it done. */
+  async updateSession(id: string, patch: { title?: string; group?: string | null; done?: boolean }) {
+    const session = this.live.get(id) ?? await this.session(id)
+    if (patch.group && !(await this.groups()).some((group) => group.id === patch.group)) throw new MushinError('not_found', `No group "${patch.group}"`)
+    if (patch.title?.trim()) session.title = patch.title.trim().slice(0, 80)
+    if (patch.group !== undefined) session.group = patch.group ?? undefined
+    if (patch.done !== undefined) session.done = patch.done || undefined
+    // Keep the order of the list: a rename or a move is not new activity.
+    await this.home.storage.set(`fairy/${session.id}`, session)
+    this.home.emit('fairy/sessions')
+    return this.summary(session)
+  }
+
+  /** A readable name for a resource, and its names in other languages, for a new group. */
+  private async resourceName(resource: string): Promise<{ name: string; labels?: Record<string, string> }> {
+    const [kind, ...rest] = resource.split(':')
+    const id = rest.join(':')
+    const read = async (action: string, input: unknown) => {
+      try {
+        return await this.home.actions.call(action, input, { kind: 'internal' }) as any
+      } catch {
+        return undefined
+      }
+    }
+    if (kind === 'plugin') {
+      const entry = ((await read('plugins.catalog', { query: id })) as any[] | undefined)?.find((item) => item.package === id)
+      const labels = entry?.manifest?.displayName as Record<string, string> | undefined
+      return { name: labels?.en ?? id.replace(/^@[^/]+\//, ''), ...(labels ? { labels } : {}) }
+    }
+    if (kind === 'bot') return { name: (await read('bots.get', { id }))?.name ?? id }
+    if (kind === 'flow') return { name: (await read('flows.get', { id }))?.name ?? id }
+    if (kind === 'provider') return { name: ((await read('providers.list', {})) as any[] | undefined)?.find((item) => item.id === id)?.name ?? id }
+    if (kind === 'kb') return { name: (await read('kb.get', { id }))?.name ?? ((await read('kb.list', {})) as any[] | undefined)?.find?.((item: any) => item.id === id)?.name ?? id }
+    return { name: id }
+  }
+
+  /**
+   * Notes what a successful call worked on as a `resource:` tag, and files a conversation that has no group
+   * under that resource's group, making it when needed. A helper files the conversation that started it.
+   */
+  private async noteResource(session: FairySession, action: string, input: any, result: any) {
+    const resource = resourceOf(action, input, result, (id) => this.home.manager?.entries.find((entry: { id: string }) => entry.id === id)?.package)
+    if (!resource) return
+    const tag = `resource:${resource}`
+    if (!session.tags?.includes(tag)) session.tags = [...session.tags ?? [], tag]
+    const target = session.parent ? this.links.get(session.id)?.parent : session
+    if (!target || target.group || target.parent) return
+    if (!target.tags?.includes(tag)) target.tags = [...target.tags ?? [], tag]
+    const groups = await this.groups()
+    const group = groups.find((item) => item.resource === resource) ?? await this.createGroup({ resource, ...await this.resourceName(resource) })
+    target.group = group.id
+    await this.save(target)
+    this.home.emit('fairy/sessions')
+  }
+
   private async allSessions() {
     const keys = await this.home.storage.list('fairy')
     const sessions = await Promise.all(keys.map((key) => this.home.storage.get<FairySession>(key)))
@@ -457,8 +572,11 @@ export class Fairy extends Service {
       .sort((a, b) => b.updatedAt - a.updatedAt)
   }
 
-  private summary({ id, title, createdAt, updatedAt, scene, tags, role, parent }: FairySession) {
-    return { id, title, createdAt, updatedAt, scene, tags: tags ?? [], running: this.running.has(id), ...(role ? { role } : {}), ...(parent ? { parent } : {}) }
+  private summary({ id, title, createdAt, updatedAt, scene, tags, role, parent, group, done }: FairySession) {
+    return {
+      id, title, createdAt, updatedAt, scene, tags: tags ?? [], running: this.running.has(id),
+      ...(role ? { role } : {}), ...(parent ? { parent } : {}), ...(group ? { group } : {}), ...(done ? { done } : {}),
+    }
   }
 
   /** Fairy's own conversations; a helper's conversation is reached from the task that started it. */
@@ -679,6 +797,7 @@ export class Fairy extends Service {
     if (session.tools.length > MAX_TOOLS) session.tools = session.role ? await this.roleTools(this.role(session.role)) : await this.tools()
     const running: Running = { abort: new AbortController(), confirms: new Map(), usage: { inputTokens: 0, outputTokens: 0 }, failures: new Map() }
     this.running.set(session.id, running)
+    this.live.set(session.id, session)
     const skills = options.skills?.length ? await Promise.all(options.skills.map((id) => this.skill(id))) : []
     if (!session.title) session.title = (text || skills.map((skill) => skill.name).join(', ')).replace(/\s+/g, ' ').slice(0, 48)
     if (!session.messages.length && options.scene) {
@@ -704,6 +823,7 @@ export class Fairy extends Service {
       this.emit({ session: session.id, type: 'error', error: message, ...(error instanceof StepLimit && !running.abort.signal.aborted ? { code: 'max_steps' as const } : {}) })
     } finally {
       this.running.delete(session.id)
+      this.live.delete(session.id)
       await this.save(session)
     }
     return { session: session.id }
@@ -847,6 +967,7 @@ export class Fairy extends Service {
     try {
       const result = await this.home.actions.call(name, input, { kind: 'fairy', session: session.id, client: options.client })
       this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: true, result })
+      await this.noteResource(session, name, input, result).catch((error) => this.ctx.logger.warn('could not file the conversation: %s', error))
       reply(truncate(JSON.stringify(result ?? { ok: true })))
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -885,7 +1006,8 @@ export class Fairy extends Service {
     const stop = () => running.abort.abort()
     parentRunning.abort.signal.addEventListener('abort', stop, { once: true })
     this.running.set(child.id, running)
-    this.links.set(child.id, child.parent!)
+    this.live.set(child.id, child)
+    this.links.set(child.id, { ...child.parent!, parent })
     await this.save(child)
     this.emit({ session: child.id, type: 'start' })
     let report: TaskReport
@@ -900,6 +1022,7 @@ export class Fairy extends Service {
     } finally {
       parentRunning.abort.signal.removeEventListener('abort', stop)
       this.running.delete(child.id)
+      this.live.delete(child.id)
       this.links.delete(child.id)
       parentRunning.usage.inputTokens += running.usage.inputTokens
       parentRunning.usage.outputTokens += running.usage.outputTokens
@@ -1105,6 +1228,46 @@ export class Fairy extends Service {
     })
 
     yield actions.define({
+      name: 'fairy.groups.list',
+      description: 'Groups of Fairy conversations. Fairy files a conversation under the group of the first bot, flow, plugin, provider or knowledge base it works on.',
+      risk: 'read',
+      input: z.object({}),
+      handler: () => this.groups(),
+    })
+
+    yield actions.define({
+      name: 'fairy.groups.create',
+      description: 'Make a group of Fairy conversations.',
+      risk: 'write',
+      input: z.object({ name: z.string().trim().min(1).max(60) }),
+      handler: ({ name }) => this.createGroup({ name }),
+    })
+
+    yield actions.define({
+      name: 'fairy.groups.update',
+      description: 'Rename a group of Fairy conversations.',
+      risk: 'write',
+      input: z.object({ id: z.string(), name: z.string().trim().min(1).max(60) }),
+      handler: ({ id, name }) => this.updateGroup(id, { name }),
+    })
+
+    yield actions.define({
+      name: 'fairy.groups.delete',
+      description: 'Delete a group of Fairy conversations; the conversations stay, ungrouped.',
+      risk: 'write',
+      input: z.object({ id: z.string() }),
+      handler: ({ id }) => this.deleteGroup(id),
+    })
+
+    yield actions.define({
+      name: 'fairy.sessions.update',
+      description: 'Rename a Fairy conversation, file it under a group (null takes it out of its group), or mark it done.',
+      risk: 'write',
+      input: z.object({ id: z.string(), title: z.string().trim().min(1).max(80).optional(), group: z.string().nullable().optional(), done: z.boolean().optional() }),
+      handler: ({ id, ...patch }) => this.updateSession(id, patch),
+    })
+
+    yield actions.define({
       name: 'fairy.roles.list',
       description: 'The helpers Fairy can hand tasks to, with what each is for and which tools it may use.',
       risk: 'read',
@@ -1228,6 +1391,30 @@ function turnTags(text: string, options: SendOptions, skills: FairySkill[]) {
   const command = /^\s*\/([\p{L}\p{N}_-]+)/u.exec(text)
   if (command) tags.push(`command:${command[1]}`)
   return tags
+}
+
+/** Namespaces whose actions name one thing by id, and the kind of resource it is. */
+const RESOURCE_KINDS: Record<string, string> = { bots: 'bot', flows: 'flow', providers: 'provider', kb: 'kb', personas: 'persona' }
+
+/**
+ * What an action worked on, as `<kind>:<id>`: the bot, flow, provider, knowledge base, persona or plugin package
+ * it names in its input, or the one it made. `pluginOf` turns a plugin entry id into its package.
+ */
+export function resourceOf(action: string, input: any, result: any, pluginOf: (id: string) => string | undefined = () => undefined) {
+  const [namespace, verb] = action.split('.')
+  const text = (value: unknown) => (typeof value === 'string' && value ? value : undefined)
+  if (namespace === 'plugins') {
+    const pkg = text(input?.package) ?? (text(input?.id) ? pluginOf(input.id) : undefined)
+    return pkg ? `plugin:${pkg}` : undefined
+  }
+  if (namespace === 'bots' && action.startsWith('bots.plugins.')) {
+    const pkg = text(input?.package)
+    if (pkg) return `plugin:${pkg}`
+  }
+  const kind = RESOURCE_KINDS[namespace!]
+  if (!kind) return undefined
+  const id = text(input?.id) ?? text(input?.bot && namespace === 'bots' ? input.bot : undefined) ?? (verb === 'create' ? text(result?.id) : undefined)
+  return id ? `${kind}:${id}` : undefined
 }
 
 /** A report as a helper sent it, with the fields Fairy reads; anything malformed is dropped. */

@@ -341,6 +341,18 @@ export interface FairySessionSummary {
   /** Set on a helper's conversation: its role, and the conversation and call that started it. */
   role?: string
   parent?: { session: string; call: string }
+  /** The group it is filed under, and whether it is marked done. */
+  group?: string
+  done?: boolean
+}
+
+/** A group of Fairy conversations; `resource` is what it is about, e.g. `plugin:<package>` or `bot:<id>`. */
+export interface FairyGroup {
+  id: string
+  name: string
+  resource?: string
+  labels?: Record<string, string>
+  createdAt: number
 }
 
 /** What a helper reports to Fairy at the end of its task. */

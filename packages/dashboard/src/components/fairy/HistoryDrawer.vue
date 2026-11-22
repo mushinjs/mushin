@@ -3,14 +3,14 @@ import { Drawer, Empty, Input, Select, Spin, Tag } from '@mushinjs/ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
-import { useFairyStore } from '../../stores/fairy'
+import { useConversation } from '../../stores/fairy'
 import type { FairySessionSummary } from '../../types'
 import { formatTime } from '../../utils'
 
 const show = defineModel<boolean>('show', { required: true })
 
 const { t, te } = useI18n()
-const fairy = useFairyStore()
+const fairy = useConversation()
 const query = ref('')
 const tags = ref<string[]>([])
 const results = ref<FairySessionSummary[]>([])

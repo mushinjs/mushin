@@ -8,6 +8,8 @@ import HighlightLayer from './components/HighlightLayer.vue'
 import { useTheme } from './theme'
 
 const route = useRoute()
+// A dashboard page shown in the Fairy workspace's panel is this app in a frame: it shows the page alone.
+const embedded = window.self !== window.top
 const { t } = useI18n()
 const { isDark } = useTheme()
 // Lets global CSS (e.g. the logo) adapt to the active theme.
@@ -21,8 +23,8 @@ const uiText = computed(() => {
 
 <template>
   <UiProvider :text="uiText">
-    <RouterView v-if="route.meta.public" />
-    <AppLayout v-else />
+    <RouterView v-if="route.meta.public || (route.meta.workspace && !embedded)" />
+    <AppLayout v-else :embedded="embedded" />
     <HighlightLayer />
   </UiProvider>
 </template>

@@ -17,6 +17,9 @@ import GlobalSearch from './GlobalSearch.vue'
 import type { NavGroup, NavItem } from './nav'
 import SideNav from './SideNav.vue'
 
+/** `embedded`: the page alone, as the Fairy workspace's panel shows it; no sidebar, top bar or Fairy. */
+const props = defineProps<{ embedded?: boolean }>()
+
 const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
@@ -50,7 +53,7 @@ watch(collapsed, (value) => {
     localStorage.setItem(SIDEBAR_KEY, value ? 'collapsed' : 'expanded')
   } catch {}
 })
-if (window.innerWidth < 1100) fairy.open = false
+if (window.innerWidth < 1100 || props.embedded) fairy.open = false
 
 data.bind()
 fairy.bind()
@@ -237,7 +240,12 @@ function onAccount(key: string) {
 </script>
 
 <template>
-  <div class="layout">
+  <div v-if="embedded" class="layout">
+    <main class="content">
+      <RouterView />
+    </main>
+  </div>
+  <div v-else class="layout">
     <SideNav v-model:collapsed="collapsed" :groups="navGroups" :active="activeKey" />
 
     <div class="main">
@@ -255,6 +263,9 @@ function onAccount(key: string) {
           <span class="search-label">{{ t('search.button') }}</span>
           <span class="search-keys"><kbd>{{ isMac ? '⌘' : 'Ctrl' }}</kbd><kbd>K</kbd></span>
         </button>
+        <Button secondary icon="i-lucide-panels-top-left" data-fairy-target="fairy.workspace" :title="t('workspace.enterHint')" @click="router.push('/fairy')">
+          {{ t('workspace.enter') }}
+        </Button>
         <Button
           :type="fairy.open ? 'primary' : 'default'"
           :secondary="fairy.open"

@@ -61,7 +61,7 @@ const CLIENT_CALL_TIMEOUTS: Record<string, number> = { 'ui.ask': 15 * 60_000 }
 /** Events forwarded to every signed-in dashboard. */
 const FORWARDED_EVENTS = [
   'actions/changed', 'manager/changed', 'providers/changed',
-  'bots/changed', 'bots/status', 'bots/message', 'bots/log', 'fairy/event', 'fairy/changed',
+  'bots/changed', 'bots/status', 'bots/message', 'bots/log', 'fairy/event', 'fairy/changed', 'fairy/sessions',
   'flows/changed', 'flows/run', 'flows/step', 'flows/tests', 'flows/activity', 'flows/paused', 'stats/sample', 'permissions/changed', 'personas/changed',
   'knowledge/changed', 'knowledge/progress',
 ] as const
@@ -347,7 +347,8 @@ export class Console extends Service {
         reject(new MushinError('unavailable', 'The dashboard did not answer'))
       }, CLIENT_CALL_TIMEOUTS[name] ?? CLIENT_CALL_TIMEOUT)
       target.calls.set(id, { resolve, reject, timer })
-      target.socket.send(JSON.stringify({ type: 'client-call', id, action: name, input }))
+      // The Fairy conversation that made the call, so the dashboard answers in the right pane.
+      target.socket.send(JSON.stringify({ type: 'client-call', id, action: name, input, ...(caller.session ? { session: caller.session } : {}) }))
     })
   }
 
@@ -360,6 +361,19 @@ export class Console extends Service {
       risk: 'read',
       client: true,
       input: z.object({ path: z.string().regex(/^\//).describe('Dashboard path starting with /') }),
+    })
+
+    yield actions.define({
+      name: 'ui.panel',
+      description: 'Show something in the side panel of the Fairy workspace, next to the chat: a dashboard page (page, with a path such as /bots/<bot id>/logs, /flows/<flow id>, /plugins or /database), a web page (web, with a url), or the status of bots and plugins (status). Use it to show what you are working on or what the user asked to see. Fails when the user is not in the Fairy workspace; then use ui.navigate.',
+      risk: 'read',
+      client: true,
+      input: z.object({
+        kind: z.enum(['page', 'web', 'status']),
+        path: z.string().regex(/^\//).optional().describe('For page: dashboard path starting with /'),
+        url: z.string().regex(/^https?:\/\//).optional().describe('For web: an http or https address'),
+        title: z.string().max(60).optional().describe('Tab title; the page name when omitted'),
+      }).refine((input) => input.kind !== 'page' || input.path, 'A page needs a path').refine((input) => input.kind !== 'web' || input.url, 'A web page needs a url'),
     })
 
     yield actions.define({

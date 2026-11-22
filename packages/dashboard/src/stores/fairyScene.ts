@@ -34,7 +34,7 @@ export interface PageFacts {
 }
 
 /** Pages Fairy knows, in the order the Fairy page lists them. */
-export const SCENES = ['overview', 'setup', 'providers', 'bots', 'botDetail', 'flows', 'flowEditor', 'personas', 'knowledge', 'database', 'plugins', 'logs', 'settings', 'fairy'] as const
+export const SCENES = ['overview', 'setup', 'providers', 'bots', 'botDetail', 'flows', 'flowEditor', 'personas', 'knowledge', 'database', 'plugins', 'logs', 'settings', 'fairy', 'workspace'] as const
 
 /** The built-in suggestions each page can show (each only when its condition holds), for the Fairy page. */
 export const SCENE_RECOMMENDATIONS: Record<string, string[]> = {
@@ -52,6 +52,7 @@ export const SCENE_RECOMMENDATIONS: Record<string, string[]> = {
   logs: ['connect', 'status', 'provider'],
   settings: ['connect', 'status', 'provider'],
   fairy: ['connect', 'status', 'provider'],
+  workspace: ['connect', 'status', 'provider'],
 }
 
 const t = (key: string, values: Record<string, unknown> = {}) => i18n.global.t(key, values)
@@ -62,6 +63,7 @@ export function sceneKey(path: string) {
   if (first === 'bots') return id ? 'botDetail' : 'bots'
   if (first === 'flows') return id ? 'flowEditor' : 'flows'
   if (first === 'settings') return id === 'fairy' ? 'fairy' : 'settings'
+  if (first === 'fairy' && !id) return 'workspace'
   return (SCENES as readonly string[]).includes(first) ? first : 'overview'
 }
 
