@@ -1,10 +1,10 @@
 import { z } from '@mushinjs/core'
 
-/** Where a skill comes from: shipped with the Agent, added by a plugin, or written by the user. */
+/** Where a skill comes from: shipped with Fairy, added by a plugin, or written by the user. */
 export type SkillSource = 'builtin' | 'plugin' | 'user'
 
 /** A reusable way of doing something; picked with `$`, its instructions go into that one message. */
-export interface AgentSkill {
+export interface FairySkill {
   id: string
   name: string
   /** One line: what it is for. */
@@ -24,8 +24,8 @@ export interface AgentSkill {
   enabled: boolean
 }
 
-/** What a plugin passes to `ctx.agent.defineSkill()`. */
-export type SkillDefinition = Omit<AgentSkill, 'source' | 'plugin' | 'enabled'>
+/** What a plugin passes to `ctx.fairy.defineSkill()`. */
+export type SkillDefinition = Omit<FairySkill, 'source' | 'plugin' | 'enabled'>
 
 export const skillFields = {
   name: z.string().trim().min(1).max(80),
@@ -33,12 +33,12 @@ export const skillFields = {
   instructions: z.string().min(1).max(20_000).describe('The steps, in Markdown'),
   whenToUse: z.string().max(500).optional(),
   tools: z.array(z.string()).max(30).optional().describe('Action names it tends to use, e.g. bots.logs'),
-  scenes: z.array(z.string()).max(20).optional().describe('Scene keys where it is recommended: overview, bots, botDetail, providers, flows, flowEditor, plugins, logs, personas, knowledge, settings, agent'),
+  scenes: z.array(z.string()).max(20).optional().describe('Scene keys where it is recommended: overview, bots, botDetail, providers, flows, flowEditor, plugins, logs, personas, knowledge, settings, fairy'),
 }
 
 export const skillInput = z.object(skillFields)
 
-/** Skills that ship with the Agent. */
+/** Skills that ship with Fairy. */
 export const BUILTIN_SKILLS: SkillDefinition[] = [
   {
     id: 'diagnose-bot',

@@ -68,7 +68,7 @@ export type Provenance =
   | { kind: 'plugin'; plugin: string }
   | { kind: 'llm'; plugin?: string; provider: string; model: string; latencyMs: number; tokens?: number; persona?: string }
   | { kind: 'flow'; flow: string; node: string; provider?: string; model?: string; persona?: string; knowledge?: KnowledgeSource[] }
-  | { kind: 'agent'; session: string }
+  | { kind: 'fairy'; session: string }
   | { kind: 'manual' }
 
 export interface ChannelInfo {

@@ -320,7 +320,7 @@ export class McpClient {
   }
 }
 
-/** The text of a tool result, for the Agent: text parts joined, other parts summarized. */
+/** The text of a tool result, for Fairy: text parts joined, other parts summarized. */
 export function resultText(result: McpCallResult) {
   const parts = (result.content ?? []).map((part) => {
     if (part.type === 'text') return part.text ?? ''

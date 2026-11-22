@@ -49,7 +49,7 @@ export function useRunText() {
     const by = run.stoppedBy
     if (!by) return ''
     if (by.startsWith('flow:')) return t('runs.stoppedByFlow', { flow: by.slice(5) })
-    return ['dashboard', 'agent', 'system'].includes(by) ? t(`runs.stoppedBy.${by}`) : by
+    return ['dashboard', 'fairy', 'system'].includes(by) ? t(`runs.stoppedBy.${by}`) : by
   }
 
   return { nodeName, userName, activityText, duration, statusText, stoppedByText }

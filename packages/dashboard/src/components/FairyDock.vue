@@ -4,34 +4,34 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { call } from '../api'
-import { type ChatItem, EFFORTS, useAgentStore } from '../stores/agent'
-import { type Recommendation, useAgentSceneStore } from '../stores/agentScene'
+import { type ChatItem, EFFORTS, useFairyStore } from '../stores/fairy'
+import { type Recommendation, useFairySceneStore } from '../stores/fairyScene'
 import { modelCapabilities, providerOptions as toProviderOptions } from '../models'
 import { useDataStore } from '../stores/data'
-import type { AgentSkill } from '../types'
+import type { FairySkill } from '../types'
 import { pretty } from '../utils'
-import AgentMessage from './agent/AgentMessage.vue'
-import AgentToolCall from './agent/AgentToolCall.vue'
-import CommandPalette, { type PaletteItem } from './agent/CommandPalette.vue'
-import HistoryDrawer from './agent/HistoryDrawer.vue'
+import FairyMessage from './fairy/FairyMessage.vue'
+import FairyToolCall from './fairy/FairyToolCall.vue'
+import CommandPalette, { type PaletteItem } from './fairy/CommandPalette.vue'
+import HistoryDrawer from './fairy/HistoryDrawer.vue'
 import PanelIcon from './flow/editor/PanelIcon.vue'
 import ModelSelect from './ModelSelect.vue'
 
-/** `mode` is set where the Agent can float or dock; the button switches between the two. */
+/** `mode` is set where Fairy can float or dock; the button switches between the two. */
 defineProps<{ closable?: boolean; mode?: 'docked' | 'floating' }>()
 const emit = defineEmits<{ close: []; toggleMode: [] }>()
 
 const { t } = useI18n()
 const router = useRouter()
-const agent = useAgentStore()
-const scenes = useAgentSceneStore()
+const fairy = useFairyStore()
+const scenes = useFairySceneStore()
 const data = useDataStore()
 
 const input = ref('')
 const list = ref<HTMLElement>()
 const expanded = ref(new Set<string>())
-const picked = ref<AgentSkill[]>([])
-/** The bot of a bot command picked with `/`, told to the Agent with the next message. */
+const picked = ref<FairySkill[]>([])
+/** The bot of a bot command picked with `/`, told to Fairy with the next message. */
 const commandBot = ref<{ name: string; bot: string }>()
 const palette = ref<InstanceType<typeof CommandPalette>>()
 const paletteClosed = ref(false)
@@ -47,21 +47,21 @@ const editing = ref<{ ordinal: number; text: string }>()
 const ordinals = computed(() => {
   const map = new Map<ChatItem, number>()
   let n = 0
-  for (const item of agent.items) if (item.kind === 'user') map.set(item, n++)
+  for (const item of fairy.items) if (item.kind === 'user') map.set(item, n++)
   return map
 })
 
 async function copy(text: string) {
   try {
     await navigator.clipboard.writeText(text)
-    toast.success(t('agent.copied'))
+    toast.success(t('fairy.copied'))
   } catch {
-    toast.error(t('agent.copyFailed'))
+    toast.error(t('fairy.copyFailed'))
   }
 }
 
 function startEdit(item: ChatItem) {
-  if (item.kind !== 'user' || agent.running) return
+  if (item.kind !== 'user' || fairy.running) return
   editing.value = { ordinal: ordinals.value.get(item) ?? 0, text: item.text }
 }
 
@@ -69,7 +69,7 @@ async function saveEdit() {
   const draft = editing.value
   if (!draft?.text.trim()) return
   editing.value = undefined
-  await agent.edit(draft.ordinal, draft.text.trim(), { scene: { ...scenes.scene } })
+  await fairy.edit(draft.ordinal, draft.text.trim(), { scene: { ...scenes.scene } })
 }
 
 // ---- model and effort for the next messages ----
@@ -77,10 +77,10 @@ async function saveEdit() {
 const showPicker = ref(false)
 const modelQuery = ref('')
 const pickerLabel = computed(() => {
-  const model = agent.choice.model
-    || (agent.choice.provider ? data.providers.find((item) => item.id === agent.choice.provider)?.defaultModel ?? data.profiles.find((item) => item.id === agent.choice.provider)?.name : undefined)
-    || t('agentPicker.default')
-  return agent.choice.effort ? `${model} · ${t(`agentPicker.efforts.${agent.choice.effort}`)}` : model
+  const model = fairy.choice.model
+    || (fairy.choice.provider ? data.providers.find((item) => item.id === fairy.choice.provider)?.defaultModel ?? data.profiles.find((item) => item.id === fairy.choice.provider)?.name : undefined)
+    || t('fairyPicker.default')
+  return fairy.choice.effort ? `${model} · ${t(`fairyPicker.efforts.${fairy.choice.effort}`)}` : model
 })
 
 /** Chat providers with their models, newest first as fetched, filtered by the search words. */
@@ -99,20 +99,20 @@ const modelGroups = computed(() => {
 const modelCount = computed(() => data.providers.reduce((sum, provider) => sum + provider.models.length, 0))
 
 /** Whether the picked model reasons; the name is all there is to go by, so an unknown model counts as one. */
-const supportsEffort = computed(() => !agent.choice.model || modelCapabilities(agent.choice.model).includes('reasoning'))
+const supportsEffort = computed(() => !fairy.choice.model || modelCapabilities(fairy.choice.model).includes('reasoning'))
 
 function changeModel() {
   showPicker.value = true
 }
 
 /** 0 is the default effort, then one step per level. */
-const effortStep = computed(() => (agent.choice.effort ? EFFORTS.indexOf(agent.choice.effort) + 1 : 0))
+const effortStep = computed(() => (fairy.choice.effort ? EFFORTS.indexOf(fairy.choice.effort) + 1 : 0))
 function setEffortStep(step: number) {
-  agent.choice = { ...agent.choice, effort: step ? EFFORTS[step - 1] : undefined }
+  fairy.choice = { ...fairy.choice, effort: step ? EFFORTS[step - 1] : undefined }
 }
 
 function pickModel(provider?: string, model?: string) {
-  agent.choice = { ...agent.choice, provider, model }
+  fairy.choice = { ...fairy.choice, provider, model }
   showPicker.value = false
 }
 
@@ -122,13 +122,13 @@ watch(showPicker, (open) => {
 
 const ALL = '__all__'
 const sessionOptions = computed<DropdownOption[]>(() => [
-  ...agent.sessions.slice(0, 8).map((session) => ({ label: session.title || t('agent.untitled'), key: session.id, icon: session.id === agent.current ? 'i-lucide-check' : 'i-lucide-message-square' })),
-  ...(agent.sessions.length ? [{ type: 'divider' as const }, { label: t('agentHistory.all'), key: ALL, icon: 'i-lucide-history' }] : []),
+  ...fairy.sessions.slice(0, 8).map((session) => ({ label: session.title || t('fairy.untitled'), key: session.id, icon: session.id === fairy.current ? 'i-lucide-check' : 'i-lucide-message-square' })),
+  ...(fairy.sessions.length ? [{ type: 'divider' as const }, { label: t('fairyHistory.all'), key: ALL, icon: 'i-lucide-history' }] : []),
 ])
 
 function pickSession(id: string) {
   if (id === ALL) showHistory.value = true
-  else agent.load(id)
+  else fairy.load(id)
 }
 
 /** `/` at the start of the input lists commands; `$` after a space lists skills. */
@@ -144,7 +144,7 @@ const trigger = computed(() => {
 watch(input, () => (paletteClosed.value = false))
 
 async function send(text = input.value) {
-  if ((!text.trim() && !picked.value.length && !agent.quote) || agent.running) return
+  if ((!text.trim() && !picked.value.length && !fairy.quote) || fairy.running) return
   const skills = picked.value
   const scene = { ...scenes.scene }
   const bot = commandBot.value
@@ -152,14 +152,14 @@ async function send(text = input.value) {
   input.value = ''
   picked.value = []
   commandBot.value = undefined
-  await agent.send(text.trim(), { skills, scene })
+  await fairy.send(text.trim(), { skills, scene })
 }
 
 async function sendRecommendation(item: Recommendation) {
-  const skill = item.skill ? agent.skills.find((entry) => entry.id === item.skill && entry.enabled) : undefined
+  const skill = item.skill ? fairy.skills.find((entry) => entry.id === item.skill && entry.enabled) : undefined
   scenes.dismiss(item.id)
-  if (agent.running) return
-  await agent.send(item.prompt, { skills: skill ? [skill] : [], scene: scenes.scene })
+  if (fairy.running) return
+  await fairy.send(item.prompt, { skills: skill ? [skill] : [], scene: scenes.scene })
 }
 
 function onPick(item: PaletteItem) {
@@ -185,7 +185,7 @@ function runBuiltin(name: string) {
   switch (name) {
     case 'new':
     case 'clear':
-      agent.newChat()
+      fairy.newChat()
       picked.value = []
       break
     case 'history':
@@ -195,21 +195,21 @@ function runBuiltin(name: string) {
       openModel().catch(() => {})
       break
     case 'status': {
-      const chars = agent.items.reduce((sum, item) => sum + ('text' in item ? item.text.length : item.kind === 'tool' ? JSON.stringify(item.input ?? '').length + JSON.stringify(item.result ?? '').length : 0), 0)
-      agent.note(t('agentPalette.statusText', {
-        messages: agent.items.filter((item) => item.kind === 'user' || item.kind === 'assistant').length,
+      const chars = fairy.items.reduce((sum, item) => sum + ('text' in item ? item.text.length : item.kind === 'tool' ? JSON.stringify(item.input ?? '').length + JSON.stringify(item.result ?? '').length : 0), 0)
+      fairy.note(t('fairyPalette.statusText', {
+        messages: fairy.items.filter((item) => item.kind === 'user' || item.kind === 'assistant').length,
         chars,
-        input: agent.usage?.inputTokens ?? '—',
-        output: agent.usage?.outputTokens ?? '—',
+        input: fairy.usage?.inputTokens ?? '—',
+        output: fairy.usage?.outputTokens ?? '—',
         scene: scenes.scene.label,
       }))
       break
     }
     case 'help':
-      agent.note(t('agentPalette.helpText', {
-        commands: agent.commands.builtin.map((command) => `/${command.name}`).join(' '),
-        bots: agent.commands.bots.length,
-        skills: agent.skills.filter((skill) => skill.enabled).length,
+      fairy.note(t('fairyPalette.helpText', {
+        commands: fairy.commands.builtin.map((command) => `/${command.name}`).join(' '),
+        bots: fairy.commands.bots.length,
+        skills: fairy.skills.filter((skill) => skill.enabled).length,
       }))
       break
   }
@@ -219,19 +219,19 @@ const providerOptions = computed(() => toProviderOptions(data.providers, data.pr
 
 async function openModel() {
   const plugins = await call<{ id: string; package: string; config: Record<string, any> }[]>('plugins.list')
-  const entry = plugins.find((plugin) => plugin.package === '@mushinjs/plugin-agent')
+  const entry = plugins.find((plugin) => plugin.package === '@mushinjs/plugin-fairy')
   modelForm.value = { provider: entry?.config.provider, model: entry?.config.model }
   showModel.value = true
 }
 
 async function saveModel() {
   const plugins = await call<{ id: string; package: string; config: Record<string, any> }[]>('plugins.list')
-  const entry = plugins.find((plugin) => plugin.package === '@mushinjs/plugin-agent')
+  const entry = plugins.find((plugin) => plugin.package === '@mushinjs/plugin-fairy')
   if (!entry) return
   const config = { ...entry.config, provider: modelForm.value.provider || undefined, model: modelForm.value.model || undefined }
   await call('plugins.configure', { id: entry.id, config })
   showModel.value = false
-  agent.note(t('agentPalette.modelSaved', { model: modelForm.value.model || t('common.default') }))
+  fairy.note(t('fairyPalette.modelSaved', { model: modelForm.value.model || t('common.default') }))
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -272,7 +272,7 @@ const GROUP_FROM = 3
 
 const rows = computed<Row[]>(() => {
   const out: Row[] = []
-  const items = agent.items
+  const items = fairy.items
   for (let index = 0; index < items.length;) {
     const item = items[index]
     let end = index + 1
@@ -295,9 +295,9 @@ const rows = computed<Row[]>(() => {
 function groupSummary(row: Extract<Row, { kind: 'group' }>) {
   const ok = row.items.filter((call) => call.state === 'ok').length
   return [
-    ok ? t('agent.groupOk', { n: ok }) : '',
-    row.failed ? t('agent.groupFailed', { n: row.failed }) : '',
-    row.running ? t('agent.state.running') : '',
+    ok ? t('fairy.groupOk', { n: ok }) : '',
+    row.failed ? t('fairy.groupFailed', { n: row.failed }) : '',
+    row.running ? t('fairy.state.running') : '',
   ].filter(Boolean).join(' · ')
 }
 
@@ -313,7 +313,7 @@ async function scrollToEnd() {
   list.value?.scrollTo({ top: list.value.scrollHeight })
 }
 
-watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToEnd, { deep: true })
+watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToEnd, { deep: true })
 </script>
 
 <template>
@@ -321,66 +321,66 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
     <header class="dock-head">
       <div class="dock-title">
         <span class="i-lucide-sparkles text-[18px]" />
-        <span>{{ t('nav.agent') }}</span>
+        <span>{{ t('nav.fairy') }}</span>
         <Popover placement="bottom" align="start" :style="{ maxWidth: '300px' }">
           <template #trigger>
-            <button type="button" class="scene-tag" :title="t('agentScene.whatHere')" data-agent-target="agent.scene">
+            <button type="button" class="scene-tag" :title="t('fairyScene.whatHere')" data-fairy-target="fairy.scene">
               {{ scenes.scene.label }}
             </button>
           </template>
           <div class="scene-pop">
-            <div class="scene-pop-title">{{ t('agentScene.whatHere') }}</div>
+            <div class="scene-pop-title">{{ t('fairyScene.whatHere') }}</div>
             <p>{{ scenes.scene.hint }}</p>
           </div>
         </Popover>
       </div>
       <div class="dock-actions">
-        <Dropdown v-if="agent.sessions.length" :options="sessionOptions" align="end" @select="pickSession">
-          <Button size="small" quaternary>{{ t('agent.history') }}</Button>
+        <Dropdown v-if="fairy.sessions.length" :options="sessionOptions" align="end" @select="pickSession">
+          <Button size="small" quaternary>{{ t('fairy.history') }}</Button>
         </Dropdown>
-        <Tooltip v-if="agent.current">
+        <Tooltip v-if="fairy.current">
           <template #trigger>
-            <Button size="small" quaternary circle :aria-label="t('agent.deleteChat')" icon="i-lucide-trash-2" @click="agent.remove(agent.current!)" />
+            <Button size="small" quaternary circle :aria-label="t('fairy.deleteChat')" icon="i-lucide-trash-2" @click="fairy.remove(fairy.current!)" />
           </template>
-          {{ t('agent.deleteChat') }}
+          {{ t('fairy.deleteChat') }}
         </Tooltip>
         <Tooltip>
           <template #trigger>
-            <Button size="small" quaternary circle :aria-label="t('agent.newChat')" icon="i-lucide-plus" @click="agent.newChat()" />
+            <Button size="small" quaternary circle :aria-label="t('fairy.newChat')" icon="i-lucide-plus" @click="fairy.newChat()" />
           </template>
-          {{ t('agent.newChat') }}
+          {{ t('fairy.newChat') }}
         </Tooltip>
         <Tooltip v-if="mode">
           <template #trigger>
-            <Button size="small" quaternary circle :aria-label="mode === 'docked' ? t('agent.float') : t('agent.dock')" data-agent-target="agent.mode" @click="emit('toggleMode')">
+            <Button size="small" quaternary circle :aria-label="mode === 'docked' ? t('fairy.float') : t('fairy.dock')" data-fairy-target="fairy.mode" @click="emit('toggleMode')">
               <template #icon>
                 <span v-if="mode === 'docked'" class="i-lucide-app-window" />
                 <PanelIcon v-else side="right" :open="true" />
               </template>
             </Button>
           </template>
-          {{ mode === 'docked' ? t('agent.float') : t('agent.dock') }}
+          {{ mode === 'docked' ? t('fairy.float') : t('fairy.dock') }}
         </Tooltip>
-        <Button v-if="closable" size="small" quaternary circle :aria-label="t('agent.close')" icon="i-lucide-x" @click="emit('close')" />
+        <Button v-if="closable" size="small" quaternary circle :aria-label="t('fairy.close')" icon="i-lucide-x" @click="emit('close')" />
       </div>
     </header>
 
     <div ref="list" class="dock-list">
       <div v-if="data.loadedProviders && !data.providers.length" class="dock-empty">
-        <p>{{ t('agent.needProvider') }}</p>
-        <Button type="primary" @click="router.push('/setup')">{{ t('agent.goSetup') }}</Button>
+        <p>{{ t('fairy.needProvider') }}</p>
+        <Button type="primary" @click="router.push('/setup')">{{ t('fairy.goSetup') }}</Button>
       </div>
 
-      <div v-else-if="!agent.items.length && !agent.running" class="dock-empty">
-        <p class="dock-hello">{{ scenes.welcome ?? t('agent.hello') }}</p>
+      <div v-else-if="!fairy.items.length && !fairy.running" class="dock-empty">
+        <p class="dock-hello">{{ scenes.welcome ?? t('fairy.hello') }}</p>
         <button v-for="item in scenes.recommendations" :key="item.id" class="suggestion" :class="{ urgent: item.urgent }" type="button" @click="sendRecommendation(item)">
           <span>{{ item.text }}</span>
           <Tag v-if="item.skill" size="tiny" class="suggestion-skill">
             <template #icon><span class="i-lucide-puzzle" /></template>
-            {{ agent.skills.find((skill) => skill.id === item.skill)?.name ?? item.skill }}
+            {{ fairy.skills.find((skill) => skill.id === item.skill)?.name ?? item.skill }}
           </Tag>
         </button>
-        <p class="dock-tip">{{ t('agentPalette.tip') }}</p>
+        <p class="dock-tip">{{ t('fairyPalette.tip') }}</p>
       </div>
 
       <template v-for="(row, index) in rows" :key="index">
@@ -397,13 +397,13 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
           </button>
           <div v-if="row.failed && !expanded.has(row.key)" class="group-reason" :title="row.reason">{{ row.reason }}</div>
           <div v-if="expanded.has(row.key)" class="group-items">
-            <AgentToolCall
+            <FairyToolCall
               v-for="item in row.items"
               :key="item.id"
               :item="item"
               :expanded="expanded.has(item.id)"
               @toggle="toggle(item.id)"
-              @confirm="(approved) => agent.confirm(item.id, approved)"
+              @confirm="(approved) => fairy.confirm(item.id, approved)"
             />
           </div>
         </div>
@@ -419,7 +419,7 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
               />
               <div class="msg-edit-actions">
                 <Button size="small" secondary @click="editing = undefined">{{ t('common.cancel') }}</Button>
-                <Button size="small" type="primary" :disabled="!editing.text.trim()" @click="saveEdit()">{{ t('agent.resend') }}</Button>
+                <Button size="small" type="primary" :disabled="!editing.text.trim()" @click="saveEdit()">{{ t('fairy.resend') }}</Button>
               </div>
             </div>
             <div v-else-if="item.kind === 'user'" class="msg-wrap user">
@@ -431,14 +431,14 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
                 {{ item.text }}
               </div>
               <div class="msg-actions">
-                <Tooltip><template #trigger><Button size="tiny" quaternary circle icon="i-lucide-copy" :aria-label="t('agent.copy')" @click="copy(item.text)" /></template>{{ t('agent.copy') }}</Tooltip>
-                <Tooltip v-if="!agent.running && item.text"><template #trigger><Button size="tiny" quaternary circle icon="i-lucide-pencil" :aria-label="t('agent.edit')" @click="startEdit(item)" /></template>{{ t('agent.edit') }}</Tooltip>
+                <Tooltip><template #trigger><Button size="tiny" quaternary circle icon="i-lucide-copy" :aria-label="t('fairy.copy')" @click="copy(item.text)" /></template>{{ t('fairy.copy') }}</Tooltip>
+                <Tooltip v-if="!fairy.running && item.text"><template #trigger><Button size="tiny" quaternary circle icon="i-lucide-pencil" :aria-label="t('fairy.edit')" @click="startEdit(item)" /></template>{{ t('fairy.edit') }}</Tooltip>
               </div>
             </div>
             <div v-else-if="item.kind === 'assistant'" class="msg-wrap assistant">
-              <div class="msg assistant"><AgentMessage :text="item.text" /></div>
+              <div class="msg assistant"><FairyMessage :text="item.text" /></div>
               <div class="msg-actions">
-                <Tooltip><template #trigger><Button size="tiny" quaternary circle icon="i-lucide-copy" :aria-label="t('agent.copy')" @click="copy(item.text)" /></template>{{ t('agent.copy') }}</Tooltip>
+                <Tooltip><template #trigger><Button size="tiny" quaternary circle icon="i-lucide-copy" :aria-label="t('fairy.copy')" @click="copy(item.text)" /></template>{{ t('fairy.copy') }}</Tooltip>
               </div>
             </div>
             <div v-else-if="item.kind === 'note'" class="msg note">
@@ -446,31 +446,31 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
             </div>
             <div v-else-if="item.kind === 'error' && item.code === 'max_steps'" class="msg limit">
               <span class="i-lucide-info" />
-              <span>{{ t('agent.maxSteps') }}</span>
-              <Button v-if="index === rows.length - 1 && !agent.running" size="small" secondary @click="send(t('agent.continuePrompt'))">{{ t('agent.continue') }}</Button>
+              <span>{{ t('fairy.maxSteps') }}</span>
+              <Button v-if="index === rows.length - 1 && !fairy.running" size="small" secondary @click="send(t('fairy.continuePrompt'))">{{ t('fairy.continue') }}</Button>
             </div>
             <div v-else-if="item.kind === 'notice'" class="msg note">
-              <span class="i-lucide-info" /><span>{{ t(`agentNotice.${item.code}`) }}</span>
+              <span class="i-lucide-info" /><span>{{ t(`fairyNotice.${item.code}`) }}</span>
             </div>
             <div v-else-if="item.kind === 'error'" class="msg error">
               <div class="error-text"><span class="i-lucide-circle-alert" /> {{ item.text }}</div>
-              <div v-if="index === rows.length - 1 && !agent.running" class="error-actions">
-                <Button size="tiny" secondary icon="i-lucide-rotate-ccw" @click="agent.retry({ scene: { ...scenes.scene } })">{{ t('agent.retry') }}</Button>
-                <Button size="tiny" secondary icon="i-lucide-replace" @click="changeModel">{{ t('agent.changeModel') }}</Button>
+              <div v-if="index === rows.length - 1 && !fairy.running" class="error-actions">
+                <Button size="tiny" secondary icon="i-lucide-rotate-ccw" @click="fairy.retry({ scene: { ...scenes.scene } })">{{ t('fairy.retry') }}</Button>
+                <Button size="tiny" secondary icon="i-lucide-replace" @click="changeModel">{{ t('fairy.changeModel') }}</Button>
               </div>
             </div>
-            <AgentToolCall
+            <FairyToolCall
               v-else
               :item="item"
               :expanded="expanded.has(item.id)"
               @toggle="toggle(item.id)"
-              @confirm="(approved) => agent.confirm(item.id, approved)"
+              @confirm="(approved) => fairy.confirm(item.id, approved)"
             />
           </template>
         </template>
       </template>
 
-      <div v-for="ask in agent.asks" :key="ask.id" class="ask">
+      <div v-for="ask in fairy.asks" :key="ask.id" class="ask">
         <div class="ask-question"><span class="i-lucide-circle-help" />{{ ask.question }}</div>
         <button
           v-for="(option, optionIndex) in ask.options"
@@ -478,38 +478,38 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
           type="button"
           class="ask-option"
           :class="{ recommended: ask.recommended === optionIndex }"
-          @click="agent.answer(ask.id, { choice: optionIndex })"
+          @click="fairy.answer(ask.id, { choice: optionIndex })"
         >
           <span class="ask-label">
             {{ option.label }}
-            <Tag v-if="ask.recommended === optionIndex" size="tiny" type="success">{{ t('agentPalette.recommended') }}</Tag>
+            <Tag v-if="ask.recommended === optionIndex" size="tiny" type="success">{{ t('fairyPalette.recommended') }}</Tag>
           </span>
           <span v-if="option.description" class="ask-desc">{{ option.description }}</span>
         </button>
         <Input
           v-if="ask.allowOther"
           size="small"
-          :placeholder="t('agentMessage.other')"
-          @keydown.enter="(event: KeyboardEvent) => { const value = (event.target as HTMLInputElement).value.trim(); if (value) agent.answer(ask.id, { other: value }) }"
+          :placeholder="t('fairyMessage.other')"
+          @keydown.enter="(event: KeyboardEvent) => { const value = (event.target as HTMLInputElement).value.trim(); if (value) fairy.answer(ask.id, { other: value }) }"
         />
       </div>
 
-      <div v-if="agent.streaming" class="msg assistant streaming"><AgentMessage :text="agent.streaming" streaming /></div>
-      <div v-else-if="agent.running" class="thinking"><Spin :size="14" /> {{ t('agent.thinking') }}</div>
+      <div v-if="fairy.streaming" class="msg assistant streaming"><FairyMessage :text="fairy.streaming" streaming /></div>
+      <div v-else-if="fairy.running" class="thinking"><Spin :size="14" /> {{ t('fairy.thinking') }}</div>
     </div>
 
-    <div v-if="agent.toolsStale && agent.items.length" class="stale">
-      <span>{{ t('agentMessage.toolsStale') }}</span>
-      <Button size="tiny" secondary @click="agent.newChat()">{{ t('agent.newChat') }}</Button>
+    <div v-if="fairy.toolsStale && fairy.items.length" class="stale">
+      <span>{{ t('fairyMessage.toolsStale') }}</span>
+      <Button size="tiny" secondary @click="fairy.newChat()">{{ t('fairy.newChat') }}</Button>
     </div>
 
-    <div v-if="agent.items.length && scenes.banner && !agent.running" class="banner">
+    <div v-if="fairy.items.length && scenes.banner && !fairy.running" class="banner">
       <span class="i-lucide-info" color="var(--warn)" />
       <button type="button" class="banner-text" @click="sendRecommendation(scenes.banner!)">{{ scenes.banner.text }}</button>
-      <Button size="tiny" quaternary circle :aria-label="t('agent.close')" icon="i-lucide-x" @click="scenes.dismiss(scenes.banner!.id)" />
+      <Button size="tiny" quaternary circle :aria-label="t('fairy.close')" icon="i-lucide-x" @click="scenes.dismiss(scenes.banner!.id)" />
     </div>
 
-    <footer class="dock-input" data-agent-target="agent.input">
+    <footer class="dock-input" data-fairy-target="fairy.input">
       <CommandPalette
         v-if="trigger"
         ref="palette"
@@ -520,10 +520,10 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
         @pick="onPick"
       />
       <div class="input-box">
-        <div v-if="picked.length || agent.quote" class="chips">
-          <Tag v-if="agent.quote" size="small" type="info" closable class="quote-chip" :title="agent.quote.label" @close="agent.quote = undefined">
+        <div v-if="picked.length || fairy.quote" class="chips">
+          <Tag v-if="fairy.quote" size="small" type="info" closable class="quote-chip" :title="fairy.quote.label" @close="fairy.quote = undefined">
             <template #icon><span class="i-lucide-message-circle-more" /></template>
-            {{ t('agent.quoted', { label: agent.quote.label }) }}
+            {{ t('fairy.quoted', { label: fairy.quote.label }) }}
           </Tag>
           <Tag v-for="skill in picked" :key="skill.id" size="small" type="success" closable @close="picked = picked.filter((item) => item.id !== skill.id)">
             <template #icon><span class="i-lucide-puzzle" /></template>
@@ -534,14 +534,14 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
           v-model:value="input"
           type="textarea"
           :autosize="{ minRows: 1, maxRows: 6 }"
-          :placeholder="t('agent.placeholder')"
+          :placeholder="t('fairy.placeholder')"
           :disabled="!data.providers.length"
           @keydown="onKeydown"
         />
         <div class="input-tools">
           <Popover v-model:show="showPicker" placement="top" align="end" :padded="false" :width="300">
             <template #trigger>
-              <button type="button" class="picker-chip" :title="t('agentPicker.title')">
+              <button type="button" class="picker-chip" :title="t('fairyPicker.title')">
                 <span class="picker-label">{{ pickerLabel }}</span>
                 <span class="i-lucide-chevron-down picker-caret" />
               </button>
@@ -549,8 +549,8 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
             <div class="picker">
               <div class="picker-effort">
                 <div class="picker-row">
-                  <span class="picker-title">{{ t('agentPicker.effort') }}</span>
-                  <span class="picker-value">{{ t(`agentPicker.efforts.${agent.choice.effort ?? 'default'}`) }}</span>
+                  <span class="picker-title">{{ t('fairyPicker.effort') }}</span>
+                  <span class="picker-value">{{ t(`fairyPicker.efforts.${fairy.choice.effort ?? 'default'}`) }}</span>
                 </div>
                 <div class="effort-track" :class="{ disabled: !supportsEffort }" :style="{ '--fill': `${(effortStep / EFFORTS.length) * 100}%` }">
                   <button
@@ -560,22 +560,22 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
                     class="effort-stop"
                     :class="{ on: step - 1 <= effortStep, current: step - 1 === effortStep }"
                     :style="{ left: `${((step - 1) / EFFORTS.length) * 100}%` }"
-                    :aria-label="t(`agentPicker.efforts.${step === 1 ? 'default' : EFFORTS[step - 2]}`)"
-                    :title="t(`agentPicker.efforts.${step === 1 ? 'default' : EFFORTS[step - 2]}`)"
+                    :aria-label="t(`fairyPicker.efforts.${step === 1 ? 'default' : EFFORTS[step - 2]}`)"
+                    :title="t(`fairyPicker.efforts.${step === 1 ? 'default' : EFFORTS[step - 2]}`)"
                     @click="setEffortStep(step - 1)"
                   />
                 </div>
                 <div class="effort-ends">
-                  <span>{{ t('agentPicker.efforts.default') }}</span>
-                  <span>{{ t('agentPicker.efforts.max') }}</span>
+                  <span>{{ t('fairyPicker.efforts.default') }}</span>
+                  <span>{{ t('fairyPicker.efforts.max') }}</span>
                 </div>
-                <p v-if="!supportsEffort" class="effort-off">{{ t('agentPicker.noEffort') }}</p>
+                <p v-if="!supportsEffort" class="effort-off">{{ t('fairyPicker.noEffort') }}</p>
               </div>
               <div class="picker-models">
-                <input v-if="modelCount > 8" v-model="modelQuery" class="picker-search" :placeholder="t('agentPicker.search')">
-                <button type="button" class="model-item" :class="{ current: !agent.choice.provider && !agent.choice.model }" @click="pickModel()">
-                  <span class="model-name">{{ t('agentPicker.default') }}<small>{{ t('agentPicker.defaultHint') }}</small></span>
-                  <span v-if="!agent.choice.provider && !agent.choice.model" class="i-lucide-check" />
+                <input v-if="modelCount > 8" v-model="modelQuery" class="picker-search" :placeholder="t('fairyPicker.search')">
+                <button type="button" class="model-item" :class="{ current: !fairy.choice.provider && !fairy.choice.model }" @click="pickModel()">
+                  <span class="model-name">{{ t('fairyPicker.default') }}<small>{{ t('fairyPicker.defaultHint') }}</small></span>
+                  <span v-if="!fairy.choice.provider && !fairy.choice.model" class="i-lucide-check" />
                 </button>
                 <template v-for="group in modelGroups" :key="group.id">
                   <div class="model-group">{{ group.name }}</div>
@@ -584,29 +584,29 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
                     :key="model"
                     type="button"
                     class="model-item"
-                    :class="{ current: agent.choice.provider === group.id && agent.choice.model === model }"
+                    :class="{ current: fairy.choice.provider === group.id && fairy.choice.model === model }"
                     @click="pickModel(group.id, model)"
                   >
                     <span class="model-name">{{ model }}</span>
-                    <span v-if="agent.choice.provider === group.id && agent.choice.model === model" class="i-lucide-check" />
+                    <span v-if="fairy.choice.provider === group.id && fairy.choice.model === model" class="i-lucide-check" />
                   </button>
                 </template>
-                <div v-if="!modelGroups.length && modelQuery" class="model-empty">{{ t('agentPicker.noMatch') }}</div>
+                <div v-if="!modelGroups.length && modelQuery" class="model-empty">{{ t('fairyPicker.noMatch') }}</div>
               </div>
-              <p class="picker-hint">{{ t('agentPicker.hint') }}</p>
+              <p class="picker-hint">{{ t('fairyPicker.hint') }}</p>
             </div>
           </Popover>
         </div>
       </div>
-      <Button v-if="agent.running" type="warning" secondary :aria-label="t('agent.stop')" icon="i-lucide-circle-stop" @click="agent.cancel()" />
-      <Button v-else type="primary" :disabled="!input.trim() && !picked.length && !agent.quote" :aria-label="t('agent.send')" icon="i-lucide-send" @click="send()" />
+      <Button v-if="fairy.running" type="warning" secondary :aria-label="t('fairy.stop')" icon="i-lucide-circle-stop" @click="fairy.cancel()" />
+      <Button v-else type="primary" :disabled="!input.trim() && !picked.length && !fairy.quote" :aria-label="t('fairy.send')" icon="i-lucide-send" @click="send()" />
     </footer>
 
     <HistoryDrawer v-model:show="showHistory" />
-    <Modal v-model:show="showModel" :title="t('agentPalette.modelTitle')" :style="{ width: '400px' }">
+    <Modal v-model:show="showModel" :title="t('fairyPalette.modelTitle')" :style="{ width: '400px' }">
       <div class="model-form">
-        <Select v-model:value="modelForm.provider" clearable :options="providerOptions" :placeholder="t('agentPalette.defaultProvider')" />
-        <ModelSelect :model-value="modelForm.model" :provider="modelForm.provider" :placeholder="t('agentPalette.defaultModel')" @update:model-value="(value) => (modelForm.model = value ?? undefined)" />
+        <Select v-model:value="modelForm.provider" clearable :options="providerOptions" :placeholder="t('fairyPalette.defaultProvider')" />
+        <ModelSelect :model-value="modelForm.model" :provider="modelForm.provider" :placeholder="t('fairyPalette.defaultModel')" @update:model-value="(value) => (modelForm.model = value ?? undefined)" />
         <Button type="primary" @click="saveModel">{{ t('common.save') }}</Button>
       </div>
     </Modal>
@@ -1174,7 +1174,7 @@ watch(() => [agent.items.length, agent.streaming, agent.items.at(-1)], scrollToE
   white-space: normal;
 }
 
-.msg.streaming :deep(.agent-md > :last-child)::after {
+.msg.streaming :deep(.fairy-md > :last-child)::after {
   content: '▍';
   opacity: 0.6;
   animation: blink 1s steps(2) infinite;

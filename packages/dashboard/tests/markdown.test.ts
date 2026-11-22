@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { renderSegments } from '../src/components/agent/markdown'
+import { renderSegments } from '../src/components/fairy/markdown'
 
 const fence = '```'
 
-describe('Agent reply rendering', () => {
+describe('Fairy reply rendering', () => {
   it('renders Markdown and keeps dashboard links in the app', () => {
     const [segment] = renderSegments('**Bold** and a [page](/bots) and [docs](https://example.com)\n\n| a | b |\n| --- | --- |\n| 1 | 2 |')
     expect(segment.kind).toBe('html')

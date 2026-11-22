@@ -87,7 +87,7 @@ describe('decision providers', () => {
     const test = await app.call('providers.test', { id: decider })
     expect(test).toMatchObject({ ok: true, model: 'jev-latest' })
     expect(decisions.at(-1)?.questions).toEqual({ ok: { type: 'noul', instructions: 'Is the statement true?' } })
-    // Only chat providers make the Agent ready.
+    // Only chat providers make Fairy ready.
     expect((await app.call('providers.list')).ready).toBe(false)
   })
 })

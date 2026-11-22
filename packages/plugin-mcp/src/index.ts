@@ -74,7 +74,7 @@ const serverFields = {
   enabled: z.boolean().optional(),
 }
 
-/** Connects to MCP servers and offers each of their tools as an action, so the Agent and flows can use them. */
+/** Connects to MCP servers and offers each of their tools as an action, so Fairy and flows can use them. */
 export class Mcp extends Service {
   static inject = ['actions', 'storage']
 
@@ -117,7 +117,7 @@ export class Mcp extends Service {
     return server
   }
 
-  /** A server as the dashboard and the Agent see it: secrets masked, with status and tools. */
+  /** A server as the dashboard and Fairy see it: secrets masked, with status and tools. */
   describe(server: McpServerRecord) {
     const runtime = this.runtimes.get(server.id)
     // A `${NAME}` reference is not a secret: it shows where the value is.
@@ -333,7 +333,7 @@ export class Mcp extends Service {
 
     yield actions.define({
       name: 'mcp.servers.create',
-      description: 'Add an MCP server and connect to it: a local command over stdio (e.g. npx -y @modelcontextprotocol/server-filesystem <dir>) or a Streamable HTTP URL. Its tools become actions for new Agent conversations.',
+      description: 'Add an MCP server and connect to it: a local command over stdio (e.g. npx -y @modelcontextprotocol/server-filesystem <dir>) or a Streamable HTTP URL. Its tools become actions for new Fairy conversations.',
       risk: 'dangerous',
       input: z.object({ ...serverFields, id: z.string().regex(/^[a-z][a-zA-Z0-9]{0,30}$/).optional().describe('Short id used in action names; made from the name when omitted') }),
       handler: (input) => this.create(input),

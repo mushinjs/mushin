@@ -93,7 +93,7 @@ const matched = computed(() => sampleMatch.value?.triggers.filter((item) => item
         :type="sample ? (sampleError ? 'warning' : 'info') : 'default'"
         class="sample-button"
         :title="sample ? label : t('flows.sampleHint')"
-        data-agent-target="flows.sample" icon="i-lucide-messages-square">
+        data-fairy-target="flows.sample" icon="i-lucide-messages-square">
         <span class="sample-label">{{ sample ? label : t('flows.sample') }}</span>
         <Tag v-if="sampleMatch" size="tiny" round :type="matched ? 'success' : 'default'" class="count">
           {{ t('flows.sampleMatched', { n: matched }) }}

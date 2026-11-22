@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import PageHeader from '../components/PageHeader.vue'
 import SettingsAbout from '../components/settings/SettingsAbout.vue'
-import SettingsAgent from '../components/settings/SettingsAgent.vue'
+import SettingsFairy from '../components/settings/SettingsFairy.vue'
 import SettingsAppearance from '../components/settings/SettingsAppearance.vue'
 import SettingsFeatures from '../components/settings/SettingsFeatures.vue'
 
@@ -30,16 +30,16 @@ const narrow = computed(() => width.value < 720)
       :placement="narrow ? 'top' : 'left'"
       @update:value="(next: string) => router.replace(`/settings/${next}`)"
     >
-      <TabPane name="appearance" :tab="t('settings.sections.appearance')" data-agent-target="settings.appearance">
+      <TabPane name="appearance" :tab="t('settings.sections.appearance')" data-fairy-target="settings.appearance">
         <SettingsAppearance />
       </TabPane>
-      <TabPane name="features" :tab="t('settings.sections.features')" data-agent-target="settings.features">
+      <TabPane name="features" :tab="t('settings.sections.features')" data-fairy-target="settings.features">
         <SettingsFeatures />
       </TabPane>
-      <TabPane name="agent" :tab="t('settings.sections.agent')" data-agent-target="settings.agent">
-        <SettingsAgent />
+      <TabPane name="fairy" :tab="t('settings.sections.fairy')" data-fairy-target="settings.fairy">
+        <SettingsFairy />
       </TabPane>
-      <TabPane name="about" :tab="t('settings.sections.about')" data-agent-target="settings.about">
+      <TabPane name="about" :tab="t('settings.sections.about')" data-fairy-target="settings.about">
         <SettingsAbout />
       </TabPane>
     </Tabs>

@@ -295,7 +295,7 @@ describe('bots over OneBot', () => {
   })
 })
 
-describe('agent', () => {
+describe('fairy', () => {
   it('calls tools, relays navigation to the dashboard and streams the answer', async () => {
     const navigations: string[] = []
     const dashboard = await app.connect((action, input) => {
@@ -307,10 +307,10 @@ describe('agent', () => {
       { toolCalls: [{ name: 'ui__navigate', arguments: { path: '/bots' } }] },
       { text: 'You have two bots.' },
     )
-    const { session } = await dashboard.call('agent.send', { text: 'How many bots do I have?' })
+    const { session } = await dashboard.call('fairy.send', { text: 'How many bots do I have?' })
     expect(navigations).toEqual(['/bots'])
 
-    const events = dashboard.agentEvents(session)
+    const events = dashboard.fairyEvents(session)
     expect(events.map((e) => e.type).filter((t) => t !== 'delta')).toEqual([
       'start', 'tool-call', 'tool-result', 'tool-call', 'tool-result', 'done',
     ])
@@ -321,13 +321,13 @@ describe('agent', () => {
     expect(first.messages[0].role).toBe('system')
     expect(first.messages.at(-1).content).toContain('<context>Dashboard page: /bots.')
     expect(first.tools.map((t: any) => t.function.name)).toContain('bots__plugins__enable')
-    expect(first.tools.map((t: any) => t.function.name)).not.toContain('agent__send')
+    expect(first.tools.map((t: any) => t.function.name)).not.toContain('fairy__send')
     // The tool result of bots.list went back to the model.
     const second = llm.requests.at(-2)
     expect(second.messages.at(-1).role).toBe('tool')
     expect(JSON.parse(second.messages.at(-1).content)).toHaveLength(2)
 
-    const stored = await app.call('agent.session', { id: session })
+    const stored = await app.call('fairy.session', { id: session })
     expect(stored.messages[0].display).toBe('How many bots do I have?')
     dashboard.close()
   })
@@ -338,13 +338,13 @@ describe('agent', () => {
       { toolCalls: [{ name: 'bots__delete', arguments: { id: botB } }] },
       { text: 'Okay, I kept the bot.' },
     )
-    const sending = dashboard.call('agent.send', { text: 'Delete bot Beta' })
-    const confirm = await waitFor(() => dashboard.agentEvents().find((e) => e.type === 'confirm'))
+    const sending = dashboard.call('fairy.send', { text: 'Delete bot Beta' })
+    const confirm = await waitFor(() => dashboard.fairyEvents().find((e) => e.type === 'confirm'))
     expect(confirm.action).toBe('bots.delete')
-    await dashboard.call('agent.confirm', { session: confirm.session, id: confirm.id, approved: false })
+    await dashboard.call('fairy.confirm', { session: confirm.session, id: confirm.id, approved: false })
     await sending
     expect((await app.call<any[]>('bots.list')).map((b) => b.id)).toContain(botB)
-    expect(dashboard.agentEvents(confirm.session).find((e) => e.type === 'tool-result')).toMatchObject({ ok: false, error: 'Declined by the user' })
+    expect(dashboard.fairyEvents(confirm.session).find((e) => e.type === 'tool-result')).toMatchObject({ ok: false, error: 'Declined by the user' })
     dashboard.close()
   })
 })

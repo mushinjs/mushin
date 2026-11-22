@@ -23,13 +23,13 @@ afterEach(async () => {
 describe('storage', () => {
   it('stores, lists and deletes JSON documents', async () => {
     const { ctx, baseDir } = await setup()
-    await ctx.storage.set('agent/one', { a: 1 })
-    await ctx.storage.set('agent/two', { b: 2 })
-    expect(await ctx.storage.get('agent/one')).toEqual({ a: 1 })
-    expect(await ctx.storage.list('agent')).toEqual(['agent/one', 'agent/two'])
-    expect(JSON.parse(await readFile(join(baseDir, 'data', 'agents', 'sessions', 'one.json'), 'utf8'))).toEqual({ a: 1 })
-    await ctx.storage.delete('agent/one')
-    expect(await ctx.storage.get('agent/one')).toBeUndefined()
+    await ctx.storage.set('fairy/one', { a: 1 })
+    await ctx.storage.set('fairy/two', { b: 2 })
+    expect(await ctx.storage.get('fairy/one')).toEqual({ a: 1 })
+    expect(await ctx.storage.list('fairy')).toEqual(['fairy/one', 'fairy/two'])
+    expect(JSON.parse(await readFile(join(baseDir, 'data', 'fairy', 'sessions', 'one.json'), 'utf8'))).toEqual({ a: 1 })
+    await ctx.storage.delete('fairy/one')
+    expect(await ctx.storage.get('fairy/one')).toBeUndefined()
   })
 
   it('keeps the last write when writes overlap', async () => {
@@ -48,6 +48,6 @@ describe('storage', () => {
   it('rejects keys that leave the data directory', async () => {
     const { ctx } = await setup()
     await expect(ctx.storage.set('../escape', {})).rejects.toThrow()
-    await expect(ctx.storage.get('agent/../../escape')).rejects.toThrow()
+    await expect(ctx.storage.get('fairy/../../escape')).rejects.toThrow()
   })
 })

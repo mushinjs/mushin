@@ -270,7 +270,7 @@ function normalize(nodes: NodeInput[], edges: EdgeInput[], types: Map<string, No
     targetHandle: edge.targetHandle,
   }))
   const migrated = migrateDataEdges(flowNodes, flowEdges, types)
-  // Callers (often the Agent) may still send the old "let other plugins answer too" setting.
+  // Callers (often Fairy) may still send the old "let other plugins answer too" setting.
   const intercepts = migrateIntercept(migrated.nodes, false)
   const result = { nodes: intercepts.nodes, edges: migrated.edges }
   layout(result)
@@ -469,7 +469,7 @@ export class FlowService extends Service {
   }
 
   /**
-   * One line per node type, for the Agent: every schema at once is far more than a model reads
+   * One line per node type, for Fairy: every schema at once is far more than a model reads
    * (and more than a tool result holds), so it picks types here and asks `nodeTypes` for those.
    */
   nodeCatalog() {
@@ -503,7 +503,7 @@ export class FlowService extends Service {
   }
 
   /**
-   * Refuses Agent changes to restricted nodes (such as terminal commands): new ones, and changed
+   * Refuses Fairy changes to restricted nodes (such as terminal commands): new ones, and changed
    * config or inputs of existing ones. Removing them and moving them is fine.
    */
   private checkRestricted(nodes: NodeInput[] | undefined, before: FlowNode[]) {
@@ -513,7 +513,7 @@ export class FlowService extends Service {
       if (!type?.restricted) continue
       const old = node.id ? before.find((item) => item.id === node.id) : undefined
       if (old && old.type === node.type && same(old.config, node.config) && same(old.inputs, node.inputs)) continue
-      throw new MushinError('forbidden', `The Agent cannot add or change "${node.type}" nodes${node.id ? ` (${node.id})` : ''}; ask the user to do it in the flow editor`)
+      throw new MushinError('forbidden', `Fairy cannot add or change "${node.type}" nodes${node.id ? ` (${node.id})` : ''}; ask the user to do it in the flow editor`)
     }
   }
 
@@ -1679,12 +1679,12 @@ export class FlowService extends Service {
 
     yield actions.define({
       name: 'flows.nodeTypes',
-      description: 'Node types for conversation flows. Without types, the Agent gets one line per type (id, title, what it does); pass types with the ids you plan to use to get their config schemas, input and output ports, exec outputs and a worked example. Read this before creating or editing a flow, and use only type ids it lists.',
+      description: 'Node types for conversation flows. Without types, Fairy gets one line per type (id, title, what it does); pass types with the ids you plan to use to get their config schemas, input and output ports, exec outputs and a worked example. Read this before creating or editing a flow, and use only type ids it lists.',
       risk: 'read',
       input: z.object({
         types: z.array(z.string()).max(30).optional().describe('Node type ids, e.g. ["trigger.command", "onebot.sendPoke"]; omit to list every type briefly'),
       }),
-      handler: ({ types }, caller) => (!types && caller.kind === 'agent' ? this.nodeCatalog() : this.nodeTypes(types)),
+      handler: ({ types }, caller) => (!types && caller.kind === 'fairy' ? this.nodeCatalog() : this.nodeTypes(types)),
     })
 
     yield actions.define({
@@ -1709,8 +1709,8 @@ export class FlowService extends Service {
       risk: 'write',
       input: z.object(flowFields),
       handler: (input, caller) => {
-        if (caller.kind === 'agent') this.checkRestricted(input.nodes, [])
-        return this.create({ ...input, source: { kind: caller.kind === 'agent' ? 'agent' : 'user' } })
+        if (caller.kind === 'fairy') this.checkRestricted(input.nodes, [])
+        return this.create({ ...input, source: { kind: caller.kind === 'fairy' ? 'fairy' : 'user' } })
       },
     })
 
@@ -1720,7 +1720,7 @@ export class FlowService extends Service {
       risk: 'write',
       input: idInput.extend(z.object(flowFields).partial().shape),
       handler: ({ id, ...patch }, caller) => {
-        if (caller.kind === 'agent') this.checkRestricted(patch.nodes, this.get(id).nodes)
+        if (caller.kind === 'fairy') this.checkRestricted(patch.nodes, this.get(id).nodes)
         return this.update(id, patch)
       },
     })
@@ -1780,7 +1780,7 @@ export class FlowService extends Service {
       name: 'flows.sampleMatch',
       description: 'Editor only: which triggers of a flow a real message of a bot starts, with their outputs and the message\'s sys values; nothing runs.',
       risk: 'read',
-      agent: false,
+      fairy: false,
       input: idInput.extend({
         sample: z.object({ bot: z.string(), id: z.string(), channel: z.string().optional() }),
         nodes: z.array(z.object({ id: z.string(), type: z.string(), config: z.record(z.string(), z.any()).optional(), skip: z.boolean().optional(), priority: z.number().optional() })).optional(),
@@ -1807,7 +1807,7 @@ export class FlowService extends Service {
       name: 'flows.guide',
       description: 'Editor only: a node type\'s tutorial example run as a test, for the node picker\'s hover animation: the example flow, the steps the run took and what the bot replied.',
       risk: 'read',
-      agent: false,
+      fairy: false,
       input: z.object({ type: z.string() }),
       handler: async ({ type }) => (await this.guide(type)) ?? null,
     })
@@ -1816,7 +1816,7 @@ export class FlowService extends Service {
       name: 'flows.testOptions',
       description: 'Editor only: test runs that a flow\'s nodes call for, such as a user on a permission check\'s allow list, for the test panel\'s quick choices.',
       risk: 'read',
-      agent: false,
+      fairy: false,
       input: z.object({ nodes: z.array(z.object({ id: z.string(), type: z.string(), config: z.record(z.string(), z.any()).optional() })) }),
       handler: ({ nodes }) => this.testOptions(nodes),
     })
@@ -1825,7 +1825,7 @@ export class FlowService extends Service {
       name: 'flows.debug',
       description: 'Editor only: tell a test run paused at a breakpoint to continue to the next breakpoint, pause again at the next node (step), or stop.',
       risk: 'write',
-      agent: false,
+      fairy: false,
       input: z.object({ runId: z.string(), action: z.enum(['continue', 'step', 'stop']) }),
       handler: ({ runId, action }) => this.debug(runId, action),
     })
@@ -1942,7 +1942,7 @@ export class FlowService extends Service {
       description: 'Run the saved test cases of a flow (all, or the given ids) in test mode: nothing is sent and no platform API is called; LLM nodes give the case\'s mock answers unless the case asks for the real model. Returns passed and failed counts, each case\'s failures and trace, and nodes no case reached.',
       risk: 'write',
       input: idInput.extend({ cases: z.array(z.string()).optional() }),
-      handler: ({ id, cases }, caller) => this.runTests(id, { ...(cases ? { ids: cases } : {}), source: caller.kind === 'agent' ? 'agent' : 'editor' }),
+      handler: ({ id, cases }, caller) => this.runTests(id, { ...(cases ? { ids: cases } : {}), source: caller.kind === 'fairy' ? 'fairy' : 'editor' }),
     })
 
     yield actions.define({
@@ -2037,7 +2037,7 @@ export class FlowService extends Service {
       risk: 'dangerous',
       input: z.object({ id: z.string() }),
       handler: ({ id }, caller) => {
-        const run = this.runs.stop(id, caller.kind === 'agent' ? 'agent' : caller.kind === 'api' ? 'dashboard' : 'system')
+        const run = this.runs.stop(id, caller.kind === 'fairy' ? 'fairy' : caller.kind === 'api' ? 'dashboard' : 'system')
         if (!run) throw new MushinError('not_found', `Run "${id}" is not going on`)
         return run
       },

@@ -143,7 +143,7 @@ function remove() {
           </div>
         </nav>
 
-        <section class="detail-body" :data-agent-target="current?.target">
+        <section class="detail-body" :data-fairy-target="current?.target">
           <h2 class="section-heading">{{ current?.label }}</h2>
           <BotHome v-if="tab === 'home'" :bot="bot" />
           <LiveConversation v-else-if="tab === 'live'" :bot-id="bot.id" />

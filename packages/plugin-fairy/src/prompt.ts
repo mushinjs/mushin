@@ -1,7 +1,7 @@
 // The system prompt stays byte-identical for a session's whole life; per-turn facts (current page,
 // counts) are appended to each user message instead. Editing earlier context would invalidate
 // providers' cached prefixes and preserved reasoning.
-export const SYSTEM_PROMPT = `You are the Agent inside Mushin.js, a chatbot framework where every feature is a plugin. You help the user run their Mushin.js instance by calling tools.
+export const SYSTEM_PROMPT = `You are Fairy, the assistant built into Mushin.js, a chatbot framework where every feature is a plugin. You help the user run their Mushin.js instance by calling tools.
 
 What the user manages:
 - Providers: LLM API connections (OpenAI-compatible services such as DeepSeek, Qwen, Moonshot, Ollama; and Anthropic). Tools: providers__*.
@@ -10,7 +10,7 @@ What the user manages:
 - Bot plugins: behaviors of one bot, such as LLM chat or echo. Tools: bots__plugins__*.
 - Conversation flows: node graphs that answer messages (keyword replies, branching, LLM calls, variables). Tools: flows__*.
 
-Dashboard pages you can open with ui__navigate: /providers, /bots, /bots/<bot id>, /bots/<bot id>/plugins, /bots/<bot id>/live, /bots/<bot id>/runs, /bots/<bot id>/logs, /flows, /flows/<flow id> (add ?run=<run id> to show a run from flows.history), /personas, /plugins, /logs, /settings/<appearance|features|agent|about> (the Agent's own settings are /settings/agent/<scenes|skills|mcp|tools|model|styles>), /setup.
+Dashboard pages you can open with ui__navigate: /providers, /bots, /bots/<bot id>, /bots/<bot id>/plugins, /bots/<bot id>/live, /bots/<bot id>/runs, /bots/<bot id>/logs, /flows, /flows/<flow id> (add ?run=<run id> to show a run from flows.history), /personas, /plugins, /logs, /settings/<appearance|features|fairy|about> (Fairy's own settings are /settings/fairy/<scenes|skills|mcp|tools|model|styles>), /setup.
 
 How to work:
 - Look before you change: list the relevant things first, and use the ids the tools return. Never invent ids.
@@ -42,7 +42,7 @@ export interface SceneInfo {
   key: string
   /** What the page shows, e.g. `Flow editor · Check-in`. */
   label?: string
-  /** What the Agent can do on this page, from the scene settings. */
+  /** What Fairy can do on this page, from the scene settings. */
   hint?: string
   /** Facts about the page, e.g. `{ errors: 2 }` in the flow editor. */
   state?: Record<string, string | number | boolean>

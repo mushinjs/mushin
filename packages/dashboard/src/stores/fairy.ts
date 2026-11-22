@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { call, on } from '../api'
 import { prefs } from '../prefs'
-import type { AgentCommands, AgentEvent, AgentMessage, AgentScene, AgentSessionSummary, AgentSkill, Risk } from '../types'
+import type { FairyCommands, FairyEvent, FairyMessage, FairyScene, FairySessionSummary, FairySkill, Risk } from '../types'
 
 export type ToolState = 'running' | 'confirm' | 'ok' | 'error' | 'declined'
 
@@ -14,7 +14,7 @@ export type ChatItem =
   | { kind: 'error'; text: string; code?: 'max_steps' }
   /** Shown by the dashboard itself, e.g. for /status; never sent to the model. */
   | { kind: 'note'; text: string }
-  /** A notice from the Agent about the running turn, shown in the user's language. */
+  /** A notice from Fairy about the running turn, shown in the user's language. */
   | { kind: 'notice'; code: 'effort_ignored' }
 
 function parseArgs(json: string) {
@@ -26,7 +26,7 @@ function parseArgs(json: string) {
 }
 
 /** Turns a stored conversation into chat items: user and assistant text, and one row per tool call. */
-function toItems(messages: AgentMessage[]): ChatItem[] {
+function toItems(messages: FairyMessage[]): ChatItem[] {
   const items: ChatItem[] = []
   const tools = new Map<string, Extract<ChatItem, { kind: 'tool' }>>()
   for (const message of messages) {
@@ -60,7 +60,7 @@ function toItems(messages: AgentMessage[]): ChatItem[] {
   return items
 }
 
-/** A question the Agent asked with ui.ask, waiting for the user's pick. */
+/** A question Fairy asked with ui.ask, waiting for the user's pick. */
 export interface AskItem {
   id: number
   question: string
@@ -70,13 +70,13 @@ export interface AskItem {
   resolve: (answer: unknown) => void
 }
 
-const SESSION_KEY = 'mushin.agent.session'
-const CHOICE_KEY = 'mushin.agent.choice'
+const SESSION_KEY = 'mushin.fairy.session'
+const CHOICE_KEY = 'mushin.fairy.choice'
 
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 export const EFFORTS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
-/** The model and effort picked in the dock for the next messages; empty fields use the Agent's settings. */
+/** The model and effort picked in the dock for the next messages; empty fields use Fairy's settings. */
 export interface ModelChoice {
   provider?: string
   model?: string
@@ -99,9 +99,9 @@ function readSession() {
   }
 }
 
-export const useAgentStore = defineStore('agent', () => {
-  const open = ref(prefs.agentOpenOnStart)
-  const sessions = ref<AgentSessionSummary[]>([])
+export const useFairyStore = defineStore('fairy', () => {
+  const open = ref(prefs.fairyOpenOnStart)
+  const sessions = ref<FairySessionSummary[]>([])
   const current = ref<string | undefined>(readSession())
 
   // Reopen the same conversation after a reload.
@@ -124,31 +124,31 @@ export const useAgentStore = defineStore('agent', () => {
 
   /** Token use of the last reply in this conversation, for /status. */
   const usage = ref<{ inputTokens: number; outputTokens: number }>()
-  const skills = ref<AgentSkill[]>([])
+  const skills = ref<FairySkill[]>([])
   /** The open conversation's tools differ from what a new one would get (new MCP tools, changed policies). */
   const toolsStale = ref(false)
   const asks = ref<AskItem[]>([])
   let askSeq = 0
-  const commands = ref<AgentCommands>({ builtin: [], bots: [] })
+  const commands = ref<FairyCommands>({ builtin: [], bots: [] })
   /** A chat message to quote into the next message, picked in a conversation view. */
   const quote = ref<{ bot: string; channel: string; id: string; label: string }>()
 
   async function refreshSessions() {
-    sessions.value = await call<AgentSessionSummary[]>('agent.sessions')
+    sessions.value = await call<FairySessionSummary[]>('fairy.sessions')
   }
 
   /** Skills and commands for the `$` and `/` pickers. */
   async function refreshPickers() {
     const [skillList, commandList] = await Promise.all([
-      call<AgentSkill[]>('agent.skills.list'),
-      call<AgentCommands>('agent.commands'),
+      call<FairySkill[]>('fairy.skills.list'),
+      call<FairyCommands>('fairy.commands'),
     ])
     skills.value = skillList
     commands.value = commandList
   }
 
   async function load(id: string) {
-    const session = await call<{ id: string; messages: AgentMessage[]; running: boolean; toolsStale?: boolean }>('agent.session', { id })
+    const session = await call<{ id: string; messages: FairyMessage[]; running: boolean; toolsStale?: boolean }>('fairy.session', { id })
     toolsStale.value = !!session.toolsStale
     current.value = session.id
     items.value = toItems(session.messages)
@@ -201,7 +201,7 @@ export const useAgentStore = defineStore('agent', () => {
     return items.value.find((item): item is Extract<ChatItem, { kind: 'tool' }> => item.kind === 'tool' && item.id === id)
   }
 
-  function handle(event: AgentEvent) {
+  function handle(event: FairyEvent) {
     if (adopting && event.type === 'start' && event.session !== current.value) {
       current.value = event.session
       adopting = false
@@ -259,7 +259,7 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   /** Edits the user message `ordinal` (0 is the first): what follows it goes, and the new text is sent in its place. */
-  async function edit(ordinal: number, text: string, options: { scene?: AgentScene } = {}) {
+  async function edit(ordinal: number, text: string, options: { scene?: FairyScene } = {}) {
     if (running.value || !current.value || !text.trim()) return
     let seen = -1
     const at = items.value.findIndex((item) => item.kind === 'user' && ++seen === ordinal)
@@ -269,7 +269,7 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   /** Sends the last user message again, replacing what came after it. */
-  async function retry(options: { scene?: AgentScene } = {}) {
+  async function retry(options: { scene?: FairyScene } = {}) {
     let ordinal = -1
     let last: Extract<ChatItem, { kind: 'user' }> | undefined
     for (const item of items.value) {
@@ -284,7 +284,7 @@ export const useAgentStore = defineStore('agent', () => {
     return send(last.text, options)
   }
 
-  async function send(text: string, options: { skills?: AgentSkill[]; scene?: AgentScene; rewind?: number } = {}) {
+  async function send(text: string, options: { skills?: FairySkill[]; scene?: FairyScene; rewind?: number } = {}) {
     const picked = options.skills ?? []
     const quoted = quote.value
     if (running.value || (!text.trim() && !picked.length && !quoted)) return
@@ -293,7 +293,7 @@ export const useAgentStore = defineStore('agent', () => {
     running.value = true
     adopting = !current.value
     try {
-      const result = await call<{ session: string }>('agent.send', {
+      const result = await call<{ session: string }>('fairy.send', {
         session: current.value,
         text,
         ...(options.scene ? { scene: options.scene } : {}),
@@ -316,15 +316,15 @@ export const useAgentStore = defineStore('agent', () => {
     if (!current.value) return
     const item = tool(id)
     if (item) item.state = approved ? 'running' : 'declined'
-    await call('agent.confirm', { session: current.value, id, approved })
+    await call('fairy.confirm', { session: current.value, id, approved })
   }
 
   async function cancel() {
-    if (current.value) await call('agent.cancel', { session: current.value })
+    if (current.value) await call('fairy.cancel', { session: current.value })
   }
 
   async function remove(id: string) {
-    await call('agent.deleteSession', { id })
+    await call('fairy.deleteSession', { id })
     if (current.value === id) newChat()
     await refreshSessions()
   }
@@ -333,14 +333,14 @@ export const useAgentStore = defineStore('agent', () => {
   function bind() {
     if (bound) return
     bound = true
-    on('agent/event', handle)
+    on('fairy/event', handle)
     // Command nodes, bots and plugin skills come and go with these.
     let timer: ReturnType<typeof setTimeout> | undefined
     const later = () => {
       clearTimeout(timer)
       timer = setTimeout(() => refreshPickers().catch(() => {}), 500)
     }
-    for (const name of ['flows/changed', 'bots/changed', 'actions/changed', 'agent/changed']) on(name, later)
+    for (const name of ['flows/changed', 'bots/changed', 'actions/changed', 'fairy/changed']) on(name, later)
     on('connected', () => {
       refreshSessions().catch(() => {})
       refreshPickers().catch(() => {})

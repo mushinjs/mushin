@@ -267,9 +267,6 @@ importers:
       '@mushinjs/plugin-adapter-telegram':
         specifier: workspace:*
         version: link:../plugin-adapter-telegram
-      '@mushinjs/plugin-agent':
-        specifier: workspace:*
-        version: link:../plugin-agent
       '@mushinjs/plugin-bots':
         specifier: workspace:*
         version: link:../plugin-bots
@@ -282,6 +279,9 @@ importers:
       '@mushinjs/plugin-demo':
         specifier: workspace:*
         version: link:../plugin-demo
+      '@mushinjs/plugin-fairy':
+        specifier: workspace:*
+        version: link:../plugin-fairy
       '@mushinjs/plugin-flows':
         specifier: workspace:*
         version: link:../plugin-flows
@@ -490,18 +490,6 @@ importers:
         specifier: workspace:*
         version: link:../plugin-bots
 
-  packages/plugin-agent:
-    dependencies:
-      '@mushinjs/core':
-        specifier: workspace:*
-        version: link:../core
-      '@mushinjs/plugin-providers':
-        specifier: workspace:*
-        version: link:../plugin-providers
-      '@mushinjs/plugin-storage':
-        specifier: workspace:*
-        version: link:../plugin-storage
-
   packages/plugin-bots:
     dependencies:
       '@mushinjs/core':
@@ -528,12 +516,12 @@ importers:
       '@mushinjs/dashboard':
         specifier: workspace:*
         version: link:../dashboard
-      '@mushinjs/plugin-agent':
-        specifier: workspace:*
-        version: link:../plugin-agent
       '@mushinjs/plugin-bots':
         specifier: workspace:*
         version: link:../plugin-bots
+      '@mushinjs/plugin-fairy':
+        specifier: workspace:*
+        version: link:../plugin-fairy
       '@mushinjs/plugin-flows':
         specifier: workspace:*
         version: link:../plugin-flows
@@ -586,6 +574,18 @@ importers:
         specifier: workspace:*
         version: link:../plugin-storage
 
+  packages/plugin-fairy:
+    dependencies:
+      '@mushinjs/core':
+        specifier: workspace:*
+        version: link:../core
+      '@mushinjs/plugin-providers':
+        specifier: workspace:*
+        version: link:../plugin-providers
+      '@mushinjs/plugin-storage':
+        specifier: workspace:*
+        version: link:../plugin-storage
+
   packages/plugin-flows:
     dependencies:
       '@mushinjs/core':
@@ -631,9 +631,9 @@ importers:
         specifier: 'catalog:'
         version: 4.0.1(cordis@4.0.0-rc.11)
     devDependencies:
-      '@mushinjs/plugin-agent':
+      '@mushinjs/plugin-fairy':
         specifier: workspace:*
-        version: link:../plugin-agent
+        version: link:../plugin-fairy
 
   packages/plugin-mcp:
     dependencies:

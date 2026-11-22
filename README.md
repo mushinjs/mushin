@@ -1,6 +1,6 @@
 # Mushin.js 無心
 
-An agent-powered chatbot framework where everything is a plugin. Describe what you want, in plain words, and the built-in Agent sets it up: providers, bots, plugins and pages in the dashboard.
+An fairy-powered chatbot framework where everything is a plugin. Describe what you want, in plain words, and the built-in Fairy sets it up: providers, bots, plugins and pages in the dashboard.
 
 Mushin.js is built on [Cordis](https://github.com/cordiverse/cordis). The MVP ships a OneBot v11 adapter for [NapCat](https://napneko.github.io/), so bots run on QQ.
 
@@ -9,8 +9,8 @@ Mushin.js is built on [Cordis](https://github.com/cordiverse/cordis). The MVP sh
 | Area | What you get |
 | --- | --- |
 | Plugin architecture | Every feature is a Cordis plugin. App plugins extend Mushin.js; bot plugins run per bot, each bot in its own isolated context. |
-| Agent | A chat dock on every page. It operates the instance through the same actions the dashboard uses, asks before dangerous ones, and can open pages and point at controls. It knows which page you are on and suggests what to do there; type `/` for commands (its own and every bot's) and `$` for skills. Replies render Markdown, code, cards, checklists and Mermaid diagrams. |
-| Settings | Appearance (theme, language), features (Agent panel on start, which pages the sidebar shows), the Agent settings and an about page. The Agent settings hold per-page hints and suggestions, skills (write your own or import a `SKILL.md`), MCP servers whose tools the Agent can use, a policy per tool (auto, ask first, off), the model and a daily token budget. |
+| Fairy | A chat dock on every page. It operates the instance through the same actions the dashboard uses, asks before dangerous ones, and can open pages and point at controls. It knows which page you are on and suggests what to do there; type `/` for commands (its own and every bot's) and `$` for skills. Replies render Markdown, code, cards, checklists and Mermaid diagrams. |
+| Settings | Appearance (theme, language), features (Fairy panel on start, which pages the sidebar shows), the Fairy settings and an about page. The Fairy settings hold per-page hints and suggestions, skills (write your own or import a `SKILL.md`), MCP servers whose tools Fairy can use, a policy per tool (auto, ask first, off), the model and a daily token budget. |
 | Providers | OpenAI-compatible endpoints (OpenAI, DeepSeek, Moonshot, Qwen, SiliconFlow, OpenRouter, Zhipu GLM, Volcengine Ark, Baidu Qianfan, Tencent Hunyuan, MiniMax, StepFun, xAI, Groq, Mistral, Gemini, Together, Ollama, LM Studio, vLLM), Azure OpenAI, Anthropic (plus the Anthropic-compatible endpoints of DeepSeek, Kimi, Zhipu and MiniMax), native Google Gemini, and TypeSafe Jev decision models through `providers.decide`. Keys are kept in `.env`, never in the config or `data/`. |
 | Overview | The start page: bots online, today's messages and model tokens, flows with errors, commands, providers and plugins; a message chart for 24 hours or 7 days per bot; the busiest chats, users, commands, flows and models; live CPU, memory and event loop delay; versions, uptime and data directory size. |
 | Bots | Create, start, stop and configure bots; enable bot plugins per bot; each bot's commands and `/help`. |
@@ -41,7 +41,7 @@ Every start prints a sign-in link and the admin token:
   New token:   mushin token reset
 ```
 
-Open the sign-in link, then follow **Quick setup** to connect an LLM provider. After that, ask the Agent, for example: *"Connect a QQ bot through NapCat at ws://127.0.0.1:3001 and turn on LLM chat."*
+Open the sign-in link, then follow **Quick setup** to connect an LLM provider. After that, ask Fairy, for example: *"Connect a QQ bot through NapCat at ws://127.0.0.1:3001 and turn on LLM chat."*
 
 - The token is kept in `.env` as `MUSHIN_ADMIN_TOKEN`, so it stays the same across restarts.
 - To replace it, run `npx mushin token reset`. A running Mushin.js accepts the new token at once and the old one stops working.
@@ -66,14 +66,14 @@ my-bot/
     mushin.db          the database
     core/              bots, providers, permissions
     bots/<id>/         one bot's message log
-    agents/            Agent sessions, skills and settings
+    fairy/            Fairy sessions, skills and settings
     plugins/<name>/    each plugin's own files
     backups/           copies Mushin.js makes before changing the folder
   logs/                bot logs, safe to delete
   cache/               safe to delete
 ```
 
-Secrets stay out of `mushin.config.json` and `data/`: a key you enter in the dashboard or through the Agent is written to `.env`, and the record holds a reference such as `${DEEPSEEK_API_KEY}`. You can write such a reference yourself, in a provider form or in any plugin setting in `mushin.config.json`. A plugin setting marked secret (`field(…, { secret: true })`) is moved to `.env` the same way when you save it, or on the next start if you typed the key into `mushin.config.json`, and lists show it masked. A variable set in the environment overrides `.env`. Keep `.env` out of git and out of anything you share.
+Secrets stay out of `mushin.config.json` and `data/`: a key you enter in the dashboard or through Fairy is written to `.env`, and the record holds a reference such as `${DEEPSEEK_API_KEY}`. You can write such a reference yourself, in a provider form or in any plugin setting in `mushin.config.json`. A plugin setting marked secret (`field(…, { secret: true })`) is moved to `.env` the same way when you save it, or on the next start if you typed the key into `mushin.config.json`, and lists show it masked. A variable set in the environment overrides `.env`. Keep `.env` out of git and out of anything you share.
 
 An instance from an older version is moved to this layout when it starts, after a copy of its `data/` folder goes to `data/backups/`, and the keys it kept in plain text move to `.env`. That copy still holds the old keys, so delete it once the instance runs. To see the moves first, run `npx mushin migrate --dry-run`; `mushin migrate` makes them without starting.
 
@@ -83,7 +83,7 @@ Mushin.js serves its actions over MCP at `/mcp`, so an AI tool such as Claude Co
 
 The app also has four official skills in `.claude/skills/`: writing a plugin (it asks you what it needs to know before it writes any code), building and testing flows, finding out why something does not work, and running the app (upgrades, backups, moving machines). `npm run upgrade` replaces them with the new version's; `npx mushin skills` does it on its own.
 
-The MCP tools follow the Agent's tool policy (the **Tool policy** tab of the dashboard's Agent page). Tools turned off are not offered. Dangerous tools, and any you set to ask first, run only after you approve them in an open dashboard. Only a short list of common tools is listed directly, to keep the model's tool list small. The rest are found with `search_tools` and run with `call_tool`. The **Console** plugin's settings choose which tools are listed, list them all, or turn the MCP server off.
+The MCP tools follow Fairy's tool policy (the **Tool policy** tab of the dashboard's Fairy page). Tools turned off are not offered. Dangerous tools, and any you set to ask first, run only after you approve them in an open dashboard. Only a short list of common tools is listed directly, to keep the model's tool list small. The rest are found with `search_tools` and run with `call_tool`. The **Console** plugin's settings choose which tools are listed, list them all, or turn the MCP server off.
 
 ### Try it without QQ or an API key
 
@@ -92,12 +92,12 @@ pnpm build
 pnpm demo
 ```
 
-This starts an instance wired to a mock NapCat and a mock LLM, with a provider, two bots, some chat traffic and an Agent conversation already in place. Sign in with the token `demo`.
+This starts an instance wired to a mock NapCat and a mock LLM, with a provider, two bots, some chat traffic and a Fairy conversation already in place. Sign in with the token `demo`.
 
 To try things inside your own instance instead, enable **Demo** (`@mushinjs/plugin-demo`) on the **Plugins** page. It adds a *Demo (offline)* provider type that answers without an API key, a *Demo sandbox* bot adapter that is always online, and a sandbox bot to try flows on. Nothing is created until you tick it in the plugin's settings:
 
 - **Create the demo provider**: a provider of the offline type.
-- **Create the demo bot**: a sandbox bot. In its live conversation view you play the test user: what you send is received by the bot as the test user's message (start with `@` to mention the bot). The Agent can do the same with the `demo.say` action.
+- **Create the demo bot**: a sandbox bot. In its live conversation view you play the test user: what you send is received by the bot as the test user's message (start with `@` to mention the bot). Fairy can do the same with the `demo.say` action.
 - **Sample flows**: command reply (`/ping`, `/echo`), keyword trigger, condition branch (`/score 85`), cooldown and counter (`/checkin`), wait for a reply with a timeout (`/quiz`), LLM reply (`/ai`) and intent classification (`/客服`). They run on the demo bot when it exists, and the bot's built-in `/help` lists their commands.
 
 Unticking an item deletes it, and disabling the plugin deletes everything it created. The sample flows are marked as the plugin's on the flows page, cannot be deleted there, and link to the plugin. Edit a sample flow freely, but untick it before you disable the plugin if you want to keep a copy.
@@ -125,7 +125,7 @@ Set NapCat's message format to `array` and use the same access token on both sid
 { "name": "HttpClient", "enable": true, "url": "http://127.0.0.1:5160/onebot/<bot id>", "messagePostFormat": "array", "token": "your-token", "secret": "your-secret" }
 ```
 
-The bots list shows each bot's connection mode and address, with a switch to start or stop it. A bot's **Flow overview** tab lists, in order, everything a message passes on that bot: the flow triggers by priority, the built-in commands and the bot plugins. Type a message there and pick who sends it (group member, admin, owner, the bot's admin, or a private chat) to see which triggers it starts, the path each run takes, what it replies and which plugins never see it, all in test mode; LLM nodes answer with a placeholder unless you allow real calls. The Agent can do the same with `flows.route`.
+The bots list shows each bot's connection mode and address, with a switch to start or stop it. A bot's **Flow overview** tab lists, in order, everything a message passes on that bot: the flow triggers by priority, the built-in commands and the bot plugins. Type a message there and pick who sends it (group member, admin, owner, the bot's admin, or a private chat) to see which triggers it starts, the path each run takes, what it replies and which plugins never see it, all in test mode; LLM nodes answer with a placeholder unless you allow real calls. Fairy can do the same with `flows.route`.
 
 If Mushin.js and NapCat run on different machines, bind Mushin.js to a reachable address (`host` in the server entry) and keep the admin token private.
 
@@ -149,7 +149,7 @@ When a bot misbehaves, open its **Logs** tab. It lists what happened inside that
 
 ## Keeping LLM chat in check
 
-Turning on the LLM chat bot plugin makes a flow on the bot, **大模型对话 · <bot name>**, and the limits are nodes in it. Open the flow from the bot's **Plugins** tab to change them, add your own conditions (only users who checked in, a persona for one group), or ask the Agent. The flow belongs to the plugin: turning the plugin off on the bot removes it. Bots set up with the plugin's old settings get a flow made from them.
+Turning on the LLM chat bot plugin makes a flow on the bot, **大模型对话 · <bot name>**, and the limits are nodes in it. Open the flow from the bot's **Plugins** tab to change them, add your own conditions (only users who checked in, a persona for one group), or ask Fairy. The flow belongs to the plugin: turning the plugin off on the bot removes it. Bots set up with the plugin's old settings get a flow made from them.
 
 | Node | Default | Effect |
 | --- | --- | --- |
@@ -163,7 +163,7 @@ The flow sits below other flows (priority −100), so commands and keyword flows
 
 ## Conversation flows
 
-Open **Flows** in the dashboard (cards or a compact list, grouped by bot by default with the most recently edited flows on top, or by trigger, adapter or when they were last edited; filters for trigger, adapter, bot and status sit in one panel, and the choices stay in the address bar) and create a flow from a template, or ask the Agent ("when someone says hello, greet them and count visitors"). A flow is a graph of nodes:
+Open **Flows** in the dashboard (cards or a compact list, grouped by bot by default with the most recently edited flows on top, or by trigger, adapter or when they were last edited; filters for trigger, adapter, bot and status sit in one panel, and the choices stay in the address bar) and create a flow from a template, or ask Fairy ("when someone says hello, greet them and count visitors"). A flow is a graph of nodes:
 
 - **Connections** only say what runs next. Branching nodes have one output per outcome, listed on the right edge of the node, such as `true`/`false` or one per intent label.
 - **Values** move by reference, as in Dify: a node's input, or any text in its settings, can read `{{<node id>.<output>}}` from a node that ran earlier (for example `{{n1.rest}}` or `{{llm.reply}}`), `{{sys.text}}` / `{{sys.user}}` for the incoming message, and `{{chat.<name>}}`, `{{user.<name>}}`, `{{flow.<name>}}` for stored variables. Press **(x)** next to an input to pick one. Flows saved with the older data connections are converted on load.
@@ -198,7 +198,7 @@ A run may work for 60 seconds; waiting for a reply, waiting in a queue and **lon
 
 To debug a flow, set **breakpoints** on its nodes (F9, or the node's right-click menu; click the red dot to remove one). A test run from the Logs bar then pauses before each, with the run so far on the canvas and in the logs and the paused node's inputs on hover; **Continue** (F8), **Step** (F10) or **Stop** it. Breakpoints are kept in the browser and never pause real runs.
 
-The Agent sees the same with `flows.activity`, `flows.history` and `flows.run`, and can stop a run with `flows.stop` once you confirm.
+Fairy sees the same with `flows.activity`, `flows.history` and `flows.run`, and can stop a run with `flows.stop` once you confirm.
 
 ### Test cases
 
@@ -220,7 +220,7 @@ The database nodes work on these tables. Their conditions and values are lists e
 - **Update rows** sets fields or adds to number fields on the matching rows, continuing on `updated` or `none`; **Add when missing** adds a row from the "equals" conditions and the values instead.
 - **Delete rows** removes the matching rows.
 
-Update and delete need at least one condition. Test runs (the Logs bar and test cases) read the tables but never write: the writes they would make are listed with the platform calls, and test cases can assert them. Without the Database plugin, the nodes are greyed out and flows using them show an error. The Agent manages tables with `flows.tables.list`, `flows.tables.define` and `flows.tables.drop`.
+Update and delete need at least one condition. Test runs (the Logs bar and test cases) read the tables but never write: the writes they would make are listed with the platform calls, and test cases can assert them. Without the Database plugin, the nodes are greyed out and flows using them show an error. Fairy manages tables with `flows.tables.list`, `flows.tables.define` and `flows.tables.drop`.
 
 ### Permissions
 
@@ -231,7 +231,7 @@ With the Database plugin, each chat also keeps its own members and rules, edited
 - Members have a chat role (member or **chat admin**), tags such as `VIP`, a note, and can be blocked.
 - Rules name a feature (a command name without its prefix, the feature name set on a permission check, or `*` for everything) and either turn it off in that chat or keep it for members with one of some tags.
 
-Set a permission check's **Check** to **Chat rules** to look only at the chat (blocked users and rules for the feature), or **Both** to look at the chat first and then at **Allowed**, which can now include **Chat admin**. Masters pass every chat rule. The **Manage chat member** node blocks, unblocks, tags or names chat admins from a flow, and **Chat member** reads someone's chat role, tags and block. Turn on **Chat commands** to let people manage members in a group: `/拉黑 @someone`, `/解除拉黑`, `/加标签 @someone VIP` and `/去标签` for bot admins and chat admins, `/设为管理` and `/取消管理` for bot admins only. Rules change only on this tab or through the Agent (`permissions.rules.*`), never from a chat.
+Set a permission check's **Check** to **Chat rules** to look only at the chat (blocked users and rules for the feature), or **Both** to look at the chat first and then at **Allowed**, which can now include **Chat admin**. Masters pass every chat rule. The **Manage chat member** node blocks, unblocks, tags or names chat admins from a flow, and **Chat member** reads someone's chat role, tags and block. Turn on **Chat commands** to let people manage members in a group: `/拉黑 @someone`, `/解除拉黑`, `/加标签 @someone VIP` and `/去标签` for bot admins and chat admins, `/设为管理` and `/取消管理` for bot admins only. Rules change only on this tab or through Fairy (`permissions.rules.*`), never from a chat.
 
 ### Terminal commands
 
@@ -240,10 +240,10 @@ Enable **Terminal** on the Plugins page to get two nodes: **Run command** runs a
 Because a command can do anything your account can:
 
 - A reference in the command, such as `ping -c 3 {{n1.rest}}`, is inserted as one quoted argument, so a chat message cannot end the argument and add commands of its own. cmd cannot quote `"`, `%`, `!` or line breaks safely, so values containing them stop the run; prefer PowerShell on Windows.
-- Only people can add terminal nodes or change their command, in the flow editor. The Agent cannot add them or change their settings, though it can still edit the rest of a flow that has them.
-- Test runs from the **Logs** bar or the Agent show the command they would run instead of running it, unless you turn on **Run commands in test runs** in the plugin settings. **Allow local commands** turns the local node off while keeping SSH.
+- Only people can add terminal nodes or change their command, in the flow editor. Fairy cannot add them or change their settings, though it can still edit the rest of a flow that has them.
+- Test runs from the **Logs** bar or Fairy show the command they would run instead of running it, unless you turn on **Run commands in test runs** in the plugin settings. **Allow local commands** turns the local node off while keeping SSH.
 
-SSH servers are listed in the plugin settings: a name the nodes pick, address, port, user and the remote shell (posix, or powershell / cmd for Windows servers). Passwords are never stored: point **Private key file** at a key such as `~/.ssh/id_ed25519` (its passphrase, and any password, are read from environment variables you name), or use the running ssh-agent. Paste the server's fingerprint (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server) to pin it; left empty, the key seen on the first connection is remembered and a different key is refused later. The Agent can list the servers (`terminal.hosts.list`) and test a sign-in (`terminal.hosts.check`).
+SSH servers are listed in the plugin settings: a name the nodes pick, address, port, user and the remote shell (posix, or powershell / cmd for Windows servers). Passwords are never stored: point **Private key file** at a key such as `~/.ssh/id_ed25519` (its passphrase, and any password, are read from environment variables you name), or use the running ssh-agent. Paste the server's fingerprint (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server) to pin it; left empty, the key seen on the first connection is remembered and a different key is refused later. Fairy can list the servers (`terminal.hosts.list`) and test a sign-in (`terminal.hosts.check`).
 
 Turn a flow off with the switch on its card or at the top of the editor: it keeps its content and bots but answers no messages, events or schedules, and its commands leave `/help`, until it is turned on again.
 
@@ -253,7 +253,7 @@ Variables are saved in the database (`flows_var`) and survive restarts.
 
 A **Command** trigger answers a command such as `/checkin`: a name, aliases, a description and a list of arguments, each with a type (text, number, yes/no, an @mention, or one of a few choices), whether it is required, a default and a note. Each argument becomes an output of the same name, so `{{n1.score}}` reads it; names may be in any script, such as `{{n1.分数}}`. The command follows the bot's prefixes unless it is given prefixes of its own (say, only `#`). The settings show the usage line the arguments make and a box to try a message against them. When the arguments do not fit, the bot replies with the usage instead of running the flow. A Keyword trigger matches `/foo` as plain text; when a keyword starts with `/`, the settings offer to turn the node into a Command trigger (it keeps its id, so `{{n1.rest}}` still works).
 
-Every bot has a command list on its **Commands** tab: command nodes from the flows on the bot, commands that bot plugins register with `ctx.bot.command()`, and the built-in `/help`, which answers with the list unless a flow or plugin handles `/help` itself. The same tab sets the bot's prefixes (default `/`; `#` or `!` work too), the first line of `/help`, and the admins allowed to run admin-only commands. Two sources registering the same name on one bot are flagged in the list and as a warning on the flow. The `commands.list` action gives the Agent the same list.
+Every bot has a command list on its **Commands** tab: command nodes from the flows on the bot, commands that bot plugins register with `ctx.bot.command()`, and the built-in `/help`, which answers with the list unless a flow or plugin handles `/help` itself. The same tab sets the bot's prefixes (default `/`; `#` or `!` work too), the first line of `/help`, and the admins allowed to run admin-only commands. Two sources registering the same name on one bot are flagged in the list and as a warning on the flow. The `commands.list` action gives Fairy the same list.
 
 ## Development
 
@@ -290,7 +290,7 @@ A pull request that changes what users get adds a changeset (`pnpm changeset`). 
 | `@mushinjs/plugin-provider-typesafe` | TypeSafe Jev decision provider type (noul, choice, score and box questions) |
 | `@mushinjs/plugin-bots` | Bot records, per-bot runtimes, sessions, message records |
 | `@mushinjs/plugin-adapter-onebot` | OneBot v11 adapter |
-| `@mushinjs/plugin-agent` | The Agent's tool loop, skills, page profiles, tool policy and token budget |
+| `@mushinjs/plugin-fairy` | Fairy's tool loop, skills, page profiles, tool policy and token budget |
 | `@mushinjs/plugin-mcp` | MCP client (stdio and Streamable HTTP); each MCP tool becomes an action |
 | `@mushinjs/plugin-console` | HTTP API, WebSocket, admin token, dashboard hosting, and the MCP server at `/mcp` |
 | `@mushinjs/plugin-flows` | Flow documents, node types, validation and the execution engine |

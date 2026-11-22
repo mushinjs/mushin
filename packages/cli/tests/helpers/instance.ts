@@ -75,8 +75,8 @@ export async function startInstance(options: { baseDir?: string } = {}) {
     })
     return {
       events,
-      agentEvents: (session?: string) => events
-        .filter((event) => event.name === 'agent/event' && (!session || event.data.session === session))
+      fairyEvents: (session?: string) => events
+        .filter((event) => event.name === 'fairy/event' && (!session || event.data.session === session))
         .map((event) => event.data),
       call<T = any>(action: string, input: unknown = {}) {
         const id = String(++counter)

@@ -53,7 +53,7 @@
     "@mushinjs/plugin-adapter-telegram": "workspace:*",
     "@mushinjs/plugin-adapter-discord": "workspace:*",
     "@mushinjs/plugin-adapter-kook": "workspace:*",
-    "@mushinjs/plugin-agent": "workspace:*",
+    "@mushinjs/plugin-fairy": "workspace:*",
     "@mushinjs/plugin-console": "workspace:*",
     "@mushinjs/bot-plugin-echo": "workspace:*",
     "@mushinjs/bot-plugin-llm-chat": "workspace:*",

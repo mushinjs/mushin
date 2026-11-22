@@ -169,7 +169,7 @@ const {
   container: flow-editor / inline-size;
 }
 
-/* Full window: the editor covers the app's sidebar, top bar and Agent until Esc or the button. */
+/* Full window: the editor covers the app's sidebar, top bar and Fairy until Esc or the button. */
 .editor.immersive {
   position: fixed;
   inset: 0;

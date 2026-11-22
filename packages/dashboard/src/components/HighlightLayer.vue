@@ -6,7 +6,7 @@ import { highlightState } from '../highlight'
   <Transition name="fade">
     <div
       v-if="highlightState.visible"
-      class="agent-tip"
+      class="fairy-tip"
       :style="{ top: `${highlightState.top}px`, left: `${highlightState.left}px` }"
       role="status"
     >
@@ -16,7 +16,7 @@ import { highlightState } from '../highlight'
 </template>
 
 <style scoped>
-.agent-tip {
+.fairy-tip {
   position: fixed;
   z-index: 3000;
   max-width: 280px;

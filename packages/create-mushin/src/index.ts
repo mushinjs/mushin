@@ -100,7 +100,7 @@ const PNPM_SETTINGS = `allowBuilds:
 function agentsGuide(name: string) {
   return `# ${name}
 
-This folder is a [Mushin.js](https://github.com/mushinjs/mushin) app: a chatbot framework for QQ (through OneBot / NapCat) with LLM chat, conversation flows and an Agent. Read this before changing anything here.
+This folder is a [Mushin.js](https://github.com/mushinjs/mushin) app: a chatbot framework for QQ (through OneBot / NapCat) with LLM chat, conversation flows and a Fairy. Read this before changing anything here.
 
 ## Commands
 
@@ -129,7 +129,7 @@ This folder is a [Mushin.js](https://github.com/mushinjs/mushin) app: a chatbot 
 
 | Path | What it is | Who writes it |
 | --- | --- | --- |
-| \`mushin.config.json\` | Which plugins run, and their settings. Holds no secrets. | People, the dashboard, the Agent |
+| \`mushin.config.json\` | Which plugins run, and their settings. Holds no secrets. | People, the dashboard, Fairy |
 | \`.mcp.json\` | Connects the AI tool opened here to Mushin.js. Holds no secrets. | create-mushin |
 | \`.claude/skills/\` | The official skills for AI tools | Mushin.js (on create and upgrade) |
 | \`.env\` | Secrets: the admin token, provider keys, bot tokens. Configuration refers to them as \`\${NAME}\`. | Mushin.js and people |

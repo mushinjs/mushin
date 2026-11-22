@@ -2,15 +2,15 @@
 import { Tag } from '@mushinjs/ui'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useAgentStore } from '../../stores/agent'
-import { useAgentSceneStore } from '../../stores/agentScene'
-import type { AgentCommands, AgentSkill } from '../../types'
+import { useFairyStore } from '../../stores/fairy'
+import { useFairySceneStore } from '../../stores/fairyScene'
+import type { FairyCommands, FairySkill } from '../../types'
 
-/** One row: an Agent command, a bot command or a skill. */
+/** One row: a Fairy command, a bot command or a skill. */
 export type PaletteItem =
   | { kind: 'builtin'; key: string; name: string; description: string }
-  | { kind: 'bot'; key: string; name: string; description: string; command: AgentCommands['bots'][number] }
-  | { kind: 'skill'; key: string; name: string; description: string; skill: AgentSkill; recommended: boolean }
+  | { kind: 'bot'; key: string; name: string; description: string; command: FairyCommands['bots'][number] }
+  | { kind: 'skill'; key: string; name: string; description: string; skill: FairySkill; recommended: boolean }
 
 const props = defineProps<{
   /** `/` lists commands and skills, `$` only skills. */
@@ -22,8 +22,8 @@ const props = defineProps<{
 const emit = defineEmits<{ pick: [item: PaletteItem] }>()
 
 const { t, locale } = useI18n()
-const agent = useAgentStore()
-const scenes = useAgentSceneStore()
+const fairy = useFairyStore()
+const scenes = useFairySceneStore()
 const active = ref(0)
 const listEl = ref<HTMLElement>()
 
@@ -32,14 +32,14 @@ const matches = (...texts: (string | undefined)[]) => {
   return !query || texts.some((text) => text?.toLowerCase().includes(query))
 }
 
-const skillItems = computed<PaletteItem[]>(() => agent.skills
+const skillItems = computed<PaletteItem[]>(() => fairy.skills
   .filter((skill) => skill.enabled && matches(skill.id, skill.name, skill.description))
   .map((skill) => ({ kind: 'skill' as const, key: `skill:${skill.id}`, name: skill.name, description: skill.description, skill, recommended: !!skill.scenes?.includes(props.scene) || scenes.skills.includes(skill.id) }))
   .sort((a, b) => Number(b.recommended) - Number(a.recommended)))
 
 const groups = computed(() => {
-  if (props.mode === '$') return [{ title: t('agentPalette.skills'), items: skillItems.value }]
-  const builtin: PaletteItem[] = agent.commands.builtin
+  if (props.mode === '$') return [{ title: t('fairyPalette.skills'), items: skillItems.value }]
+  const builtin: PaletteItem[] = fairy.commands.builtin
     .filter((command) => matches(command.name))
     .map((command) => ({
       kind: 'builtin',
@@ -48,13 +48,13 @@ const groups = computed(() => {
       description: locale.value === 'zh-CN' ? command['zh-CN'] ?? command.description : command.description,
     }))
   // A command on several bots is listed once per bot, so the user picks where it runs.
-  const bots: PaletteItem[] = agent.commands.bots
+  const bots: PaletteItem[] = fairy.commands.bots
     .filter((command) => matches(command.name, command.description, command.botName))
     .map((command) => ({ kind: 'bot', key: `bot:${command.bot}:${command.name}`, name: command.name, description: command.description ?? '', command }))
   return [
-    { title: t('agentPalette.agentCommands'), items: builtin },
-    { title: t('agentPalette.botCommands'), items: bots },
-    { title: t('agentPalette.skills'), items: skillItems.value },
+    { title: t('fairyPalette.fairyCommands'), items: builtin },
+    { title: t('fairyPalette.botCommands'), items: bots },
+    { title: t('fairyPalette.skills'), items: skillItems.value },
   ].filter((group) => group.items.length)
 })
 
@@ -63,10 +63,10 @@ const flat = computed(() => groups.value.flatMap((group) => group.items))
 watch(() => [props.query, props.mode], () => (active.value = 0))
 
 function sourceLabel(item: PaletteItem) {
-  if (item.kind === 'builtin') return t('agentPalette.source.builtin')
+  if (item.kind === 'builtin') return t('fairyPalette.source.builtin')
   if (item.kind === 'bot') return item.command.botName ?? item.command.bot
-  if (item.skill.source === 'plugin') return item.skill.plugin ?? t('agentPalette.source.plugin')
-  return t(`agentPalette.source.${item.skill.source}`)
+  if (item.skill.source === 'plugin') return item.skill.plugin ?? t('fairyPalette.source.plugin')
+  return t(`fairyPalette.source.${item.skill.source}`)
 }
 
 async function move(step: number) {
@@ -89,7 +89,7 @@ defineExpose({ move, choose, count: () => flat.value.length })
 
 <template>
   <div ref="listEl" class="palette" role="listbox">
-    <div v-if="!flat.length" class="empty">{{ mode === '$' ? t('agentPalette.noSkills') : t('agentPalette.none') }}</div>
+    <div v-if="!flat.length" class="empty">{{ mode === '$' ? t('fairyPalette.noSkills') : t('fairyPalette.none') }}</div>
     <template v-for="group in groups" :key="group.title">
       <div class="group">{{ group.title }}</div>
       <button
@@ -106,7 +106,7 @@ defineExpose({ move, choose, count: () => flat.value.length })
         <span class="icon text-[16px]" :class="item.kind === 'builtin' ? 'i-lucide-terminal' : item.kind === 'bot' ? 'i-lucide-message-circle-more' : item.recommended ? 'i-lucide-zap' : 'i-lucide-puzzle'" />
         <span class="name">{{ item.kind === 'skill' ? item.name : `/${item.name}` }}</span>
         <span class="desc">{{ item.description }}</span>
-        <Tag v-if="item.kind === 'skill' && item.recommended" size="tiny" type="success">{{ t('agentPalette.recommended') }}</Tag>
+        <Tag v-if="item.kind === 'skill' && item.recommended" size="tiny" type="success">{{ t('fairyPalette.recommended') }}</Tag>
         <span class="source">{{ sourceLabel(item) }}</span>
       </button>
     </template>

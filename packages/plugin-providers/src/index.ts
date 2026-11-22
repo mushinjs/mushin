@@ -662,7 +662,7 @@ export class LlmService extends Service {
 
     yield actions.define({
       name: 'providers.list',
-      description: 'List configured LLM providers and model profiles. Secrets are masked. Also reports whether the Agent is ready (a provider passed its test).',
+      description: 'List configured LLM providers and model profiles. Secrets are masked. Also reports whether Fairy is ready (a provider passed its test).',
       risk: 'read',
       input: z.object({}),
       handler: () => ({ providers: this.list(), profiles: this.profiles(), ready: this.isReady() }),
@@ -734,7 +734,7 @@ export class LlmService extends Service {
 
     yield actions.define({
       name: 'providers.setDefault',
-      description: 'Make a provider the default for the Agent and bot plugins.',
+      description: 'Make a provider the default for Fairy and bot plugins.',
       risk: 'write',
       input: idInput,
       handler: ({ id }) => this.setDefault(id),

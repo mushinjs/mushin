@@ -173,7 +173,7 @@ const percent = (item: KnowledgeProgress) => (item.total ? Math.round((item.done
     <div
       class="drop"
       :class="{ dragging }"
-      data-agent-target="knowledge.upload"
+      data-fairy-target="knowledge.upload"
       @dragover.prevent="dragging = true"
       @dragleave="dragging = false"
       @drop.prevent="drop"

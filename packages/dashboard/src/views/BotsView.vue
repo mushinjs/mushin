@@ -108,7 +108,7 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
 <template>
   <div class="page">
     <PageHeader :title="t('nav.bots')" :lead="t('bots.lead')">
-      <Button type="primary" data-agent-target="bots.add" icon="i-lucide-plus" @click="showCreate = true">
+      <Button type="primary" data-fairy-target="bots.add" icon="i-lucide-plus" @click="showCreate = true">
         {{ t('bots.add') }}
       </Button>
     </PageHeader>

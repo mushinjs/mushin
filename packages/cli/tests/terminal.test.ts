@@ -35,18 +35,18 @@ describe('terminal plugin', () => {
     ])
   })
 
-  it('lets people add terminal nodes but not the Agent', async () => {
+  it('lets people add terminal nodes but not Fairy', async () => {
     const actions = app.ctx.actions
-    await expect(actions.call('flows.create', flow('uptime'), { kind: 'agent' })).rejects.toThrow(/Agent cannot add or change "terminal.local"/)
+    await expect(actions.call('flows.create', flow('uptime'), { kind: 'fairy' })).rejects.toThrow(/Fairy cannot add or change "terminal.local"/)
 
     const created = await app.call('flows.create', flow('uptime'))
-    // The Agent can still edit the rest of the flow when it sends the terminal node back unchanged…
+    // Fairy can still edit the rest of the flow when it sends the terminal node back unchanged…
     const nodes = created.nodes.map((node: any) => (node.id === 'say' ? { ...node, config: { text: 'Up: {{run.stdout}}' } } : node))
-    const updated: any = await actions.call('flows.update', { id: created.id, nodes }, { kind: 'agent' })
+    const updated: any = await actions.call('flows.update', { id: created.id, nodes }, { kind: 'fairy' })
     expect(updated.nodes.find((node: any) => node.id === 'say').config.text).toBe('Up: {{run.stdout}}')
     // …but not change its command.
     const changed = nodes.map((node: any) => (node.id === 'run' ? { ...node, config: { command: 'rm -rf ~' } } : node))
-    await expect(actions.call('flows.update', { id: created.id, nodes: changed }, { kind: 'agent' })).rejects.toThrow(/Agent cannot/)
+    await expect(actions.call('flows.update', { id: created.id, nodes: changed }, { kind: 'fairy' })).rejects.toThrow(/Fairy cannot/)
   })
 
   it('shows the command instead of running it in a test run', async () => {

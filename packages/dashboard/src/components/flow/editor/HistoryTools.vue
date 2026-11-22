@@ -22,13 +22,13 @@ function when(at: number) {
   <div class="history-tools" role="group" :aria-label="t('flows.history.title')">
     <Tooltip>
       <template #trigger>
-        <Button quaternary size="small" :disabled="!canUndo" :aria-label="t('flows.history.undo')" data-agent-target="flows.undo" @click="undo" icon="i-lucide-undo-2" />
+        <Button quaternary size="small" :disabled="!canUndo" :aria-label="t('flows.history.undo')" data-fairy-target="flows.undo" @click="undo" icon="i-lucide-undo-2" />
       </template>
       {{ canUndo ? t('flows.history.undoStep', { step: undoLabel }) : t('flows.history.nothingToUndo') }}
     </Tooltip>
     <Tooltip>
       <template #trigger>
-        <Button quaternary size="small" :disabled="!canRedo" :aria-label="t('flows.history.redo')" data-agent-target="flows.redo" @click="redo" icon="i-lucide-redo-2" />
+        <Button quaternary size="small" :disabled="!canRedo" :aria-label="t('flows.history.redo')" data-fairy-target="flows.redo" @click="redo" icon="i-lucide-redo-2" />
       </template>
       {{ canRedo ? t('flows.history.redoStep', { step: redoLabel }) : t('flows.history.nothingToRedo') }}
     </Tooltip>
