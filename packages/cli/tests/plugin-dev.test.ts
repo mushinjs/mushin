@@ -56,6 +56,37 @@ describe('plugin folders', () => {
     expect(await app.call('sharedHello.hello', { name: 'Fairy' })).toEqual({ text: 'Hello, Fairy?' })
   })
 
+  it('lets a code plugin add a flow node, which the flow editor lists beside the built-in ones', async () => {
+    const created = await app.call('plugins.new', { name: 'node-demo', folder: shared })
+    const entry = join(created.dir, 'src/index.ts')
+    await writeFile(entry, `import { type Context, z } from '@mushinjs/core'
+import type {} from '@mushinjs/plugin-flows'
+
+export const name = 'node-demo'
+export const inject = ['flows']
+
+export function apply(ctx: Context) {
+  ctx.flows.defineNode({
+    kind: 'action',
+    type: 'nodeDemo.shout',
+    category: 'data',
+    title: { en: 'Shout', 'zh-CN': '大声说' },
+    description: { en: 'Upper-cases the text', 'zh-CN': '把文字变成大写' },
+    config: z.object({}),
+    inputs: [{ name: 'text', type: 'text', title: { en: 'Text', 'zh-CN': '文字' } }],
+    outputs: [{ name: 'text', type: 'text', title: { en: 'Loud text', 'zh-CN': '大写文字' } }],
+    execOut: ['next'],
+    async run({ inputs }) {
+      return { exec: 'next', outputs: { text: String(inputs.text ?? '').toUpperCase() } }
+    },
+  })
+}
+`)
+    await app.call('plugins.reload', { id: 'node-demo' })
+    const [type] = await app.call<any[]>('flows.nodeTypes', { types: ['nodeDemo.shout'] })
+    expect(type).toMatchObject({ type: 'nodeDemo.shout', category: 'data', title: { 'zh-CN': '大声说' } })
+  })
+
   it('lets Fairy\'s file tools into the plugin folders without asking', async () => {
     await app.call('plugins.enable', { package: '@mushinjs/plugin-terminal' })
     await waitFor(() => app.ctx.actions.has('files.write'))

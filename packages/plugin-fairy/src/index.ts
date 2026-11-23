@@ -297,14 +297,19 @@ export class Fairy extends Service {
     return (role.needs ?? []).every((name) => actions.some((action) => action.name === name))
   }
 
-  /** fairy__delegate, listing the roles that can work when the conversation starts. */
+  /** What keeps a role from working, for Fairy: the plugins to turn on, or the actions that are missing. */
+  private roleMissing(role: FairyRole) {
+    return role.enable?.length ? `turn on ${role.enable.join(', ')} first (plugins__enable), after asking the user` : `needs ${role.needs!.join(', ')}`
+  }
+
+  /** fairy__delegate, listing the roles; one that cannot work yet says what it needs, so Fairy can offer that. */
   private delegateTool(actions: ActionInfo[]): ToolDefinition {
-    const roles = this.roles().filter((role) => this.roleReady(role, actions))
+    const roles = this.roles()
     return {
       name: DELEGATE_TOOL,
       description: [
         'Hand a task to a helper. It works in a conversation of its own with its own tools, and returns its report: status, summary, findings, changes and what to do next. Roles:',
-        ...roles.map((role) => `- ${role.id}: ${role.description}`),
+        ...roles.map((role) => (this.roleReady(role, actions) ? `- ${role.id}: ${role.description}` : `- ${role.id} (not available yet: ${this.roleMissing(role)}): ${role.description}`)),
       ].join('\n'),
       parameters: {
         type: 'object',
@@ -1023,7 +1028,10 @@ export class Fairy extends Service {
     const task = typeof input?.task === 'string' ? input.task.trim() : ''
     if (!task) throw new MushinError('invalid_input', 'Say what the helper should do in task')
     if (!this.roleReady(role, await this.allowedActions())) {
-      throw new MushinError('unavailable', `The ${role.name} helper needs ${role.needs!.join(', ')}, which ${role.needs!.length > 1 ? 'are' : 'is'} not available (a plugin is off, or the tools are turned off for Fairy)`)
+      const fix = role.enable?.length
+        ? `Ask the user whether to turn on ${role.enable.join(', ')}, saying what it lets you do; when they agree, turn it on with plugins__enable and delegate again`
+        : 'A plugin that adds them is off, or the tools are turned off for Fairy in its settings'
+      throw new MushinError('unavailable', `The ${role.name} helper cannot work yet: it needs ${role.needs!.join(', ')}. ${fix}.`)
     }
     const now = Date.now()
     const child: FairySession = {

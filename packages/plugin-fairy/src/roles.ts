@@ -17,8 +17,10 @@ export interface FairyRole {
   instructions: string
   /** Which actions it may use: any of these risk levels, plus the included patterns, minus the excluded ones. */
   tools: RoleTools
-  /** Actions that must be there for Fairy to offer the role, such as `files.write` for one that writes code. */
+  /** Actions that must be there for the role to work, such as `files.write` for one that writes code. */
   needs?: string[]
+  /** App plugins that add what `needs` names, so Fairy can offer to turn them on while the role cannot work. */
+  enable?: string[]
   source: RoleSource
   /** The plugin that added it. */
   plugin?: string
@@ -129,6 +131,7 @@ export const BUILTIN_ROLES: RoleDefinition[] = [
     name: 'Developer',
     description: 'Writes and fixes code plugins on this machine, for jobs no flow node does (an outside API such as weather, data processing, a scheduled job, a new action or command): creates the plugin, writes the TypeScript, loads it, tests it with a bot and reports the settings it has. Give it what the user decided: what starts it, where it acts, what it sends, the data source, who may use it.',
     needs: ['files.write', 'files.edit', 'plugins.new'],
+    enable: ['@mushinjs/plugin-terminal'],
     instructions: [
       'You write local plugins: TypeScript packages that Mushin.js runs without a build step. Everything a plugin needs comes from `@mushinjs/core`.',
       '',
@@ -144,6 +147,7 @@ export const BUILTIN_ROLES: RoleDefinition[] = [
       '- An API key or token is a field marked secret, with an empty default: `field(\'API key\', \'…\', { … }, { secret: true })`. The user types it into the plugin\'s form on the Plugins page and Mushin.js keeps it in .env. Never put a key in the code or in the report, and never read .env. Log a warning that names the setting when it is empty.',
       '- List the services it uses in inject: actions (`ctx.actions.define({ name: \'<camelName>.<verb>\', description, risk, input, handler })`, the description written for an AI), bots (`ctx.bots.get(id)`, then `bot.send({ type: \'group\', id }, text)`), storage (`ctx.storage.get/set`, keys starting with the plugin name). Log with `ctx.logger(\'<name>\')`, never a secret.',
       '- Wrap anything that keeps running (timers, sockets) in ctx.effect(() => { …; return () => cleanup }), so it stops when the plugin is turned off or reloaded. A scheduled or event-driven plugin also defines an action that runs the job once.',
+      '- When the plugin gives bots something to look up or do on a message (weather for a city, a price, a translation), also add it as a flow node, so the user can use it in their flows next to the built-in nodes: put \'flows\' in inject and call ctx.flows.defineNode({ kind: \'action\', type: \'<camelName>.<verb>\', category, title: { en, \'zh-CN\' }, description: { en, \'zh-CN\' }, config: z.object({ … }), inputs: [{ name, type: \'text\', title }], outputs: [{ name, type: \'text\' | \'number\' | \'any\', title }], execOut: [\'next\', \'error\'], async run({ config, inputs, session, logger }) { return { exec: \'next\', outputs: { … } } } }). List its types in package.json under mushin.nodes (e.g. ["weather.*"]) and add "@mushinjs/plugin-flows": "*" to mushin.requires.plugins. Read packages such as @mushinjs/plugin-knowledge (its src/node.ts) with files.read for a full example, and check the node with flows.nodeTypes { types: [...] } after a reload.',
       '- Use fetch for HTTP. Add an npm package only when it saves real work, and say why in the report.',
       '',
       'If a choice is the user\'s to make (a group, a time, which service, a key), report with status blocked and name it in next. In the report, list the files you changed, the plugin\'s settings, what goes into .env, how you tested it, and how the user can try it for real.',
