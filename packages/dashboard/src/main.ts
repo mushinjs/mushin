@@ -18,7 +18,7 @@ handleClientAction('ui.navigate', async ({ path }: { path: string }) => {
   await router.push(path)
   return { ok: true, path: router.currentRoute.value.fullPath }
 })
-handleClientAction('ui.panel', (input: { kind: 'page' | 'web' | 'status'; path?: string; url?: string; title?: string }) => {
+handleClientAction('ui.panel', (input: { kind: 'page' | 'web' | 'status' | 'terminal'; path?: string; url?: string; title?: string }) => {
   if (!workspace.active) throw new Error('The user is not in the Fairy workspace; use ui.navigate to open a page')
   const view = workspace.openView(input)
   return { ok: true, shown: view.kind === 'web' ? view.url : view.path ?? view.kind }

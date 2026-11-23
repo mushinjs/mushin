@@ -947,7 +947,8 @@ export class Fairy extends Service {
       return reply(`The tool ${toolName} is not available right now.`, true)
     }
 
-    const policy = this.policyOf(await this.settings(), info)
+    const settings = await this.settings()
+    const policy = name in settings.toolPolicy ? settings.toolPolicy[name]! : this.home.actions.approval(name, input) ?? defaultPolicy(info.risk)
     if (policy === 'off') {
       this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: false, error: 'Turned off in the Fairy settings' })
       return reply(`The user turned ${toolName} off for Fairy. Do not use it; tell them if it is needed.`, true)

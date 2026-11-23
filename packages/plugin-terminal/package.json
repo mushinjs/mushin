@@ -1,7 +1,7 @@
 {
   "name": "@mushinjs/plugin-terminal",
   "version": "0.3.0",
-  "description": "Flow nodes that run commands in a local terminal or over SSH",
+  "description": "Lets Fairy run commands and edit files on this machine, and flow nodes that run commands locally or over SSH",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -36,8 +36,8 @@
       "zh-CN": "终端"
     },
     "description": {
-      "en": "Flow nodes that run commands on this machine or on servers over SSH; only you can add them, not Fairy",
-      "zh-CN": "在本机或通过 SSH 在服务器上运行命令的流程节点；只能由你添加，Fairy 不能"
+      "en": "Lets Fairy run commands and read and write files on this machine (asking first, as set here), and adds flow nodes that run commands here or on servers over SSH, which only you can add",
+      "zh-CN": "让 Fairy 在本机运行命令、读写文件（按这里的设置先问你），并提供在本机或通过 SSH 在服务器上运行命令的流程节点（只能由你添加）"
     },
     "requires": {
       "mushin": ">=0.1.0",

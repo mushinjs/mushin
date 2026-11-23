@@ -63,7 +63,7 @@ const FORWARDED_EVENTS = [
   'actions/changed', 'manager/changed', 'providers/changed',
   'bots/changed', 'bots/status', 'bots/message', 'bots/log', 'fairy/event', 'fairy/changed', 'fairy/sessions',
   'flows/changed', 'flows/run', 'flows/step', 'flows/tests', 'flows/activity', 'flows/paused', 'stats/sample', 'permissions/changed', 'personas/changed',
-  'knowledge/changed', 'knowledge/progress',
+  'knowledge/changed', 'knowledge/progress', 'terminal/process', 'terminal/output',
 ] as const
 
 const plainExporter: Exporter = { colors: false, export() {} }
@@ -365,11 +365,11 @@ export class Console extends Service {
 
     yield actions.define({
       name: 'ui.panel',
-      description: 'Show something in the side panel of the Fairy workspace, next to the chat: a dashboard page (page, with a path such as /bots/<bot id>/logs, /flows/<flow id>, /plugins or /database), a web page (web, with a url), or the status of bots and plugins (status). Use it to show what you are working on or what the user asked to see. Fails when the user is not in the Fairy workspace; then use ui.navigate.',
+      description: 'Show something in the side panel of the Fairy workspace, next to the chat: a dashboard page (page, with a path such as /bots/<bot id>/logs, /flows/<flow id>, /plugins or /database), a web page (web, with a url), the status of bots and plugins (status), or the commands run on this machine with their live output (terminal). Use it to show what you are working on or what the user asked to see. Fails when the user is not in the Fairy workspace; then use ui.navigate.',
       risk: 'read',
       client: true,
       input: z.object({
-        kind: z.enum(['page', 'web', 'status']),
+        kind: z.enum(['page', 'web', 'status', 'terminal']),
         path: z.string().regex(/^\//).optional().describe('For page: dashboard path starting with /'),
         url: z.string().regex(/^https?:\/\//).optional().describe('For web: an http or https address'),
         title: z.string().max(60).optional().describe('Tab title; the page name when omitted'),

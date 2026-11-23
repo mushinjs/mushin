@@ -123,7 +123,7 @@ export class OutputBuffer {
 }
 
 /** Ends a local command and the processes it started. */
-function killTree(pid: number | undefined) {
+export function killTree(pid: number | undefined) {
   if (!pid) return
   if (process.platform === 'win32') {
     spawn('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on('error', () => {})
