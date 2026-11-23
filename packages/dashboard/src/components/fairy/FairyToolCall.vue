@@ -34,6 +34,18 @@ const taskState = computed(() => {
 /** The last few things the helper did, newest last. */
 const steps = computed(() => props.item.task?.steps.slice(-4) ?? [])
 
+/** What a command or file tool works on, shown in its row: `$ ls -la` or a path. */
+const summary = computed(() => {
+  const value = props.item.input as { command?: unknown; path?: unknown } | undefined
+  if (typeof value?.command === 'string') return `$ ${value.command.split('\n')[0]}`
+  if (typeof value?.path === 'string' && /^(files|terminal)\./.test(props.item.action)) return value.path
+  return ''
+})
+const command = computed(() => {
+  const value = props.item.input as { command?: unknown; cwd?: unknown } | undefined
+  return typeof value?.command === 'string' ? { text: value.command, cwd: typeof value.cwd === 'string' ? value.cwd : '' } : undefined
+})
+
 /** The first line of a failure, shown under the row so nobody has to open it to see why. */
 const reason = computed(() => {
   if (props.item.state !== 'error' || !props.item.error) return ''
@@ -101,13 +113,15 @@ const reason = computed(() => {
       <span v-else-if="item.state === 'confirm'" class="i-lucide-hand" color="var(--warn)" />
       <span v-else class="i-lucide-circle-x" color="var(--bad)" />
       <span class="mono tool-name">{{ item.action }}</span>
+      <span v-if="summary" class="mono tool-summary" :title="summary">{{ summary }}</span>
       <Tag v-if="item.risk === 'dangerous'" size="tiny" type="error">{{ t('fairy.dangerous') }}</Tag>
       <span class="tool-state">{{ t(`fairy.state.${item.state}`) }}</span>
     </button>
     <div v-if="reason && !expanded" class="tool-reason" :title="reason">{{ reason }}</div>
     <div v-if="item.state === 'confirm'" class="confirm">
       <p>{{ t('fairy.confirmText', { action: item.action }) }}</p>
-      <pre class="json mono">{{ pretty(item.input) }}</pre>
+      <pre v-if="command" class="json mono command">$ {{ command.text }}<template v-if="command.cwd">{{ '\n' }}# {{ command.cwd }}</template></pre>
+      <pre v-else class="json mono">{{ pretty(item.input) }}</pre>
       <div class="confirm-actions">
         <Button size="small" type="error" @click="emit('confirm', true)">{{ t('fairy.approve') }}</Button>
         <Button size="small" @click="emit('confirm', false)">{{ t('fairy.deny') }}</Button>
@@ -266,5 +280,24 @@ const reason = computed(() => {
 .label {
   font-size: 12px;
   opacity: 0.6;
+}
+.tool-name:has(+ .tool-summary) {
+  flex: none;
+  max-width: 45%;
+}
+
+.tool-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--fg3);
+  font-size: 12px;
+}
+
+.json.command {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>

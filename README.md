@@ -228,6 +228,15 @@ Because a command can do anything your account can:
 
 SSH servers are listed in the plugin settings: a name the nodes pick, address, port, user and the remote shell (posix, or powershell / cmd for Windows servers). Passwords are never stored: point **Private key file** at a key such as `~/.ssh/id_ed25519` (its passphrase, and any password, are read from environment variables you name), or use the running ssh-agent. Paste the server's fingerprint (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server) to pin it; left empty, the key seen on the first connection is remembered and a different key is refused later. Fairy can list the servers (`terminal.hosts.list`) and test a sign-in (`terminal.hosts.check`).
 
+### Fairy on this machine
+
+With **Terminal** enabled, Fairy can also work on the machine running Mushin.js: run a command and read its output (`terminal.run`), start one that keeps running such as a dev server and follow it (`terminal.start`, `terminal.output`, `terminal.write`, `terminal.stop`), and list, read, search, write and edit files (`files.*`). Commands run in the app folder, as the user running Mushin.js. Two settings of the plugin decide how far it goes:
+
+- **Fairy runs commands**: off, ask every time (the default), run commands that only look (listing, reading, `git status`) without asking, or run everything without asking. A policy you set for one of these tools in the Fairy settings comes first.
+- **Fairy reads and writes files**: off, read only, or read and write (the default). Files are reachable in the app folder and the **extra folders** you list; `.env` files never are, writes stay out of `data/`, `node_modules/` and `.git/`, and a write outside `plugins/` and the extra folders asks you first.
+
+In the Fairy workspace, the panel's **Terminal** tab lists these commands with their live output, whoever started them; type a command at its bottom to run one yourself.
+
 Turn a flow off with the switch on its card or at the top of the editor: it keeps its content and bots but answers no messages, events or schedules, and its commands leave `/help`, until it is turned on again.
 
 Variables are saved in the database (`flows_var`) and survive restarts.

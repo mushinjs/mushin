@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { type PanelView, workspace } from '../../stores/workspace'
 import StatusView from './StatusView.vue'
+import TerminalView from './TerminalView.vue'
 
 /**
  * The workspace's right panel: tabs that show the status of bots and plugins, dashboard pages (bot logs, a flow,
@@ -20,6 +21,7 @@ const active = computed(() => layout.views.find((view) => view.id === layout.act
 function titleOf(view: PanelView) {
   if (view.title) return view.title
   if (view.kind === 'status') return t('workspace.panel.status')
+  if (view.kind === 'terminal') return t('workspace.panel.terminal')
   if (view.kind === 'web') {
     try {
       return new URL(view.url!).host
@@ -31,11 +33,13 @@ function titleOf(view: PanelView) {
   return te(`nav.${first}`) ? t(`nav.${first}`) : view.path!
 }
 
-const iconOf = (view: PanelView) => (view.kind === 'status' ? 'i-lucide-activity' : view.kind === 'web' ? 'i-lucide-globe' : 'i-lucide-app-window')
+const ICONS: Record<PanelView['kind'], string> = { status: 'i-lucide-activity', terminal: 'i-lucide-square-terminal', web: 'i-lucide-globe', page: 'i-lucide-app-window' }
+const iconOf = (view: PanelView) => ICONS[view.kind]
 
 const PAGES = ['/overview', '/bots', '/flows', '/plugins', '/providers', '/logs', '/database', '/knowledge', '/personas', '/settings']
 const addMenu = computed<DropdownOption[]>(() => [
   { key: 'status', label: t('workspace.panel.status'), icon: 'i-lucide-activity' },
+  { key: 'terminal', label: t('workspace.panel.terminal'), icon: 'i-lucide-square-terminal' },
   { key: 'web', label: t('workspace.panel.web'), icon: 'i-lucide-globe' },
   { type: 'group', label: t('workspace.panel.pages'), children: PAGES.map((path) => ({ key: path, label: t(`nav.${path.slice(1)}`), icon: 'i-lucide-app-window' })) },
 ])
@@ -44,7 +48,7 @@ const askingUrl = ref(false)
 const url = ref('')
 
 function onAdd(key: string) {
-  if (key === 'status') workspace.openView({ kind: 'status' })
+  if (key === 'status' || key === 'terminal') workspace.openView({ kind: key })
   else if (key === 'web') {
     url.value = ''
     askingUrl.value = true
@@ -117,7 +121,7 @@ const external = (view: PanelView) => (view.kind === 'web' ? view.url! : view.pa
       <Button size="small" type="primary" @click="openUrl">{{ t('workspace.panel.go') }}</Button>
       <Button size="small" quaternary @click="askingUrl = false">{{ t('common.cancel') }}</Button>
     </div>
-    <div v-else-if="active && active.kind !== 'status'" class="address">
+    <div v-else-if="active && (active.kind === 'page' || active.kind === 'web')" class="address">
       <span class="address-text mono" :title="external(active)">{{ external(active) }}</span>
       <Button size="tiny" quaternary circle icon="i-lucide-rotate-cw" :aria-label="t('workspace.panel.reload')" @click="reload(active)" />
       <a :href="external(active)" target="_blank" rel="noopener" class="open-link" :aria-label="t('workspace.panel.openTab')" :title="t('workspace.panel.openTab')"><span class="i-lucide-external-link" /></a>
@@ -127,6 +131,7 @@ const external = (view: PanelView) => (view.kind === 'web' ? view.url! : view.pa
       <template v-for="view in layout.views" :key="view.id">
         <div v-show="view.id === active?.id" class="view">
           <StatusView v-if="view.kind === 'status'" />
+          <TerminalView v-else-if="view.kind === 'terminal'" />
           <iframe
             v-else
             :ref="(el) => el && frames.set(view.id, el as HTMLIFrameElement)"

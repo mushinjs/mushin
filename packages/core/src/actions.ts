@@ -43,6 +43,11 @@ export interface ActionDefinition<S extends z.ZodType = z.ZodType, R = unknown> 
    * controls) that only makes sense next to a screen and would only distract the model.
    */
   fairy?: false
+  /**
+   * Whether Fairy asks before a call with this input, when the user set no policy for the action; undefined goes by
+   * the risk (dangerous asks). Lets an action ask only for some inputs, such as a command that changes something.
+   */
+  approval?: (input: z.output<S>) => 'auto' | 'confirm' | undefined
   handler?: (input: z.output<S>, caller: ActionCaller) => R | Promise<R>
 }
 
@@ -128,6 +133,14 @@ export class Actions extends Service {
 
   has(name: string) {
     return this.store.has(name)
+  }
+
+  /** Whether Fairy should ask before this call, as the action decides from the input; see `ActionDefinition.approval`. */
+  approval(name: string, input: unknown): 'auto' | 'confirm' | undefined {
+    const action = this.store.get(name)
+    if (!action?.approval) return
+    const parsed = action.input.safeParse(input ?? {})
+    return parsed.success ? action.approval(parsed.data) : undefined
   }
 
   get(name: string): ActionInfo | undefined {

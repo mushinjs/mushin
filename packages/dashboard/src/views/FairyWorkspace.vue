@@ -3,7 +3,7 @@ import { Button, Tooltip } from '@mushinjs/ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { connection } from '../api'
+import { connection, on } from '../api'
 import FairyPane from '../components/workspace/FairyPane.vue'
 import WorkspacePanel from '../components/workspace/WorkspacePanel.vue'
 import WorkspaceSidebar from '../components/workspace/WorkspaceSidebar.vue'
@@ -40,6 +40,12 @@ onBeforeUnmount(() => {
   workspace.active = false
   scenes.publish(undefined)
 })
+
+// The first command Fairy runs brings up the terminal tab, so its output can be followed; later ones leave the tabs be.
+const offProcess = on('terminal/process', (info: { running: boolean; session?: string }) => {
+  if (info.running && info.session && !layout.views.some((view) => view.kind === 'terminal')) workspace.openView({ kind: 'terminal' })
+})
+onBeforeUnmount(offProcess)
 
 // Fairy hears which panel tab is open, so "this page" means what the user sees beside the chat.
 const activeView = computed(() => layout.views.find((view) => view.id === layout.activeView))
