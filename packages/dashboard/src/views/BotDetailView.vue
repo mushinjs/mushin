@@ -48,7 +48,7 @@ const sections = computed<{ key: string, label: string, items: Section[] }[]>(()
     key: 'behave',
     label: t('bot.groupBehavior'),
     items: [
-      { key: 'plugins', label: t('bot.plugins'), icon: 'i-lucide-puzzle', target: 'bot.plugins', count: bot.value?.plugins.filter((plugin) => plugin.enabled).length },
+      { key: 'plugins', label: t('bot.plugins'), icon: 'i-lucide-puzzle', target: 'bot.plugins', count: bot.value && bot.value.plugins.filter((plugin) => plugin.enabled).length + (bot.value.appPlugins?.length ?? 0) },
       { key: 'commands', label: t('bot.commands'), icon: 'i-lucide-code', target: 'bot.commands' },
       { key: 'personas', label: t('bot.personas'), icon: 'i-lucide-circle-user', target: 'bot.personas' },
     ],

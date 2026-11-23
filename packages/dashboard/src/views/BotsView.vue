@@ -101,7 +101,7 @@ const shown = computed(() => {
 })
 
 const account = (bot: Bot) => (bot.selfName ? `${bot.selfName} · ${bot.selfId}` : bot.selfId ?? t('bots.notLoggedIn'))
-const enabledPlugins = (bot: Bot) => bot.plugins.filter((plugin) => plugin.enabled).length
+const enabledPlugins = (bot: Bot) => bot.plugins.filter((plugin) => plugin.enabled).length + (bot.appPlugins?.length ?? 0)
 const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
 </script>
 

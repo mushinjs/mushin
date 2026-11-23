@@ -63,7 +63,7 @@ const FORWARDED_EVENTS = [
   'actions/changed', 'manager/changed', 'providers/changed',
   'bots/changed', 'bots/status', 'bots/message', 'bots/log', 'fairy/event', 'fairy/changed', 'fairy/sessions',
   'flows/changed', 'flows/run', 'flows/step', 'flows/tests', 'flows/activity', 'flows/paused', 'stats/sample', 'permissions/changed', 'personas/changed',
-  'knowledge/changed', 'knowledge/progress', 'terminal/process', 'terminal/output', 'browser/frame', 'browser/closed',
+  'knowledge/changed', 'knowledge/progress', 'terminal/process', 'terminal/output', 'browser/frame', 'browser/closed', 'bots/run',
 ] as const
 
 const plainExporter: Exporter = { colors: false, export() {} }

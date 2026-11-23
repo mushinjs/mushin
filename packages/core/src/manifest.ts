@@ -10,7 +10,10 @@ export interface PluginManifest {
   kind: 'app' | 'bot'
   displayName?: LocalizedText
   description?: LocalizedText
-  /** Essential app plugins cannot be disabled from the dashboard or by Fairy. */
+  /**
+   * Essential app plugins cannot be disabled from the dashboard or by Fairy. An essential bot plugin cannot be turned
+   * off for the whole project, only on each bot (the flows runner, which the Flows plugin turns on where flows run).
+   */
   essential?: boolean
   platforms?: string[]
   category?: string

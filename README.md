@@ -50,6 +50,8 @@ Open the sign-in link, then follow **Quick setup** to connect an LLM provider. A
 - `npm run upgrade` updates Mushin.js (stop it first). `npx mushin new plugin <name>` creates a TypeScript plugin in `plugins/<name>/`, turned on and ready to edit; `npm run typecheck` checks it.
 - Plugins can also live in folders outside the app: add them on the Plugins page (**Plugin folders**) or as `"pluginDirs": ["../shared-plugins"]` in `mushin.config.json`. Point a development copy and an instance at the same folder and a plugin written once runs in both. Code in these folders runs as part of Mushin.js, and imports `@mushinjs/*` from the app, so the folder needs no install of its own. After you edit a local plugin, its reload button (or `plugins.reload`) runs the new code without a restart.
 - The app's `AGENTS.md` explains the folder to an AI such as Claude Code or Codex opened in it.
+- Plugins that answer in chats have two switches. A bot plugin is turned on for each bot on the bot's **Plugins** tab, and the Plugins page has a switch that turns it off for every bot at once. An app plugin's chat commands (`ctx.bots.defineCommand`) answer only on the bots it is turned on for, on the same **Plugins** tab of each bot; turning the app plugin off on the Plugins page stops them everywhere. A plugin that picks its bots from its own per-bot settings (personas, knowledge bases, chat permissions) passes `bots` to `defineCommand` and has no switch on the bot's tab.
+- On the Plugins page, the small counts next to a running plugin say how many chat commands, flow nodes, tools (actions Fairy and the API can call) and bot adapters it adds; hover them for the names.
 
 ### Where things are kept
 

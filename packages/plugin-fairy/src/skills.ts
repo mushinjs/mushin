@@ -49,10 +49,10 @@ export const BUILTIN_SKILLS: SkillDefinition[] = [
       '1. 用 bots.list 找到这个机器人，记下状态和错误信息。',
       '2. 用 bots.logs 读它最近的日志：连接地址、NapCat 的 self id、令牌是否被拒绝、登录记录。',
       '3. 根据日志判断：地址或端口不对、NapCat 没开 WebSocket、令牌不一致、消息格式不是 array、反向连接地址不对。',
-      '4. 在线但不回复时，用 bots.plugins.list 看插件是否启用，用 flows.route 看一条消息会被谁处理。',
+      '4. 在线但不回复时，用 bots.plugins.list 看插件是否在这个机器人上开启（projectOff 表示整个项目里关了），用 flows.route 看一条消息会被谁处理，用 bots.runs 看插件处理了哪些消息、有没有出错。',
       '5. 给出最可能的原因和具体修改步骤；能直接改的配置（地址、令牌）先说明再改，改完用 bots.get 确认状态。',
     ].join('\n'),
-    tools: ['bots.list', 'bots.logs', 'bots.get', 'bots.plugins.list', 'flows.route'],
+    tools: ['bots.list', 'bots.logs', 'bots.get', 'bots.plugins.list', 'bots.runs', 'flows.route'],
     scenes: ['bots', 'botDetail'],
   },
   {

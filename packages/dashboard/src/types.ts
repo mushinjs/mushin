@@ -169,6 +169,8 @@ export interface Bot {
   enabled: boolean
   adapter: { type: string; config: Record<string, any> }
   plugins: BotPluginEntry[]
+  /** App plugins whose chat commands this bot answers. */
+  appPlugins?: string[]
   provider?: string
   commands?: CommandSettings
   /** How the bot connects: `ws` (forward), `ws-reverse` or `http`, and the addresses involved. */
@@ -242,17 +244,64 @@ export interface AdapterType {
   qrSetup?: { start: string; poll: string }
 }
 
+/**
+ * A plugin a bot can turn on: a bot plugin (runs inside the bot, with settings per bot) or an app plugin with chat
+ * commands (its settings are on the Plugins page; its commands answer only on the bots it is turned on for).
+ */
 export interface BotPluginInfo {
   package: string
+  kind: 'bot' | 'app'
   version: string
   manifest: PluginManifest
+  /** On for this bot. */
   enabled: boolean
-  config: Record<string, any>
+  /** Turned off for the whole project, so it does not run even where it is on. */
+  projectOff?: boolean
+  /** An app plugin's chat commands. */
+  commands?: string[]
+  config?: Record<string, any>
   configSchema?: JsonSchema
   status: PluginStatus
   error?: string
   dependencies?: PluginDependencies
   missing?: MissingDependency[]
+}
+
+/** A chat plugin across the project, from bots.plugins.project. */
+export interface ProjectChatPlugin {
+  package: string
+  kind: 'bot' | 'app'
+  /** A bot plugin's project switch. */
+  enabled: boolean
+  essential?: boolean
+  /** Bots that have it on. */
+  bots: string[]
+}
+
+/** What a running plugin adds, from plugins.provides. */
+export interface PluginProvides {
+  commands: string[]
+  nodes: string[]
+  tools: string[]
+  adapters: string[]
+}
+
+/** A message a plugin handled on a bot, from bots.runs and the `bots/run` event. */
+export interface PluginRunInfo {
+  id: string
+  botId: string
+  plugin: string
+  command?: string
+  text: string
+  user: { id: string; name?: string }
+  channel: string
+  message: string
+  status: 'ok' | 'error'
+  replies: number
+  kept: boolean
+  startedAt: number
+  ms: number
+  error?: string
 }
 
 export interface Segment {

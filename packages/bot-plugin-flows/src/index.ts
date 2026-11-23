@@ -13,7 +13,8 @@ export function apply(ctx: Context) {
     const { consumed } = await ctx.flows.dispatch(ctx, session)
     // A matched trigger keeps the message unless it lets other plugins answer too.
     if (!consumed) return next()
-  }, { priority: PRIORITY })
+    // Flows keep their own runs, with every node they went through.
+  }, { priority: PRIORITY, runs: false })
 
   // Command nodes of the flows on this bot show in its /help and command list.
   ctx.bot.defineCommands(() => ctx.flows.commandsOn(ctx.bot.id))

@@ -1,4 +1,4 @@
-import { Context, Service } from 'cordis'
+import { Context, type Fiber, Service } from 'cordis'
 import { z } from 'zod'
 import { MushinError } from './errors'
 
@@ -76,6 +76,8 @@ export type ClientRelay = (name: string, input: unknown, caller: ActionCaller) =
 
 interface StoredAction extends ActionDefinition {
   plugin: string
+  /** The context that defined it, to tell which installed plugin it belongs to. */
+  fiber: Fiber
   schema?: JsonSchema
 }
 
@@ -112,7 +114,7 @@ export class Actions extends Service {
       if (this.store.has(definition.name)) {
         throw new Error(`action "${definition.name}" is already defined`)
       }
-      this.store.set(definition.name, { ...(definition as ActionDefinition), plugin: ctx.fiber.name })
+      this.store.set(definition.name, { ...(definition as ActionDefinition), plugin: ctx.fiber.name, fiber: ctx.fiber })
       ctx.emit('actions/changed')
       return () => {
         this.store.delete(definition.name)
@@ -141,6 +143,11 @@ export class Actions extends Service {
     if (!action?.approval) return
     const parsed = action.input.safeParse(input ?? {})
     return parsed.success ? action.approval(parsed.data) : undefined
+  }
+
+  /** The context that defined an action; `manager.packageOf` names its plugin. */
+  fiberOf(name: string): Fiber | undefined {
+    return this.store.get(name)?.fiber
   }
 
   get(name: string): ActionInfo | undefined {

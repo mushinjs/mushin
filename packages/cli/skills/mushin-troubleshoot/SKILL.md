@@ -47,7 +47,8 @@ For an LLM reply that is wrong rather than missing, `call_tool` with `flows.prev
 
 - `plugins__list` shows every app plugin with its status. `failed` comes with the error; `pending` means a service it needs is missing.
 - `logs__recent` with tag `plugin` (or `system`) shows Mushin.js's own log lines.
-- Bot plugins are per bot: `call_tool` with `bots.plugins.list` and the bot id.
+- Bot plugins, and app plugins' chat commands, are switched per bot: `call_tool` with `bots.plugins.list` and the bot id. `projectOff` means the plugin is off for the whole project (the Plugins page), so it does not run even where the bot has it on.
+- `call_tool` with `bots.runs` and the bot id lists what plugins did with its messages: replied, kept the message from the plugins after it, or failed (with the error). Flows have their own runs in `flows.history`.
 
 ## 6. Report
 

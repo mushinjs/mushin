@@ -7,8 +7,9 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { call, on } from '../api'
 import DependencyTags from '../components/DependencyTags.vue'
+import ProvidesBadge from '../components/ProvidesBadge.vue'
 import SchemaForm from '../components/SchemaForm.vue'
-import type { AppPlugin, CatalogEntry, DependencyPlan, PluginDependencies } from '../types'
+import type { AppPlugin, CatalogEntry, DependencyPlan, PluginDependencies, PluginProvides, ProjectChatPlugin } from '../types'
 import { clone, localize } from '../utils'
 
 const { t, locale } = useI18n()
@@ -20,6 +21,10 @@ const route = useRoute()
 const plugins = ref<AppPlugin[]>([])
 const appCatalog = ref<CatalogEntry[]>([])
 const botPlugins = ref<CatalogEntry[]>([])
+/** Chat plugins across the bots: a bot plugin's project switch, and the bots each chat plugin is on for. */
+const chatPlugins = ref<ProjectChatPlugin[]>([])
+/** What each running plugin adds, by package. */
+const provides = ref<Record<string, PluginProvides>>({})
 const loading = ref(true)
 const busy = ref<string>()
 const editing = ref<AppPlugin>()
@@ -39,11 +44,16 @@ watch(() => [route.query.highlight, plugins.value.length] as const, async ([targ
 
 async function refresh(rescan = false) {
   try {
-    const [list, catalog] = await Promise.all([
+    const [list, catalog, chat, provided] = await Promise.all([
       call<AppPlugin[]>('plugins.list'),
       call<CatalogEntry[]>('plugins.catalog', { refresh: rescan }),
+      // Without the bots plugin there are no chat plugins to switch.
+      call<ProjectChatPlugin[]>('bots.plugins.project').catch(() => [] as ProjectChatPlugin[]),
+      call<Record<string, PluginProvides>>('plugins.provides').catch(() => ({})),
     ])
     plugins.value = list
+    chatPlugins.value = chat
+    provides.value = provided
     appCatalog.value = catalog.filter((entry) => entry.manifest.kind === 'app')
     botPlugins.value = catalog.filter((entry) => entry.manifest.kind === 'bot')
   } catch (error) {
@@ -183,11 +193,29 @@ async function saveFolders() {
   }
 }
 let timer: number | undefined
-const off = on('manager/changed', () => {
+const later = () => {
   window.clearTimeout(timer)
   timer = window.setTimeout(() => refresh(), 150)
-})
-onBeforeUnmount(off)
+}
+// A plugin's actions, nodes and commands come a moment after it starts.
+const offs = [on('manager/changed', later), on('actions/changed', later), on('bots/changed', later)]
+onBeforeUnmount(() => offs.forEach((off) => off()))
+
+const chatOf = (pkg: string) => chatPlugins.value.find((item) => item.package === pkg)
+
+/** Turns a bot plugin on or off for every bot; each bot keeps its own switch. */
+async function toggleProject(entry: CatalogEntry, enabled: boolean) {
+  busy.value = entry.package
+  try {
+    await call('bots.plugins.setProject', { package: entry.package, enabled })
+    await refresh()
+  } catch (error) {
+    message.error((error as Error).message)
+  } finally {
+    busy.value = undefined
+  }
+}
+
 
 async function toggle(plugin: AppPlugin, enabled: boolean) {
   busy.value = keyOf(plugin)
@@ -385,6 +413,11 @@ async function save() {
                   <span class="sep">·</span>
                   <span>{{ t('plugins.neededBy', dependentCount(plugin)) }}</span>
                 </template>
+                <template v-if="plugin.enabled && chatOf(plugin.package)?.kind === 'app'">
+                  <span class="sep">·</span>
+                  <span>{{ t('plugins.chatBots', chatOf(plugin.package)!.bots.length) }}</span>
+                </template>
+                <ProvidesBadge v-if="plugin.enabled" :value="provides[plugin.package]" />
                 <span class="i-lucide-chevron-down chevron text-[14px]" />
               </span>
             </button>
@@ -419,15 +452,43 @@ async function save() {
         <h2 class="section-title">{{ t('plugins.botPlugins') }} <span class="count">{{ shownBot.length }}</span></h2>
         <p class="section-lead">{{ t('plugins.botPluginsHint') }}</p>
         <ul v-if="shownBot.length" class="rows">
-          <li v-for="entry in shownBot" :key="entry.package" class="row static">
+          <li
+            v-for="entry in shownBot"
+            :id="`plugin-${entry.package}`"
+            :key="entry.package"
+            class="row static"
+            :class="{ highlighted: highlighted === entry.package, off: chatOf(entry.package)?.enabled === false }"
+          >
             <div class="row-main">
               <span class="title">
                 <strong>{{ localize(entry.manifest.displayName, locale) || entry.package }}</strong>
                 <span v-for="platform in entry.manifest.platforms ?? []" :key="platform" class="tag">{{ platform }}</span>
                 <span v-if="entry.local" class="tag warn">{{ t('plugins.local') }}</span>
+                <span v-if="chatOf(entry.package)?.enabled === false" class="tag">{{ t('plugins.projectOff') }}</span>
               </span>
               <span class="desc">{{ localize(entry.manifest.description, locale) }}</span>
-              <span class="meta"><span class="mono">{{ entry.package }}@{{ entry.version }}</span></span>
+              <span class="meta">
+                <span class="mono">{{ entry.package }}@{{ entry.version }}</span>
+                <template v-if="chatOf(entry.package)">
+                  <span class="sep">·</span>
+                  <span>{{ t('plugins.botPluginBots', chatOf(entry.package)!.bots.length) }}</span>
+                </template>
+                <ProvidesBadge :value="provides[entry.package]" />
+              </span>
+            </div>
+            <div class="actions">
+              <Tooltip v-if="chatOf(entry.package)?.essential">
+                <template #trigger><span class="tag">{{ t('plugins.essential') }}</span></template>
+                {{ t('plugins.botEssentialHint') }}
+              </Tooltip>
+              <Toggle
+                v-else-if="chatOf(entry.package)"
+                variant="button"
+                :value="chatOf(entry.package)!.enabled"
+                :loading="busy === entry.package"
+                :aria-label="localize(entry.manifest.displayName, locale) || entry.package"
+                @update:value="(value: boolean) => toggleProject(entry, value)"
+              />
             </div>
             <div class="details">
               <DependencyTags :deps="depsOf(asPlugin(entry))" :catalog="catalog" />

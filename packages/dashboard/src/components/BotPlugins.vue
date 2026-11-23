@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import IconAction from './IconAction.vue'
 import { Button, Card, Empty, Modal, Spin, Tag, Toggle, useToast } from '@mushinjs/ui'
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { call, on } from '../api'
 import type { BotPluginInfo, CatalogEntry, FlowSummary } from '../types'
 import { clone, localize } from '../utils'
@@ -14,6 +14,7 @@ import StatusBadge from './StatusBadge.vue'
 const props = defineProps<{ botId: string }>()
 const { t, locale } = useI18n()
 const message = useToast()
+const router = useRouter()
 
 const plugins = ref<BotPluginInfo[]>([])
 /** Flows each plugin made on this bot, such as LLM chat's flow, by package. */
@@ -46,7 +47,16 @@ onMounted(() => {
   call<CatalogEntry[]>('plugins.catalog').then((list) => (catalog.value = list), () => {})
 })
 watch(() => props.botId, refresh)
-const offs = [on('bots/changed', refresh), on('flows/changed', refresh)]
+const offs = [on('bots/changed', refresh), on('flows/changed', refresh), on('manager/changed', refresh)]
+
+/** Bot plugins run inside this bot; app plugins with chat commands only answer here when turned on. */
+const groups = computed(() => [
+  { kind: 'bot' as const, items: plugins.value.filter((plugin) => plugin.kind !== 'app') },
+  { kind: 'app' as const, items: plugins.value.filter((plugin) => plugin.kind === 'app') },
+].filter((group) => group.items.length))
+
+/** The plugin on the Plugins page, where its project switch is (and an app plugin's settings). */
+const openOnPluginsPage = (plugin: BotPluginInfo) => router.push({ path: '/plugins', query: { highlight: plugin.package } })
 onBeforeUnmount(() => offs.forEach((off) => off()))
 
 /** A config form only for plugins that still have settings; LLM chat keeps its settings in its flow. */
@@ -66,7 +76,7 @@ async function toggle(plugin: BotPluginInfo, enabled: boolean) {
 
 function configure(plugin: BotPluginInfo) {
   editing.value = plugin
-  draft.value = clone(plugin.config)
+  draft.value = clone(plugin.config ?? {})
 }
 
 async function save() {
@@ -88,32 +98,44 @@ async function save() {
 <template>
   <Card>
     <Spin :show="loading">
-      <ul v-if="plugins.length" class="list">
-        <li v-for="plugin in plugins" :key="plugin.package" class="item">
-          <div class="main">
-            <div class="head">
-              <span class="name">{{ localize(plugin.manifest.displayName, locale) || plugin.package }}</span>
-              <StatusBadge v-if="plugin.enabled" :status="plugin.status" :error="plugin.error" />
-              <Tag v-for="platform in plugin.manifest.platforms ?? []" :key="platform" size="tiny">{{ platform }}</Tag>
+      <section v-for="group in groups" :key="group.kind" class="group">
+        <template v-if="groups.length > 1 || group.kind === 'app'">
+          <h3 class="group-title">{{ t(`botPlugins.group.${group.kind}`) }}</h3>
+          <p class="sub group-hint">{{ t(`botPlugins.groupHint.${group.kind}`) }}</p>
+        </template>
+        <ul class="list">
+          <li v-for="plugin in group.items" :key="plugin.package" class="item">
+            <div class="main">
+              <div class="head">
+                <span class="name">{{ localize(plugin.manifest.displayName, locale) || plugin.package }}</span>
+                <StatusBadge v-if="plugin.enabled && !plugin.projectOff" :status="plugin.status" :error="plugin.error" />
+                <Tag v-for="platform in plugin.manifest.platforms ?? []" :key="platform" size="tiny">{{ platform }}</Tag>
+                <Tag v-if="plugin.projectOff" size="tiny" type="warning" class="clickable" :title="t('botPlugins.projectOffHint')" @click="openOnPluginsPage(plugin)">{{ t('botPlugins.projectOff') }}</Tag>
+              </div>
+              <div class="mono sub">{{ plugin.package }}@{{ plugin.version }}</div>
+              <div class="desc">{{ localize(plugin.manifest.description, locale) }}</div>
+              <div v-if="plugin.commands?.length" class="flows">
+                <span class="sub">{{ t('botPlugins.commands') }}</span>
+                <Tag v-for="command in plugin.commands" :key="command" size="small" class="mono">/{{ command }}</Tag>
+              </div>
+              <DependencyTags v-if="plugin.dependencies?.requires.some((dep) => dep.problem && dep.problem !== 'not-app')" :deps="{ requires: plugin.dependencies.requires, optional: [] }" :catalog="catalog" />
+              <div v-if="flowsBy[plugin.package]?.length" class="flows">
+                <span class="sub">{{ t('botPlugins.madeFlows') }}</span>
+                <RouterLink v-for="flow in flowsBy[plugin.package]" :key="flow.id" :to="`/flows/${flow.id}`">
+                  <Tag size="small" type="info" icon="i-lucide-network" class="clickable">{{ flow.name }}</Tag>
+                </RouterLink>
+                <span v-if="plugin.package === '@mushinjs/bot-plugin-llm-chat'" class="sub">{{ t('botPlugins.llmChatHint') }}</span>
+              </div>
             </div>
-            <div class="mono sub">{{ plugin.package }}@{{ plugin.version }}</div>
-            <div class="desc">{{ localize(plugin.manifest.description, locale) }}</div>
-            <DependencyTags v-if="plugin.dependencies?.requires.some((dep) => dep.problem && dep.problem !== 'not-app')" :deps="{ requires: plugin.dependencies.requires, optional: [] }" :catalog="catalog" />
-            <div v-if="flowsBy[plugin.package]?.length" class="flows">
-              <span class="sub">{{ t('botPlugins.madeFlows') }}</span>
-              <RouterLink v-for="flow in flowsBy[plugin.package]" :key="flow.id" :to="`/flows/${flow.id}`">
-                <Tag size="small" type="info" icon="i-lucide-network" class="clickable">{{ flow.name }}</Tag>
-              </RouterLink>
-              <span v-if="plugin.package === '@mushinjs/bot-plugin-llm-chat'" class="sub">{{ t('botPlugins.llmChatHint') }}</span>
+            <div class="actions">
+              <IconAction v-if="plugin.kind === 'app'" icon="i-lucide-settings" :label="t('botPlugins.appSettings')" @click="openOnPluginsPage(plugin)" />
+              <IconAction v-else-if="hasSettings(plugin)" icon="i-lucide-settings" :label="t('common.configure')" @click="configure(plugin)" />
+              <Toggle variant="button" :value="plugin.enabled" :loading="busy === plugin.package" :aria-label="localize(plugin.manifest.displayName, locale) || plugin.package" @update:value="(value: boolean) => toggle(plugin, value)" />
             </div>
-          </div>
-          <div class="actions">
-            <IconAction v-if="hasSettings(plugin)" icon="i-lucide-settings" :label="t('common.configure')" @click="configure(plugin)" />
-            <Toggle variant="button" :value="plugin.enabled" :loading="busy === plugin.package" @update:value="(value: boolean) => toggle(plugin, value)" />
-          </div>
-        </li>
-      </ul>
-      <Empty v-else-if="!loading" :description="t('plugins.noBotPlugins')" />
+          </li>
+        </ul>
+      </section>
+      <Empty v-if="!groups.length && !loading" :description="t('plugins.noBotPlugins')" />
     </Spin>
 
     <Modal
@@ -132,6 +154,22 @@ async function save() {
 </template>
 
 <style scoped>
+.group + .group {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.group-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.group-hint {
+  margin: 2px 0 4px;
+}
+
 .list {
   margin: 0;
   padding: 0;

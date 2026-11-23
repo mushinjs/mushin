@@ -1,13 +1,13 @@
 import {
-  type ChannelInfo, Context, currentPackageName, describeMissing, dependencyReport, envReference, type LogTag, type MissingDependency, logTag, type Exporter, type Fiber, fiberError, fiberStatus, isMasked, Logger, mask, type Message,
-  type MessageRecord, messageType, MushinError, type Plugin, type Provenance, pluginSchema, randomId, resolveEnvReferences, type Segment, segmentsToText, Service, toJsonSchema,
+  type ChannelInfo, Context, currentPackageName, type DependencyGraph, describeMissing, dependencyReport, envReference, type LogTag, type MissingDependency, logTag, type Exporter, type Fiber, fiberError, fiberStatus, isMasked, Logger, mask, type Message,
+  type MessageRecord, messageType, MushinError, type Plugin, type ProvidedItem, type Provenance, pluginSchema, randomId, resolveEnvReferences, type Segment, segmentsToText, Service, toJsonSchema,
   type UsageEvent, usage, validatePluginConfig, z, maskSecrets, restoreMasked, secretFields,
 } from '@mushinjs/core'
 import type {} from '@mushinjs/plugin-storage'
 import { MessageArchive } from './archive'
-import { Bot, type BotHooks, byteSize, type Session } from './bot'
+import { Bot, type BotHooks, byteSize, type PluginRunReport, type Session } from './bot'
 import { type CommandArg, type CommandDef, type CommandEntry, commandConflicts, type CommandSettings, commandMatches, commandUsage, DEFAULT_PREFIXES, helpText, parseArgs, requiredRole, splitCommand } from './commands'
-import { type AdapterType, type BotPluginEntry, type BotRecord, type BotStatus, isSandbox, type PermissionProvider, roleAtLeast } from './types'
+import { type AdapterType, type BotPluginEntry, type BotRecord, type BotStatus, isSandbox, type PermissionProvider, type PluginRun, roleAtLeast } from './types'
 
 declare module '@mushinjs/core' {
   interface Context {
@@ -21,6 +21,7 @@ declare module '@mushinjs/core' {
     'bots/message'(record: MessageRecord): void
     'bots/log'(line: BotLogLine): void
     'bots/command'(call: CommandCall): void
+    'bots/run'(run: PluginRun): void
   }
 }
 
@@ -85,12 +86,28 @@ export interface RunCommandInput {
 /** Lists commands a plugin provides on a bot, e.g. the command nodes of the flows attached to it. */
 export type CommandProvider = (botId: string) => CommandEntry[]
 
-/** A command an app plugin answers on every bot, or on the bots `bots` picks. */
+/**
+ * A command an app plugin answers on the bots it is turned on for (`BotRecord.appPlugins`), or, when the plugin
+ * picks the bots itself, on the bots `bots` picks.
+ */
 interface AppCommand {
   def: CommandDef
   plugin: string
+  fiber: Fiber
   handler: (session: Session) => Promise<unknown> | unknown
   bots?: (botId: string) => boolean
+}
+
+/** A chat plugin across the project, for the Plugins page: its switch and the bots that have it on. */
+export interface ProjectChatPlugin {
+  package: string
+  kind: 'app' | 'bot'
+  /** For a bot plugin, its project switch; an app plugin's is its entry on the Plugins page. */
+  enabled: boolean
+  /** An essential bot plugin has no project switch. */
+  essential?: boolean
+  /** Bots that have it on. */
+  bots: string[]
 }
 
 export interface BotStatusInfo {
@@ -116,6 +133,8 @@ interface Runtime {
 
 const STORAGE_KEY = 'bots'
 const BUFFER_SIZE = 500
+/** Plugin runs kept in memory for each bot; older ones stay in the daily files. */
+const RUN_BUFFER_SIZE = 300
 const LOG_BUFFER_SIZE = 500
 // Bot logs include debug lines (e.g. why llm-chat skipped a message); the main log stream does not.
 const LOG_LEVEL_DEBUG = 3
@@ -156,7 +175,7 @@ const commandSettingsInput = z.object({
 /** Answers `/help` when nothing else on the bot registers a command called help. */
 const HELP_COMMAND = { name: 'help', description: '列出所有指令' }
 
-const pluginInput = idInput.extend({ package: z.string().describe('Bot plugin package name from bots.plugins.list') })
+const pluginInput = idInput.extend({ package: z.string().describe('Plugin package name from bots.plugins.list: a bot plugin, or an app plugin with chat commands') })
 
 /**
  * Owns bot records and runs each enabled bot in its own isolated context:
@@ -180,6 +199,11 @@ export class BotManager extends Service {
   private botLogSns = new Set<number>()
   private commandProviders = new Set<CommandProvider>()
   private appCommands = new Set<AppCommand>()
+  /** Bot plugins turned off for the whole project; they run on no bot, whatever each bot says. */
+  private projectOff = new Set<string>()
+  private runs = new Map<string, PluginRun[]>()
+  /** The context that registered each adapter, to tell which installed plugin adds it. */
+  private adapterFibers = new Map<string, Fiber>()
   private permissionProvider?: PermissionProvider
 
   constructor(ctx: Context) {
@@ -196,8 +220,9 @@ export class BotManager extends Service {
   }
 
   async *[Service.init]() {
-    const stored = await this.home.storage.get<{ bots: BotRecord[] }>(STORAGE_KEY)
+    const stored = await this.home.storage.get<{ bots: BotRecord[]; off?: string[] }>(STORAGE_KEY)
     this.records = stored?.bots ?? []
+    this.projectOff = new Set(stored?.off ?? [])
     for (const record of this.records) {
       for (const plugin of record.plugins ?? []) plugin.package = currentPackageName(plugin.package)
     }
@@ -208,6 +233,8 @@ export class BotManager extends Service {
       export: (message) => this.captureLog(message),
     })
     yield* this.defineActions()
+    // The Plugins page shows how many commands and adapters each plugin adds.
+    yield this.home.manager.defineProvides(() => this.provided())
     this.home.inject(['model', 'database'], async (ctx) => {
       const archive = new MessageArchive(ctx, (error) => this.logger.warn('saving a message to the database failed: %s', error))
       this.archive = archive
@@ -236,6 +263,7 @@ export class BotManager extends Service {
     return ctx.effect(() => {
       if (this.adapterStore.has(adapter.id)) throw new Error(`adapter "${adapter.id}" is already defined`)
       this.adapterStore.set(adapter.id, adapter)
+      this.adapterFibers.set(adapter.id, ctx.fiber)
       this.logger.info('adapter %s is available', adapter.id)
       this.secureRecords(adapter as AdapterType).catch((error) => this.logger.warn('could not move the %s secrets of bots to .env: %s', adapter.id, error))
       for (const record of this.records) {
@@ -247,6 +275,7 @@ export class BotManager extends Service {
       ctx.emit('bots/changed')
       return async () => {
         this.adapterStore.delete(adapter.id)
+        this.adapterFibers.delete(adapter.id)
         this.logger.info('adapter %s was removed', adapter.id)
         for (const record of this.records) {
           if (record.adapter.type !== adapter.id || !this.runtimes.has(record.id)) continue
@@ -350,7 +379,7 @@ export class BotManager extends Service {
   }
 
   private async save() {
-    await this.home.storage.set(STORAGE_KEY, { bots: this.records })
+    await this.home.storage.set(STORAGE_KEY, { bots: this.records, ...(this.projectOff.size ? { off: [...this.projectOff] } : {}) })
     this.home.emit('bots/changed')
   }
 
@@ -416,6 +445,7 @@ export class BotManager extends Service {
     this.records = this.records.filter((item) => item !== record)
     this.buffers.delete(id)
     this.logs.delete(id)
+    this.runs.delete(id)
     this.startErrors.delete(id)
     await this.save()
     this.logger.info('deleted bot %s', this.label(record))
@@ -444,7 +474,7 @@ export class BotManager extends Service {
     const runtime: Runtime = { plugins: new Map(), pluginErrors: new Map() }
     const loaded: { entry: BotPluginEntry; plugin: Plugin }[] = []
     for (const entry of record.plugins) {
-      if (!entry.enabled) continue
+      if (!entry.enabled || this.projectOff.has(entry.package)) continue
       try {
         const plugin = await this.loadBotPlugin(entry.package)
         // A key an older version or a hand edit left in plain text moves to .env.
@@ -488,7 +518,8 @@ export class BotManager extends Service {
         return helpText(entries, bot.record.commands)
       },
       roleOf: (bot, userId) => this.permissionProvider?.roleOf(bot.id, userId),
-      appCommand: (bot, entry) => this.appCommandFor(bot.id, entry)?.handler,
+      appCommand: (bot, entry) => this.appCommandFor(bot.id, entry),
+      pluginRun: (bot, run, fiber) => this.recordRun(bot.id, run, fiber),
       usageScope: (bot, message) => {
         const entry = this.usageEntry(bot.id, message.id, true)!
         entry.bytes = byteSize(message.segments)
@@ -564,10 +595,36 @@ export class BotManager extends Service {
     return this.home.manager.loadPlugin(name)
   }
 
+  /**
+   * The plugins a bot can turn on: every installed bot plugin, then each app plugin with chat commands (`kind: 'app'`),
+   * with whether it is on for this bot and whether it is turned off for the whole project.
+   */
   async plugins(id: string) {
     const record = this.get(id)
-    const runtime = this.runtimes.get(id)
     const graph = await this.home.manager.graph()
+    const apps = this.chatApps()
+    const appEntries = graph.catalog
+      .filter((entry) => entry.manifest.kind === 'app' && (apps.has(entry.package) || record.appPlugins?.includes(entry.package)))
+      .map((entry) => {
+        const commands = apps.get(entry.package)
+        const enabled = !!record.appPlugins?.includes(entry.package)
+        return {
+          package: entry.package,
+          kind: 'app' as const,
+          version: entry.version,
+          manifest: entry.manifest,
+          enabled,
+          // Its commands are only known while it runs; an app plugin that does not run is off on the Plugins page.
+          ...(commands ? { commands } : { projectOff: true }),
+          status: enabled && commands ? 'active' : 'disabled',
+        }
+      })
+    return [...await this.botPlugins(id, graph), ...appEntries]
+  }
+
+  private async botPlugins(id: string, graph: DependencyGraph) {
+    const record = this.get(id)
+    const runtime = this.runtimes.get(id)
     const catalog = graph.catalog.filter((entry) => entry.manifest.kind === 'bot')
     return Promise.all(catalog.map(async (entry) => {
       const configured = record.plugins.find((item) => item.package === entry.package)
@@ -581,10 +638,13 @@ export class BotManager extends Service {
       const fiber = runtime?.plugins.get(entry.package)
       const report = dependencyReport(graph, entry.package)
       const missing = this.missingApps(report.requires)
-      let status: string = configured?.enabled ? (runtime ? fiberStatus(fiber) : 'disabled') : 'disabled'
+      const projectOff = this.projectOff.has(entry.package)
+      let status: string = configured?.enabled && !projectOff ? (runtime ? fiberStatus(fiber) : 'disabled') : 'disabled'
       if (status === 'pending' && missing.length) status = 'missing'
       return {
         package: entry.package,
+        kind: 'bot' as const,
+        ...(projectOff ? { projectOff } : {}),
         version: entry.version,
         manifest: entry.manifest,
         enabled: !!configured?.enabled,
@@ -605,8 +665,29 @@ export class BotManager extends Service {
       .map((dep) => ({ package: dep.package, range: dep.range, reason: dep.problem as MissingDependency['reason'], ...(dep.version ? { version: dep.version } : {}) }))
   }
 
+  /** The bot's entry for a plugin in `plugins()`. */
+  private async pluginInfo(id: string, name: string) {
+    return (await this.plugins(id)).find((item) => item.package === name)
+  }
+
+  /** Turns an app plugin's chat commands on or off for one bot. */
+  private async setAppPlugin(id: string, name: string, enabled: boolean) {
+    const record = this.get(id)
+    const list = new Set(record.appPlugins ?? [])
+    if (enabled) list.add(name)
+    else list.delete(name)
+    record.appPlugins = [...list]
+    await this.save()
+    this.logger.info('%s the commands of %s on bot %s', enabled ? 'turned on' : 'turned off', name, this.label(record))
+    return this.pluginInfo(id, name)
+  }
+
   async enablePlugin(id: string, name: string, config?: Record<string, any>) {
     const record = this.get(id)
+    if ((await this.home.manager.findPackage(name))?.manifest.kind === 'app') {
+      if (config) throw new MushinError('invalid_input', `${name} is an app plugin: its settings are on the Plugins page (plugins.configure)`)
+      return this.setAppPlugin(id, name, true)
+    }
     const plugin = await this.loadBotPlugin(name)
     const missing = this.missingApps(dependencyReport(await this.home.manager.graph(), name).requires)
     if (missing.length) {
@@ -625,11 +706,12 @@ export class BotManager extends Service {
     await this.save()
     this.logger.info('enabled plugin %s on bot %s', name, this.label(record))
     this.reloadPlugin(id, entry, plugin)
-    return this.plugins(id).then((list) => list.find((item) => item.package === name))
+    return this.pluginInfo(id, name)
   }
 
   async disablePlugin(id: string, name: string) {
     const record = this.get(id)
+    if ((await this.home.manager.findPackage(name))?.manifest.kind === 'app' || record.appPlugins?.includes(name)) return this.setAppPlugin(id, name, false)
     const entry = record.plugins.find((item) => item.package === name)
     if (!entry) throw new MushinError('not_found', `${name} is not configured on this bot`)
     entry.enabled = false
@@ -639,11 +721,14 @@ export class BotManager extends Service {
     const fiber = runtime?.plugins.get(name)
     runtime?.plugins.delete(name)
     await fiber?.dispose()
-    return this.plugins(id).then((list) => list.find((item) => item.package === name))
+    return this.pluginInfo(id, name)
   }
 
   async configurePlugin(id: string, name: string, config: Record<string, any>) {
     const record = this.get(id)
+    if ((await this.home.manager.findPackage(name))?.manifest.kind === 'app') {
+      throw new MushinError('invalid_input', `${name} is an app plugin: its settings are on the Plugins page (plugins.configure), the same for every bot`)
+    }
     const entry = record.plugins.find((item) => item.package === name)
     if (!entry) return this.enablePlugin(id, name, config)
     const plugin = await this.loadBotPlugin(name)
@@ -653,7 +738,7 @@ export class BotManager extends Service {
     await this.save()
     this.logger.info('config of plugin %s on bot %s changed', name, this.label(record))
     if (entry.enabled) this.reloadPlugin(id, entry, plugin)
-    return this.plugins(id).then((list) => list.find((item) => item.package === name))
+    return this.pluginInfo(id, name)
   }
 
   /** Puts the plain values of a bot plugin's secret fields into .env and returns the config with `${NAME}` references. */
@@ -666,10 +751,70 @@ export class BotManager extends Service {
 
   private reloadPlugin(id: string, entry: BotPluginEntry, plugin: Plugin) {
     const runtime = this.runtimes.get(id)
-    if (!runtime?.ctx) return
+    if (!runtime?.ctx || this.projectOff.has(entry.package)) return
     runtime.plugins.get(entry.package)?.dispose()
     runtime.pluginErrors.delete(entry.package)
     runtime.plugins.set(entry.package, runtime.ctx.plugin(plugin, resolveEnvReferences(entry.config)))
+  }
+
+  /**
+   * Turns a bot plugin on or off for the whole project. Off, it runs on no bot; each bot keeps its own switch and
+   * settings, so turning it back on starts it again where it was on.
+   */
+  async setProjectPlugin(name: string, enabled: boolean) {
+    const entry = await this.home.manager.findPackage(name)
+    if (!entry) throw new MushinError('not_found', `Plugin "${name}" is not installed`)
+    if (entry.manifest.kind !== 'bot') throw new MushinError('invalid_input', `${name} is an app plugin: turn it on or off for the project with plugins.enable or plugins.disable`)
+    if (!enabled && entry.manifest.essential) throw new MushinError('forbidden', `${name} cannot be turned off for the whole project; turn it off on each bot instead`)
+    if (enabled === !this.projectOff.has(name)) return this.projectPlugin(name)
+    if (enabled) this.projectOff.delete(name)
+    else this.projectOff.add(name)
+    await this.save()
+    this.logger.info('%s %s for every bot', enabled ? 'turned on' : 'turned off', name)
+    for (const record of this.records) {
+      const item = record.plugins.find((plugin) => plugin.package === name && plugin.enabled)
+      const runtime = this.runtimes.get(record.id)
+      if (!item || !runtime) continue
+      if (enabled) {
+        try {
+          this.reloadPlugin(record.id, item, await this.loadBotPlugin(name))
+        } catch (error) {
+          runtime.pluginErrors.set(name, error instanceof Error ? error.message : String(error))
+        }
+      } else {
+        const fiber = runtime.plugins.get(name)
+        runtime.plugins.delete(name)
+        await fiber?.dispose()
+      }
+    }
+    return this.projectPlugin(name)
+  }
+
+  /**
+   * The chat plugins across the project: each bot plugin with its project switch, and each app plugin with chat
+   * commands, with the bots that have it on.
+   */
+  async projectPlugins(): Promise<ProjectChatPlugin[]> {
+    const catalog = (await this.home.manager.graph()).catalog
+    const apps = this.chatApps()
+    return catalog
+      .filter((entry) => entry.manifest.kind === 'bot' || apps.has(entry.package))
+      .map((entry) => {
+        const bot = entry.manifest.kind === 'bot'
+        return {
+          package: entry.package,
+          kind: bot ? 'bot' as const : 'app' as const,
+          enabled: bot ? !this.projectOff.has(entry.package) : true,
+          ...(bot && entry.manifest.essential ? { essential: true } : {}),
+          bots: this.records
+            .filter((record) => (bot ? record.plugins.some((item) => item.package === entry.package && item.enabled) : record.appPlugins?.includes(entry.package)))
+            .map((record) => record.id),
+        }
+      })
+  }
+
+  private async projectPlugin(name: string) {
+    return (await this.projectPlugins()).find((item) => item.package === name)
   }
 
   // ---- commands ----
@@ -683,12 +828,14 @@ export class BotManager extends Service {
   }
 
   /**
-   * Answers a command on every bot (or those `bots` picks) from an app plugin, such as `/persona`.
-   * It answers after flows, like `/help`, and shows in each bot's command list.
+   * Answers a command from an app plugin, such as `/persona`, on the bots the user turned the plugin on for (on the
+   * bot's Plugins page, or with `bots.plugins.enable`). A plugin that decides itself which bots answer, from its own
+   * per-bot settings, passes `bots`, and then has no switch on the bot's page. It answers after flows, like `/help`,
+   * and shows in the command list of each bot it answers on.
    */
   defineCommand(def: CommandDef, handler: AppCommand['handler'], options: { bots?: (botId: string) => boolean } = {}) {
     const ctx = this.ctx
-    const command: AppCommand = { def, plugin: ctx.fiber.name, handler, bots: options.bots }
+    const command: AppCommand = { def, plugin: ctx.fiber.name, fiber: ctx.fiber, handler, bots: options.bots }
     return ctx.effect(() => {
       this.appCommands.add(command)
       return () => this.appCommands.delete(command)
@@ -698,7 +845,28 @@ export class BotManager extends Service {
   /** The app plugin command behind a command entry, if an app plugin answers it. */
   appCommandFor(botId: string, entry: CommandEntry) {
     if (entry.source.kind !== 'plugin') return
-    return [...this.appCommands].find((item) => item.plugin === entry.source.id && commandMatches(item.def, entry.name) && (item.bots?.(botId) ?? true))
+    return [...this.appCommands].find((item) => item.plugin === entry.source.id && commandMatches(item.def, entry.name) && this.answersOn(item, botId))
+  }
+
+  /** Whether an app plugin's command answers on a bot: the plugin's own choice, or the bot's switch for the plugin. */
+  private answersOn(command: AppCommand, botId: string) {
+    if (command.bots) return command.bots(botId)
+    const name = this.home.manager.packageOf(command.fiber)
+    return !!name && !!this.records.find((record) => record.id === botId)?.appPlugins?.includes(name)
+  }
+
+  /** App plugins whose commands have a switch on each bot, with the names of those commands, by package. */
+  private chatApps() {
+    const apps = new Map<string, string[]>()
+    for (const command of this.appCommands) {
+      if (command.bots) continue
+      const name = this.home.manager.packageOf(command.fiber)
+      if (!name) continue
+      const list = apps.get(name) ?? []
+      if (!list.includes(command.def.name)) list.push(command.def.name)
+      apps.set(name, list)
+    }
+    return apps
   }
 
   /** Lets the permissions plugin say who is master, admin or user on each bot. */
@@ -730,7 +898,7 @@ export class BotManager extends Service {
     }
     entries.push(...(this.runtimes.get(botId)?.bot?.localCommands() ?? []))
     for (const command of this.appCommands) {
-      if (command.bots && !command.bots(botId)) continue
+      if (!this.answersOn(command, botId)) continue
       entries.push({ ...command.def, botId, source: { kind: 'plugin', id: command.plugin, name: command.plugin } })
     }
     if (record.commands?.help !== false && !entries.some((entry) => commandMatches(entry, HELP_COMMAND.name))) {
@@ -785,6 +953,67 @@ export class BotManager extends Service {
       user: userId,
       replies: replies.map((reply) => segmentsToText(reply.segments)),
     }
+  }
+
+  // ---- plugin runs ----
+
+  /** The installed plugin a context of a bot belongs to: one of the bot's plugins, else an app plugin. */
+  private packageIn(botId: string, fiber: Fiber | undefined) {
+    if (!fiber) return
+    const runtime = this.runtimes.get(botId)
+    if (runtime) {
+      const owners = new Map<Fiber, string>()
+      for (const [name, plugin] of runtime.plugins) owners.set(plugin.ctx.fiber, name)
+      for (let current: Fiber | undefined = fiber; current; current = current.parent?.fiber === current ? undefined : current.parent?.fiber) {
+        const name = owners.get(current)
+        if (name) return name
+      }
+    }
+    return this.home.manager.packageOf(fiber)
+  }
+
+  private recordRun(botId: string, report: PluginRunReport, fiber?: Fiber) {
+    const run: PluginRun = { id: randomId(8), botId, ...report, plugin: this.packageIn(botId, fiber) ?? report.plugin }
+    let buffer = this.runs.get(botId)
+    if (!buffer) this.runs.set(botId, buffer = [])
+    buffer.push(run)
+    if (buffer.length > RUN_BUFFER_SIZE) buffer.splice(0, buffer.length - RUN_BUFFER_SIZE)
+    const day = new Date(run.startedAt).toISOString().slice(0, 10)
+    this.home.storage.append(`runs/${botId}/${day}`, run).catch(() => {})
+    this.home.emit('bots/run', run)
+  }
+
+  /**
+   * What plugins did with a bot's messages, newest first: each message a plugin replied to, kept from the plugins
+   * after it, or failed on. Flow runs are in `flows.history`.
+   */
+  async pluginRuns(id: string, query: { limit?: number; before?: number; plugin?: string; status?: PluginRun['status'] } = {}) {
+    this.get(id)
+    let buffer = this.runs.get(id)
+    if (!buffer) {
+      // Today's runs from the file, with any recorded while it was read.
+      const day = new Date().toISOString().slice(0, 10)
+      const stored = await this.home.storage.tail<PluginRun>(`runs/${id}/${day}`, RUN_BUFFER_SIZE)
+      const current = this.runs.get(id) ?? []
+      buffer = [...stored.filter((run) => !current.some((item) => item.id === run.id)), ...current].slice(-RUN_BUFFER_SIZE)
+      this.runs.set(id, buffer)
+    }
+    const limit = query.limit ?? 50
+    const matching = buffer.filter((run) => (query.before === undefined || run.startedAt < query.before)
+      && (!query.plugin || run.plugin === query.plugin)
+      && (!query.status || run.status === query.status))
+    return { runs: matching.slice(-limit).reverse(), more: matching.length > limit }
+  }
+
+  /** What this plugin knows of what others add: chat commands (app plugins' and bot plugins'), and adapters. */
+  private *provided(): Iterable<ProvidedItem> {
+    for (const command of this.appCommands) yield { kind: 'command', name: command.def.name, fiber: command.fiber }
+    for (const [id, runtime] of this.runtimes) {
+      for (const command of runtime.bot?.ownCommandList() ?? []) {
+        yield { kind: 'command', name: command.name, package: this.packageIn(id, command.fiber), fiber: command.fiber }
+      }
+    }
+    for (const [id, fiber] of this.adapterFibers) yield { kind: 'adapter', name: id, fiber }
   }
 
   // ---- logs ----
@@ -1127,7 +1356,7 @@ export class BotManager extends Service {
 
     yield actions.define({
       name: 'bots.plugins.list',
-      description: 'List every installed bot plugin with whether it is enabled on this bot, its config and status.',
+      description: 'List the plugins a bot can turn on, with whether each is on for this bot: every installed bot plugin (kind bot, with its config and status), then each app plugin that adds chat commands (kind app, with its commands). projectOff means it is turned off for the whole project, so it does not run even where it is on.',
       risk: 'read',
       input: idInput,
       handler: ({ id }) => this.plugins(id),
@@ -1135,7 +1364,7 @@ export class BotManager extends Service {
 
     yield actions.define({
       name: 'bots.plugins.enable',
-      description: 'Enable a bot plugin on one bot, optionally with config.',
+      description: 'Turn a plugin on for one bot: a bot plugin, optionally with config, or an app plugin\'s chat commands (an app plugin\'s commands answer only on the bots it is turned on for).',
       risk: 'write',
       input: pluginInput.extend({ config: z.record(z.string(), z.any()).optional() }),
       handler: ({ id, package: name, config }) => this.enablePlugin(id, name, config),
@@ -1143,7 +1372,7 @@ export class BotManager extends Service {
 
     yield actions.define({
       name: 'bots.plugins.disable',
-      description: 'Disable a bot plugin on one bot. Its config is kept.',
+      description: 'Turn a bot plugin, or an app plugin\'s chat commands, off for one bot. A bot plugin\'s config is kept.',
       risk: 'write',
       input: pluginInput,
       handler: ({ id, package: name }) => this.disablePlugin(id, name),
@@ -1155,6 +1384,35 @@ export class BotManager extends Service {
       risk: 'write',
       input: pluginInput.extend({ config: z.record(z.string(), z.any()) }),
       handler: ({ id, package: name, config }) => this.configurePlugin(id, name, config),
+    })
+
+    yield actions.define({
+      name: 'bots.plugins.project',
+      description: 'The chat plugins across the project: each bot plugin with its project switch (off, it runs on no bot), and each app plugin that adds chat commands. Lists the bots that have each one on.',
+      risk: 'read',
+      input: z.object({}),
+      handler: () => this.projectPlugins(),
+    })
+
+    yield actions.define({
+      name: 'bots.plugins.setProject',
+      description: 'Turn a bot plugin on or off for the whole project. Off, it runs on no bot; each bot keeps its own switch and settings. App plugins are turned on and off with plugins.enable and plugins.disable.',
+      risk: 'write',
+      input: z.object({ package: z.string().describe('Bot plugin package name'), enabled: z.boolean() }),
+      handler: ({ package: name, enabled }) => this.setProjectPlugin(name, enabled),
+    })
+
+    yield actions.define({
+      name: 'bots.runs',
+      description: 'What plugins did with a bot\'s messages, newest first: each message a bot plugin or an app plugin\'s command replied to (replies), kept from the plugins after it (kept), or failed on (status error, with the error). Flow runs are in flows.history. The message field is the record id, for bots.logs and bots.usage.',
+      risk: 'read',
+      input: idInput.extend({
+        limit: z.number().int().min(1).max(RUN_BUFFER_SIZE).optional(),
+        before: z.number().optional().describe('Only runs started before this time (ms since 1970), to page back'),
+        plugin: z.string().optional().describe('Only this plugin\'s runs: its package name'),
+        status: z.enum(['ok', 'error']).optional(),
+      }),
+      handler: ({ id, ...query }) => this.pluginRuns(id, query),
     })
 
     yield actions.define({

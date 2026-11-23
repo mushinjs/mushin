@@ -81,6 +81,29 @@ export function fiberError(fiber: Fiber | undefined): string | undefined {
   return error instanceof Error ? error.message : String(error)
 }
 
+/** Something a running plugin adds besides actions: a chat command, a flow node or a bot adapter. */
+export interface ProvidedItem {
+  kind: 'command' | 'node' | 'adapter'
+  name: string
+  /** The context that added it; `packageOf` finds its plugin from there. */
+  fiber?: Fiber
+  /** The package, when the source knows it better than the context does (a bot plugin runs inside the bots plugin). */
+  package?: string
+}
+
+/** Lists what running plugins add; see `PluginManager.defineProvides`. */
+export type ProvidesSource = () => Iterable<ProvidedItem>
+
+/** What one plugin adds, by name: tools are the actions Fairy and the API can call. */
+export interface PluginProvides {
+  commands: string[]
+  nodes: string[]
+  tools: string[]
+  adapters: string[]
+}
+
+const PROVIDES_KEY = { command: 'commands', node: 'nodes', adapter: 'adapters' } as const
+
 /** Picks the plugin out of a module: a default export, or the module namespace itself. */
 export function unwrapPlugin(mod: any): Plugin {
   const value = mod?.default
@@ -165,6 +188,7 @@ export class PluginManager extends Service {
   private loadErrors = new Map<string, string>()
   /** The version of each local plugin folder's files, so a reload after an edit imports them afresh. */
   private versions = new Map<string, { stamp: string; version: number }>()
+  private providesSources = new Set<ProvidesSource>()
 
   constructor(ctx: Context, public options: ManagerOptions) {
     super(ctx, 'manager')
@@ -255,6 +279,55 @@ export class PluginManager extends Service {
 
   private graphNow(): DependencyGraph {
     return { catalog: this.catalogList, entries: this.entries, known: knownManifest }
+  }
+
+  /** The package of the app plugin a context belongs to, found by walking up from it to an entry's context. */
+  packageOf(fiber: Fiber | undefined): string | undefined {
+    if (!fiber) return
+    const owners = new Map<Fiber, string>()
+    for (const [id, tracked] of this.fibers) {
+      const entry = this.entries.find((item) => item.id === id)
+      if (entry) owners.set(tracked.ctx.fiber, entry.package)
+    }
+    let current: Fiber | undefined = fiber
+    while (current) {
+      const found = owners.get(current)
+      if (found) return found
+      const parent: Fiber | undefined = current.parent?.fiber
+      if (!parent || parent === current) return
+      current = parent
+    }
+  }
+
+  /** Lists what plugins add besides actions (flow nodes, chat commands, adapters), for `plugins.provides`. Removed when the caller unloads. */
+  defineProvides(source: ProvidesSource) {
+    return this.ctx.effect(() => {
+      this.providesSources.add(source)
+      return () => this.providesSources.delete(source)
+    }, 'manager.defineProvides()')
+  }
+
+  /** What each running plugin adds, by package: its chat commands, flow nodes, tools (actions) and adapters. */
+  provides(): Record<string, PluginProvides> {
+    const result: Record<string, PluginProvides> = {}
+    const add = (pkg: string | undefined, key: keyof PluginProvides, name: string) => {
+      if (!pkg) return
+      const item = result[pkg] ??= { commands: [], nodes: [], tools: [], adapters: [] }
+      if (!item[key].includes(name)) item[key].push(name)
+    }
+    const actions = this.home.actions
+    for (const action of actions.list()) {
+      if (action.fairy) add(this.packageOf(actions.fiberOf(action.name)), 'tools', action.name)
+    }
+    for (const source of this.providesSources) {
+      try {
+        for (const item of source()) add(item.package ?? this.packageOf(item.fiber), PROVIDES_KEY[item.kind], item.name)
+      } catch (error) {
+        this.logger.debug('listing what plugins provide failed: %s', error)
+      }
+    }
+    for (const item of Object.values(result)) for (const list of Object.values(item)) list.sort()
+    return result
   }
 
   /** Dependencies, dependents and what enabling or disabling the package would take. */
@@ -620,6 +693,14 @@ export class PluginManager extends Service {
       risk: 'read',
       input: z.object({}),
       handler: () => Promise.all(this.entries.map((entry) => this.describe(entry))),
+    })
+
+    yield actions.define({
+      name: 'plugins.provides',
+      description: 'What each running plugin adds, by package: chat commands, flow node types, tools (actions) and bot adapters. Disabled plugins add nothing.',
+      risk: 'read',
+      input: z.object({}),
+      handler: () => this.provides(),
     })
 
     yield actions.define({

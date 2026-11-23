@@ -54,9 +54,24 @@ When the user types the key into the plugin's form on the dashboard's Plugins pa
 **Services.** List what the plugin uses in `inject`; it starts once they are all there.
 
 - `actions`: `ctx.actions.define({ name, description, risk, input, handler })`. Name it `<camelName>.<verb>`. Risk is `read`, `write` or `dangerous`. The description is written for an AI: what it does and what it returns.
-- `bots`: `ctx.bots.get(botId)` is a running bot. `bot.send({ type: 'group', id: groupId }, 'text')` sends a message. Check that the bot exists and is online, and log a warning when it is not.
+- `bots`: `ctx.bots.bot(botId)` is a running bot. `bot.send({ type: 'group', id: groupId }, 'text')` sends a message. Check that the bot exists and is online, and log a warning when it is not.
 - `storage`: `ctx.storage.get(key)` and `ctx.storage.set(key, value)`. Start every key with the plugin's name (`weather/last-sent`), and the data lands in `data/plugins/<name>/`. Do not write files under `data/` yourself.
 - `ctx.logger('<name>')` for logs. Log what happened and why it was skipped; never log a secret.
+
+**Chat commands.** A command such as `/天气` comes from `ctx.bots.defineCommand`. Put `bots` in `inject` and `"@mushinjs/plugin-bots": "*"` under `mushin.requires.plugins`:
+
+```ts
+ctx.bots.defineCommand({
+  name: '天气',
+  description: '按地名查询当前天气',
+  args: [{ name: '地域', type: 'text', rest: true, optional: true }],
+}, async (session) => {
+  const area = session.command?.rest.trim()
+  await session.send(area ? await lookUp(area) : '用法：/天气 北京')
+})
+```
+
+A command answers only on the bots the plugin is turned on for. Ask the user which bots, then turn it on for each with `call_tool` and `bots.plugins.enable` (`{ "id": "<bot id>", "package": "<package name>" }`). The user switches it per bot on the bot's Plugins tab, and for the whole project on the Plugins page. Each message the command answers, or fails on, shows on the bot's Runs tab (`bots.runs`).
 
 **Cleanup.** Anything that keeps running is wrapped in `ctx.effect`, so it stops when the plugin is turned off or reloaded:
 
@@ -79,6 +94,6 @@ For a daily job, check once a minute whether the configured time (in the configu
 
 1. `npm run typecheck` (or `pnpm run typecheck`) passes.
 2. Reload the plugin: `plugins__list` shows its entry id; run `plugins__reload` (or `call_tool` with `plugins.reload`) and `{ "id": "<entry id>" }`. A reload runs the files as they are now, without a restart. `plugins__list` must then show it `active`. If it shows `failed`, read the error and `logs__recent` with tag `plugin`.
-3. Try it without touching real groups. Use the sandbox bot of the Demo plugin when there is one (`plugins__list`, then `bots__sandbox` to write as its test user, and `bots__messages` to read the reply). Call your `…Now` action against the sandbox bot. A command can also be checked with `bots.commands.run` without a target, which only previews it.
+3. Try it without touching real groups. Use the sandbox bot of the Demo plugin when there is one (`plugins__list`, then `bots__sandbox` to write as its test user, and `bots__messages` to read the reply). A chat command must be turned on for that bot first (`bots.plugins.enable`). When there is no reply, `bots.runs` shows whether the plugin handled the message and the error it hit. Call your `…Now` action against the sandbox bot. A command can also be checked with `bots.commands.run` without a target, which only previews it.
 4. Turn each switch off and on once (`plugins.configure`) and check that the behavior follows it.
 5. Tell the user what you built, which settings it has, what goes into `.env`, and how to try it for real.

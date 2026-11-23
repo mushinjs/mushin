@@ -33,7 +33,7 @@ onMounted(load)
 watch(() => props.bot.id, load)
 
 const today = computed(() => series.value?.reduce((sum, value) => sum + value, 0))
-const plugins = computed(() => props.bot.plugins.filter((plugin) => plugin.enabled).length)
+const plugins = computed(() => props.bot.plugins.filter((plugin) => plugin.enabled).length + (props.bot.appPlugins?.length ?? 0))
 const maxChat = computed(() => Math.max(1, ...(chats.value ?? []).map((row) => row.count)))
 
 /** A 24-hour sparkline as an SVG path, scaled to the busiest hour. */

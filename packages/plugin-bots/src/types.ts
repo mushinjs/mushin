@@ -15,6 +15,11 @@ export interface BotRecord {
   enabled: boolean
   adapter: { type: string; config: Record<string, any> }
   plugins: BotPluginEntry[]
+  /**
+   * App plugins (by package) whose chat commands this bot answers. A command an app plugin adds with
+   * `bots.defineCommand` is off on a bot until it is turned on here, unless the plugin picks the bots itself.
+   */
+  appPlugins?: string[]
   /** Default provider id for this bot's LLM plugins. */
   provider?: string
   /** Command prefixes, the built-in `/help` and admins. */
@@ -173,4 +178,33 @@ export interface BotEvent {
   user?: UserInfo
   /** The message the event is about, when it is known (e.g. the text of a recalled message). */
   message?: { id?: string; text: string; segments: Segment[] }
+}
+
+/**
+ * A message a plugin handled on a bot, for the bot's runs beside the flow runs: it replied, kept the
+ * message from the plugins after it, or failed. Plugins that only looked at the message leave no run.
+ */
+export interface PluginRun {
+  id: string
+  botId: string
+  /** The plugin's package, or its name when the package is not known. */
+  plugin: string
+  /** The command the plugin answered, such as `天气`. */
+  command?: string
+  /** The message, cut to 200 characters. */
+  text: string
+  user: UserInfo
+  /** `group:123` or `private:456`. */
+  channel: string
+  /** The bot's record of the message (its `MessageRecord` id). */
+  message: string
+  status: 'ok' | 'error'
+  /** Messages the plugin sent while handling it. */
+  replies: number
+  /** The plugin did not pass the message on to the plugins after it. */
+  kept: boolean
+  startedAt: number
+  /** Time spent in the plugin itself, not in the plugins after it. */
+  ms: number
+  error?: string
 }

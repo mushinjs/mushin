@@ -1,5 +1,5 @@
 import {
-  type ChannelInfo, type Content, Context, type MessageRecord, type Provenance, type Segment, segmentsToText,
+  type ChannelInfo, type Content, Context, type Fiber, type MessageRecord, type Provenance, type Segment, segmentsToText,
   randomId, Service, seg, toSegments, usage, type UsageEvent, type UsageScope, type UserInfo,
 } from '@mushinjs/core'
 import {
@@ -8,7 +8,7 @@ import {
 } from './commands'
 import {
   type BotEvent, type BotRecord, type BotRole, type BotStatus, type ContactResolver, type GroupRole, type GroupRoleResolver, type IncomingMessage, isSandbox,
-  type MediaResolver, roleAtLeast, SANDBOX_CHANNEL, SANDBOX_USER, type SourcedContent, type Transport,
+  type MediaResolver, type PluginRun, roleAtLeast, SANDBOX_CHANNEL, SANDBOX_USER, type SourcedContent, type Transport,
 } from './types'
 
 export type Sendable = Content | SourcedContent
@@ -17,14 +17,32 @@ export type Middleware = (session: Session, next: () => Promise<void>) => Promis
 
 interface MiddlewareEntry {
   plugin: string
+  /** The context that registered it, to tell which installed plugin it belongs to. */
+  fiber?: Fiber
   callback: Middleware
   priority: number
+  /** False when the plugin keeps its own record of what it handled, as flows do. */
+  runs?: false
 }
 
 export interface MiddlewareOptions {
   /** Higher runs earlier; plugins with the same priority run in registration order. Default 0. */
   priority?: number
+  /**
+   * False when the plugin keeps its own record of the messages it handles, as flows do with their runs.
+   * Otherwise each message the middleware answers, keeps from the plugins after it or fails on is a plugin run.
+   */
+  runs?: false
 }
+
+/** A command an app plugin answers on this bot, and the context that registered it. */
+export interface AppCommandTarget {
+  handler: (session: Session) => Promise<unknown> | unknown
+  fiber?: Fiber
+}
+
+/** A plugin handled a message; the bot manager adds the id and the package. */
+export type PluginRunReport = Omit<PluginRun, 'id' | 'botId'>
 
 /** Supplied by the bot manager: `record` stores and broadcasts a message, `status` reports changes. */
 export interface BotHooks {
@@ -38,8 +56,10 @@ export interface BotHooks {
   builtinCommand?(bot: Bot, entry: CommandEntry, session: Session): string | undefined
   /** The sender's role on this bot; nothing when the permissions plugin is not running. */
   roleOf?(bot: Bot, userId: string): BotRole | undefined
-  /** A command that an app plugin answers on every bot, such as `/persona`. */
-  appCommand?(bot: Bot, entry: CommandEntry): ((session: Session) => Promise<unknown> | unknown) | undefined
+  /** A command that an app plugin answers on this bot, such as `/persona`. */
+  appCommand?(bot: Bot, entry: CommandEntry): AppCommandTarget | undefined
+  /** A plugin replied to a message, kept it from the plugins after it, or failed on it. */
+  pluginRun?(bot: Bot, run: PluginRunReport, fiber?: Fiber): void
   /** Where the costs of handling a message go; see `usage` in core. */
   usageScope?(bot: Bot, record: MessageRecord): UsageScope | undefined
   /** An outgoing message was sent: its size, how long the platform took (not for the sandbox), and the message being handled. */
@@ -153,7 +173,9 @@ export class Bot extends Service {
   private transport?: Transport
   private middlewares: MiddlewareEntry[] = []
   private eventHandlers = new Set<(event: BotEvent) => void>()
-  private ownCommands = new Set<{ def: CommandDef; plugin: string }>()
+  private ownCommands = new Set<{ def: CommandDef; plugin: string; fiber: Fiber }>()
+  /** Replies sent while each message is handled, by plugin: the message's record id → plugin name → count. */
+  private replying = new Map<string, Map<string, number>>()
   private commandProviders = new Set<() => CommandEntry[]>()
   private roleResolver?: GroupRoleResolver
   private mediaResolver?: MediaResolver
@@ -308,7 +330,7 @@ export class Bot extends Service {
   /** Registers middleware for incoming messages; runs in registration order. */
   middleware(callback: Middleware, options: MiddlewareOptions = {}) {
     const ctx = this.ctx
-    const entry: MiddlewareEntry = { plugin: ctx.fiber.name, callback, priority: options.priority ?? 0 }
+    const entry: MiddlewareEntry = { plugin: ctx.fiber.name, fiber: ctx.fiber, callback, priority: options.priority ?? 0, runs: options.runs }
     return ctx.effect(() => {
       // Insert after every entry with the same or higher priority, keeping registration order within a priority.
       const index = this.middlewares.findIndex((item) => item.priority < entry.priority)
@@ -343,6 +365,11 @@ export class Bot extends Service {
     return entry ? { ...parsed, entry } : parsed
   }
 
+  /** The commands plugins of this bot registered with `bot.command()`, with the context of each. */
+  ownCommandList() {
+    return [...this.ownCommands].map(({ def, fiber }) => ({ name: def.name, fiber }))
+  }
+
   /** Commands that plugins of this bot registered with `bot.command()` or `bot.defineCommands()`. */
   localCommands(): CommandEntry[] {
     const entries: CommandEntry[] = [...this.ownCommands].map(({ def, plugin }) => ({ ...def, botId: this.id, source: { kind: 'plugin', id: plugin, name: plugin } }))
@@ -374,7 +401,7 @@ export class Bot extends Service {
    */
   command(def: CommandDef, handler: CommandHandler) {
     const ctx = this.ctx
-    const entry = { def, plugin: ctx.fiber.name }
+    const entry = { def, plugin: ctx.fiber.name, fiber: ctx.fiber }
     ctx.effect(() => {
       this.ownCommands.add(entry)
       return () => this.ownCommands.delete(entry)
@@ -454,16 +481,17 @@ export class Bot extends Service {
       } catch {}
     }
     const chain = [...this.middlewares]
-    const appHandler = entry?.source.kind === 'plugin' ? this.hooks.appCommand?.(this, entry) : undefined
-    if (entry?.source.kind === 'builtin' || appHandler) {
+    const app = entry?.source.kind === 'plugin' ? this.hooks.appCommand?.(this, entry) : undefined
+    if (entry?.source.kind === 'builtin' || app) {
       // After flows, so a flow that answers the same text (say a keyword trigger on /help) still wins.
       const builtin: MiddlewareEntry = {
-        plugin: appHandler ? entry!.source.id : BUILTIN_PLUGIN,
+        plugin: app ? entry!.source.id : BUILTIN_PLUGIN,
+        fiber: app ? app.fiber : this.ctx.fiber,
         priority: BUILTIN_PRIORITY,
         callback: async (view, next) => {
           if (!this.allows(entry!, view)) return next()
-          if (appHandler) {
-            await appHandler(view)
+          if (app) {
+            await app.handler(view)
             return
           }
           const answer = this.hooks.builtinCommand?.(this, entry!, view)
@@ -475,23 +503,70 @@ export class Bot extends Service {
     }
     /** The plugin that kept the message from the ones after it, if one did. */
     let stoppedAt: string | undefined
+    const replies = new Map<string, number>()
+    this.replying.set(record.id, replies)
     const run = async (index: number): Promise<void> => {
       const entry = chain[index]
       if (!entry) return
       let passed = false
+      let failure: unknown
+      // What the plugins after this one did is not this one's: their time and, for a plugin with several middlewares, their replies.
+      const began = Date.now()
+      const sent = () => replies.get(entry.plugin) ?? 0
+      const sentBefore = sent()
+      let laterMs = 0
+      let laterSent = 0
       try {
-        await entry.callback(session.as(entry.plugin), () => {
+        await entry.callback(session.as(entry.plugin), async () => {
           passed = true
-          return run(index + 1)
+          const at = Date.now()
+          const before = sent()
+          try {
+            await run(index + 1)
+          } finally {
+            laterMs += Date.now() - at
+            laterSent += sent() - before
+          }
         })
         if (!passed && index < chain.length - 1) stoppedAt ??= entry.plugin
       } catch (error) {
+        failure = error
         this.ctx.logger('bot').warn('middleware of %s failed: %s', entry.plugin, error)
       }
+      const own = sent() - sentBefore - laterSent
+      const kept = !passed && !failure && index < chain.length - 1
+      if (entry.runs !== false && (own || kept || failure)) this.reportRun(entry, session, { began, ms: Date.now() - began - laterMs, replies: own, kept, failure })
     }
-    await run(0)
+    try {
+      await run(0)
+    } finally {
+      this.replying.delete(record.id)
+    }
     this.ctx.logger('bot').info('processed in %s%s', duration(Date.now() - started), stoppedAt ? `; ${stoppedAt} kept it from the plugins after it` : '')
     return session
+  }
+
+  private reportRun(entry: MiddlewareEntry, session: Session, result: { began: number; ms: number; replies: number; kept: boolean; failure: unknown }) {
+    const command = session.command?.entry
+    const text = session.text
+    try {
+      this.hooks.pluginRun?.(this, {
+        plugin: entry.plugin,
+        ...(command && answers(command, entry.plugin) ? { command: command.name } : {}),
+        text: text.length > 200 ? `${text.slice(0, 200)}…` : text,
+        user: session.user,
+        channel: `${session.channel.type}:${session.channel.id}`,
+        message: session.record.id,
+        status: result.failure ? 'error' : 'ok',
+        replies: result.replies,
+        kept: result.kept,
+        startedAt: result.began,
+        ms: result.ms,
+        ...(result.failure ? { error: result.failure instanceof Error ? result.failure.message : String(result.failure) } : {}),
+      }, entry.fiber)
+    } catch (error) {
+      this.ctx.logger('bot').debug('recording what %s did failed: %s', entry.plugin, error)
+    }
   }
 
   /**
@@ -577,7 +652,10 @@ export class Bot extends Service {
       replyTo: options.replyTo,
       source,
     })
-    this.hooks.sent?.(this, record, { bytes, ...(sandbox ? {} : { ms }), cause: usage.current()?.messageId })
+    const cause = usage.current()?.messageId
+    this.hooks.sent?.(this, record, { bytes, ...(sandbox ? {} : { ms }), cause })
+    const replies = cause ? this.replying.get(cause) : undefined
+    if (replies && options.plugin) replies.set(options.plugin, (replies.get(options.plugin) ?? 0) + 1)
     return record
   }
 }
@@ -585,6 +663,11 @@ export class Bot extends Service {
 /** How big a message is on the wire, roughly: its segments as JSON. Inline images count in full. */
 export function byteSize(segments: Segment[]) {
   return Buffer.byteLength(JSON.stringify(segments))
+}
+
+/** Whether a plugin is the one answering a command: the plugin that registered it, or the bots plugin for `/help`. */
+function answers(command: CommandEntry, plugin: string) {
+  return command.source.kind === 'builtin' ? plugin === BUILTIN_PLUGIN : command.source.kind === 'plugin' && command.source.id === plugin
 }
 
 /** A message on one line for the bot's log, cut to a readable length. */

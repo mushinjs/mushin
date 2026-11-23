@@ -1,4 +1,4 @@
-import { type ChannelInfo, Context, MushinError, randomId, seg, type Segment, segmentsToText, Service, toJsonSchema, type UserInfo, z } from '@mushinjs/core'
+import { type ChannelInfo, Context, type Fiber, MushinError, randomId, seg, type Segment, segmentsToText, Service, toJsonSchema, type UserInfo, z } from '@mushinjs/core'
 import { type BotEvent, type BotRole, BUILTIN_PRIORITY, type CommandArg, type CommandEntry, commandMatches, type GroupRole, helpText, requiredRole, roleAtLeast, splitCommand } from '@mushinjs/plugin-bots'
 import type {} from '@mushinjs/plugin-providers'
 import type {} from '@mushinjs/plugin-storage'
@@ -286,6 +286,8 @@ export class FlowService extends Service {
 
   private home: Context
   private types = new Map<string, NodeType & { plugin: string }>()
+  /** The context that defined each node type, to tell which installed plugin adds it. */
+  private typeFibers = new Map<string, Fiber>()
   private docs = new Map<string, FlowDocument>()
   private compiled = new Map<string, CompiledFlow>()
   private traces = new Map<string, RunTrace[]>()
@@ -376,6 +378,10 @@ export class FlowService extends Service {
       ctx.effect(() => this.runs.attach(ctx), 'flows runs')
     })
     yield* this.defineActions()
+    // The Plugins page shows how many node types each plugin adds.
+    this.home.inject(['manager'], (ctx) => {
+      ctx.manager.defineProvides(() => [...this.typeFibers].map(([name, fiber]) => ({ kind: 'node' as const, name, fiber })))
+    })
     yield this.home.effect(() => {
       const timer = setInterval(() => this.tick(), TICK)
       return () => clearInterval(timer)
@@ -395,9 +401,11 @@ export class FlowService extends Service {
     return ctx.effect(() => {
       if (this.types.has(type.type)) throw new Error(`node type "${type.type}" is already defined`)
       this.types.set(type.type, { ...(type as NodeType), plugin: ctx.fiber.name })
+      this.typeFibers.set(type.type, ctx.fiber)
       this.recompile()
       return () => {
         this.types.delete(type.type)
+        this.typeFibers.delete(type.type)
         this.recompile()
       }
     }, `flows.defineNode(${type.type})`)
