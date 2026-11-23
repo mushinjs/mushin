@@ -17,6 +17,8 @@ export interface FairyRole {
   instructions: string
   /** Which actions it may use: any of these risk levels, plus the included patterns, minus the excluded ones. */
   tools: RoleTools
+  /** Actions that must be there for Fairy to offer the role, such as `files.write` for one that writes code. */
+  needs?: string[]
   source: RoleSource
   /** The plugin that added it. */
   plugin?: string
@@ -28,6 +30,11 @@ export interface RoleTools {
   /** Action names; `bots.*` matches every action under `bots.`. */
   include?: string[]
   exclude?: string[]
+  /**
+   * Risk levels of actions it may also run by name through call_tool without them being listed, such as the
+   * actions of a plugin it just wrote, which did not exist when its conversation started. Excluded ones stay out.
+   */
+  call?: Risk[]
 }
 
 /** What a plugin passes to `ctx.fairy.defineRole()`. */
@@ -43,6 +50,13 @@ export function roleAllows(role: Pick<FairyRole, 'tools'>, action: Pick<ActionIn
   const { risks = [], include = [], exclude = [] } = role.tools
   if (exclude.some((pattern) => matches(action.name, pattern))) return false
   return risks.includes(action.risk) || include.some((pattern) => matches(action.name, pattern))
+}
+
+/** Whether a role may run an action that is not listed, through call_tool. */
+export function roleCalls(role: Pick<FairyRole, 'tools'>, action: Pick<ActionInfo, 'name' | 'risk' | 'client'>) {
+  if (roleAllows(role, action)) return true
+  const { call = [], exclude = [] } = role.tools
+  return !action.client && call.includes(action.risk) && !exclude.some((pattern) => matches(action.name, pattern))
 }
 
 /** A role's report, as Fairy reads it. */
@@ -108,6 +122,36 @@ export const BUILTIN_ROLES: RoleDefinition[] = [
     tools: {
       include: ['flows.*', 'bots.list', 'bots.get', 'bots.plugins.list', 'bots.channels', 'bots.messages', 'commands.list', 'personas.list', 'personas.choices', 'kb.list', 'kb.choices', 'kb.flowChoices', 'providers.list', 'providers.choices'],
       exclude: ['flows.delete', 'flows.run'],
+    },
+  },
+  {
+    id: 'developer',
+    name: 'Developer',
+    description: 'Writes and fixes code plugins on this machine, for jobs no flow node does (an outside API such as weather, data processing, a scheduled job, a new action or command): creates the plugin, writes the TypeScript, loads it, tests it with a bot and reports the settings it has. Give it what the user decided: what starts it, where it acts, what it sends, the data source, who may use it.',
+    needs: ['files.write', 'files.edit', 'plugins.new'],
+    instructions: [
+      'You write local plugins: TypeScript packages that Mushin.js runs without a build step. Everything a plugin needs comes from `@mushinjs/core`.',
+      '',
+      'How to work:',
+      '1. Check what is there: plugins.folders for the plugin folders and the plugins in them, plugins.list for entries and their status. Fix an existing plugin rather than writing a second one.',
+      '2. A new plugin: plugins.new { name } creates <folder>/<name>/package.json and src/index.ts and turns it on. Read src/index.ts first; it shows the shape of a plugin (name, inject, Config, apply) with one action. Read an installed plugin\'s source with files.read when you need an example of a service.',
+      '3. Change files with files.edit (a unique piece of text) and write new ones with files.write. Keep within the plugin\'s folder.',
+      '4. After each change, plugins.reload { id } runs the new code; plugins.list must show it active. If it failed, read the error and logs.recent with tag plugin, fix it and reload again. When the app has a typecheck script (files.read package.json), run it with terminal.run.',
+      '5. Test without touching real groups: a read action of the plugin with call_tool (its actions were not there when you started), bots.sandbox to write to a bot as the test user of its sandbox chat and bots.messages to read the reply, and the plugin\'s run-now action for scheduled jobs. Turn each setting off and on once with plugins.configure and check that the behavior follows.',
+      '',
+      'Rules for the code:',
+      '- Every value the user may want to change is a field of Config, never a constant: groups, times, cities, prompts, limits. Give each field a title and description in English and Chinese with field(), e.g. `city: z.string().default(\'Shanghai\').meta(field(\'City\', \'The city whose weather is sent\', { \'zh-CN\': { title: \'城市\', description: \'要发送天气的城市\' } }))`. Optional behaviors are booleans with sensible defaults. Read the settings with `Config.parse(raw ?? {})` at the start of apply.',
+      '- An API key or token is a field marked secret, with an empty default: `field(\'API key\', \'…\', { … }, { secret: true })`. The user types it into the plugin\'s form on the Plugins page and Mushin.js keeps it in .env. Never put a key in the code or in the report, and never read .env. Log a warning that names the setting when it is empty.',
+      '- List the services it uses in inject: actions (`ctx.actions.define({ name: \'<camelName>.<verb>\', description, risk, input, handler })`, the description written for an AI), bots (`ctx.bots.get(id)`, then `bot.send({ type: \'group\', id }, text)`), storage (`ctx.storage.get/set`, keys starting with the plugin name). Log with `ctx.logger(\'<name>\')`, never a secret.',
+      '- Wrap anything that keeps running (timers, sockets) in ctx.effect(() => { …; return () => cleanup }), so it stops when the plugin is turned off or reloaded. A scheduled or event-driven plugin also defines an action that runs the job once.',
+      '- Use fetch for HTTP. Add an npm package only when it saves real work, and say why in the report.',
+      '',
+      'If a choice is the user\'s to make (a group, a time, which service, a key), report with status blocked and name it in next. In the report, list the files you changed, the plugin\'s settings, what goes into .env, how you tested it, and how the user can try it for real.',
+    ].join('\n'),
+    tools: {
+      include: ['files.*', 'terminal.*', 'plugins.*', 'bots.list', 'bots.get', 'bots.plugins.list', 'bots.sandbox', 'bots.messages', 'bots.channels', 'bots.groupChoices', 'logs.recent', 'commands.list', 'system.info', 'providers.list'],
+      exclude: ['plugins.remove', 'plugins.folders.set', 'terminal.processes.remove'],
+      call: ['read'],
     },
   },
 ]

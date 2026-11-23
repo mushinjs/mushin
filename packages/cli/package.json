@@ -13,7 +13,7 @@
     "mushin": "./bin/mushin.js"
   },
   "scripts": {
-    "dev": "tsx watch --clear-screen=false --exclude \"../dashboard/**\" src/dev.ts start --dir ../../instance",
+    "dev": "tsx src/dev-watch.ts",
     "demo": "tsx tests/helpers/demo.ts"
   },
   "exports": {

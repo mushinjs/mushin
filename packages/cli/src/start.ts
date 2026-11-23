@@ -1,10 +1,12 @@
 import { mkdir, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { Actions, Context, currentPackageName, EnvFile, type Exporter, type InstanceConfig, Logger, type Message, PluginManager, readJson, resolveEnvReferences, writeJsonAtomic } from '@mushinjs/core'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { Actions, Context, currentPackageName, EnvFile, type Exporter, type InstanceConfig, Logger, type Message, MushinError, PluginManager, readJson, resolveEnvReferences, writeJsonAtomic, z } from '@mushinjs/core'
 import type { SignInInfo } from '@mushinjs/plugin-console'
 import { type LayoutDirs, migrateLayout, resolveDirs } from '@mushinjs/plugin-storage'
+import { registerPluginHooks } from './hooks'
+import { createPluginFolder, PLUGIN_NAME } from './scaffold'
 
 export const DEFAULT_PORT = 5160
 
@@ -17,7 +19,7 @@ let tsx: Promise<unknown> | undefined
  * TypeScript, so tsx starts the first time one is imported, and an instance without one never loads it.
  */
 export async function importPlugin(specifier: string) {
-  if (!fromSource && /\.[cm]?tsx?$/.test(specifier)) {
+  if (!fromSource && /\.[cm]?tsx?(?:\?|$)/.test(specifier)) {
     tsx ??= import('tsx/esm/api').then(({ register }) => register())
     await tsx
   }
@@ -111,6 +113,35 @@ export function instanceDirs(baseDir: string, config: InstanceConfig): LayoutDir
   return resolveDirs(baseDir, resolveEnvReferences(storage?.config ?? {}))
 }
 
+/** `plugins.new`: a new local plugin from the template, for Fairy and the dashboard. */
+function definePluginTemplate(ctx: Context, baseDir: string) {
+  ctx.actions.define({
+    name: 'plugins.new',
+    description: 'Create a new local plugin from the template: <folder>/<name>/package.json (package mushin-plugin-<name>) and src/index.ts, a TypeScript plugin with one example action <name>.hello that Mushin.js runs without a build step. Then turn it on, unless enable is false. Read src/index.ts before changing it; after changing it, plugins.reload with its entry id runs the new code.',
+    risk: 'write',
+    input: z.object({
+      name: z.string().regex(PLUGIN_NAME).describe('Lowercase letters, digits and dashes, starting with a letter, e.g. weather'),
+      folder: z.string().optional().describe('A folder from plugins.folders; the app\'s plugins/ folder by default'),
+      enable: z.boolean().default(true),
+    }),
+    handler: async ({ name, folder, enable }) => {
+      const manager = ctx.get('manager')
+      if (!manager) throw new MushinError('unavailable', 'The plugin manager is not running')
+      const dirs = manager.localDirs
+      const parent = folder ? dirs.find((dir) => dir === resolve(baseDir, folder)) : dirs[0]
+      if (!parent) throw new MushinError('invalid_input', `${folder} is not a plugin folder; plugins.folders lists them (${dirs.join(', ')})`)
+      const pkg = `mushin-plugin-${name}`
+      if ((await manager.catalog(true)).some((item) => item.package === pkg)) throw new MushinError('conflict', `A plugin named ${pkg} is already installed; pick another name`)
+      const created = await createPluginFolder(parent, name).catch((error: Error) => {
+        throw new MushinError('conflict', error.message)
+      })
+      await manager.graph(true)
+      const entry = enable ? await manager.describe(await manager.enable(pkg)) : undefined
+      return { ...created, files: created.files.map((file) => join(created.dir, file)), ...(entry ? { entry } : {}) }
+    },
+  })
+}
+
 /** Boots an instance: root context, action registry, then every app plugin in the config file. */
 export async function start(options: StartOptions) {
   const baseDir = resolve(options.baseDir)
@@ -155,8 +186,12 @@ export async function start(options: StartOptions) {
 
   if (options.onSignIn) ctx.on('console/ready', options.onSignIn)
 
+  // Local plugins, also in folders outside the app, import the app's packages and reload with fresh code.
+  registerPluginHooks([pathToFileURL(join(baseDir, 'package.json')).href, import.meta.url])
+
   const actions = ctx.plugin(Actions)
   await actions
+  definePluginTemplate(ctx, baseDir)
   const manager = ctx.plugin(PluginManager, {
     // Offline runs change the plugin list in memory; saving it would lose the real one.
     configPath: options.offline ? join(await mkdtemp(join(tmpdir(), 'mushin-offline-')), 'mushin.config.json') : configPath,
@@ -166,6 +201,7 @@ export async function start(options: StartOptions) {
       join(baseDir, 'node_modules'),
     ],
     localDirs: [join(baseDir, 'plugins')],
+    baseDir,
     importer: importPlugin,
   })
   await manager

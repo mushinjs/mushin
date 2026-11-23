@@ -25,7 +25,7 @@ Then say in two or three sentences what you will build, and wait for a yes.
 
 ## 2. Create it
 
-Run `npx mushin new plugin <name>` in the app folder (lowercase letters, digits and dashes). It writes `plugins/<name>/package.json` and `src/index.ts`, and turns the plugin on in `mushin.config.json`. Read the generated `src/index.ts` first: it shows the shape of a plugin with one action.
+Call `plugins__new` with the name (lowercase letters, digits and dashes) and, when the user keeps plugins in another plugin folder, that folder from `plugins__folders`. It writes `<folder>/<name>/package.json` and `src/index.ts` and turns the plugin on. When Mushin.js is not running, `npx mushin new plugin <name>` in the app folder does the same in `plugins/`. Read the generated `src/index.ts` first: it shows the shape of a plugin with one action.
 
 ## 3. Rules for the code
 
@@ -76,7 +76,7 @@ For a daily job, check once a minute whether the configured time (in the configu
 ## 4. Check it
 
 1. `npm run typecheck` (or `pnpm run typecheck`) passes.
-2. Reload the plugin: `plugins__list` shows its entry id; run `call_tool` with `plugins.reload` and `{ "id": "<entry id>" }`, or ask the user to restart Mushin.js. `plugins__list` must then show it `active`. If it shows `failed`, read the error and `logs__recent` with tag `plugin`.
+2. Reload the plugin: `plugins__list` shows its entry id; run `plugins__reload` (or `call_tool` with `plugins.reload`) and `{ "id": "<entry id>" }`. A reload runs the files as they are now, without a restart. `plugins__list` must then show it `active`. If it shows `failed`, read the error and `logs__recent` with tag `plugin`.
 3. Try it without touching real groups. Use the sandbox bot of the Demo plugin when there is one (`plugins__list`, then `bots__sandbox` to write as its test user, and `bots__messages` to read the reply). Call your `…Now` action against the sandbox bot. A command can also be checked with `bots.commands.run` without a target, which only previews it.
 4. Turn each switch off and on once (`plugins.configure`) and check that the behavior follows it.
 5. Tell the user what you built, which settings it has, what goes into `.env`, and how to try it for real.

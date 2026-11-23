@@ -48,6 +48,7 @@ Open the sign-in link, then follow **Quick setup** to connect an LLM provider. A
 - Prefer a fixed token? Set `MUSHIN_ADMIN_TOKEN` in the environment before starting; it overrides `.env`.
 - The server listens on `127.0.0.1:5160`. Change host and port in `mushin.config.json` (the `server` entry).
 - `npm run upgrade` updates Mushin.js (stop it first). `npx mushin new plugin <name>` creates a TypeScript plugin in `plugins/<name>/`, turned on and ready to edit; `npm run typecheck` checks it.
+- Plugins can also live in folders outside the app: add them on the Plugins page (**Plugin folders**) or as `"pluginDirs": ["../shared-plugins"]` in `mushin.config.json`. Point a development copy and an instance at the same folder and a plugin written once runs in both. Code in these folders runs as part of Mushin.js, and imports `@mushinjs/*` from the app, so the folder needs no install of its own. After you edit a local plugin, its reload button (or `plugins.reload`) runs the new code without a restart.
 - The app's `AGENTS.md` explains the folder to an AI such as Claude Code or Codex opened in it.
 
 ### Where things are kept
@@ -250,9 +251,11 @@ SSH servers are listed in the plugin settings: a name the nodes pick, address, p
 With **Terminal** enabled, Fairy can also work on the machine running Mushin.js: run a command and read its output (`terminal.run`), start one that keeps running such as a dev server and follow it (`terminal.start`, `terminal.output`, `terminal.write`, `terminal.stop`), and list, read, search, write and edit files (`files.*`). Commands run in the app folder, as the user running Mushin.js. Two settings of the plugin decide how far it goes:
 
 - **Fairy runs commands**: off, ask every time (the default), run commands that only look (listing, reading, `git status`) without asking, or run everything without asking. A policy you set for one of these tools in the Fairy settings comes first.
-- **Fairy reads and writes files**: off, read only, or read and write (the default). Files are reachable in the app folder and the **extra folders** you list; `.env` files never are, writes stay out of `data/`, `node_modules/` and `.git/`, and a write outside `plugins/` and the extra folders asks you first.
+- **Fairy reads and writes files**: off, read only, or read and write (the default). Files are reachable in the app folder and the **extra folders** you list; `.env` files never are, writes stay out of `data/`, `node_modules/` and `.git/`, and a write outside the plugin folders and the extra folders asks you first.
 
 In the Fairy workspace, the panel's **Terminal** tab lists these commands with their live output, whoever started them; type a command at its bottom to run one yourself.
+
+With these tools Fairy can also write plugins itself. For a job no flow node does, such as an outside API or a scheduled report, it asks what you want, then hands the job to its **Developer** helper. The helper creates the plugin (`plugins.new`) in `plugins/` or another plugin folder, writes the code and reloads it. It then tries the plugin on a bot's sandbox chat and reports which settings the plugin has. You can still use a coding tool of your own instead.
 
 Turn a flow off with the switch on its card or at the top of the editor: it keeps its content and bots but answers no messages, events or schedules, and its commands leave `/help`, until it is turned on again.
 
@@ -272,7 +275,7 @@ To work on Mushin.js itself, clone this repository and use pnpm:
 pnpm install
 pnpm build        # builds the packages and the dashboard
 pnpm start        # starts Mushin.js in ./instance
-pnpm dev          # backend on :5160 and the dashboard dev server on :5173 (proxying /api)
+pnpm dev          # backend on :5160 and the dashboard dev server on :5173 (proxying /api); restarts on source changes, not on plugin folder changes
 pnpm test         # unit and end-to-end tests (mock NapCat and mock LLM)
 pnpm typecheck    # TypeScript for all packages, vue-tsc for the dashboard
 pnpm test:flows   # the saved test cases of every flow in ./instance, offline (mushin test)

@@ -8,7 +8,7 @@ import {
   type FairySettings, defaultPolicy, formatSkillMarkdown, parseSkillMarkdown, policyInput, profileInput, SCENE_KEYS, type SceneProfile, today,
   type TokenUsage, type ToolPolicy,
 } from './settings'
-import { BUILTIN_ROLES, type FairyRole, type RoleDefinition, roleAllows, rolePrompt, type TaskReport, taskMessage } from './roles'
+import { BUILTIN_ROLES, type FairyRole, type RoleDefinition, roleAllows, roleCalls, rolePrompt, type TaskReport, taskMessage } from './roles'
 import { type FairySkill, BUILTIN_SKILLS, type SkillDefinition, skillFields, skillInput } from './skills'
 
 export * from './prompt'
@@ -260,7 +260,7 @@ export class Fairy extends Service {
   async tools(): Promise<ToolDefinition[]> {
     const actions = await this.allowedActions()
     const describe = (action: ActionInfo) => ({ name: toToolName(action.name), description: describeTool(action), parameters: portableSchema(action.inputSchema) })
-    const delegate = this.delegateTool()
+    const delegate = this.delegateTool(actions)
     if (actions.length + 1 <= MAX_TOOLS) return [...actions.map(describe), delegate]
     return [
       ...actions.slice(0, MAX_TOOLS - 3).map(describe),
@@ -292,9 +292,14 @@ export class Fairy extends Service {
     ]
   }
 
-  /** fairy__delegate, listing the roles there are when the conversation starts. */
-  private delegateTool(): ToolDefinition {
-    const roles = this.roles()
+  /** Whether a role's needed actions are among the allowed ones, so it can do its job. */
+  private roleReady(role: FairyRole, actions: Pick<ActionInfo, 'name'>[]) {
+    return (role.needs ?? []).every((name) => actions.some((action) => action.name === name))
+  }
+
+  /** fairy__delegate, listing the roles that can work when the conversation starts. */
+  private delegateTool(actions: ActionInfo[]): ToolDefinition {
+    const roles = this.roles().filter((role) => this.roleReady(role, actions))
     return {
       name: DELEGATE_TOOL,
       description: [
@@ -313,11 +318,29 @@ export class Fairy extends Service {
     }
   }
 
-  /** The tools of a role's conversation: the actions it may use under the user's policies, and fairy__report. */
+  /**
+   * The tools of a role's conversation: the actions it may use under the user's policies, call_tool when it may run
+   * actions that come later, and fairy__report.
+   */
   async roleTools(role: FairyRole): Promise<ToolDefinition[]> {
-    const actions = (await this.allowedActions()).filter((action) => roleAllows(role, action)).slice(0, MAX_TOOLS - 1)
+    const call = !!role.tools.call?.length
+    const actions = (await this.allowedActions()).filter((action) => roleAllows(role, action)).slice(0, MAX_TOOLS - (call ? 2 : 1))
     return [
       ...actions.map((action) => ({ name: toToolName(action.name), description: describeTool(action), parameters: portableSchema(action.inputSchema) })),
+      ...(call
+        ? [{
+            name: CALL_TOOL,
+            description: `Run an action that is not listed here by its name and input, such as one of a plugin you just loaded (its actions did not exist when this task started). You may run ${role.tools.call!.join(' and ')} actions this way.`,
+            parameters: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'Action name, e.g. weather.today or weather__today' },
+                input: { type: 'object', description: 'The action\'s input', additionalProperties: true },
+              },
+              required: ['name'],
+            },
+          }]
+        : []),
       {
         name: REPORT_TOOL,
         description: 'Finish the task and report to Fairy. Call it once, at the end.',
@@ -947,6 +970,15 @@ export class Fairy extends Service {
       return reply(`The tool ${toolName} is not available right now.`, true)
     }
 
+    // A helper keeps to its role's tools, whatever name it sends.
+    if (session.parent) {
+      const role = this.roles().find((item) => item.id === session.role)
+      if (!role || !(call.name === CALL_TOOL ? roleCalls(role, info) : roleAllows(role, info))) {
+        this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: false, error: `Not a tool of this helper: ${toolName}` })
+        return reply(`${toolName} is not one of your tools. Report what you need instead.`, true)
+      }
+    }
+
     const settings = await this.settings()
     const policy = name in settings.toolPolicy ? settings.toolPolicy[name]! : this.home.actions.approval(name, input) ?? defaultPolicy(info.risk)
     if (policy === 'off') {
@@ -990,6 +1022,9 @@ export class Fairy extends Service {
     const role = this.role(String(input?.role ?? ''))
     const task = typeof input?.task === 'string' ? input.task.trim() : ''
     if (!task) throw new MushinError('invalid_input', 'Say what the helper should do in task')
+    if (!this.roleReady(role, await this.allowedActions())) {
+      throw new MushinError('unavailable', `The ${role.name} helper needs ${role.needs!.join(', ')}, which ${role.needs!.length > 1 ? 'are' : 'is'} not available (a plugin is off, or the tools are turned off for Fairy)`)
+    }
     const now = Date.now()
     const child: FairySession = {
       id: randomId(),
@@ -1273,10 +1308,14 @@ export class Fairy extends Service {
       description: 'The helpers Fairy can hand tasks to, with what each is for and which tools it may use.',
       risk: 'read',
       input: z.object({}),
-      handler: async () => Promise.all(this.roles().map(async (role) => ({
-        ...role,
-        toolNames: (await this.roleTools(role)).map((tool) => tool.name).filter((name) => name !== REPORT_TOOL),
-      }))),
+      handler: async () => {
+        const allowed = await this.allowedActions()
+        return Promise.all(this.roles().map(async (role) => ({
+          ...role,
+          ready: this.roleReady(role, allowed),
+          toolNames: (await this.roleTools(role)).map((tool) => tool.name).filter((name) => name !== REPORT_TOOL),
+        })))
+      },
     })
 
     yield actions.define({

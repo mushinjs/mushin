@@ -1,4 +1,6 @@
-import { dirname, join } from 'node:path'
+import { readdir, stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Context, type Fiber, type Plugin, Service } from 'cordis'
 import { z } from 'zod'
@@ -31,6 +33,11 @@ export interface PluginEntry {
 
 export interface InstanceConfig {
   plugins: PluginEntry[]
+  /**
+   * Folders besides the app's plugins/ that hold local plugin folders, such as one a development copy and an
+   * instance share. Relative paths start at the app folder; `~` is the home folder.
+   */
+  pluginDirs?: string[]
 }
 
 export interface ManagerOptions {
@@ -38,8 +45,10 @@ export interface ManagerOptions {
   config: InstanceConfig
   /** `node_modules` directories searched for plugin packages. */
   nodeModules: string[]
-  /** Directories holding local plugin folders. */
+  /** Directories holding local plugin folders; the config's `pluginDirs` come after them. */
   localDirs: string[]
+  /** The app folder, where relative `pluginDirs` start; the config file's folder by default. */
+  baseDir?: string
   /** Imports a module by specifier; supplied by the launcher so bare names resolve from its location. */
   importer: (specifier: string) => Promise<any>
 }
@@ -154,6 +163,8 @@ export class PluginManager extends Service {
   private blocked = new Map<string, MissingDependency[]>()
   /** Entries whose package could not be imported, such as one that is no longer installed. */
   private loadErrors = new Map<string, string>()
+  /** The version of each local plugin folder's files, so a reload after an edit imports them afresh. */
+  private versions = new Map<string, { stamp: string; version: number }>()
 
   constructor(ctx: Context, public options: ManagerOptions) {
     super(ctx, 'manager')
@@ -211,9 +222,16 @@ export class PluginManager extends Service {
     }
   }
 
+  /** Every folder local plugins load from: the launcher's, then the config's `pluginDirs`. */
+  get localDirs() {
+    const base = this.options.baseDir ?? dirname(this.options.configPath)
+    const extra = (this.options.config.pluginDirs ?? []).filter(Boolean).map((dir) => resolve(base, dir.replace(/^~(?=$|[\\/])/, homedir())))
+    return [...new Set([...this.options.localDirs, ...extra])]
+  }
+
   catalog(refresh = false) {
     if (refresh || !this.catalogCache) {
-      this.catalogCache = scanCatalog(this.options.nodeModules, this.options.localDirs)
+      this.catalogCache = scanCatalog(this.options.nodeModules, this.localDirs)
       this.catalogCache.then((list) => (this.catalogList = list), () => {})
     }
     return this.catalogCache
@@ -254,13 +272,52 @@ export class PluginManager extends Service {
     return (await this.catalog()).find((entry) => entry.package === name)
   }
 
-  /** Imports a plugin package. Catalogued packages load from their own directory. */
+  /**
+   * Imports a plugin package. Catalogued packages load from their own directory. A local one carries the version of
+   * its files in the URL (`?mushin-v=<n>`), which goes up when a file changed, so loading it again runs the new code.
+   */
   async loadPlugin(name: string): Promise<Plugin> {
     const entry = await this.findPackage(name)
     if (!entry) return unwrapPlugin(await this.options.importer(name))
     const pkg = await readPackageJson(entry.path)
     const file = resolvePackageEntry(entry.path, pkg ?? {})
-    return unwrapPlugin(await this.options.importer(pathToFileURL(file).href))
+    const url = pathToFileURL(file).href
+    if (!entry.local) return unwrapPlugin(await this.options.importer(url))
+    const stamp = await folderStamp(entry.path)
+    const known = this.versions.get(entry.path)
+    const version = !known ? 0 : known.stamp === stamp ? known.version : known.version + 1
+    this.versions.set(entry.path, { stamp, version })
+    return unwrapPlugin(await this.options.importer(`${url}?mushin-v=${version}`))
+  }
+
+  /** The local plugin folders, each with the plugins found in it. */
+  async folders() {
+    const catalog = await this.catalog(true)
+    return Promise.all(this.localDirs.map(async (path) => ({
+      path,
+      /** From the config's pluginDirs, rather than the app's own plugins/ folder. */
+      extra: !this.options.localDirs.includes(path),
+      exists: await stat(path).then((info) => info.isDirectory(), () => false),
+      plugins: catalog.filter((item) => item.local && isInside(path, item.path)).map((item) => item.package),
+    })))
+  }
+
+  /** Sets the config's `pluginDirs`, rescans, and starts enabled entries whose package turned up. */
+  async setFolders(dirs: string[]) {
+    const list = [...new Set(dirs.map((dir) => dir.trim()).filter(Boolean))]
+    if (list.length) this.options.config.pluginDirs = list
+    else delete this.options.config.pluginDirs
+    await this.save()
+    this.logger.info('plugin folders: %s', this.localDirs.join(', '))
+    await this.graph(true)
+    for (const entry of this.entries) {
+      if (entry.enabled === false || this.fibers.has(entry.id) || !(this.loadErrors.has(entry.id) || this.blocked.has(entry.id))) continue
+      if (!this.catalogList.some((item) => item.package === entry.package)) continue
+      await this.start(entry).catch((error) => this.logger.error('failed to load %s: %s', entry.package, error))
+    }
+    await this.retryBlocked()
+    this.home.emit('manager/changed', '')
+    return this.folders()
   }
 
   get(id: string) {
@@ -566,6 +623,22 @@ export class PluginManager extends Service {
     })
 
     yield actions.define({
+      name: 'plugins.folders',
+      description: 'The folders local plugins load from (the app\'s plugins/ folder, then the extra ones in pluginDirs of mushin.config.json), with whether each exists and the plugin packages found in it.',
+      risk: 'read',
+      input: z.object({}),
+      handler: () => this.folders(),
+    })
+
+    yield actions.define({
+      name: 'plugins.folders.set',
+      description: 'Set the extra folders local plugins load from, besides the app\'s plugins/ folder (pluginDirs in mushin.config.json), for example one folder that a development copy and an instance share. Replaces the list; an empty list removes them. Relative paths start at the app folder. The code in these folders runs as part of Mushin.js.',
+      risk: 'dangerous',
+      input: z.object({ dirs: z.array(z.string().min(1)).max(20) }),
+      handler: ({ dirs }) => this.setFolders(dirs),
+    })
+
+    yield actions.define({
       name: 'plugins.dependencies',
       description: 'What a plugin package needs and what needs it: required and optional plugins with whether each is installed, fits the version range and is enabled; the plugins that depend on it; the app plugins enabling it would also enable; and the ones disabling it would also disable. Read this before enabling or disabling a plugin.',
       risk: 'read',
@@ -613,6 +686,35 @@ export class PluginManager extends Service {
       handler: async ({ id }) => this.describe(await this.reload(id)),
     })
   }
+}
+
+const isInside = (root: string, path: string) => {
+  const rel = relative(root, path)
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+}
+
+const SKIP_STAMP = new Set(['node_modules', '.git'])
+
+/** When the files of a folder last changed, as one string: file count, newest modification time and total size. */
+async function folderStamp(root: string) {
+  let count = 0
+  let newest = 0
+  let size = 0
+  const walk = async (dir: string, depth: number) => {
+    for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+      if (entry.isDirectory()) {
+        if (depth < 8 && !SKIP_STAMP.has(entry.name)) await walk(join(dir, entry.name), depth + 1)
+      } else if (entry.isFile()) {
+        const info = await stat(join(dir, entry.name)).catch(() => undefined)
+        if (!info) continue
+        count++
+        size += info.size
+        newest = Math.max(newest, info.mtimeMs)
+      }
+    }
+  }
+  await walk(root, 0)
+  return `${count}:${newest}:${size}`
 }
 
 /** Why a package could not be imported, in one line: a missing package says so plainly. */

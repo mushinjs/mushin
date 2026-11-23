@@ -400,7 +400,11 @@ const plain = (text: string) => text
 function defineFairyTools(ctx: Context, config: Config) {
   const baseDir = ctx.baseDir ?? process.cwd()
   const workDir = config.cwd ? expandPath(config.cwd, baseDir) : baseDir
-  const roots: FileRoots = { roots: [baseDir, ...config.fairyRoots.filter(Boolean).map((root) => expandPath(root, baseDir))] }
+  const extraRoots = config.fairyRoots.filter(Boolean).map((root) => expandPath(root, baseDir))
+  /** The folders local plugins load from, as the plugin manager has them now (they can change at runtime). */
+  const pluginDirs = () => ctx.get('manager')?.localDirs ?? [join(baseDir, 'plugins')]
+  /** The app folder first, then the plugin folders and the extra ones from the settings. */
+  const fileRoots = (): FileRoots => ({ roots: [...new Set([baseDir, ...pluginDirs(), ...extraRoots])] })
   const processes = new Processes({
     changed: (info) => ctx.emit('terminal/process', info),
     output: (id, text, at) => ctx.emit('terminal/output', { id, text, at }),
@@ -552,17 +556,16 @@ function defineFairyTools(ctx: Context, config: Config) {
 
   // ---- files ----
 
-  const plugins = join(baseDir, 'plugins')
-  /** Writes in plugins/ and the extra folders run; anywhere else in the app folder they ask first. */
+  /** Writes in the plugin folders and the extra folders run; anywhere else in the app folder they ask first. */
   const writeApproval = (path: string) => {
     const target = resolve(baseDir, path)
-    const ok = [plugins, ...roots.roots.slice(1)].some((root) => !relative(root, target).startsWith('..') && !isAbsolute(relative(root, target)))
+    const ok = [...pluginDirs(), ...extraRoots].some((root) => !relative(root, target).startsWith('..') && !isAbsolute(relative(root, target)))
     return ok ? undefined : 'confirm' as const
   }
 
   ctx.actions.define({
     name: 'files.list',
-    description: `List a folder in the app folder (${baseDir}) or the extra folders Fairy may use; depth up to 4 lists subfolders too (skipping node_modules, .git and dist). Paths are relative to the app folder.`,
+    description: `List a folder in the app folder (${baseDir}), the plugin folders (plugins.folders) or the extra folders Fairy may use; depth up to 4 lists subfolders too (skipping node_modules, .git and dist). Paths are relative to the app folder; give other folders by absolute path.`,
     risk: 'read',
     input: z.object({
       path: z.string().default('.').describe('Folder, relative to the app folder'),
@@ -570,7 +573,7 @@ function defineFairyTools(ctx: Context, config: Config) {
     }),
     handler: ({ path, depth }) => {
       filesOn()
-      return listFiles(roots, path, depth)
+      return listFiles(fileRoots(), path, depth)
     },
   })
 
@@ -585,7 +588,7 @@ function defineFairyTools(ctx: Context, config: Config) {
     }),
     handler: ({ path, offset, limit }) => {
       filesOn()
-      return readText(roots, path, offset, limit)
+      return readText(fileRoots(), path, offset, limit)
     },
   })
 
@@ -602,31 +605,31 @@ function defineFairyTools(ctx: Context, config: Config) {
     }),
     handler: ({ query, path, glob, literal, limit }) => {
       filesOn()
-      return searchFiles(roots, query, { path, glob, literal, limit })
+      return searchFiles(fileRoots(), query, { path, glob, literal, limit })
     },
   })
 
   ctx.actions.define({
     name: 'files.write',
-    description: 'Create or overwrite a text file with the given content, creating folders as needed. Prefer files.edit to change part of an existing file. In plugins/ it runs at once; elsewhere it asks the user first.',
+    description: 'Create or overwrite a text file with the given content, creating folders as needed. Prefer files.edit to change part of an existing file. In the plugin folders it runs at once; elsewhere it asks the user first.',
     risk: 'write',
     input: z.object({ path: z.string().min(1), content: z.string().max(1_000_000) }),
     approval: ({ path }) => writeApproval(path),
     handler: ({ path, content }) => {
       filesOn(true)
-      return writeText(roots, path, content)
+      return writeText(fileRoots(), path, content)
     },
   })
 
   ctx.actions.define({
     name: 'files.edit',
-    description: 'Replace a piece of a text file: `old` must appear exactly once (copy it from files.read, with enough around it to be unique) unless `all` is true. In plugins/ it runs at once; elsewhere it asks the user first.',
+    description: 'Replace a piece of a text file: `old` must appear exactly once (copy it from files.read, with enough around it to be unique) unless `all` is true. In the plugin folders it runs at once; elsewhere it asks the user first.',
     risk: 'write',
     input: z.object({ path: z.string().min(1), old: z.string().min(1), new: z.string(), all: z.boolean().default(false) }),
     approval: ({ path }) => writeApproval(path),
     handler: ({ path, old, new: replacement, all }) => {
       filesOn(true)
-      return editText(roots, path, old, replacement, all)
+      return editText(fileRoots(), path, old, replacement, all)
     },
   })
 }

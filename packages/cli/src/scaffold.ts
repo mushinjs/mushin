@@ -8,7 +8,7 @@ import { defaultConfig } from './start'
 /** The version of the CLI, which every `@mushinjs/*` package shares. */
 export const CLI_VERSION: string = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
 
-const PLUGIN_NAME = /^[a-z][a-z0-9-]{0,40}$/
+export const PLUGIN_NAME = /^[a-z][a-z0-9-]{0,40}$/
 
 /** `my-plugin` → `myPlugin`, for action names. */
 function camel(name: string) {
@@ -71,20 +71,27 @@ export function apply(ctx: Context, raw: z.input<typeof Config>) {
   }
 }
 
+/** Writes a new plugin folder `<parent>/<name>/` from the template. Returns the folder and the package name. */
+export async function createPluginFolder(parent: string, name: string) {
+  if (!PLUGIN_NAME.test(name)) throw new Error(`"${name}" is not a plugin name: use lowercase letters, digits and dashes, starting with a letter`)
+  const dir = join(parent, name)
+  if (existsSync(dir)) throw new Error(`${dir} already exists`)
+  const files = pluginFiles(name)
+  for (const [path, content] of Object.entries(files)) {
+    const file = join(dir, path)
+    await mkdir(join(file, '..'), { recursive: true })
+    await writeFile(file, content)
+  }
+  return { dir, package: `mushin-plugin-${name}`, files: Object.keys(files) }
+}
+
 /**
  * Creates `plugins/<name>/` in an instance and adds the plugin to `mushin.config.json`, so it runs on the next start.
  * Returns the folder and the package name.
  */
 export async function newPlugin(baseDir: string, name: string) {
-  if (!PLUGIN_NAME.test(name)) throw new Error(`"${name}" is not a plugin name: use lowercase letters, digits and dashes, starting with a letter`)
-  const dir = join(baseDir, 'plugins', name)
-  if (existsSync(dir)) throw new Error(`plugins/${name} already exists`)
-  for (const [path, content] of Object.entries(pluginFiles(name))) {
-    const file = join(dir, path)
-    await mkdir(join(file, '..'), { recursive: true })
-    await writeFile(file, content)
-  }
-  const pkg = `mushin-plugin-${name}`
+  if (PLUGIN_NAME.test(name) && existsSync(join(baseDir, 'plugins', name))) throw new Error(`plugins/${name} already exists`)
+  const { dir, package: pkg } = await createPluginFolder(join(baseDir, 'plugins'), name)
   const configPath = join(baseDir, 'mushin.config.json')
   // A new app has no config until its first start: begin with the default one.
   const config = await readJson<InstanceConfig>(configPath) ?? defaultConfig()

@@ -144,6 +144,44 @@ async function rescan() {
   await refresh(true)
   message.success(t('plugins.rescanned'))
 }
+
+/** The folders local plugins load from: the app's plugins/ folder, then the extra ones the user added. */
+interface PluginFolder { path: string; extra: boolean; exists?: boolean; plugins?: string[] }
+const foldersOpen = ref(false)
+const folders = ref<PluginFolder[]>([])
+const newFolder = ref('')
+const savingFolders = ref(false)
+
+async function openFolders() {
+  try {
+    folders.value = await call<PluginFolder[]>('plugins.folders')
+    newFolder.value = ''
+    foldersOpen.value = true
+  } catch (error) {
+    message.error((error as Error).message)
+  }
+}
+
+function addFolder() {
+  const path = newFolder.value.trim()
+  if (path && !folders.value.some((folder) => folder.path === path)) folders.value.push({ path, extra: true })
+  newFolder.value = ''
+}
+
+async function saveFolders() {
+  savingFolders.value = true
+  try {
+    if (newFolder.value.trim()) addFolder()
+    folders.value = await call<PluginFolder[]>('plugins.folders.set', { dirs: folders.value.filter((folder) => folder.extra).map((folder) => folder.path) })
+    message.success(t('common.saved'))
+    foldersOpen.value = false
+    await refresh()
+  } catch (error) {
+    message.error((error as Error).message)
+  } finally {
+    savingFolders.value = false
+  }
+}
 let timer: number | undefined
 const off = on('manager/changed', () => {
   window.clearTimeout(timer)
@@ -287,6 +325,7 @@ async function save() {
 <template>
   <div class="page">
     <PageHeader :title="t('nav.plugins')" :lead="t('plugins.lead')">
+      <Button icon="i-lucide-folder-tree" @click="openFolders">{{ t('plugins.folders.title') }}</Button>
       <Button :loading="loading" icon="i-lucide-refresh-cw" @click="rescan">
         {{ t('plugins.rescan') }}
       </Button>
@@ -413,6 +452,30 @@ async function save() {
       <template #footer>
         <Button @click="editing = undefined">{{ t('common.cancel') }}</Button>
         <Button type="primary" :loading="saving" @click="save">{{ t('common.saveAndReload') }}</Button>
+      </template>
+    </Modal>
+
+    <Modal :show="foldersOpen" :title="t('plugins.folders.title')" :width="600" @update:show="(value: boolean) => !value && (foldersOpen = false)">
+      <p class="faint folders-lead">{{ t('plugins.folders.lead') }}</p>
+      <ul class="folders">
+        <li v-for="(folder, index) in folders" :key="folder.path" class="folder">
+          <span class="i-lucide-folder folder-icon" />
+          <span class="mono folder-path" :title="folder.path">{{ folder.path }}</span>
+          <!-- The app's plugins/ folder appears with its first plugin; a missing extra folder is worth a warning. -->
+          <span v-if="folder.exists === false && folder.extra" class="tag warn">{{ t('plugins.folders.missing') }}</span>
+          <span v-else-if="folder.plugins" class="faint">{{ t('plugins.folders.count', folder.plugins.length) }}</span>
+          <span v-if="!folder.extra" class="tag">{{ t('plugins.folders.app') }}</span>
+          <IconAction v-else icon="i-lucide-x" :label="t('common.remove')" @click="folders.splice(index, 1)" />
+        </li>
+      </ul>
+      <form class="folder-add" @submit.prevent="addFolder">
+        <Input v-model:value="newFolder" class="mono" :placeholder="t('plugins.folders.placeholder')" />
+        <Button attr-type="submit" :disabled="!newFolder.trim()">{{ t('common.add') }}</Button>
+      </form>
+      <p class="faint">{{ t('plugins.folders.hint') }}</p>
+      <template #footer>
+        <Button @click="foldersOpen = false">{{ t('common.cancel') }}</Button>
+        <Button type="primary" :loading="savingFolders" @click="saveFolders">{{ t('common.save') }}</Button>
       </template>
     </Modal>
   </div>
@@ -669,6 +732,54 @@ async function save() {
   margin: 0;
   font-size: 12.5px;
   color: var(--fg3);
+}
+
+.folders-lead {
+  margin-bottom: 12px;
+}
+
+.folders {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.folder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 8px 4px 12px;
+}
+
+.folder + .folder {
+  border-top: 1px solid var(--line);
+}
+
+.folder-icon {
+  flex: none;
+  color: var(--fg3);
+}
+
+.folder-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12.5px;
+}
+
+.folder-add {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.folder-add > :first-child {
+  flex: 1;
 }
 
 .none {

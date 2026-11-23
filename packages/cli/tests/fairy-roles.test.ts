@@ -96,7 +96,9 @@ describe('Fairy helpers', () => {
 
   it('lists the roles with their tools, and takes roles from plugins', async () => {
     const roles = await app.call<any[]>('fairy.roles.list')
-    expect(roles.map((role) => role.id)).toEqual(['debug', 'setup', 'builder'])
+    expect(roles.map((role) => role.id)).toEqual(['debug', 'setup', 'builder', 'developer'])
+    // The developer writes files, which needs the Terminal plugin; without it Fairy does not offer that helper.
+    expect(roles.find((role) => role.id === 'developer')).toMatchObject({ ready: false, needs: ['files.write', 'files.edit', 'plugins.new'] })
     const builder = roles.find((role) => role.id === 'builder')
     expect(builder.toolNames).toEqual(expect.arrayContaining(['flows__create', 'flows__test', 'bots__list']))
     expect(builder.toolNames).not.toContain('flows__delete')
