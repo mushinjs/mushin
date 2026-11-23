@@ -71,6 +71,8 @@ For a daily job, check once a minute whether the configured time (in the configu
 
 **A way to run it now.** A scheduled or event-driven plugin also defines an action such as `weather.sendNow` that runs the job once. You test it with that action, and the user can call it from the dashboard.
 
+**A flow node, when flows can use it.** When the plugin gives bots something to look up or do on a message (weather for a city, a price, a translation), also add it as a flow node so the user can wire it into flows beside the built-in nodes. Put `flows` in `inject` and call `ctx.flows.defineNode({ kind: 'action', type: '<camelName>.<verb>', category, title, description, config, inputs, outputs, execOut: ['next', 'error'], run })`, where `run` returns `{ exec: 'next', outputs: { … } }`. List the types in `package.json` under `mushin.nodes` (e.g. `["weather.*"]`) and require `@mushinjs/plugin-flows`. `@mushinjs/plugin-knowledge`'s `src/node.ts` is a full example. After a reload, `flows__nodeTypes` with `{ "types": ["<type>"] }` shows it.
+
 **Keep it small.** One plugin, one job. Use `fetch` for HTTP. Add a package to the app only when it saves real work, and tell the user why.
 
 ## 4. Check it

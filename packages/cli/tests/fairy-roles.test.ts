@@ -33,7 +33,10 @@ describe('Fairy helpers', () => {
 
     const [main, child, report, after] = llm.requests.slice(start)
     expect(toolNames(main)).toContain(DELEGATE_TOOL)
-    expect(main.tools.find((tool: any) => tool.function.name === DELEGATE_TOOL).function.parameters.properties.role.enum).toEqual(['debug', 'setup', 'builder'])
+    const delegate = main.tools.find((tool: any) => tool.function.name === DELEGATE_TOOL).function
+    expect(delegate.parameters.properties.role.enum).toEqual(['debug', 'setup', 'builder', 'developer'])
+    // Without the Terminal plugin the developer cannot work; the listing says what to turn on.
+    expect(delegate.description).toContain('- developer (not available yet: turn on @mushinjs/plugin-terminal first (plugins__enable), after asking the user)')
     // The helper has its own prompt and tools: read-only ones and the report, never delegation.
     expect(child.messages[0].content).toContain('You are the Debug helper of Fairy')
     expect(child.messages[1].content).toMatch(/^<task time="[^"]+">\nFind the error the user saw just now\n\nContext from Fairy:\nThe user is on \/logs\n<\/task>$/)
@@ -85,6 +88,15 @@ describe('Fairy helpers', () => {
     await app.call('fairy.policy.set', { policies: { 'providers.list': null } })
   })
 
+  it('tells Fairy what a helper that cannot work yet needs', async () => {
+    llm.enqueue(
+      { toolCalls: [{ name: DELEGATE_TOOL, arguments: { role: 'developer', task: 'Write a weather plugin' } }] },
+      { text: 'Shall I turn on the Terminal plugin?' },
+    )
+    await app.call('fairy.send', { text: 'write a weather plugin' })
+    expect(llm.requests.at(-1).messages.at(-1).content).toContain('cannot work yet: it needs files.write, files.edit, plugins.new. Ask the user whether to turn on @mushinjs/plugin-terminal')
+  })
+
   it('tells Fairy when it names a role there is not', async () => {
     llm.enqueue(
       { toolCalls: [{ name: DELEGATE_TOOL, arguments: { role: 'nobody', task: 'x' } }] },
@@ -109,5 +121,20 @@ describe('Fairy helpers', () => {
     expect(withPlugin.find((role) => role.id === 'reviewer')).toMatchObject({ source: 'plugin', toolNames: ['flows__get', 'flows__list'] })
     dispose()
     expect((await app.call<any[]>('fairy.roles.list')).map((role) => role.id)).not.toContain('reviewer')
+  })
+
+  it('hands code to the developer once the Terminal plugin is on, in the same reply', async () => {
+    const start = llm.requests.length
+    llm.enqueue(
+      { toolCalls: [{ name: 'plugins__enable', arguments: { package: '@mushinjs/plugin-terminal' } }] },
+      { toolCalls: [{ name: DELEGATE_TOOL, arguments: { role: 'developer', task: 'Write a weather plugin' } }] },
+      { toolCalls: [{ name: REPORT_TOOL, arguments: { status: 'done', summary: 'Wrote it.' } }] },
+      { text: 'Done.' },
+    )
+    await app.call('fairy.send', { text: 'turn it on and write the plugin' })
+    const [, , child] = llm.requests.slice(start)
+    expect(child.messages[0].content).toContain('You are the Developer helper of Fairy')
+    expect(toolNames(child)).toEqual(expect.arrayContaining(['files__write', 'files__edit', 'plugins__new', 'plugins__reload', 'terminal__run']))
+    expect((await app.call<any[]>('fairy.roles.list')).find((role) => role.id === 'developer')).toMatchObject({ ready: true })
   })
 })
