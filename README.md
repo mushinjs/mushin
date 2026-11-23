@@ -48,7 +48,7 @@ Open the sign-in link, then follow **Quick setup** to connect an LLM provider. A
 - The server listens on `127.0.0.1:5160`. Change host and port in `mushin.config.json` (the `server` entry).
 - `npm run upgrade` updates Mushin.js (stop it first). `npx mushin new plugin <name>` creates a TypeScript plugin in `plugins/<name>/`, turned on and ready to edit; `npm run typecheck` checks it.
 - Plugins can also live in folders outside the app: add them on the Plugins page (**Plugin folders**) or as `"pluginDirs": ["../shared-plugins"]` in `mushin.config.json`. Point a development copy and an instance at the same folder and a plugin written once runs in both. Code in these folders runs as part of Mushin.js, and imports `@mushinjs/*` from the app, so the folder needs no install of its own. After you edit a local plugin, its reload button (or `plugins.reload`) runs the new code without a restart.
-- The app's `AGENTS.md` explains the folder to an AI such as Claude Code or Codex opened in it.
+- After installing, `create-mushin` asks which coding agents to write a guide for: `AGENTS.md` (Codex, Cursor, Amp, OpenCode and others), `CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.cursor/rules/mushin.mdc` or `.aiassistant/rules/mushin.md`. The guide is short: what Mushin.js is, this app's folder, version and dashboard address, how the parts fit, and which skill to read for which job, so the agent does not have to search. `npx mushin agents` asks again; `--agents agents,claude` (or `none`) answers without asking.
 
 ### Where things are kept
 
@@ -57,7 +57,7 @@ my-bot/
   package.json         the Mushin.js packages and plugins this app uses
   mushin.config.json   which plugins run, and their settings
   .env                 secrets: the admin token, provider keys, bot tokens, MCP headers
-  AGENTS.md            what this folder is, for you and your AI
+  AGENTS.md            what this folder is, for your coding agent (or CLAUDE.md, GEMINI.md… as chosen)
   .mcp.json            connects the AI tool you open here to Mushin.js
   .claude/skills/      the official skills for AI tools
   plugins/             your own plugins
@@ -82,6 +82,8 @@ An instance from an older version is moved to this layout when it starts, after 
 Mushin.js serves its actions over MCP at `/mcp`, so an AI tool such as Claude Code can list your bots, read logs, and build and test flows for you. An app made with `npm create mushin` has a `.mcp.json` that does the wiring: open the AI tool in the app folder while Mushin.js runs, and it starts `mushin mcp`, which forwards to the running instance with the admin token from `.env`. Nothing secret is written into `.mcp.json`. For a tool that speaks Streamable HTTP and doesn't read `.mcp.json`, point it at `http://127.0.0.1:5160/mcp` with the header `Authorization: Bearer <admin token>`.
 
 The app also has four official skills in `.claude/skills/`: writing a plugin (it asks you what it needs to know before it writes any code), building and testing flows, finding out why something does not work, and running the app (upgrades, backups, moving machines). `npm run upgrade` replaces them with the new version's; `npx mushin skills` does it on its own.
+
+The agent guide (`AGENTS.md` and the other files you picked) points to those skills by path, so a tool that does not read `.claude/skills/` by itself still finds them. Mushin.js writes the guide between `<!-- mushin:start -->` and `<!-- mushin:end -->` lines and keeps whatever you write around them. A start brings it up to date when the folder moved, and an upgrade when the version or skills changed. An app made before this gets its old `AGENTS.md` replaced on `npm run upgrade`; `npx mushin agents` adds the others.
 
 The MCP tools follow Fairy's tool policy (the **Tool policy** tab of the dashboard's Fairy page). Tools turned off are not offered. Dangerous tools, and any you set to ask first, run only after you approve them in an open dashboard. Only a short list of common tools is listed directly, to keep the model's tool list small. The rest are found with `search_tools` and run with `call_tool`. The **Console** plugin's settings choose which tools are listed, list them all, or turn the MCP server off.
 

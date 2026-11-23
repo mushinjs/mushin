@@ -15,7 +15,7 @@ describe('create-mushin', () => {
     const parent = await mkdtemp(join(tmpdir(), 'create-mushin-'))
     temps.push(parent)
     const { dir, files } = await createApp(join(parent, 'My Bot'), { version: '0.2.0' })
-    expect(files.sort()).toEqual(['.gitignore', '.mcp.json', 'AGENTS.md', 'package.json', 'plugins/.gitkeep', 'skills/.gitkeep', 'tsconfig.json'])
+    expect(files.sort()).toEqual(['.gitignore', '.mcp.json', 'package.json', 'plugins/.gitkeep', 'skills/.gitkeep', 'tsconfig.json'])
     const pkg = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8'))
     expect(pkg).toMatchObject({
       name: 'my-bot',
@@ -25,7 +25,7 @@ describe('create-mushin', () => {
     })
     const ignore = await readFile(join(dir, '.gitignore'), 'utf8')
     for (const line of ['.env', 'data/', 'cache/', 'logs/', 'node_modules/']) expect(ignore.split('\n')).toContain(line)
-    expect((await readdir(dir)).sort()).toEqual(['.gitignore', '.mcp.json', 'AGENTS.md', 'package.json', 'plugins', 'skills', 'tsconfig.json'])
+    expect((await readdir(dir)).sort()).toEqual(['.gitignore', '.mcp.json', 'package.json', 'plugins', 'skills', 'tsconfig.json'])
   })
 
   it('tells pnpm which install scripts to run', () => {

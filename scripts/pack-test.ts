@@ -300,6 +300,8 @@ export function apply(ctx: Context): void {
     }
     const appBin = join(dir, 'node_modules', '@mushinjs', 'cli', 'bin', 'mushin.js')
     await run(process.execPath, [appBin, 'new', 'plugin', 'demo-tool'], dir)
+    // What create-mushin runs after its own install; without a terminal it writes the default files.
+    await run(process.execPath, [appBin, 'agents'], dir)
     await run(pm, ['run', 'typecheck'], dir)
     console.log('  mushin new plugin demo-tool passes the typecheck')
     const { entries, call, port } = await startMushin(dir, appBin)
@@ -316,7 +318,7 @@ export function apply(ctx: Context): void {
     const hello = answers.find((answer) => answer.id === 2)?.result?.content?.[0]?.text ?? ''
     if (!hello.includes('Hello, MCP!')) fail(`the MCP bridge answered ${JSON.stringify(answers)}`)
     console.log('  the AI tool reaches the plugin through .mcp.json and mushin mcp')
-    for (const path of ['mushin.config.json', 'data/mushin.db', 'data/layout.json', 'AGENTS.md', '.gitignore', '.mcp.json', '.claude/skills/mushin-flows/SKILL.md']) {
+    for (const path of ['mushin.config.json', 'data/mushin.db', 'data/layout.json', 'AGENTS.md', 'CLAUDE.md', '.gitignore', '.mcp.json', '.claude/skills/mushin-flows/SKILL.md']) {
       if (!existsSync(join(dir, path))) fail(`the ${pm} app has no ${path} after starting`)
     }
     console.log(`  the app starts, the plugin answers, and the folder matches the layout`)

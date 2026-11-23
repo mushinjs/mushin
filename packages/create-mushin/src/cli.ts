@@ -1,6 +1,6 @@
 import { relative } from 'node:path'
 import { parseArgs } from 'node:util'
-import { addSkills, createApp, detectPackageManager, install, type PackageManager, VERSION } from './index'
+import { addAgentFiles, addSkills, createApp, detectPackageManager, install, type PackageManager, VERSION } from './index'
 
 const usage = `Usage: npm create mushin@latest [folder] [-- options]
 
@@ -9,6 +9,8 @@ Creates a Mushin.js app in a new folder (default: my-bot) and installs it.
 Options:
   --pm <npm|pnpm>   Package manager to install with (default: the one that ran this)
   --no-install      Only write the files
+  --agents <list>   Guides for coding agents, without asking: agents, claude, gemini, copilot,
+                    cursor, jetbrains (comma-separated), or none. Default: ask, or agents,claude
   -h, --help        Show this help`
 
 const { values, positionals } = parseArgs({
@@ -16,6 +18,7 @@ const { values, positionals } = parseArgs({
   options: {
     pm: { type: 'string' },
     'no-install': { type: 'boolean' },
+    agents: { type: 'string' },
     help: { type: 'boolean', short: 'h' },
   },
 })
@@ -39,6 +42,7 @@ try {
     console.log(`Installing with ${pm}…`)
     await install(dir, pm)
     await addSkills(dir)
+    await addAgentFiles(dir, values.agents)
   }
   const cd = relative(process.cwd(), dir) || '.'
   const run = pm === 'npm' ? 'npm' : 'pnpm'
@@ -50,7 +54,9 @@ try {
     `  ${run} start`,
     '',
     'Open the sign-in link it prints, then follow Quick setup in the dashboard.',
-    'AGENTS.md explains the folder to you and to your AI.',
+    values['no-install']
+      ? `After installing, "${pm === 'npm' ? 'npx' : 'pnpm exec'} mushin agents" writes AGENTS.md and the like, which explain the folder to your coding agent.`
+      : 'AGENTS.md (or the file you picked for your coding agent) explains the folder to it.',
   ].join('\n'))
 } catch (error) {
   console.error((error as Error).message)

@@ -74,7 +74,6 @@ export function appFiles(name: string, version = VERSION, packageManager: Packag
       'logs/',
       '',
     ].join('\n'),
-    'AGENTS.md': agentsGuide(name),
     // Connects the AI tool opened in this folder to the running Mushin.js; the token stays in .env.
     '.mcp.json': json({
       mcpServers: {
@@ -97,56 +96,6 @@ const PNPM_SETTINGS = `allowBuilds:
   ssh2: false
 `
 
-function agentsGuide(name: string) {
-  return `# ${name}
-
-This folder is a [Mushin.js](https://github.com/mushinjs/mushin) app: a chatbot framework for QQ (through OneBot / NapCat) with LLM chat, conversation flows and a Fairy. Read this before changing anything here.
-
-## Commands
-
-- \`npm start\` starts Mushin.js and prints the dashboard sign-in link (\`pnpm start\` with pnpm).
-- \`npm run upgrade\` updates every \`@mushinjs/*\` package and moves the data to the new version's layout. Stop Mushin.js first.
-- \`npx mushin new plugin <name>\` creates a TypeScript plugin in \`plugins/<name>/\` and turns it on.
-- \`npm run typecheck\` checks the plugins in \`plugins/\`.
-- \`npx mushin token reset\` makes a new admin token for the dashboard.
-
-## Managing Mushin.js from an AI tool
-
-\`.mcp.json\` connects the AI tool you open in this folder (Claude Code and others that read it) to the running Mushin.js through \`mushin mcp\`. Start Mushin.js first. The tools are Mushin.js actions: list bots, read logs, build and test flows, and more. Dangerous ones wait for approval in the dashboard. The admin token is read from \`.env\`; do not copy it anywhere.
-
-## Skills
-
-\`.claude/skills/\` holds the official skills. Read the matching \`SKILL.md\` before you start one of these jobs, whichever AI tool you are:
-
-- \`mushin-plugin-dev\`: writing or changing a plugin in \`plugins/\`. It starts with the questions to ask the user first.
-- \`mushin-flows\`: building and testing conversation flows.
-- \`mushin-troubleshoot\`: finding out why a bot, command, flow or plugin does not work.
-- \`mushin-operations\`: upgrades, backups, restores, moving machines, the admin token.
-
-\`npm run upgrade\` replaces them with the new version's; put your own skills in other folders.
-
-## Layout
-
-| Path | What it is | Who writes it |
-| --- | --- | --- |
-| \`mushin.config.json\` | Which plugins run, and their settings. Holds no secrets. | People, the dashboard, Fairy |
-| \`.mcp.json\` | Connects the AI tool opened here to Mushin.js. Holds no secrets. | create-mushin |
-| \`.claude/skills/\` | The official skills for AI tools | Mushin.js (on create and upgrade) |
-| \`.env\` | Secrets: the admin token, provider keys, bot tokens. Configuration refers to them as \`\${NAME}\`. | Mushin.js and people |
-| \`plugins/\` | Local plugins, run as TypeScript without a build step | People and AIs |
-| \`skills/\` | Your own skills, one folder each with a \`SKILL.md\` | People and AIs |
-| \`data/\` | Everything Mushin.js keeps: database, bots, providers, flows, message logs. Back up this folder. | Mushin.js only |
-| \`cache/\`, \`logs/\` | Safe to delete | Mushin.js only |
-
-## Rules
-
-- Do not edit files under \`data/\` by hand while Mushin.js runs. Change things through the dashboard or its actions.
-- Never print, commit or copy the contents of \`.env\`. To use a secret in a setting, write \`\${NAME}\` and put \`NAME=value\` in \`.env\`.
-- A plugin is a package in \`plugins/<name>/\` with a \`mushin\` field in its \`package.json\`. It exports \`name\`, optionally \`inject\` and \`Config\` (a zod schema), and \`apply(ctx, config)\`. Import everything from \`@mushinjs/core\`.
-- After changing a plugin, reload it from the dashboard's Plugins page or restart Mushin.js.
-`
-}
-
 /** Writes a new app into `dir`, which must be missing or empty. */
 export async function createApp(dir: string, options: { version?: string; packageManager?: PackageManager } = {}) {
   const target = resolve(dir)
@@ -161,14 +110,27 @@ export async function createApp(dir: string, options: { version?: string; packag
   return { dir: target, files: Object.keys(files) }
 }
 
-/** Puts the official skills into the app, with the CLI that was just installed. */
-export function addSkills(dir: string) {
+/** Runs the CLI that was just installed in the app. */
+function mushin(dir: string, args: string[]) {
   return new Promise<void>((done, reject) => {
     const bin = join(dir, 'node_modules', '@mushinjs', 'cli', 'bin', 'mushin.js')
-    const child = spawn(process.execPath, [bin, 'skills', '--dir', dir], { cwd: dir, stdio: 'inherit' })
+    const child = spawn(process.execPath, [bin, ...args, '--dir', dir], { cwd: dir, stdio: 'inherit' })
     child.on('error', reject)
-    child.on('exit', (code) => (code ? reject(new Error(`mushin skills exited with ${code}`)) : done()))
+    child.on('exit', (code) => (code ? reject(new Error(`mushin ${args[0]} exited with ${code}`)) : done()))
   })
+}
+
+/** Puts the official skills into the app. */
+export function addSkills(dir: string) {
+  return mushin(dir, ['skills'])
+}
+
+/**
+ * Writes the guide for coding agents (AGENTS.md, CLAUDE.md and the like). Without `files` the CLI asks which
+ * ones in a terminal, and picks AGENTS.md and CLAUDE.md otherwise.
+ */
+export function addAgentFiles(dir: string, files?: string) {
+  return mushin(dir, files === undefined ? ['agents'] : ['agents', '--files', files])
 }
 
 /** Runs the package manager's install in the app folder, with its output shown. */

@@ -5,7 +5,9 @@ import { parseArgs } from 'node:util'
 import { type InstanceConfig, readJson } from '@mushinjs/core'
 import { resetAdminToken, type SignInInfo } from '@mushinjs/plugin-console'
 import { LAYOUT_VERSION, migrateLayout } from '@mushinjs/plugin-storage'
+import { AGENT_FILES, defaultAgentIds, parseAgentIds, refreshAgentFiles, writeAgentFiles } from './agents'
 import { mcpConfig, runBridge } from './mcp'
+import { multiSelect } from './prompt'
 import { appPackageManager, appPackages, CLI_VERSION, newPlugin, run, upgradeCommand, upgradeTag } from './scaffold'
 import { installSkills, SKILLS_TARGET } from './skills'
 import { instanceDirs, start } from './start'
@@ -23,6 +25,7 @@ Commands:
   upgrade         Update the @mushinjs packages of this app, then migrate its data; stop Mushin.js first
   mcp             An MCP server over stdio for the AI tool in this folder; it forwards to the running Mushin.js
   skills          Put the official skills for AI tools into .claude/skills/, replacing older copies
+  agents          Write the guide for coding agents (AGENTS.md, CLAUDE.md…); asks which files unless --files is given
 
 Options:
   -d, --dir <path>   Instance directory (default: the current directory, or ./instance if it holds one)
@@ -31,6 +34,7 @@ Options:
   --json             test: print the results as JSON
   --dry-run          migrate: only list the moves
   --tag <tag>        upgrade: the npm dist-tag to follow (default: next for a preview, latest otherwise)
+  --files <list>     agents: which files, comma-separated: ${AGENT_FILES.map((file) => file.id).join(', ')}, or none
   -h, --help         Show this help`
 
 const { values, positionals } = parseArgs({
@@ -43,6 +47,7 @@ const { values, positionals } = parseArgs({
     json: { type: 'boolean' },
     'dry-run': { type: 'boolean' },
     tag: { type: 'string' },
+    files: { type: 'string' },
   },
 })
 
@@ -86,7 +91,11 @@ if (values.help) {
   console.log(usage)
 } else if (command === 'start') {
   // An app made before the official skills existed gets them; ones already there are left as they are.
-  if ((await appPackages(baseDir))?.length) await installSkills(baseDir).catch(() => {})
+  // The agent guide names the folder and version, so it follows a move or an upgrade.
+  if ((await appPackages(baseDir))?.length) {
+    await installSkills(baseDir).catch(() => {})
+    await refreshAgentFiles(baseDir).catch(() => {})
+  }
   let signedIn = false
   const instance = await start({
     baseDir,
@@ -170,6 +179,29 @@ if (values.help) {
   const { added, updated } = await installSkills(baseDir, { overwrite: true })
   const changed = [...added.map((name) => `added ${name}`), ...updated.map((name) => `updated ${name}`)]
   console.log(changed.length ? `${SKILLS_TARGET}: ${changed.join(', ')}.` : `The official skills in ${SKILLS_TARGET} are up to date.`)
+  // The guide lists the skills, so it changes with them.
+  const guides = await refreshAgentFiles(baseDir, { legacy: true })
+  if (guides.length) console.log(`Updated the agent guide in ${guides.join(', ')}.`)
+} else if (command === 'agents') {
+  let ids: string[] = []
+  try {
+    ids = values.files !== undefined ? parseAgentIds(values.files) : await defaultAgentIds(baseDir)
+  } catch (error) {
+    console.error((error as Error).message)
+    process.exit(1)
+  }
+  if (values.files === undefined && process.stdin.isTTY && process.stdout.isTTY) {
+    const chosen = await multiSelect(
+      'Which coding agent instruction files should Mushin.js create?',
+      AGENT_FILES.map((file) => ({ value: file.id, label: file.path, hint: file.tools })),
+      ids,
+    )
+    if (!chosen) process.exit(130)
+    ids = chosen
+  }
+  const written = await writeAgentFiles(baseDir, ids)
+  if (!ids.length) console.log('No agent files chosen.')
+  else console.log(written.length ? `Wrote the agent guide to ${written.join(', ')}.` : 'The agent guide is up to date.')
 } else if (command === 'mcp') {
   await runBridge({ baseDir, port: values.port ? Number(values.port) : undefined })
 } else if (command === 'upgrade') {

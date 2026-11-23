@@ -179,7 +179,7 @@ export class McpServer {
       `Only some tools are listed. Use ${SEARCH_TOOL} to find the others by what they do, then run them with ${CALL_TOOL}.`,
       'Tools marked dangerous, and any the user set to ask first, wait for the user to approve them in the dashboard.',
       'Secrets are kept in .env and show up only as ${NAME} references: never ask the user to paste a key into a tool call when they can put it in .env.',
-      'An app folder made with create-mushin has skills in .claude/skills/ (mushin-flows, mushin-plugin-dev, mushin-troubleshoot, mushin-operations): read the matching SKILL.md before such a job.',
+      'An app folder made with create-mushin has skills in .claude/skills/ (mushin-flows, mushin-plugin-dev, mushin-troubleshoot, mushin-operations): read the matching SKILL.md before such a job. Its AGENTS.md (or CLAUDE.md, GEMINI.md and the like) says where the app, its data and the Mushin.js packages are.',
     ].join('\n')
   }
 
