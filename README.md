@@ -257,6 +257,8 @@ In the Fairy workspace, the panel's **Terminal** tab lists these commands with t
 
 With these tools Fairy can also write plugins itself. For a job no flow node does, such as an outside API or a scheduled report, it asks what you want, then hands the job to its **Developer** helper. The helper creates the plugin (`plugins.new`) in `plugins/` or another plugin folder, writes the code and reloads it. It then tries the plugin on a bot's sandbox chat and reports which settings the plugin has. You can still use a coding tool of your own instead.
 
+With **Browser** enabled, Fairy can also use a browser on this machine: it opens a page (`browser.open`), reads it as an outline in which each link, button and field has a ref, and clicks, types, selects and presses keys by those refs (`browser.click`, `browser.type`, …). It uses Chrome, then Edge, then Chromium, whichever is installed, or the program you set. It keeps its own profile under `data/plugins/browser/profile`, so sign-ins you make in its window stay, and never touches your usual profile. The panel's **Browser** tab shows the page after every step; type an address there, switch tabs, or click the picture to click the page. Opening and reading pages never asks; clicks and typing ask first when you set **Fairy clicks and types** to ask, and running a script in the page (`browser.evaluate`) always does. On a server without a display the browser runs without a window.
+
 Turn a flow off with the switch on its card or at the top of the editor: it keeps its content and bots but answers no messages, events or schedules, and its commands leave `/help`, until it is turned on again.
 
 Variables are saved in the database (`flows_var`) and survive restarts.
@@ -306,7 +308,8 @@ A pull request that changes what users get adds a changeset (`pnpm changeset`). 
 | `@mushinjs/plugin-mcp` | MCP client (stdio and Streamable HTTP); each MCP tool becomes an action |
 | `@mushinjs/plugin-console` | HTTP API, WebSocket, admin token, dashboard hosting, and the MCP server at `/mcp` |
 | `@mushinjs/plugin-flows` | Flow documents, node types, validation and the execution engine |
-| `@mushinjs/plugin-terminal` | Flow nodes that run commands locally or over SSH (opt-in) |
+| `@mushinjs/plugin-terminal` | Lets Fairy run commands and edit files on this machine, and flow nodes that run commands locally or over SSH (opt-in) |
+| `@mushinjs/plugin-browser` | Lets Fairy use Chrome, Edge or Chromium on this machine, shown live in the Fairy workspace (opt-in) |
 | `@mushinjs/plugin-stats` | Hourly counts of messages, commands, flow runs and model usage (kept hourly for 30 days, daily for a year, in `data/plugins/stats/`) and process samples for the overview |
 | `@mushinjs/bot-plugin-echo`, `@mushinjs/bot-plugin-llm-chat`, `@mushinjs/bot-plugin-flows` | Bot plugins |
 | `@mushinjs/plugin-demo` | Offline demo provider, sandbox bot adapter and sample flows (opt-in) |

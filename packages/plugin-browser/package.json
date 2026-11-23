@@ -1,0 +1,54 @@
+{
+  "name": "@mushinjs/plugin-browser",
+  "version": "0.3.0",
+  "description": "Lets Fairy use a browser on this machine (Chrome, Edge or Chromium): open pages, read them, click and type, with the page shown in the Fairy workspace",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mushinjs/mushin.git",
+    "directory": "packages/plugin-browser"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "displayName": {
+      "en": "Browser",
+      "zh-CN": "浏览器"
+    },
+    "description": {
+      "en": "Lets Fairy use Chrome, Edge or Chromium on this machine: open pages, read them, click, type and take screenshots, shown live in the Fairy workspace",
+      "zh-CN": "让 Fairy 使用本机的 Chrome、Edge 或 Chromium：打开网页、读取内容、点击、输入和截图，并在 Fairy 工作区里实时显示"
+    },
+    "requires": {
+      "mushin": ">=0.1.0",
+      "plugins": {
+        "@mushinjs/plugin-storage": "*"
+      }
+    }
+  },
+  "dependencies": {
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-storage": "workspace:*",
+    "playwright-core": "catalog:"
+  }
+}

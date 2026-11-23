@@ -66,6 +66,7 @@
     "@mushinjs/plugin-personas": "workspace:*",
     "@mushinjs/plugin-mcp": "workspace:*",
     "@mushinjs/plugin-terminal": "workspace:*",
+    "@mushinjs/plugin-browser": "workspace:*",
     "@mushinjs/plugin-knowledge": "workspace:*"
   },
   "devDependencies": {

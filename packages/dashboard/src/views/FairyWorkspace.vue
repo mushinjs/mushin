@@ -45,7 +45,14 @@ onBeforeUnmount(() => {
 const offProcess = on('terminal/process', (info: { running: boolean; session?: string }) => {
   if (info.running && info.session && !layout.views.some((view) => view.kind === 'terminal')) workspace.openView({ kind: 'terminal' })
 })
-onBeforeUnmount(offProcess)
+// Likewise the first page the browser shows brings up the browser tab.
+const offBrowser = on('browser/frame', () => {
+  if (!layout.views.some((view) => view.kind === 'browser')) workspace.openView({ kind: 'browser' })
+})
+onBeforeUnmount(() => {
+  offProcess()
+  offBrowser()
+})
 
 // Fairy hears which panel tab is open, so "this page" means what the user sees beside the chat.
 const activeView = computed(() => layout.views.find((view) => view.id === layout.activeView))

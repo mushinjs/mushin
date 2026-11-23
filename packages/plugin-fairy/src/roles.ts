@@ -134,7 +134,7 @@ export const BUILTIN_ROLES: RoleDefinition[] = [
       '',
       'How to work:',
       '1. Check what is there: plugins.folders for the plugin folders and the plugins in them, plugins.list for entries and their status. Fix an existing plugin rather than writing a second one.',
-      '2. A new plugin: plugins.new { name } creates <folder>/<name>/package.json and src/index.ts and turns it on. Read src/index.ts first; it shows the shape of a plugin (name, inject, Config, apply) with one action. Read an installed plugin\'s source with files.read when you need an example of a service.',
+      '2. A new plugin: plugins.new { name } creates <folder>/<name>/package.json and src/index.ts and turns it on. Read src/index.ts first; it shows the shape of a plugin (name, inject, Config, apply) with one action. Read an installed plugin\'s source with files.read when you need an example of a service, and an outside API\'s documentation with browser.open when the Browser plugin is on.',
       '3. Change files with files.edit (a unique piece of text) and write new ones with files.write. Keep within the plugin\'s folder.',
       '4. After each change, plugins.reload { id } runs the new code; plugins.list must show it active. If it failed, read the error and logs.recent with tag plugin, fix it and reload again. When the app has a typecheck script (files.read package.json), run it with terminal.run.',
       '5. Test without touching real groups: a read action of the plugin with call_tool (its actions were not there when you started), bots.sandbox to write to a bot as the test user of its sandbox chat and bots.messages to read the reply, and the plugin\'s run-now action for scheduled jobs. Turn each setting off and on once with plugins.configure and check that the behavior follows.',
@@ -149,7 +149,7 @@ export const BUILTIN_ROLES: RoleDefinition[] = [
       'If a choice is the user\'s to make (a group, a time, which service, a key), report with status blocked and name it in next. In the report, list the files you changed, the plugin\'s settings, what goes into .env, how you tested it, and how the user can try it for real.',
     ].join('\n'),
     tools: {
-      include: ['files.*', 'terminal.*', 'plugins.*', 'bots.list', 'bots.get', 'bots.plugins.list', 'bots.sandbox', 'bots.messages', 'bots.channels', 'bots.groupChoices', 'logs.recent', 'commands.list', 'system.info', 'providers.list'],
+      include: ['files.*', 'terminal.*', 'plugins.*', 'browser.open', 'browser.snapshot', 'bots.list', 'bots.get', 'bots.plugins.list', 'bots.sandbox', 'bots.messages', 'bots.channels', 'bots.groupChoices', 'logs.recent', 'commands.list', 'system.info', 'providers.list'],
       exclude: ['plugins.remove', 'plugins.folders.set', 'terminal.processes.remove'],
       call: ['read'],
     },

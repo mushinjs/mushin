@@ -90,10 +90,10 @@ export const Config = z.object({
       options: { off: '关闭', ask: '每次都先问', readonly: '只查看的命令直接运行', auto: '全部直接运行' },
     },
   }, { options: { off: 'Off', ask: 'Ask every time', readonly: 'Run look-only commands without asking', auto: 'Run everything without asking' } })),
-  fairyFiles: z.enum(['off', 'read', 'write']).default('write').meta(field('Fairy reads and writes files', 'Files in the app folder and the extra folders below: off, read only, or read and write. .env files are never touched, and writes stay out of data/, node_modules/ and .git/. Writes outside plugins/ ask first', {
+  fairyFiles: z.enum(['off', 'read', 'write']).default('write').meta(field('Fairy reads and writes files', 'Files in the app folder and the extra folders below: off, read only, or read and write. .env files are never touched, and writes stay out of data/, node_modules/ and .git/. Writes outside the plugin folders ask first', {
     'zh-CN': {
       title: 'Fairy 读写文件',
-      description: '应用目录和下面额外目录里的文件：关闭、只读、可读写。永远不碰 .env，写入不会进入 data/、node_modules/ 和 .git/。plugins/ 以外的写入会先问你',
+      description: '应用目录和下面额外目录里的文件：关闭、只读、可读写。永远不碰 .env，写入不会进入 data/、node_modules/ 和 .git/。插件目录以外的写入会先问你',
       options: { off: '关闭', read: '只读', write: '可读写' },
     },
   }, { options: { off: 'Off', read: 'Read only', write: 'Read and write' } })),

@@ -4,10 +4,13 @@
  */
 import { reactive, watch } from 'vue'
 
-/** One tab of the side panel: the status of bots and plugins, commands run on this machine, a dashboard page, or a web page. */
+/**
+ * One tab of the side panel: the status of bots and plugins, commands run on this machine, the browser Fairy uses,
+ * a dashboard page, or a web page.
+ */
 export interface PanelView {
   id: string
-  kind: 'status' | 'terminal' | 'page' | 'web'
+  kind: 'status' | 'terminal' | 'browser' | 'page' | 'web'
   path?: string
   url?: string
   title?: string
@@ -56,7 +59,7 @@ function read(): WorkspaceLayout {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? 'null')
     if (!saved || typeof saved !== 'object') return base
-    const views = Array.isArray(saved.views) ? saved.views.filter((view: PanelView) => view?.id && ['status', 'terminal', 'page', 'web'].includes(view.kind)) : base.views
+    const views = Array.isArray(saved.views) ? saved.views.filter((view: PanelView) => view?.id && ['status', 'terminal', 'browser', 'page', 'web'].includes(view.kind)) : base.views
     return {
       ...base,
       ...saved,
@@ -88,7 +91,7 @@ export const workspace = reactive({
    */
   openView(input: Omit<PanelView, 'id'>): PanelView {
     const layout = this.layout
-    let view = layout.views.find((item) => item.kind === input.kind && (input.kind === 'status' || input.kind === 'terminal' || (input.kind === 'page' ? pageOf(item.path) === pageOf(input.path) : item.url === input.url)))
+    let view = layout.views.find((item) => item.kind === input.kind && (input.kind === 'status' || input.kind === 'terminal' || input.kind === 'browser' || (input.kind === 'page' ? pageOf(item.path) === pageOf(input.path) : item.url === input.url)))
     if (view?.kind === 'page' && input.path) view.path = input.path
     if (!view) {
       view = { ...input, id: `${input.kind}-${Date.now().toString(36)}-${++seq}` }
