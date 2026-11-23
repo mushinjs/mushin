@@ -84,6 +84,9 @@ catalogs:
     pinia:
       specifier: ^4.1.0
       version: 4.1.0
+    playwright-core:
+      specifier: 1.65.1
+      version: 1.65.1
     reka-ui:
       specifier: ^2.11.0
       version: 2.11.0
@@ -255,6 +258,9 @@ importers:
       '@mushinjs/plugin-bots':
         specifier: workspace:*
         version: link:../plugin-bots
+      '@mushinjs/plugin-browser':
+        specifier: workspace:*
+        version: link:../plugin-browser
       '@mushinjs/plugin-console':
         specifier: workspace:*
         version: link:../plugin-console
@@ -432,6 +438,18 @@ importers:
       minato:
         specifier: 'catalog:'
         version: 4.0.1(cordis@4.0.0-rc.11)
+
+  packages/plugin-browser:
+    dependencies:
+      '@mushinjs/core':
+        specifier: workspace:*
+        version: link:../core
+      '@mushinjs/plugin-storage':
+        specifier: workspace:*
+        version: link:../plugin-storage
+      playwright-core:
+        specifier: 'catalog:'
+        version: 1.65.1
 
   packages/plugin-console:
     dependencies:
@@ -2603,6 +2621,11 @@ packages:
 
   pkg-types@2.3.3:
     resolution: {integrity: sha512-j/lCFdcppV0JxWpCEITdbDltBxPP6cHT+yNJ6Go2OgoSA9518X847X9z0p6LtA4Nc16+eQzCZjRrWanTGvHJ5w==}
+
+  playwright-core@1.65.1:
+    resolution: {integrity: sha512-hqPpz7blSMPxWVdoeE1yiBSzXsKiVOd2k+kjCvmUywD2GPO2Dd9HfcWnq9NN0GHbNZDFgZ9JfBFr+X5/BLo0qw==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   points-on-curve@0.2.0:
     resolution: {integrity: sha512-0mYKnYYe9ZcqMCWhUjItv/oHjvgEsfKvnUTg8sAtnHr3GVy7rGkXCb6d5cSyqrWqL4k81b9CPg3urd+T7aop3A==}
@@ -4874,6 +4897,8 @@ snapshots:
       confbox: 0.3.1
       exsolve: 1.1.3
       pathe: 2.0.3
+
+  playwright-core@1.65.1: {}
 
   points-on-curve@0.2.0: {}
 

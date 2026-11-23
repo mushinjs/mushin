@@ -34,11 +34,17 @@ const taskState = computed(() => {
 /** The last few things the helper did, newest last. */
 const steps = computed(() => props.item.task?.steps.slice(-4) ?? [])
 
-/** What a command or file tool works on, shown in its row: `$ ls -la` or a path. */
+/** What a command, file or browser tool works on, shown in its row: `$ ls -la`, a path, an address or what is typed. */
 const summary = computed(() => {
-  const value = props.item.input as { command?: unknown; path?: unknown } | undefined
+  const value = props.item.input as { command?: unknown; path?: unknown; url?: unknown; text?: unknown; key?: unknown; ref?: unknown } | undefined
   if (typeof value?.command === 'string') return `$ ${value.command.split('\n')[0]}`
   if (typeof value?.path === 'string' && /^(files|terminal)\./.test(props.item.action)) return value.path
+  if (props.item.action.startsWith('browser.')) {
+    if (typeof value?.url === 'string') return value.url
+    if (typeof value?.text === 'string') return `"${value.text.split('\n')[0]}"`
+    if (typeof value?.key === 'string') return value.key
+    if (typeof value?.ref === 'string') return value.ref
+  }
   return ''
 })
 const command = computed(() => {

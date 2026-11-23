@@ -3,6 +3,7 @@ import { Button, Dropdown, type DropdownOption, Input, Tooltip } from '@mushinjs
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { type PanelView, workspace } from '../../stores/workspace'
+import BrowserView from './BrowserView.vue'
 import StatusView from './StatusView.vue'
 import TerminalView from './TerminalView.vue'
 
@@ -22,6 +23,7 @@ function titleOf(view: PanelView) {
   if (view.title) return view.title
   if (view.kind === 'status') return t('workspace.panel.status')
   if (view.kind === 'terminal') return t('workspace.panel.terminal')
+  if (view.kind === 'browser') return t('workspace.panel.browser')
   if (view.kind === 'web') {
     try {
       return new URL(view.url!).host
@@ -33,13 +35,14 @@ function titleOf(view: PanelView) {
   return te(`nav.${first}`) ? t(`nav.${first}`) : view.path!
 }
 
-const ICONS: Record<PanelView['kind'], string> = { status: 'i-lucide-activity', terminal: 'i-lucide-square-terminal', web: 'i-lucide-globe', page: 'i-lucide-app-window' }
+const ICONS: Record<PanelView['kind'], string> = { status: 'i-lucide-activity', terminal: 'i-lucide-square-terminal', browser: 'i-lucide-compass', web: 'i-lucide-globe', page: 'i-lucide-app-window' }
 const iconOf = (view: PanelView) => ICONS[view.kind]
 
 const PAGES = ['/overview', '/bots', '/flows', '/plugins', '/providers', '/logs', '/database', '/knowledge', '/personas', '/settings']
 const addMenu = computed<DropdownOption[]>(() => [
   { key: 'status', label: t('workspace.panel.status'), icon: 'i-lucide-activity' },
   { key: 'terminal', label: t('workspace.panel.terminal'), icon: 'i-lucide-square-terminal' },
+  { key: 'browser', label: t('workspace.panel.browser'), icon: 'i-lucide-compass' },
   { key: 'web', label: t('workspace.panel.web'), icon: 'i-lucide-globe' },
   { type: 'group', label: t('workspace.panel.pages'), children: PAGES.map((path) => ({ key: path, label: t(`nav.${path.slice(1)}`), icon: 'i-lucide-app-window' })) },
 ])
@@ -48,7 +51,7 @@ const askingUrl = ref(false)
 const url = ref('')
 
 function onAdd(key: string) {
-  if (key === 'status' || key === 'terminal') workspace.openView({ kind: key })
+  if (key === 'status' || key === 'terminal' || key === 'browser') workspace.openView({ kind: key })
   else if (key === 'web') {
     url.value = ''
     askingUrl.value = true
@@ -132,6 +135,7 @@ const external = (view: PanelView) => (view.kind === 'web' ? view.url! : view.pa
         <div v-show="view.id === active?.id" class="view">
           <StatusView v-if="view.kind === 'status'" />
           <TerminalView v-else-if="view.kind === 'terminal'" />
+          <BrowserView v-else-if="view.kind === 'browser'" :visible="view.id === active?.id" />
           <iframe
             v-else
             :ref="(el) => el && frames.set(view.id, el as HTMLIFrameElement)"
