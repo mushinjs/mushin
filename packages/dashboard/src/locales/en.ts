@@ -1016,6 +1016,15 @@ export default {
     groupRoleOwner: 'Group owner',
   },
   plugins: {
+    folders: {
+      title: 'Plugin folders',
+      lead: 'Mushin.js loads local plugins from these folders: the app\'s own plugins/ folder and the ones you add. A development copy and an instance can point at the same folder, so a plugin written once runs in both.',
+      missing: 'Folder not found',
+      count: 'no plugins | 1 plugin | {count} plugins',
+      app: 'App folder',
+      placeholder: 'Folder path, e.g. D:\\mushin-plugins or ../shared-plugins',
+      hint: 'Relative paths start at the app folder. The code in these folders runs as part of Mushin.js, so add only folders you trust.',
+    },
     search: 'Search plugins',
     filterLabel: 'Filter by status',
     filter: { all: 'All', on: 'On', problem: 'Needs attention', off: 'Off' },
@@ -1673,6 +1682,7 @@ export default {
       debug: 'Debug',
       setup: 'Setup',
       builder: 'Builder',
+      developer: 'Developer',
     },
     status: {
       running: 'Working',

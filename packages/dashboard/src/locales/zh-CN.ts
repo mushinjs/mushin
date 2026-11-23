@@ -1017,6 +1017,15 @@ const zhCN: typeof en = {
     groupRoleOwner: '群主',
   },
   plugins: {
+    folders: {
+      title: '插件目录',
+      lead: 'Mushin.js 从这些文件夹加载本地插件：应用自己的 plugins/ 文件夹，以及你添加的文件夹。开发副本和正式实例可以指向同一个文件夹，插件写一次两边都能用。',
+      missing: '文件夹不存在',
+      count: '没有插件 | 1 个插件 | {count} 个插件',
+      app: '应用目录',
+      placeholder: '文件夹路径，如 D:\\mushin-plugins 或 ../shared-plugins',
+      hint: '相对路径从应用目录算起。这些文件夹里的代码会作为 Mushin.js 的一部分运行，只添加你信任的文件夹。',
+    },
     search: '搜索插件',
     filterLabel: '按状态筛选',
     filter: { all: '全部', on: '已启用', problem: '需要处理', off: '未启用' },
@@ -1674,6 +1683,7 @@ const zhCN: typeof en = {
       debug: '排错',
       setup: '安装对接',
       builder: '流程搭建',
+      developer: '插件开发',
     },
     status: {
       running: '进行中',
