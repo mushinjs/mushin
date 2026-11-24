@@ -230,6 +230,12 @@ export interface BotStatusInfo {
 export interface AdapterType {
   id: string
   displayName: LocalizedText
+  /** One short line on what it connects to. */
+  description?: LocalizedText
+  /** The platform's logo: the inside of a 24×24 SVG; see AdapterIcon. */
+  icon?: string
+  /** The platform's brand colour. */
+  color?: string
   configSchema: JsonSchema
   secrets: string[]
   segments: string[]

@@ -405,6 +405,9 @@ export function apply(ctx: Context) {
   ctx.bots.defineAdapter({
     id: 'onebot',
     displayName: 'OneBot v11',
+    description: { en: 'Any OneBot 11 implementation, such as a QQ client', 'zh-CN': '任意 OneBot 11 实现，例如 QQ 客户端框架' },
+    icon: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2m16 0h2m-7-1v2m-6-2v2"/></g>',
+    color: '#5B6CE0',
     config: AdapterConfig,
     secrets: ['token', 'secret'],
     segments: ONEBOT_SEGMENTS,

@@ -1,18 +1,20 @@
 <script setup lang="ts">
-import { Button, Empty, Input, useToast } from '@mushinjs/ui'
+import { Button, Empty, Input, Tooltip, useToast } from '@mushinjs/ui'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { call } from '../api'
-import BotEditor from '../components/BotEditor.vue'
+import AdapterIcon from '../components/AdapterIcon.vue'
+import BotWizard from '../components/BotWizard.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
 import BotActivity from '../components/runs/BotActivity.vue'
 import { avatarColor, initial } from '../botAvatar'
 import { useDataStore } from '../stores/data'
-import type { Bot } from '../types'
+import type { AppPlugin, Bot, CatalogEntry } from '../types'
+import { localize } from '../utils'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 const data = useDataStore()
 const message = useToast()
@@ -30,6 +32,22 @@ const avatarOf = (bot: Bot) => (bot.selfAvatar && !brokenAvatars.value.has(bot.s
 
 onMounted(() => data.refreshBots().catch((error) => message.error(error.message)))
 
+// Plugin names for the hover list on each card: bot plugins from the catalog, app plugins as installed.
+const pluginNames = ref(new Map<string, string>())
+onMounted(async () => {
+  const [catalog, installed] = await Promise.all([
+    call<CatalogEntry[]>('plugins.catalog', { kind: 'bot' }).catch(() => [] as CatalogEntry[]),
+    call<AppPlugin[]>('plugins.list').catch(() => [] as AppPlugin[]),
+  ])
+  const names = new Map<string, string>()
+  for (const entry of catalog) names.set(entry.package, localize(entry.manifest.displayName, locale.value))
+  for (const plugin of installed) if (plugin.manifest) names.set(plugin.package, localize(plugin.manifest.displayName, locale.value))
+  pluginNames.value = names
+})
+const pluginLabel = (pkg: string) => pluginNames.value.get(pkg) || pkg.replace(/^@mushinjs\/(bot-)?plugin-/, '')
+const enabledList = (bot: Bot) => [...bot.plugins.filter((plugin) => plugin.enabled).map((plugin) => plugin.package), ...(bot.appPlugins ?? [])].map(pluginLabel)
+const adapterOf = (bot: Bot) => data.adapters.find((item) => item.id === bot.adapter.type)
+
 async function toggle(bot: Bot, enabled: boolean) {
   busy.value = bot.id
   try {
@@ -40,18 +58,6 @@ async function toggle(bot: Bot, enabled: boolean) {
   } finally {
     busy.value = undefined
   }
-}
-
-/** The connection mode as a short label, and where the bot connects. */
-function connectionOf(bot: Bot) {
-  const info = bot.connection
-  if (!info) return { mode: '', tag: bot.adapter.type, address: '' }
-  const tag = t(`bots.mode.${info.mode}`) === `bots.mode.${info.mode}` ? info.mode : t(`bots.mode.${info.mode}`)
-  if (info.mode === 'ws-reverse') return { mode: info.mode, tag, address: t('bots.reverseTo', { path: info.address }) }
-  if (info.mode === 'http') return { mode: info.mode, tag, address: t('bots.httpTo', { url: info.address, path: info.inbound }) }
-  if (info.mode === 'webhook') return { mode: info.mode, tag, address: t('bots.webhookAt', { path: info.inbound }) }
-  if (!info.address) return { mode: info.mode, tag, address: '' }
-  return { mode: info.mode, tag, address: t('bots.forwardTo', { url: info.address }) }
 }
 
 // ---- one status per card ----
@@ -96,12 +102,11 @@ const shown = computed(() => {
   return data.bots.filter((bot) => {
     if (filter.value !== 'all' && stateOf(bot) !== filter.value) return false
     if (!text) return true
-    return [bot.name, bot.selfName, bot.selfId, bot.connection?.address].some((value) => value?.toLowerCase().includes(text))
+    return [bot.name, bot.selfName, bot.selfId].some((value) => value?.toLowerCase().includes(text))
   })
 })
 
 const account = (bot: Bot) => (bot.selfName ? `${bot.selfName} · ${bot.selfId}` : bot.selfId ?? t('bots.notLoggedIn'))
-const enabledPlugins = (bot: Bot) => bot.plugins.filter((plugin) => plugin.enabled).length + (bot.appPlugins?.length ?? 0)
 const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
 </script>
 
@@ -146,6 +151,7 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
         @click="open(bot)"
         @keyup.enter.self="open(bot)"
       >
+        <AdapterIcon :adapter="adapterOf(bot)" :size="112" class="watermark" />
         <div class="bot-head">
           <div class="avatar" :style="{ background: avatarColor(bot.id) }" aria-hidden="true">
             <img
@@ -167,11 +173,6 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
         </div>
 
         <div class="bot-body">
-          <div class="conn" :title="connectionOf(bot).address">
-            <span class="conn-icon text-[15px]" :class="['ws-reverse', 'webhook'].includes(connectionOf(bot).mode) ? 'i-lucide-arrow-left' : 'i-lucide-arrow-right'" />
-            <span class="mode">{{ connectionOf(bot).tag }}</span>
-            <span class="mono address">{{ connectionOf(bot).address }}</span>
-          </div>
           <div v-if="stateOf(bot) === 'problem'" class="note bad" :title="bot.error">
             <span class="i-lucide-circle-alert note-icon text-[15px]" />
             <span class="clamp">{{ bot.error || t('bots.state.problem') }}</span>
@@ -186,7 +187,17 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
         </div>
 
         <div class="bot-foot" @click.stop>
-          <span>{{ t('bots.pluginCount', enabledPlugins(bot)) }}</span>
+          <Tooltip placement="bottom" :show-arrow="false" class="plugin-tip">
+            <template #trigger>
+              <RouterLink :to="`/bots/${bot.id}/plugins`" class="plugins-link">
+                <span class="i-lucide-puzzle text-[14px]" />{{ t('bots.pluginCount', enabledList(bot).length) }}
+              </RouterLink>
+            </template>
+            <ul v-if="enabledList(bot).length" class="tip-list">
+              <li v-for="label in enabledList(bot)" :key="label">{{ label }}</li>
+            </ul>
+            <span v-else>{{ t('bots.noPluginsTip') }}</span>
+          </Tooltip>
           <Button v-if="bot.enabled" size="small" quaternary :loading="busy === bot.id" icon="i-lucide-square" @click="toggle(bot, false)">
             {{ t('common.stop') }}
           </Button>
@@ -209,7 +220,7 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
       <Button type="primary" @click="showCreate = true">{{ t('bots.add') }}</Button>
     </EmptyState>
 
-    <BotEditor v-model:show="showCreate" @created="(bot) => router.push(`/bots/${bot.id}`)" />
+    <BotWizard v-model:show="showCreate" />
   </div>
 </template>
 
@@ -285,14 +296,16 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
 .bot-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
+  gap: 20px;
 }
 
 .bot {
+  position: relative;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  height: 196px;
+  height: 184px;
   min-width: 0;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--s1);
@@ -314,7 +327,27 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
   grid-template-columns: 40px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 16px 16px 10px;
+  padding: 18px 18px 14px;
+}
+
+/* The platform's logo, faint behind the right of the card. */
+.watermark {
+  position: absolute;
+  top: 50%;
+  right: -22px;
+  opacity: 0.07;
+  transform: translateY(-50%) rotate(-8deg);
+  pointer-events: none;
+}
+
+.stopped .watermark {
+  filter: grayscale(1);
+}
+
+.bot-head,
+.bot-body,
+.bot-foot {
+  position: relative;
 }
 
 .avatar {
@@ -401,31 +434,7 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
   flex-direction: column;
   gap: 8px;
   min-width: 0;
-  padding: 0 16px;
-}
-
-.conn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  color: var(--fg2);
-}
-
-.conn-icon {
-  flex: none;
-}
-
-.mode {
-  flex: none;
-  font-size: 12px;
-}
-
-.address {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--fg);
+  padding: 0 18px 12px;
 }
 
 .note {
@@ -470,7 +479,7 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px 12px 10px 16px;
+  padding: 8px 12px 8px 18px;
   border-top: 1px solid var(--line);
   font-size: 12.5px;
   color: var(--fg2);
@@ -483,7 +492,7 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
   align-items: center;
   justify-content: center;
   gap: 4px;
-  height: 196px;
+  height: 184px;
   border: 1.5px dashed var(--line);
   border-radius: var(--radius);
   background: transparent;
@@ -511,6 +520,31 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
 .add-card .hint {
   font-size: 12.5px;
   color: var(--fg3);
+}
+
+.plugins-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg2);
+  text-decoration: none;
+}
+
+.plugins-link:hover {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.tip-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.tip-list li::before {
+  content: '· ';
+  opacity: 0.6;
 }
 
 .no-match {

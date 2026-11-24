@@ -135,7 +135,7 @@ Each platform has its own adapter plugin, loaded by default. Pick it as the bot'
 
 Once a Telegram or Discord bot is online, its **Connection** page shows a link and a QR code that add it to a chat: Telegram opens (the desktop app when installed) to pick a group, and Discord asks which server to authorize the bot on.
 
-Platform API calls from flows and the Agent go through the bot's `call`: Telegram takes Bot API method names (`getChat`), and QQ, Discord and KOOK take `"METHOD /path"` (`GET /users/@me`).
+Platform API calls from flows and the Agent go through the bot's `call`: Telegram takes Bot API method names (`getChat`), and most other platforms take `"METHOD /path"` (`GET /users/@me`).
 
 When a bot misbehaves, open its **Logs** tab. It lists what happened inside that bot only: every connection attempt (address, the OneBot self id, client role, and why a token was rejected), logins, status changes, and plugin warnings. The same lines are saved in `instance/logs/bots/<bot id>/` and the Agent can read them.
 
