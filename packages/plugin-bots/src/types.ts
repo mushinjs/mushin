@@ -36,6 +36,15 @@ export interface Transport {
 export interface AdapterType<C = any> {
   id: string
   displayName: LocalizedText
+  /** One short line on what the adapter connects to, for the adapter picker. */
+  description?: LocalizedText
+  /**
+   * The platform's logo as the inside of a 24×24 SVG (paths using `currentColor`), shown in the
+   * adapter picker and behind bot cards. Drawn as a mask, so it never runs as markup.
+   */
+  icon?: string
+  /** The platform's brand colour, for the icon. */
+  color?: string
   config: z.ZodType<C>
   /** Config keys holding secrets. They are kept in .env (the config holds `${NAME}` references), resolved before the adapter starts, and masked in API responses. */
   secrets?: string[]

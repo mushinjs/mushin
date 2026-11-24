@@ -5,6 +5,7 @@ import {
 } from '@mushinjs/core'
 import type {} from '@mushinjs/plugin-storage'
 import { MessageArchive } from './archive'
+import { sandboxAdapter } from './sandbox'
 import { Bot, type BotHooks, byteSize, type PluginRunReport, type Session } from './bot'
 import { type CommandArg, type CommandDef, type CommandEntry, commandConflicts, type CommandSettings, commandMatches, commandUsage, DEFAULT_PREFIXES, helpText, parseArgs, requiredRole, splitCommand } from './commands'
 import { type AdapterType, type BotPluginEntry, type BotRecord, type BotStatus, isSandbox, type PermissionProvider, type PluginRun, roleAtLeast } from './types'
@@ -233,6 +234,7 @@ export class BotManager extends Service {
       export: (message) => this.captureLog(message),
     })
     yield* this.defineActions()
+    yield this.defineAdapter(sandboxAdapter)
     // The Plugins page shows how many commands and adapters each plugin adds.
     yield this.home.manager.defineProvides(() => this.provided())
     this.home.inject(['model', 'database'], async (ctx) => {
@@ -288,10 +290,16 @@ export class BotManager extends Service {
     }, `bots.defineAdapter(${adapter.id})`)
   }
 
+  /** The adapters, the sandbox first: it needs no account, so it is the easiest way to start. */
   adapters() {
-    return [...this.adapterStore.values()].map((adapter) => ({
+    const list = [...this.adapterStore.values()]
+    list.sort((a, b) => Number(b.id === sandboxAdapter.id) - Number(a.id === sandboxAdapter.id))
+    return list.map((adapter) => ({
       id: adapter.id,
       displayName: adapter.displayName,
+      ...(adapter.description ? { description: adapter.description } : {}),
+      ...(adapter.icon ? { icon: adapter.icon } : {}),
+      ...(adapter.color ? { color: adapter.color } : {}),
       configSchema: toJsonSchema(adapter.config),
       secrets: adapter.secrets ?? [],
       segments: adapter.segments,
@@ -394,13 +402,26 @@ export class BotManager extends Service {
     return result.data as Record<string, any>
   }
 
+  /**
+   * A new bot's adapter config. A bot created stopped may be saved half filled in (its connection
+   * set up later, e.g. "connect later" in the dashboard); it is checked again when it starts.
+   */
+  private adapterConfigFor(input: { adapter: { type: string; config: Record<string, any> }; enabled?: boolean }) {
+    try {
+      return this.validateAdapter(input.adapter.type, input.adapter.config)
+    } catch (error) {
+      if (input.enabled !== false || !this.adapterStore.has(input.adapter.type)) throw error
+      return { ...input.adapter.config }
+    }
+  }
+
   async create(input: { name: string; adapter: { type: string; config: Record<string, any> }; plugins?: { package: string; config?: Record<string, any> }[]; enabled?: boolean; provider?: string; commands?: CommandSettings }) {
     const id = randomId()
     const record: BotRecord = {
       id,
       name: input.name,
       enabled: input.enabled ?? true,
-      adapter: { type: input.adapter.type, config: (await this.secureConfig(input.adapter.type, { id, name: input.name }, this.validateAdapter(input.adapter.type, input.adapter.config))).config },
+      adapter: { type: input.adapter.type, config: (await this.secureConfig(input.adapter.type, { id, name: input.name }, this.adapterConfigFor(input))).config },
       plugins: [],
       provider: input.provider,
       ...(input.commands ? { commands: input.commands } : {}),
@@ -433,8 +454,8 @@ export class BotManager extends Service {
     }
     await this.save()
     this.logger.info('updated bot %s', this.label(record))
-    // Command settings are read on every message, so changing only them needs no restart.
-    const restart = patch.name !== undefined || patch.adapter !== undefined || patch.provider !== undefined
+    // The running bot reads its name and command settings from the record, so changing only them needs no restart.
+    const restart = patch.adapter !== undefined || patch.provider !== undefined
     if (record.enabled && restart) await this.start(id).catch(() => {})
     return this.describe(record)
   }
@@ -1281,7 +1302,7 @@ export class BotManager extends Service {
 
     yield actions.define({
       name: 'bots.create',
-      description: 'Create a bot and start it. For a OneBot 11 implementation (NapCat, Lagrange, LLOneBot, ...) use adapter type "onebot" with mode "forward" (url of its WebSocket server, e.g. ws://127.0.0.1:3001) or mode "reverse" (it connects to Mushin). Returns the bot with its id.',
+      description: 'Create a bot and start it. Pick the adapter type and its config from bots.adapters; type "sandbox" needs no account and only answers in the sandbox conversation. With enabled false the bot is saved stopped, and its adapter config may still be incomplete. Returns the bot with its id.',
       risk: 'write',
       input: z.object({
         name: z.string().min(1),
@@ -1297,7 +1318,7 @@ export class BotManager extends Service {
 
     yield actions.define({
       name: 'bots.update',
-      description: 'Rename a bot, change its adapter connection, default provider or command settings. Restarts the bot if it is enabled, unless only command settings change.',
+      description: 'Rename a bot, change its adapter connection, default provider or command settings. Restarts the bot if it is enabled and its connection or provider changes.',
       risk: 'write',
       input: idInput.extend({
         name: z.string().min(1).optional(),

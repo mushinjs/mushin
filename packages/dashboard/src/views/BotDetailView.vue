@@ -78,6 +78,22 @@ const state = computed(() => {
 
 const account = computed(() => (bot.value?.selfName ? `${bot.value.selfName} · ${bot.value.selfId}` : bot.value?.selfId ?? t('bots.notLoggedIn')))
 
+/**
+ * Back: to the overview when this page was opened from one of its tiles (the browser's back does
+ * the same), else to the bots list. Switching pages in the side menu replaces the history entry,
+ * so it never piles up steps to go back through.
+ */
+const fromHome = computed(() => {
+  void route.fullPath // history.state is not reactive: read it again after every navigation
+  const previous = history.state?.back
+  return tab.value !== 'home' && typeof previous === 'string' && previous.startsWith(`/bots/${id.value}/home`)
+})
+
+function goBack() {
+  if (fromHome.value) router.back()
+  else router.push('/bots')
+}
+
 async function run(action: string) {
   try {
     await call(action, { id: id.value })
@@ -108,7 +124,7 @@ function remove() {
     <template v-if="bot">
       <PageHeader :title="bot.name" :lead="account">
         <template #before>
-          <Button quaternary circle :aria-label="t('common.back')" class="back" icon="i-lucide-arrow-left" @click="router.push('/bots')" />
+          <Button quaternary circle :aria-label="fromHome ? t('bot.backToHome') : t('common.back')" :title="fromHome ? t('bot.backToHome') : undefined" class="back" icon="i-lucide-arrow-left" @click="goBack" />
         </template>
         <template #title>
           {{ bot.name }}

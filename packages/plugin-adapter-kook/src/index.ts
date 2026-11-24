@@ -446,6 +446,9 @@ export function apply(ctx: Context) {
   ctx.bots.defineAdapter({
     id: 'kook',
     displayName: 'KOOK',
+    description: { en: 'A bot from the KOOK developer center', 'zh-CN': 'KOOK 开发者中心里的机器人' },
+    icon: '<path fill="currentColor" d="M5 3h3.4v7.4L14.8 3H19l-6.6 7.7L19.4 21h-4.2l-5-7.6l-1.8 2V21H5z"/>',
+    color: '#4CBF2A',
     config: AdapterConfig,
     secrets: ['token', 'verifyToken', 'encryptKey'],
     segments: KOOK_SEGMENTS,
