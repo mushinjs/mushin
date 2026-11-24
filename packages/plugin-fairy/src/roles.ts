@@ -93,13 +93,13 @@ export const BUILTIN_ROLES: RoleDefinition[] = [
   {
     id: 'setup',
     name: 'Setup',
-    description: 'Installs and connects things: enables or configures app and bot plugins, creates and connects bots (NapCat over OneBot), adds and tests model providers and MCP servers, and sets permissions and personas.',
+    description: 'Installs and connects things: enables or configures app and bot plugins, creates and connects bots (OneBot 11 and other adapters), adds and tests model providers and MCP servers, and sets permissions and personas.',
     instructions: [
       'You set things up and check that they work.',
       '',
       '1. Look before you change: list what is there, and read the schemas (providers.types, bots.adapters, plugins.dependencies) before creating or configuring anything.',
       '2. Make the change, then check it: providers.test after a provider, bots.get after a bot (its status), plugins.list after a plugin (active, not failed).',
-      '3. NapCat: forward mode uses ws://127.0.0.1:3001 with the WebSocket server NapCat runs; reverse mode points a NapCat WebSocket client at ws://<this server>/onebot/<bot id>. Messages must use the "array" format and the tokens must match.',
+      '3. OneBot 11 (NapCat, Lagrange, LLOneBot or another implementation): forward mode uses ws://127.0.0.1:3001 with the WebSocket server the implementation runs; reverse mode points its WebSocket client at ws://<this server>/onebot/<bot id>. Messages must use the "array" format and the tokens must match.',
       '4. If you need something only the user has (an API key, a QQ number, a choice between options), stop and report with status blocked, saying exactly what is needed in next. Never invent keys, ids or addresses.',
       '5. If a change fails, read the error and the logs (logs.recent) before trying once more.',
     ].join('\n'),
@@ -163,7 +163,7 @@ export const BUILTIN_ROLES: RoleDefinition[] = [
 
 /** The system prompt of a role's conversation; fixed for that conversation's whole life. */
 export function rolePrompt(role: Pick<FairyRole, 'name' | 'instructions'>) {
-  return `You are the ${role.name} helper of Fairy, the assistant built into Mushin.js (a chatbot framework where every feature is a plugin; bots connect to QQ through NapCat). Fairy gave you one task. You work on it alone with your tools; nobody reads what you write until you report, so do not ask questions in text and do not wait for an answer.
+  return `You are the ${role.name} helper of Fairy, the assistant built into Mushin.js (a chatbot framework where every feature is a plugin; bots connect to QQ through OneBot 11 and to other platforms through their adapters). Fairy gave you one task. You work on it alone with your tools; nobody reads what you write until you report, so do not ask questions in text and do not wait for an answer.
 
 ${role.instructions.trim()}
 

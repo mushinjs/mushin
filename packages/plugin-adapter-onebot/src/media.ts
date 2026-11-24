@@ -45,7 +45,7 @@ async function download(url: string) {
   return { bytes, type: response.headers.get('content-type') }
 }
 
-/** A file on this machine, when NapCat runs here and kept a copy. */
+/** A file on this machine, when the OneBot implementation runs here and kept a copy. */
 async function readLocal(path: unknown) {
   if (typeof path !== 'string' || !path || isHttp(path)) return
   const file = path.replace(/^file:\/\/\/?/, process.platform === 'win32' ? '' : '/')
@@ -76,8 +76,8 @@ export function forwardedMessage(item: any): ForwardedMessage {
 }
 
 /**
- * Media through NapCat. The addresses in QQ messages carry a key that expires after a few hours,
- * so NapCat is asked again (`get_image`, `get_file`, ...) for a current one.
+ * Media through the OneBot implementation. The addresses in QQ messages carry a key that expires after a few hours,
+ * so the implementation is asked again (`get_image`, `get_file`, ...) for a current one.
  */
 export function onebotMedia(ctx: Context): MediaResolver {
   const logger = ctx.logger('onebot')
@@ -90,7 +90,7 @@ export function onebotMedia(ctx: Context): MediaResolver {
     }
   }
 
-  /** What NapCat knows about a file now: a fresh address, its path on NapCat's machine, maybe its bytes. */
+  /** What the OneBot implementation knows about a file now: a fresh address, its path on that machine, maybe its bytes. */
   async function lookup(segment: Segment, channel?: ChannelInfo): Promise<Record<string, any> | undefined> {
     const data = segment.data
     const ids = { ...(data.file ? { file: data.file } : {}), ...(data.file_id ? { file_id: data.file_id } : {}) }

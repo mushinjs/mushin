@@ -23,7 +23,7 @@ const examples = computed(() => {
     },
     {
       id: 'code',
-      source: `${zh ? '在 NapCat 的 `onebot11.json` 里加入：' : 'Add this to NapCat\'s `onebot11.json`:'}\n\n${fence}json\n{\n  "network": {\n    "websocketServers": [{ "port": 3001, "messagePostFormat": "array", "token": "change-me" }]\n  }\n}\n${fence}`,
+      source: `${zh ? '在 OneBot 实现的配置里加入一个正向 WebSocket 服务器：' : 'Add a forward WebSocket server to your OneBot implementation\'s config:'}\n\n${fence}json\n{\n  "network": {\n    "websocketServers": [{ "port": 3001, "messagePostFormat": "array", "token": "change-me" }]\n  }\n}\n${fence}`,
     },
     {
       id: 'card',
@@ -38,12 +38,12 @@ const examples = computed(() => {
     {
       id: 'steps',
       source: `${fence}mushin-steps\n${JSON.stringify(zh
-        ? [{ text: '连接 DeepSeek 提供商', done: true }, { text: '创建机器人并连接 NapCat', done: true }, { text: '开启大模型对话' }, { text: '在群里 @ 机器人试试' }]
-        : [{ text: 'Connect a DeepSeek provider', done: true }, { text: 'Create a bot and connect NapCat', done: true }, { text: 'Turn on LLM chat' }, { text: 'Mention the bot in a group' }], null, 2)}\n${fence}`,
+        ? [{ text: '连接 DeepSeek 提供商', done: true }, { text: '创建机器人并连接 OneBot', done: true }, { text: '开启大模型对话' }, { text: '在群里 @ 机器人试试' }]
+        : [{ text: 'Connect a DeepSeek provider', done: true }, { text: 'Create a bot and connect OneBot', done: true }, { text: 'Turn on LLM chat' }, { text: 'Mention the bot in a group' }], null, 2)}\n${fence}`,
     },
     {
       id: 'mermaid',
-      source: `${fence}mermaid\nflowchart TD\n  QQ[QQ] --> NapCat\n  NapCat -->|WebSocket| Bot[${zh ? '机器人' : 'Bot'}]\n  Bot --> Flow[${zh ? '流程' : 'Flow'}]\n  Flow --> LLM[${zh ? '大模型' : 'LLM'}]\n${fence}`,
+      source: `${fence}mermaid\nflowchart TD\n  QQ[QQ] --> OneBot[OneBot 11]\n  OneBot -->|WebSocket| Bot[${zh ? '机器人' : 'Bot'}]\n  Bot --> Flow[${zh ? '流程' : 'Flow'}]\n  Flow --> LLM[${zh ? '大模型' : 'LLM'}]\n${fence}`,
     },
   ]
 })

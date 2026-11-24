@@ -1281,7 +1281,7 @@ export class BotManager extends Service {
 
     yield actions.define({
       name: 'bots.create',
-      description: 'Create a bot and start it. For NapCat use adapter type "onebot" with mode "forward" (url of NapCat\'s WebSocket server, e.g. ws://127.0.0.1:3001) or mode "reverse" (NapCat connects to Mushin). Returns the bot with its id.',
+      description: 'Create a bot and start it. For a OneBot 11 implementation (NapCat, Lagrange, LLOneBot, ...) use adapter type "onebot" with mode "forward" (url of its WebSocket server, e.g. ws://127.0.0.1:3001) or mode "reverse" (it connects to Mushin). Returns the bot with its id.',
       risk: 'write',
       input: z.object({
         name: z.string().min(1),

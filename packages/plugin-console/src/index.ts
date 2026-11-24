@@ -405,7 +405,7 @@ export class Console extends Service {
 
     yield actions.define({
       name: 'system.info',
-      description: 'Server address and runtime versions. The address is what NapCat should use in reverse mode.',
+      description: 'Server address and runtime versions. The address is what a OneBot implementation should use in reverse mode.',
       risk: 'read',
       input: z.object({}),
       handler: () => ({

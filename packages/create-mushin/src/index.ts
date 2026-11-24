@@ -100,7 +100,7 @@ const PNPM_SETTINGS = `allowBuilds:
 function agentsGuide(name: string) {
   return `# ${name}
 
-This folder is a [Mushin.js](https://github.com/mushinjs/mushin) app: a chatbot framework for QQ (through OneBot / NapCat) with LLM chat, conversation flows and a Fairy. Read this before changing anything here.
+This folder is a [Mushin.js](https://github.com/mushinjs/mushin) app: a chatbot framework for QQ (through OneBot 11) with LLM chat, conversation flows and a Fairy. Read this before changing anything here.
 
 ## Commands
 

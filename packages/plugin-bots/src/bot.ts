@@ -602,7 +602,7 @@ export class Bot extends Service {
     return this.deliver(channel, content, { plugin: this.ctx.fiber.name, source: options.source })
   }
 
-  /** Raw adapter API, e.g. a NapCat extension action. */
+  /** Raw adapter API, e.g. a OneBot extension action. */
   async call(action: string, params: Record<string, any> = {}) {
     if (!this.transport?.call) throw new Error(`bot ${this.record.name} has no API transport`)
     return this.transport.call(action, params)

@@ -2,7 +2,7 @@
 
 An AI-native chatbot framework where everything is a plugin. Describe what you want, in plain words, and the built-in Fairy sets it up: providers, bots, plugins and pages in the dashboard.
 
-Mushin.js is built on [Cordis](https://github.com/cordiverse/cordis). The MVP ships a OneBot v11 adapter for [NapCat](https://napneko.github.io/), so bots run on QQ.
+Mushin.js is built on [Cordis](https://github.com/cordiverse/cordis). The MVP ships a [OneBot 11](https://github.com/botuniverse/onebot-11) adapter, so bots run on QQ through any OneBot 11 implementation.
 
 ## What is in the MVP
 
@@ -14,7 +14,7 @@ Mushin.js is built on [Cordis](https://github.com/cordiverse/cordis). The MVP sh
 | Providers | OpenAI-compatible endpoints (OpenAI, DeepSeek, Moonshot, Qwen, SiliconFlow, OpenRouter, Zhipu GLM, Volcengine Ark, Baidu Qianfan, Tencent Hunyuan, MiniMax, StepFun, xAI, Groq, Mistral, Gemini, Together, Ollama, LM Studio, vLLM), Azure OpenAI, Anthropic (plus the Anthropic-compatible endpoints of DeepSeek, Kimi, Zhipu and MiniMax), native Google Gemini, and TypeSafe Jev decision models through `providers.decide`. Keys are kept in `.env`, never in the config or `data/`. |
 | Overview | The start page: bots online, today's messages and model tokens, flows with errors, commands, providers and plugins; a message chart for 24 hours or 7 days per bot; the busiest chats, users, commands, flows and models; live CPU, memory and event loop delay; versions, uptime and data directory size. |
 | Bots | Create, start, stop and configure bots; enable bot plugins per bot; each bot's commands and `/help`. |
-| OneBot adapter | OneBot v11 over WebSocket, in forward mode (Mushin dials NapCat) or reverse mode (NapCat dials Mushin), or over HTTP (API calls plus signed event reports). |
+| OneBot adapter | OneBot v11 over WebSocket, in forward mode (Mushin dials the OneBot implementation) or reverse mode (the implementation dials Mushin), or over HTTP (API calls plus signed event reports). |
 | Platform adapters | QQ official bots (WebSocket gateway or signed webhook), Discord (gateway), Telegram (long polling or webhook) and KOOK (WebSocket or webhook), each a plugin of its own. |
 | Conversation flows | A visual editor for bot behavior: wire triggers, conditions, variables, LLM calls and replies into a graph, test it with a made-up message, and watch live runs light up the path. The Agent can build flows too. |
 | Live conversation view | Messages appear as they arrive. Hover a message to see its type, supported platforms and what generated it (an LLM with provider and model, a plugin, or a flow). |
@@ -41,7 +41,7 @@ Every start prints a sign-in link and the admin token:
   New token:   mushin token reset
 ```
 
-Open the sign-in link, then follow **Quick setup** to connect an LLM provider. After that, ask Fairy, for example: *"Connect a QQ bot through NapCat at ws://127.0.0.1:3001 and turn on LLM chat."*
+Open the sign-in link, then follow **Quick setup** to connect an LLM provider. After that, ask Fairy, for example: *"Connect a OneBot 11 QQ bot at ws://127.0.0.1:3001 and turn on LLM chat."*
 
 - The token is kept in `.env` as `MUSHIN_ADMIN_TOKEN`, so it stays the same across restarts.
 - To replace it, run `npx mushin token reset`. A running Mushin.js accepts the new token at once and the old one stops working.
@@ -95,7 +95,7 @@ pnpm build
 pnpm demo
 ```
 
-This starts an instance wired to a mock NapCat and a mock LLM, with a provider, two bots, some chat traffic and a Fairy conversation already in place. Sign in with the token `demo`.
+This starts an instance wired to a mock OneBot 11 server and a mock LLM, with a provider, two bots, some chat traffic and a Fairy conversation already in place. Sign in with the token `demo`.
 
 To try things inside your own instance instead, enable **Demo** (`@mushinjs/plugin-demo`) on the **Plugins** page. It adds a *Demo (offline)* provider type that answers without an API key, a *Demo sandbox* bot adapter that is always online, and a sandbox bot to try flows on. Nothing is created until you tick it in the plugin's settings:
 
@@ -105,32 +105,19 @@ To try things inside your own instance instead, enable **Demo** (`@mushinjs/plug
 
 Unticking an item deletes it, and disabling the plugin deletes everything it created. The sample flows are marked as the plugin's on the flows page, cannot be deleted there, and link to the plugin. Edit a sample flow freely, but untick it before you disable the plugin if you want to keep a copy.
 
-## Connecting NapCat
+## Connecting a OneBot 11 bot
 
-Set NapCat's message format to `array` and use the same access token on both sides.
+The OneBot adapter speaks the [OneBot 11](https://github.com/botuniverse/onebot-11) protocol, so it works with any implementation of it, such as [NapCat](https://napneko.github.io/), [Lagrange.OneBot](https://lagrangedev.github.io/Lagrange.Doc/) or [LLOneBot](https://llonebot.com/). Whichever you use, set its message format to `array` (called `messagePostFormat` in some implementations) and use the same access token on both sides.
 
-**Forward mode (Mushin connects to NapCat).** In NapCat's network settings add a WebSocket server, for example on port 3001. Create the bot with mode `forward` and URL `ws://127.0.0.1:3001`.
+**Forward mode (Mushin connects to the implementation).** In your implementation add a forward WebSocket server, for example on port 3001. Create the bot with mode `forward` and URL `ws://127.0.0.1:3001`.
 
-```json
-{ "name": "WsServer", "enable": true, "host": "0.0.0.0", "port": 3001, "messagePostFormat": "array", "token": "your-token" }
-```
+**Reverse mode (the implementation connects to Mushin).** Create the bot with mode `reverse`. The bot's Connection tab shows the address to use, `ws://<mushin-host>:5160/onebot/<bot id>`. In your implementation add a reverse WebSocket client pointing at it, as a universal client so events and API calls share one connection.
 
-**Reverse mode (NapCat connects to Mushin).** Create the bot with mode `reverse`. The bot's Connection tab shows the address to use, `ws://<mushin-host>:5160/onebot/<bot id>`. In NapCat add a WebSocket client pointing at it.
-
-```json
-{ "name": "WsClient", "enable": true, "url": "ws://127.0.0.1:5160/onebot/<bot id>", "messagePostFormat": "array", "token": "your-token" }
-```
-
-**HTTP mode.** Create the bot with mode `http` and URL of NapCat's HTTP server, such as `http://127.0.0.1:3000`; Mushin calls the OneBot API there. In NapCat also add an HTTP client that posts events to `http://<mushin-host>:5160/onebot/<bot id>` (shown on the Connection tab). If the HTTP client has a `secret`, set the same **Report secret** on the bot; events whose `X-Signature` does not match are refused. The bot counts as online once NapCat answers `get_login_info`, retrying every 30 seconds.
-
-```json
-{ "name": "HttpServer", "enable": true, "port": 3000, "messagePostFormat": "array", "token": "your-token" }
-{ "name": "HttpClient", "enable": true, "url": "http://127.0.0.1:5160/onebot/<bot id>", "messagePostFormat": "array", "token": "your-token", "secret": "your-secret" }
-```
+**HTTP mode.** Create the bot with mode `http` and the URL of your implementation's HTTP server, such as `http://127.0.0.1:3000`; Mushin calls the OneBot API there. In the implementation also add an HTTP event report (HTTP POST) to `http://<mushin-host>:5160/onebot/<bot id>` (shown on the Connection tab). If it signs reports with a `secret`, set the same **Report secret** on the bot; events whose `X-Signature` does not match are refused. The bot counts as online once the implementation answers `get_login_info`, retrying every 30 seconds.
 
 The bots list shows each bot's connection mode and address, with a switch to start or stop it. A bot's **Flow overview** tab lists, in order, everything a message passes on that bot: the flow triggers by priority, the built-in commands and the bot plugins. Type a message there and pick who sends it (group member, admin, owner, the bot's admin, or a private chat) to see which triggers it starts, the path each run takes, what it replies and which plugins never see it, all in test mode; LLM nodes answer with a placeholder unless you allow real calls. Fairy can do the same with `flows.route`.
 
-If Mushin.js and NapCat run on different machines, bind Mushin.js to a reachable address (`host` in the server entry) and keep the admin token private.
+If Mushin.js and the OneBot implementation run on different machines, bind Mushin.js to a reachable address (`host` in the server entry) and keep the admin token private.
 
 ## Connecting other platforms
 
@@ -148,7 +135,7 @@ Once a Telegram or Discord bot is online, its **Connection** page shows a link a
 
 Platform API calls from flows and the Agent go through the bot's `call`: Telegram takes Bot API method names (`getChat`), and QQ, Discord and KOOK take `"METHOD /path"` (`GET /users/@me`).
 
-When a bot misbehaves, open its **Logs** tab. It lists what happened inside that bot only: every connection attempt (address, NapCat self id, client role, and why a token was rejected), logins, status changes, and plugin warnings. The same lines are saved in `instance/logs/bots/<bot id>/` and the Agent can read them.
+When a bot misbehaves, open its **Logs** tab. It lists what happened inside that bot only: every connection attempt (address, the OneBot self id, client role, and why a token was rejected), logins, status changes, and plugin warnings. The same lines are saved in `instance/logs/bots/<bot id>/` and the Agent can read them.
 
 ## Keeping LLM chat in check
 
@@ -183,11 +170,11 @@ Open **Flows** in the dashboard (cards or a compact list, grouped by bot by defa
 | Actions | Reply, Send to chat |
 | Terminal (Terminal plugin) | Run command (on this machine), Run over SSH |
 | Group management (OneBot) | Mute, Mute everyone, Remove member, Set admin, Set member card, Set special title, Rename group, Post announcement, Essence message, Group check-in, Leave group |
-| Platform API (OneBot) | Recall message, Get message, Send forward message, Poke, React with emoji, Like profile, Handle request, Member info, User info, Group info, Sender role, Call OneBot API (any OneBot 11 or NapCat action) |
+| Platform API (OneBot) | Recall message, Get message, Send forward message, Poke, React with emoji, Like profile, Handle request, Member info, User info, Group info, Sender role, Call OneBot API (any OneBot 11 action or extension) |
 
-OneBot nodes call NapCat through the bot running the flow and continue on `ok` or `failed`, with the error as an output, so a missing permission does not stop the run. **Wait for reply** holds the run until the next message in the chat (up to an hour; waiting does not count toward the 60-second run limit), and the awaited message does not start other flows. Event and schedule runs reply in the chat the event happened in, or the one set on the schedule trigger.
+OneBot nodes call the OneBot implementation through the bot running the flow and continue on `ok` or `failed`, with the error as an output, so a missing permission does not stop the run. **Wait for reply** holds the run until the next message in the chat (up to an hour; waiting does not count toward the 60-second run limit), and the awaited message does not start other flows. Event and schedule runs reply in the chat the event happened in, or the one set on the schedule trigger.
 
-Pick the flow's adapter at the top of the editor (it is chosen for you when only one is installed); nodes made for another adapter, such as the OneBot ones on a Discord flow, are greyed out in the node list, and hovering one says why. Right-click the canvas, a node, a selection or a connection for more: add a node where you clicked, copy and paste (Ctrl+C / Ctrl+V, also between flows), duplicate (Ctrl+D), group selected nodes into a dashed frame that moves and copies as one (Ctrl+G; Ctrl+Shift+G ungroups), or insert a node into a connection. **Skip** a node from the same menu, or with the button next to the delete button in its settings, to keep it on the canvas without running it: a skipped trigger never fires, and a skipped step passes straight on to its first exit. The canvas draws that bypass from the steps before a skipped step to the ones after it, and the skipped step's own connections are dashed. Nodes that only a skipped trigger leads to are shown as skipped too, since they never run. Click a connection to select it and press Delete, or drag either end to another handle, or onto empty canvas to remove it. The canvas stops a little beyond the nodes, and the minimap always shows that whole area with the visible part highlighted. A group can be collapsed into one box with the button on its frame, and double-clicking the box expands it again. Dropping a connection on empty canvas lists the nodes that can connect there. Then pick the bots that run the flow; Mushin.js turns on the flows bot plugin for them. After a trigger runs, the message goes on to later triggers and to the bot's other plugins, such as LLM chat, unless the trigger's **Intercept here** setting says otherwise: **In this flow** stops later triggers of the same flow, **All flows** stops later triggers of every flow on the bot, and **Everywhere** also keeps the built-in `/help` and the bot plugins from seeing it. Flows saved before this setting existed keep their old behavior: a trigger without "let other plugins answer too" intercepts everywhere. The **Logs** bar under the canvas sends a made-up message, event or schedule tick through the saved flow without sending anything to a chat or calling NapCat (AI nodes do call the LLM; the platform calls the run would make are listed) and lists every step with its input and output, as a table or JSON. **Execute step** on a node, or ▶ on its card, runs the same test but stops after that node. Recent live runs appear there too; pick one to highlight its path on the canvas. While a run is going, the edge into the running node is a moving dashed line, and edges turn green or red as each node succeeds or fails.
+Pick the flow's adapter at the top of the editor (it is chosen for you when only one is installed); nodes made for another adapter, such as the OneBot ones on a Discord flow, are greyed out in the node list, and hovering one says why. Right-click the canvas, a node, a selection or a connection for more: add a node where you clicked, copy and paste (Ctrl+C / Ctrl+V, also between flows), duplicate (Ctrl+D), group selected nodes into a dashed frame that moves and copies as one (Ctrl+G; Ctrl+Shift+G ungroups), or insert a node into a connection. **Skip** a node from the same menu, or with the button next to the delete button in its settings, to keep it on the canvas without running it: a skipped trigger never fires, and a skipped step passes straight on to its first exit. The canvas draws that bypass from the steps before a skipped step to the ones after it, and the skipped step's own connections are dashed. Nodes that only a skipped trigger leads to are shown as skipped too, since they never run. Click a connection to select it and press Delete, or drag either end to another handle, or onto empty canvas to remove it. The canvas stops a little beyond the nodes, and the minimap always shows that whole area with the visible part highlighted. A group can be collapsed into one box with the button on its frame, and double-clicking the box expands it again. Dropping a connection on empty canvas lists the nodes that can connect there. Then pick the bots that run the flow; Mushin.js turns on the flows bot plugin for them. After a trigger runs, the message goes on to later triggers and to the bot's other plugins, such as LLM chat, unless the trigger's **Intercept here** setting says otherwise: **In this flow** stops later triggers of the same flow, **All flows** stops later triggers of every flow on the bot, and **Everywhere** also keeps the built-in `/help` and the bot plugins from seeing it. Flows saved before this setting existed keep their old behavior: a trigger without "let other plugins answer too" intercepts everywhere. The **Logs** bar under the canvas sends a made-up message, event or schedule tick through the saved flow without sending anything to a chat or calling the platform (AI nodes do call the LLM; the platform calls the run would make are listed) and lists every step with its input and output, as a table or JSON. **Execute step** on a node, or ▶ on its card, runs the same test but stops after that node. Recent live runs appear there too; pick one to highlight its path on the canvas. While a run is going, the edge into the running node is a moving dashed line, and edges turn green or red as each node succeeds or fails.
 
 When one message starts several triggers on a bot, across all of its flows, they run highest **priority** first (ties: older flow first), and a trigger that intercepts stops the ones after it as far as it reaches. A trigger's settings list the triggers that compete with it on each bot, with buttons to run it earlier or later. A trigger that an earlier one always keeps the message from is marked **Never runs** on the canvas, with the trigger in its way, and so are the steps only it leads to.
 
@@ -280,7 +267,7 @@ pnpm install
 pnpm build        # builds the packages and the dashboard
 pnpm start        # starts Mushin.js in ./instance
 pnpm dev          # backend on :5160 and the dashboard dev server on :5173 (proxying /api); restarts on source changes, not on plugin folder changes
-pnpm test         # unit and end-to-end tests (mock NapCat and mock LLM)
+pnpm test         # unit and end-to-end tests (mock OneBot server and mock LLM)
 pnpm typecheck    # TypeScript for all packages, vue-tsc for the dashboard
 pnpm test:flows   # the saved test cases of every flow in ./instance, offline (mushin test)
 pnpm test:pack    # after pnpm build: packs every package, installs the tarballs with npm, creates apps with create-mushin for npm and pnpm, and starts Mushin.js from each

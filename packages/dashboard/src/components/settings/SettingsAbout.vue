@@ -42,7 +42,7 @@ onMounted(() => {
     <p class="credits">
       {{ t('settings.about.builtOn') }}
       <a href="https://github.com/cordiverse/cordis" target="_blank" rel="noopener">Cordis</a>
-      · <a href="https://napneko.github.io/" target="_blank" rel="noopener">NapCat</a>
+      · <a href="https://github.com/botuniverse/onebot-11" target="_blank" rel="noopener">OneBot 11</a>
       · <a href="https://reka-ui.com/" target="_blank" rel="noopener">Reka UI</a>
       · <a href="https://unocss.dev/" target="_blank" rel="noopener">UnoCSS</a>
     </p>
