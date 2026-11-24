@@ -347,7 +347,7 @@ export function apply(ctx: Context, config: z.infer<typeof Config> = { bindHost:
     name: 'qq.bindStart',
     description: 'Starts creating a QQ official bot by scanning a QR code with mobile QQ; answers the text to show as a QR code and a binding id for qq.bindPoll.',
     risk: 'write',
-    agent: false,
+    fairy: false,
     input: z.object({}),
     handler: () => binder.start(),
   })
@@ -355,7 +355,7 @@ export function apply(ctx: Context, config: z.infer<typeof Config> = { bindHost:
     name: 'qq.bindPoll',
     description: 'Whether a QQ bot binding from qq.bindStart was scanned and confirmed; once created, answers the AppID and AppSecret as adapter config.',
     risk: 'write',
-    agent: false,
+    fairy: false,
     input: z.object({ id: z.string() }),
     handler: ({ id }) => binder.poll(id),
   })
