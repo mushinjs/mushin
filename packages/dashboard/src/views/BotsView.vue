@@ -330,13 +330,13 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
   padding: 18px 18px 14px;
 }
 
-/* The platform's logo, faint behind the right of the card. */
+/* The platform's logo behind the right of the card. */
 .watermark {
   position: absolute;
   top: 50%;
-  right: -22px;
-  opacity: 0.07;
-  transform: translateY(-50%) rotate(-8deg);
+  right: -24px;
+  opacity: 0.3;
+  transform: translateY(-50%);
   pointer-events: none;
 }
 
