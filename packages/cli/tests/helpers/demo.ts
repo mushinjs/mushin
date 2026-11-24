@@ -69,7 +69,7 @@ await wait(500)
 
 llm.enqueue(
   { toolCalls: [{ name: 'bots__list', arguments: {} }] },
-  { text: 'You have 2 bots. Alpha is online with Echo and LLM chat enabled. Beta is waiting for NapCat to connect in reverse mode.' },
+  { text: 'You have 2 bots. Alpha is online with Echo and LLM chat enabled. Beta is waiting for its OneBot client to connect in reverse mode.' },
 )
 await call('fairy.send', { text: 'Which bots do I have, and are they online?' })
 

@@ -1,19 +1,20 @@
 import type { LocalizedText } from '@mushinjs/core'
 
 /**
- * The params of OneBot 11 APIs and of NapCat's extensions, for the "Call OneBot API" node: the
+ * The params of OneBot 11 APIs and of common extensions, for the "Call OneBot API" node: the
  * node checks params against it before calling, and the editor shows one field per param.
  *
  * Standard APIs follow the OneBot 11 spec (github.com/botuniverse/onebot-11, api/public.md): a
- * param whose default is "-" there is required. NapCat's own APIs (`source: 'napcat'`, such as
- * `send_poke`, which OneBot 11 does not have) follow NapCat's API docs
+ * param whose default is "-" there is required. Extensions (`source: 'extension'`, such as
+ * `send_poke`, which OneBot 11 does not have) are offered by implementations such as NapCat,
+ * LLOneBot and Lagrange; their params follow NapCat's API docs
  * (napneko.github.io/develop/api/doc) and the action schemas in its source
  * (NapNeko/NapCatQQ, packages/napcat-onebot/action). APIs not listed are called as written.
  */
 
 /**
  * `int` is a whole number: QQ, group and message ids (int64 / int32 in the spec), counts and
- * seconds. Numeric text is accepted and converted, as NapCat accepts both. `int`, `boolean` and
+ * seconds. Numeric text is accepted and converted, as implementations accept both. `int`, `boolean` and
  * params with `options` hold one value: one literal or one reference.
  */
 export type ApiParamType = 'int' | 'boolean' | 'string' | 'message' | 'array' | 'object'
@@ -34,8 +35,8 @@ export interface ApiParam {
 export interface ApiInfo {
   action: string
   title: LocalizedText
-  /** Where the params come from: the OneBot 11 spec, or NapCat's docs and source. */
-  source: 'onebot11' | 'napcat'
+  /** Where the params come from: the OneBot 11 spec, or an extension outside it. */
+  source: 'onebot11' | 'extension'
   /** What the docs say that a param table cannot, such as "one of these is needed". */
   note?: LocalizedText
   params: ApiParam[]
@@ -57,7 +58,7 @@ const domain = p('domain', 'string', 'Domain', '域名', { default: '' })
 const flag01 = (name: string, en: string, zh: string, value: number) => p(name, 'int', en, zh, { default: value, options: ['0', '1'] })
 
 const standard = (action: string, en: string, zh: string, params: ApiParam[] = []): ApiInfo => ({ action, title: text(en, zh), source: 'onebot11', params })
-const napcat = (action: string, en: string, zh: string, params: ApiParam[] = [], note?: LocalizedText): ApiInfo => ({ action, title: text(en, zh), source: 'napcat', params, ...(note ? { note } : {}) })
+const extension = (action: string, en: string, zh: string, params: ApiParam[] = [], note?: LocalizedText): ApiInfo => ({ action, title: text(en, zh), source: 'extension', params, ...(note ? { note } : {}) })
 
 export const onebotApis: ApiInfo[] = [
   // ---- OneBot 11 ----
@@ -128,18 +129,18 @@ export const onebotApis: ApiInfo[] = [
   standard('set_restart', 'Restart', '重启 OneBot 实现', [p('delay', 'int', 'Delay in ms', '延迟毫秒数', { default: 0, min: 0 })]),
   standard('clean_cache', 'Clean the cache', '清理缓存'),
 
-  // ---- NapCat ----
-  napcat('send_poke', 'Poke (NapCat)', '戳一戳（NapCat）', [userId, p('group_id', 'int', 'Group id; without it, pokes privately', '群号；不填则私聊戳一戳')]),
-  napcat('group_poke', 'Poke in a group (NapCat)', '群聊戳一戳（NapCat）', [groupId, userId]),
-  napcat('friend_poke', 'Poke a friend (NapCat)', '私聊戳一戳（NapCat）', [userId]),
-  napcat('set_msg_emoji_like', 'React with an emoji (NapCat)', '表情回应（NapCat）', [messageId, p('emoji_id', 'string', 'Emoji id', '表情 ID', req)]),
-  napcat('get_group_msg_history', 'Group message history (NapCat)', '获取群历史消息（NapCat）', [
+  // ---- Extensions (NapCat, LLOneBot, Lagrange, ...) ----
+  extension('send_poke', 'Poke (extension)', '戳一戳（扩展）', [userId, p('group_id', 'int', 'Group id; without it, pokes privately', '群号；不填则私聊戳一戳')]),
+  extension('group_poke', 'Poke in a group (extension)', '群聊戳一戳（扩展）', [groupId, userId]),
+  extension('friend_poke', 'Poke a friend (extension)', '私聊戳一戳（扩展）', [userId]),
+  extension('set_msg_emoji_like', 'React with an emoji (extension)', '表情回应（扩展）', [messageId, p('emoji_id', 'string', 'Emoji id', '表情 ID', req)]),
+  extension('get_group_msg_history', 'Group message history (extension)', '获取群历史消息（扩展）', [
     groupId,
     p('message_seq', 'string', 'Start from this message; empty is the latest', '起始消息序号；不填从最新开始'),
     p('count', 'int', 'How many', '数量', { default: 20, min: 1 }),
     p('reverse_order', 'boolean', 'Oldest first', '倒序', { default: false }),
   ]),
-  napcat('_send_group_notice', 'Post a group notice (NapCat)', '发送群公告（NapCat）', [
+  extension('_send_group_notice', 'Post a group notice (extension)', '发送群公告（扩展）', [
     groupId,
     p('content', 'string', 'Content', '公告内容', req),
     p('image', 'string', 'Image path or URL', '图片路径或 URL'),
@@ -149,17 +150,17 @@ export const onebotApis: ApiInfo[] = [
     flag01('is_show_edit_card', 'Ask members to set their card (0/1)', '是否显示修改群名片引导（0/1）', 0),
     p('tip_window_type', 'int', 'Popup type', '弹窗类型', { default: 0 }),
   ]),
-  napcat('set_group_sign', 'Group check-in (NapCat)', '群打卡（NapCat）', [groupId]),
-  napcat('set_essence_msg', 'Set an essence message (NapCat)', '设置精华消息（NapCat）', [messageId]),
-  napcat('delete_essence_msg', 'Remove an essence message (NapCat)', '移出精华消息（NapCat）', [
+  extension('set_group_sign', 'Group check-in (extension)', '群打卡（扩展）', [groupId]),
+  extension('set_essence_msg', 'Set an essence message (extension)', '设置精华消息（扩展）', [messageId]),
+  extension('delete_essence_msg', 'Remove an essence message (extension)', '移出精华消息（扩展）', [
     p('message_id', 'int', 'Message id', '消息 ID'),
     p('msg_seq', 'string', 'Message seq', '消息序号'),
     p('msg_random', 'string', 'Message random', '消息随机数'),
     p('group_id', 'int', 'Group id', '群号'),
   ], text('Give message_id, or all of msg_seq, msg_random and group_id', '需要 message_id，或同时提供 msg_seq、msg_random 和 group_id')),
-  napcat('send_group_forward_msg', 'Send a forward to a group (NapCat)', '发送群合并转发（NapCat）', [groupId, p('messages', 'array', 'Message nodes', '消息节点', req)]),
-  napcat('send_private_forward_msg', 'Send a forward privately (NapCat)', '发送私聊合并转发（NapCat）', [userId, p('messages', 'array', 'Message nodes', '消息节点', req)]),
-  napcat('upload_group_file', 'Upload a group file (NapCat)', '上传群文件（NapCat）', [
+  extension('send_group_forward_msg', 'Send a forward to a group (extension)', '发送群合并转发（扩展）', [groupId, p('messages', 'array', 'Message nodes', '消息节点', req)]),
+  extension('send_private_forward_msg', 'Send a forward privately (extension)', '发送私聊合并转发（扩展）', [userId, p('messages', 'array', 'Message nodes', '消息节点', req)]),
+  extension('upload_group_file', 'Upload a group file (extension)', '上传群文件（扩展）', [
     groupId,
     p('file', 'string', 'File path or URL', '文件路径或 URL', req),
     p('name', 'string', 'File name', '文件名', req),
@@ -183,7 +184,7 @@ function convert(param: ApiParam, value: unknown): { value: unknown } | { error:
       const number = Number(textValue)
       if (param.min !== undefined && number < param.min) return { error: `should be at least ${param.min}, not ${textValue}` }
       if (param.max !== undefined && number > param.max) return { error: `should be at most ${param.max}, not ${textValue}` }
-      // Ids too large for a JS number stay text, as NapCat accepts both.
+      // Ids too large for a JS number stay text, as implementations accept both.
       out = Number.isSafeInteger(number) ? number : textValue
       break
     }

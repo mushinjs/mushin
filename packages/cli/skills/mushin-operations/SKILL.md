@@ -51,7 +51,7 @@ If something is wrong after an upgrade, the copy of the old data folder is in `d
 
 1. On the old machine, stop Mushin.js and back up everything (above), `.env` included.
 2. On the new machine, install Node.js 22.13 or newer, copy the app folder without `node_modules/`, `logs/` and `cache/`, and run `npm install`.
-3. Start it with `npm start`. Bots that connect to NapCat in reverse mode need NapCat to point at the new machine's address; `system__info` shows it.
+3. Start it with `npm start`. Bots that use OneBot 11 in reverse mode need the OneBot implementation to point at the new machine's address; `system__info` shows it.
 
 ## Migrate an old data folder
 

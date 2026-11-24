@@ -1,7 +1,7 @@
 {
   "name": "@mushinjs/plugin-adapter-onebot",
   "version": "0.3.0",
-  "description": "OneBot v11 adapter (NapCat)",
+  "description": "OneBot v11 adapter",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -36,8 +36,8 @@
       "zh-CN": "OneBot v11 适配器"
     },
     "description": {
-      "en": "Connects bots to NapCat and other OneBot v11 implementations",
-      "zh-CN": "将机器人连接到 NapCat 等 OneBot v11 实现"
+      "en": "Connects bots to any OneBot v11 implementation, such as NapCat, Lagrange or LLOneBot",
+      "zh-CN": "将机器人连接到任意 OneBot v11 实现，如 NapCat、Lagrange、LLOneBot"
     },
     "requires": {
       "plugins": {

@@ -86,7 +86,7 @@ const all = computed<Result[]>(() => {
       key: `page:${item.key}`, group: g.page, label: item.label, sub: group.label, icon: item.icon, words: item.key, run: go(item.key),
     }))),
     { key: 'action:flow', group: g.action, label: t('flows.add'), icon: 'i-lucide-plus', words: 'new flow', run: go({ path: '/flows', query: { new: '1' } }) },
-    { key: 'action:bot', group: g.action, label: t('bots.add'), icon: 'i-lucide-plus', words: 'new bot napcat', run: go({ path: '/bots', query: { new: '1' } }) },
+    { key: 'action:bot', group: g.action, label: t('bots.add'), icon: 'i-lucide-plus', words: 'new bot onebot qq', run: go({ path: '/bots', query: { new: '1' } }) },
     { key: 'action:persona', group: g.action, label: t('personas.add'), icon: 'i-lucide-plus', words: 'new persona', run: go({ path: '/personas', query: { persona: 'new' } }) },
     { key: 'action:fairy', group: g.action, label: t('search.askFairy'), icon: 'i-lucide-sparkles', words: 'fairy ai', run: () => (fairy.open = true) },
     {

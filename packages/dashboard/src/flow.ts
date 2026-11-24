@@ -126,7 +126,7 @@ export function supports(type: Pick<NodeTypeInfo, 'platforms' | 'unavailable'>, 
 export const categories: NodeCategory[] = ['trigger', 'event', 'logic', 'data', 'ai', 'action', 'manage', 'platform']
 
 /**
- * Sample OneBot events for test runs, shaped like NapCat sends them. Picking one fills the event
+ * Sample OneBot events for test runs, shaped like OneBot 11 implementations send them. Picking one fills the event
  * JSON, which the user can then edit.
  */
 export const eventSamples: Record<string, Record<string, any>> = {

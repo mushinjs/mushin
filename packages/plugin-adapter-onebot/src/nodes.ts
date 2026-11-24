@@ -4,9 +4,9 @@ import { checkParams, onebotApis } from './apis'
 import { idOf } from './events'
 
 /**
- * Flow nodes for OneBot v11, following the OneBot 11 spec and NapCat's extensions. Triggers match
+ * Flow nodes for OneBot v11, following the OneBot 11 spec and common extensions (NapCat, LLOneBot, Lagrange). Triggers match
  * the events the adapter names in `normalizeEvent`; action nodes call the API through `ctx.bot.call`.
- * Ids are passed as numbers when they are numeric, as the spec says; NapCat accepts both.
+ * Ids are passed as numbers when they are numeric, as the spec says; implementations accept both.
  */
 
 // ---- shared pieces ----
@@ -186,7 +186,7 @@ const memberJoin = eventTrigger({
 const memberLeave = eventTrigger({
   type: 'onebot.memberLeave',
   title: text('Member left', '成员离群'),
-  description: text('A member left or was removed (group_decrease); kick_me means the bot was removed, disband (NapCat) that the group was dissolved', '有人退群或被移出（group_decrease）；kick_me 表示机器人被踢，disband（NapCat）表示群被解散'),
+  description: text('A member left or was removed (group_decrease); kick_me means the bot was removed, disband (an extension) that the group was dissolved', '有人退群或被移出（group_decrease）；kick_me 表示机器人被踢，disband（扩展）表示群被解散'),
   names: ['group_decrease'],
   config: z.object({
     subType: z.enum(['any', 'leave', 'kick', 'kick_me', 'disband']).default('any').meta(field('How', 'leave: left on their own. kick: removed by an admin. kick_me: the bot was removed.', {
@@ -367,8 +367,8 @@ const groupChange = eventTrigger({
   type: 'onebot.groupChange',
   title: text('Group info changed', '群资料变化'),
   description: text(
-    'NapCat: a member card (group_card), the group name (notify.group_name), a member title (notify.title), essence messages (essence) or a reaction (group_msg_emoji_like) changed',
-    'NapCat：群名片（group_card）、群名（notify.group_name）、专属头衔（notify.title）、精华消息（essence）或表情回应（group_msg_emoji_like）发生变化',
+    'Extension: a member card (group_card), the group name (notify.group_name), a member title (notify.title), essence messages (essence) or a reaction (group_msg_emoji_like) changed',
+    '扩展：群名片（group_card）、群名（notify.group_name）、专属头衔（notify.title）、精华消息（essence）或表情回应（group_msg_emoji_like）发生变化',
   ),
   names: Object.keys(GROUP_CHANGES),
   config: z.object({
@@ -406,8 +406,8 @@ const honor = eventTrigger({
   type: 'onebot.honor',
   title: text('Group honor / lucky king', '群荣誉 / 运气王'),
   description: text(
-    'OneBot 11: a member got a group honor (notify.honor) or was the red packet lucky king (notify.lucky_king). NapCat does not report these.',
-    'OneBot 11：成员获得群荣誉（notify.honor）或成为红包运气王（notify.lucky_king）。NapCat 不上报这两种事件。',
+    'OneBot 11: a member got a group honor (notify.honor) or was the red packet lucky king (notify.lucky_king). Some implementations, such as NapCat, do not report these.',
+    'OneBot 11：成员获得群荣誉（notify.honor）或成为红包运气王（notify.lucky_king）。部分实现（如 NapCat）不上报这两种事件。',
   ),
   names: ['notify.honor', 'notify.lucky_king'],
   outputs: [
@@ -502,7 +502,7 @@ const kickNode = apiNode({
   type: 'onebot.kick',
   category: 'manage',
   title: text('Remove member', '踢出成员'),
-  description: text('Removes members from the group (set_group_kick; several at once with NapCat\'s set_group_kick_members)', '把成员移出群（set_group_kick；多人时用 NapCat 的 set_group_kick_members）'),
+  description: text('Removes members from the group (set_group_kick; several at once with the set_group_kick_members extension)', '把成员移出群（set_group_kick；多人时用扩展接口 set_group_kick_members）'),
   config: z.object({
     groupId: groupIdField,
     userIds: z.string().default('').meta(field('Users', 'QQ numbers separated by spaces or commas; empty removes the sender', {
@@ -580,7 +580,7 @@ const groupNoticeNode = apiNode({
   type: 'onebot.groupNotice',
   category: 'manage',
   title: text('Post announcement', '发布群公告'),
-  description: text('Posts a group announcement (NapCat _send_group_notice)', '发布群公告（NapCat _send_group_notice）'),
+  description: text('Posts a group announcement (extension _send_group_notice)', '发布群公告（扩展接口 _send_group_notice）'),
   config: z.object({
     groupId: groupIdField,
     content: z.string().default('').meta(field('Text', 'Used when the input is not set', { 'zh-CN': { title: '内容', description: '未设置输入时使用' } })),
@@ -615,7 +615,7 @@ const groupSignNode = apiNode({
   type: 'onebot.groupSign',
   category: 'manage',
   title: text('Group check-in', '群打卡'),
-  description: text('The bot checks in to the group (NapCat set_group_sign)', '机器人在群里打卡（NapCat set_group_sign）'),
+  description: text('The bot checks in to the group (extension set_group_sign)', '机器人在群里打卡（扩展接口 set_group_sign）'),
   config: z.object({ groupId: groupIdField }),
   request: ({ config, session }) => ({ action: 'set_group_sign', params: { group_id: groupOf(config, session) } }),
 })
@@ -708,7 +708,7 @@ const pokeNode = apiNode({
   type: 'onebot.sendPoke',
   category: 'platform',
   title: text('Poke', '戳一戳'),
-  description: text('Pokes someone in a group or a private chat (NapCat group_poke / friend_poke)', '在群里或私聊戳一戳某人（NapCat group_poke / friend_poke）'),
+  description: text('Pokes someone in a group or a private chat (extensions group_poke / friend_poke)', '在群里或私聊戳一戳某人（扩展接口 group_poke / friend_poke）'),
   config: z.object({
     where: z.enum(['current', 'group', 'private']).default('current').meta(field('Where', 'current: the chat the run is about', { 'zh-CN': { title: '在哪', description: 'current：本次运行所在的会话' } })),
     groupId: groupIdField,
@@ -727,7 +727,7 @@ const emojiLikeNode = apiNode({
   type: 'onebot.emojiLike',
   category: 'platform',
   title: text('React with emoji', '表情回应'),
-  description: text('Adds or removes an emoji reaction on a group message (NapCat set_msg_emoji_like)', '给群消息添加或取消表情回应（NapCat set_msg_emoji_like）'),
+  description: text('Adds or removes an emoji reaction on a group message (extension set_msg_emoji_like)', '给群消息添加或取消表情回应（扩展接口 set_msg_emoji_like）'),
   config: z.object({
     messageId: messageIdField,
     emojiId: z.string().min(1).default('76').meta(field('Emoji id', 'QQ face id, e.g. 76 (thumbs up), 66 (heart)', {
@@ -884,7 +884,7 @@ const senderRoleNode: NodeType = {
     if (session.role?.() === 'master' || (config.masters as string[]).map(str).includes(session.user.id)) return { exec: 'master', outputs: { role: 'master' } }
     if (session.channel.type !== 'group') return { exec: 'member', outputs: { role: 'member' } }
     let role: string | undefined = session.user.role ?? await session.groupRole?.()
-    // Events carry no sender role; ask NapCat.
+    // Events carry no sender role; ask the OneBot implementation.
     if (!role && session.user.id) {
       const response = await callApi(context, 'get_group_member_info', { group_id: toId(session.channel.id), user_id: toId(session.user.id) })
       if (response.ok) role = str(response.data?.role)
@@ -988,8 +988,8 @@ const callApiNode: NodeType = {
   category: 'platform',
   title: text('Call OneBot API', '调用 OneBot 接口'),
   description: text(
-    'Calls any OneBot 11 or NapCat API with JSON params, e.g. get_group_honor_info, upload_group_file, get_group_msg_history',
-    '用 JSON 参数调用任意 OneBot 11 或 NapCat 接口，例如 get_group_honor_info、upload_group_file、get_group_msg_history',
+    'Calls any OneBot 11 API or extension with JSON params, e.g. get_group_honor_info, upload_group_file, get_group_msg_history',
+    '用 JSON 参数调用任意 OneBot 11 接口或扩展接口，例如 get_group_honor_info、upload_group_file、get_group_msg_history',
   ),
   config: z.object({
     // The editor offers the known APIs and checks their params with `x-apis`.

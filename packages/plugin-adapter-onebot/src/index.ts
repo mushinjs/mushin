@@ -19,28 +19,28 @@ export const inject = ['bots']
 export const AdapterConfig = z.object({
   mode: z.enum(['forward', 'reverse', 'http']).default('forward').meta(field(
     'Connection mode',
-    'forward: Mushin connects to NapCat\'s WebSocket server. reverse: NapCat\'s WebSocket client connects to Mushin. http: Mushin calls NapCat\'s HTTP server, and NapCat\'s HTTP client posts events to Mushin.',
-    { 'zh-CN': { title: '连接方式', description: 'forward（正向 WebSocket）：Mushin 连接 NapCat 的 WebSocket 服务器。reverse（反向 WebSocket）：NapCat 的 WebSocket 客户端连接 Mushin。http：Mushin 调用 NapCat 的 HTTP 服务器，NapCat 的 HTTP 客户端把事件上报给 Mushin。' } },
+    'forward: Mushin connects to the WebSocket server of your OneBot 11 implementation. reverse: its WebSocket client connects to Mushin. http: Mushin calls its HTTP server, and its HTTP client posts events to Mushin.',
+    { 'zh-CN': { title: '连接方式', description: 'forward（正向 WebSocket）：Mushin 连接 OneBot 11 实现的 WebSocket 服务器。reverse（反向 WebSocket）：OneBot 11 实现的 WebSocket 客户端连接 Mushin。http：Mushin 调用它的 HTTP 服务器，它的 HTTP 客户端把事件上报给 Mushin。' } },
   )),
   url: z.string().regex(/^(wss?|https?):\/\//, 'must start with ws://, wss://, http:// or https://').default('ws://127.0.0.1:3001').meta(field(
-    'NapCat address',
-    'Address of NapCat\'s WebSocket server (forward), or of its HTTP server (http), e.g. http://127.0.0.1:3000',
-    { 'zh-CN': { title: 'NapCat 地址', description: 'NapCat WebSocket 服务器的地址（正向），或 HTTP 服务器的地址（http），例如 http://127.0.0.1:3000' } },
+    'OneBot address',
+    'Address of the OneBot implementation\'s WebSocket server (forward), or of its HTTP server (http), e.g. http://127.0.0.1:3000',
+    { 'zh-CN': { title: 'OneBot 地址', description: 'OneBot 实现的 WebSocket 服务器地址（正向），或 HTTP 服务器地址（http），例如 http://127.0.0.1:3000' } },
   )),
   path: z.string().regex(/^(\/[\w.~-]*)*$/, 'must be a path such as /onebot/mybot').default('').meta(field(
     'Path',
-    'Path NapCat connects (reverse) or posts events (http) to; empty means /onebot/<bot id>',
-    { 'zh-CN': { title: '路径', description: 'NapCat 连接（反向）或上报事件（http）的路径；留空则为 /onebot/<机器人 id>' } },
+    'Path the OneBot implementation connects (reverse) or posts events (http) to; empty means /onebot/<bot id>',
+    { 'zh-CN': { title: '路径', description: 'OneBot 实现连接（反向）或上报事件（http）的路径；留空则为 /onebot/<机器人 id>' } },
   )),
   token: z.string().default('').meta(field(
     'Access token',
-    'The token configured in NapCat',
-    { 'zh-CN': { title: '访问令牌', description: '与 NapCat 中配置的 token 相同' } },
+    'The access token configured in the OneBot implementation',
+    { 'zh-CN': { title: '访问令牌', description: '与 OneBot 实现中配置的 access token 相同' } },
   )),
   secret: z.string().default('').meta(field(
     'Report secret',
-    'http mode: the secret of NapCat\'s HTTP client; events without a matching X-Signature are refused. Empty accepts unsigned events.',
-    { 'zh-CN': { title: '上报密钥', description: 'http 模式：NapCat HTTP 客户端里的 secret；签名（X-Signature）不匹配的事件会被拒绝。留空则接受不带签名的事件。' } },
+    'http mode: the secret of the OneBot implementation\'s HTTP client; events without a matching X-Signature are refused. Empty accepts unsigned events.',
+    { 'zh-CN': { title: '上报密钥', description: 'http 模式：OneBot 实现的 HTTP 客户端里的 secret；签名（X-Signature）不匹配的事件会被拒绝。留空则接受不带签名的事件。' } },
   )),
 })
 
@@ -75,11 +75,11 @@ function readToken(req: IncomingRequest) {
 
 /** Explains a token mismatch without printing either token. */
 function tokenProblem(supplied: { token: string; source: string }, expected: string) {
-  if (!supplied.token) return 'NapCat sent no token; set the same token in NapCat\'s WebSocket client'
+  if (!supplied.token) return 'the OneBot client sent no token; set the same access token in its WebSocket client'
   return `the token sent in ${supplied.source} (${supplied.token.length} characters) does not match the bot's token (${expected.length} characters)`
 }
 
-/** Forward mode: dial NapCat, retrying with backoff from 1 to 30 seconds. */
+/** Forward mode: dial the OneBot implementation's WebSocket server, retrying with backoff from 1 to 30 seconds. */
 const Forward = {
   name: 'onebot-forward',
   inject: ['bot'],
@@ -123,8 +123,8 @@ const Forward = {
       current.on('unexpected-response', (_req, res) => {
         if (stopped) return
         const reason = res.statusCode === 401 || res.statusCode === 403
-          ? 'NapCat rejected the access token'
-          : `NapCat answered HTTP ${res.statusCode}`
+          ? 'the OneBot server rejected the access token'
+          : `the OneBot server answered HTTP ${res.statusCode}`
         logger.warn('%s (HTTP %d from %s)', reason, res.statusCode, config.url)
         ctx.bot.setStatus('error', reason)
         current.terminate()
@@ -146,11 +146,11 @@ const Forward = {
 
     ctx.bot.useTransport({
       send: (channel, segments) => {
-        if (!connection) throw new Error('not connected to NapCat')
+        if (!connection) throw new Error('not connected to the OneBot server')
         return connection.send(channel, segments)
       },
       call: (action, params) => {
-        if (!connection) throw new Error('not connected to NapCat')
+        if (!connection) throw new Error('not connected to the OneBot server')
         return connection.call(action, params)
       },
     })
@@ -165,7 +165,7 @@ const Forward = {
   },
 }
 
-/** Reverse mode: NapCat dials `ws://<mushin>/<path>`; a new connection replaces the previous one. */
+/** Reverse mode: the OneBot implementation dials `ws://<mushin>/<path>`; a new connection replaces the previous one. */
 const Reverse = {
   name: 'onebot-reverse',
   inject: ['bot', 'server'],
@@ -177,7 +177,7 @@ const Reverse = {
     let stopped = false
 
     ctx.bot.setStatus('connecting')
-    logger.info('waiting for NapCat to connect to %s%s', path, config.token ? ' with a token' : ' (no token required)')
+    logger.info('waiting for the OneBot client to connect to %s%s', path, config.token ? ' with a token' : ' (no token required)')
     ctx.server.ws(path, async (req, accept) => {
       if (stopped) return
       const peer = describePeer(req)
@@ -186,29 +186,29 @@ const Reverse = {
         if (supplied.token !== config.token) {
           const problem = tokenProblem(supplied, config.token)
           if (connection) {
-            // Another client (often a second WebSocket client entry in NapCat) must not mark a working bot as broken.
+            // Another client (often a second WebSocket client entry in the OneBot implementation) must not mark a working bot as broken.
             logger.warn('rejected an extra connection from %s: %s. The current connection stays up.', peer, problem)
           } else {
             logger.warn('rejected a connection from %s: %s', peer, problem)
-            ctx.bot.setStatus('error', `NapCat connected with a wrong access token: ${problem}`)
+            ctx.bot.setStatus('error', `the OneBot client connected with a wrong access token: ${problem}`)
           }
           return
         }
       }
       const role = req.headers.get('x-client-role')
       if (role && role.toLowerCase() !== 'universal') {
-        logger.warn('NapCat connected as an "%s" client; use a universal WebSocket client so events and API calls share one connection', role)
+        logger.warn('the OneBot client connected as an "%s" client; use a universal WebSocket client so events and API calls share one connection', role)
       }
       const current = await accept()
       if (socket) logger.info('a new connection from %s replaced the previous one', peer)
-      else logger.info('NapCat connected from %s', peer)
+      else logger.info('OneBot client connected from %s', peer)
       socket?.close(1000, 'replaced by a new connection')
       connection?.dispose()
       socket = current
       connection = OneBotConnection.overSocket(ctx, current, () => {})
       current.on('close', (code, reason) => {
         if (stopped || socket !== current) return
-        logger.info('NapCat disconnected (code %d%s)', code, reason.length ? `, ${reason}` : '')
+        logger.info('OneBot client disconnected (code %d%s)', code, reason.length ? `, ${reason}` : '')
         connection?.dispose()
         connection = undefined
         socket = undefined
@@ -224,11 +224,11 @@ const Reverse = {
 
     ctx.bot.useTransport({
       send: (channel, segments) => {
-        if (!connection) throw new Error('NapCat is not connected')
+        if (!connection) throw new Error('the OneBot client is not connected')
         return connection.send(channel, segments)
       },
       call: (action, params) => {
-        if (!connection) throw new Error('NapCat is not connected')
+        if (!connection) throw new Error('the OneBot client is not connected')
         return connection.call(action, params)
       },
     })
@@ -241,7 +241,7 @@ const Reverse = {
   },
 }
 
-/** Where NapCat reaches Mushin in reverse and http modes. */
+/** Where the OneBot implementation reaches Mushin in reverse and http modes. */
 const inboundPath = (config: AdapterConfig, botId: string) => config.path || `/onebot/${botId}`
 
 /** Checks an HTTP report's `X-Signature: sha1=<hex>`, an HMAC-SHA1 of the body with the secret. */
@@ -256,7 +256,7 @@ const HTTP_TIMEOUT = 30_000
 const LOGIN_RETRY = 30_000
 
 /**
- * HTTP mode: API calls are POSTs to NapCat's HTTP server; NapCat's HTTP client posts events to
+ * HTTP mode: API calls are POSTs to the OneBot HTTP server; the implementation's HTTP client posts events to
  * `/onebot/<bot id>` (or the configured path), signed with the report secret when one is set.
  */
 const Http = {
@@ -282,31 +282,31 @@ const Http = {
           body: JSON.stringify(params),
           signal: AbortSignal.timeout(HTTP_TIMEOUT),
         })
-        if (response.status === 401 || response.status === 403) throw new Error('NapCat rejected the access token')
-        if (!response.ok) throw new Error(`NapCat answered HTTP ${response.status}`)
+        if (response.status === 401 || response.status === 403) throw new Error('the OneBot server rejected the access token')
+        if (!response.ok) throw new Error(`the OneBot server answered HTTP ${response.status}`)
         return await response.json() as OneBotResponse
       },
       close: () => {},
     }, () => {}, false)
 
-    // Without a lasting connection, "online" means NapCat answered get_login_info; keep trying until it does.
+    // Without a lasting connection, "online" means the OneBot server answered get_login_info; keep trying until it does.
     const login = () => {
       if (stopped) return
       if (ctx.bot.status !== 'error') ctx.bot.setStatus('connecting')
       connection.login().catch((error) => {
         if (stopped) return
-        logger.warn('cannot reach NapCat at %s: %s', base, error.message)
-        ctx.bot.setStatus('error', `Cannot reach NapCat at ${base}: ${error.message}`)
+        logger.warn('cannot reach the OneBot server at %s: %s', base, error.message)
+        ctx.bot.setStatus('error', `Cannot reach the OneBot server at ${base}: ${error.message}`)
         retry = setTimeout(login, LOGIN_RETRY)
       })
     }
-    logger.info('calling NapCat at %s%s; events are posted to %s%s', base, config.token ? ' with a token' : '', path, config.secret ? ' (signed)' : '')
+    logger.info('calling the OneBot server at %s%s; events are posted to %s%s', base, config.token ? ' with a token' : '', path, config.secret ? ' (signed)' : '')
     login()
 
     ctx.server.post(path, async (req, res) => {
       const body = await req.text()
       if (!signatureMatches(config.secret, body, req.headers.get('x-signature'))) {
-        logger.warn('refused an event with a missing or wrong X-Signature; check the secret in NapCat\'s HTTP client')
+        logger.warn('refused an event with a missing or wrong X-Signature; check the secret in the OneBot implementation\'s HTTP client')
         res.status = 401
         res.json({ error: 'bad signature' })
         return
@@ -346,7 +346,7 @@ const Connection = {
 
 const CONTACTS_CACHE_MS = 60_000
 
-/** Friends and groups from NapCat, kept a minute so switching back to the live view is quick. */
+/** Friends and groups from the OneBot implementation, kept a minute so switching back to the live view is quick. */
 function contactList(ctx: Context) {
   let cache: { at: number; list: Contact[] } | undefined
   return async () => {
@@ -378,7 +378,7 @@ const ROLE_CACHE_MS = 5 * 60_000
 
 /**
  * Group roles for permission checks. Messages carry the sender's role; events do not, so those ask
- * NapCat (`get_group_member_info`), and the answer is kept a few minutes per group and user.
+ * the OneBot implementation (`get_group_member_info`), and the answer is kept a few minutes per group and user.
  */
 function groupRoleResolver(ctx: Context) {
   const cache = new Map<string, { role: GroupRole | undefined; at: number }>()
@@ -404,7 +404,7 @@ function describeConnection(config: AdapterConfig, botId: string) {
 export function apply(ctx: Context) {
   ctx.bots.defineAdapter({
     id: 'onebot',
-    displayName: 'OneBot v11 (NapCat)',
+    displayName: 'OneBot v11',
     config: AdapterConfig,
     secrets: ['token', 'secret'],
     segments: ONEBOT_SEGMENTS,

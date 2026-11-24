@@ -17,7 +17,7 @@ Get from the user, or from the records, the exact case: which bot, which chat (g
 
 - `bots__get` shows the bot's status. Anything but `online` explains a silent bot.
 - `bots__logs` shows the bot's own log, oldest first: connection events, adapter errors, plugin warnings, and why LLM chat skipped a message. Read it before you guess.
-- Offline with the OneBot adapter usually means NapCat is not running, the URL or port is wrong, or the token does not match. Quote the error line.
+- Offline with the OneBot adapter usually means the OneBot 11 implementation (NapCat, Lagrange, LLOneBot, ...) is not running, the URL or port is wrong, or the token does not match. Quote the error line.
 
 ## 3. Did the message reach a flow?
 
@@ -56,4 +56,4 @@ Tell the user in a few sentences:
 
 1. What happened, quoting the log line or run step that shows it (with its time, or the run id).
 2. Why.
-3. The fix: what you would change, or what they need to do (for example in NapCat). Make the change once they agree, then test it again the same way you found the problem.
+3. The fix: what you would change, or what they need to do (for example in their OneBot implementation). Make the change once they agree, then test it again the same way you found the problem.

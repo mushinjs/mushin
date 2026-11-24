@@ -30,14 +30,14 @@ export function toId(value: string) {
   return Number.isSafeInteger(number) ? number : value
 }
 
-/** Strips fields Mushin adds for display, so NapCat receives plain OneBot segments. */
+/** Strips fields Mushin adds for display, so the OneBot implementation receives plain OneBot segments. */
 function toOneBotSegment(segment: Segment) {
   if (segment.type === 'at') return { type: 'at', data: { qq: segment.data.qq } }
   return segment
 }
 
 /**
- * How a connection reaches NapCat. Over WebSocket, `send` writes a frame and the answer comes back
+ * How a connection reaches the OneBot implementation. Over WebSocket, `send` writes a frame and the answer comes back
  * through `receive` matched by `echo`; over HTTP, `request` answers directly.
  */
 export interface OneBotLink {
@@ -59,13 +59,13 @@ export class OneBotConnection {
   private warnedStringFormat = false
   private disposed = false
   private loginTask?: Promise<void>
-  /** Set while NapCat reports the QQ account offline, so the bot shows an error instead of "online". */
+  /** Set while the OneBot implementation reports the QQ account offline, so the bot shows an error instead of "online". */
   private accountOffline?: string
   private logger
 
   /**
    * `watch`: treat the link as dead after two missed heartbeats. HTTP has no lasting link, and
-   * NapCat may not post heartbeats there, so HTTP mode turns it off.
+   * Implementations may not post heartbeats there, so HTTP mode turns it off.
    */
   constructor(private ctx: Context, private link: OneBotLink, private onDead: () => void, private watch = true) {
     this.logger = ctx.logger('onebot')
@@ -139,7 +139,7 @@ export class OneBotConnection {
 
   async send(channel: ChannelInfo, segments: Segment[]) {
     const message = segments.map(toOneBotSegment)
-    // A temporary chat needs its source group, or NapCat may fail to find the person when they are not a friend.
+    // A temporary chat needs its source group, or the OneBot implementation may fail to find the person when they are not a friend.
     const data = channel.type === 'group'
       ? await this.call('send_group_msg', { group_id: toId(channel.id), message })
       : await this.call('send_private_msg', { user_id: toId(channel.id), message, ...(channel.fromGroup ? { group_id: toId(channel.fromGroup) } : {}) })
@@ -165,7 +165,7 @@ export class OneBotConnection {
     this.ctx.bot.setStatus('online')
   }
 
-  /** Handles one frame or posted event from NapCat. */
+  /** Handles one frame or posted event from the OneBot implementation. */
   receive(text: string) {
     if (this.disposed) return
     this.touch()
@@ -222,8 +222,8 @@ export class OneBotConnection {
     return event
   }
 
-  /** Tracks whether NapCat's QQ account is logged in, from heartbeats and bot_offline notices. */
-  private markAccount(online: boolean, reason = 'NapCat reports the QQ account offline') {
+  /** Tracks whether the OneBot implementation's QQ account is logged in, from heartbeats and bot_offline notices. */
+  private markAccount(online: boolean, reason = 'the OneBot implementation reports the QQ account offline') {
     if (!online) {
       if (this.accountOffline) return
       this.accountOffline = reason
@@ -259,7 +259,7 @@ export class OneBotConnection {
     } else {
       if (!this.warnedStringFormat) {
         this.warnedStringFormat = true
-        this.logger.warn('NapCat sends messages in string format; set messagePostFormat to "array" for rich segments')
+        this.logger.warn('the OneBot implementation sends messages in string format; set its message format (messagePostFormat) to "array" for rich segments')
       }
       segments = [{ type: 'text', data: { text: String(payload.raw_message ?? payload.message ?? '') } }]
     }

@@ -27,7 +27,7 @@ export function loadableUrl(value: unknown) {
   return /^(https?:|data:)/.test(value) ? value : undefined
 }
 
-/** A forwarded message as NapCat sends it inside a segment: an OneBot message or a `node` segment. */
+/** A forwarded message as OneBot implementations send it inside a segment: an OneBot message or a `node` segment. */
 export function forwardedMessage(item: any): ForwardedMessage {
   const node = item?.type === 'node' ? item.data ?? {} : item ?? {}
   const sender = node.sender ?? {}

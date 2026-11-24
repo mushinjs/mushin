@@ -219,11 +219,11 @@ describe('bots over OneBot', () => {
 
     const lines = await app.call<any[]>('bots.logs', { id: botB })
     const texts = lines.map((line) => `${line.type} ${line.name}: ${line.text}`)
-    expect(texts.some((t) => /^info onebot: NapCat connected from 127\.0\.0\.1.*self id 10001, role Universal/.test(t))).toBe(true)
+    expect(texts.some((t) => /^info onebot: OneBot client connected from 127\.0\.0\.1.*self id 10001, role Universal/.test(t))).toBe(true)
     // NapCat's lifecycle event and the accepted socket both ask for a login; it must run once.
     expect(texts.filter((t) => t.includes('logged in as MockBot (10001)'))).toHaveLength(1)
     expect(texts.some((t) => /^warn onebot: rejected an extra connection .*Authorization header \(11 characters\) does not match the bot's token \(9 characters\)\. The current connection stays up\./.test(t))).toBe(true)
-    expect(texts.some((t) => t.includes('NapCat sent no token'))).toBe(true)
+    expect(texts.some((t) => t.includes('the OneBot client sent no token'))).toBe(true)
     expect(JSON.stringify(lines)).not.toContain('rev-token')
     // Lines are attributed to the bot that wrote them.
     expect(lines.every((line) => line.botId === botB)).toBe(true)
@@ -269,7 +269,7 @@ describe('bots over OneBot', () => {
       const current = await app.call('bots.get', { id: bot.id })
       return current.status === 'error' && current
     })
-    expect(status.error).toContain('NapCat sent no token')
+    expect(status.error).toContain('the OneBot client sent no token')
     await app.call('bots.delete', { id: bot.id })
   })
 
