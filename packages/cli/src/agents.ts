@@ -126,7 +126,7 @@ export function agentGuide(info: AppInfo) {
   const skills = info.skills.map((skill) => `| ${skill.when} | \`${SKILLS_TARGET.split(sep).join('/')}/${skill.name}/SKILL.md\` |`)
   return `# ${info.name}: a Mushin.js app
 
-[Mushin.js](https://github.com/mushinjs/mushin) is an AI-native chatbot framework for QQ (OneBot v11 through NapCat), built on [Cordis](https://github.com/cordiverse/cordis). Every feature is a plugin; a dashboard and its built-in assistant, Fairy, configure the rest.
+[Mushin.js](https://github.com/mushinjs/mushin) is an AI-native chatbot framework for QQ (through any OneBot 11 implementation, such as NapCat), built on [Cordis](https://github.com/cordiverse/cordis). Every feature is a plugin; a dashboard and its built-in assistant, Fairy, configure the rest.
 
 ## This app
 
