@@ -47,6 +47,14 @@ export function intentsOf(config: Pick<AdapterConfig, 'messageContent' | 'member
   return intents
 }
 
+/** View Channels, Send Messages, Embed Links, Attach Files and Read Message History. */
+const INVITE_PERMISSIONS = 1024 + 2048 + 16384 + 32768 + 65536
+
+/** The OAuth2 page that adds the bot to a server the person manages. */
+export function inviteUrl(applicationId: string) {
+  return `https://discord.com/oauth2/authorize?client_id=${applicationId}&scope=bot&permissions=${INVITE_PERMISSIONS}`
+}
+
 const RECONNECT_MIN = 1_000
 const RECONNECT_MAX = 60_000
 
@@ -299,6 +307,7 @@ function startGateway(ctx: Context, config: AdapterConfig, bot: DiscordBot) {
           const user = d.user ?? {}
           const name = user.global_name || user.username
           ctx.bot.setSelf(String(user.id), name, user.avatar ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png` : undefined)
+          ctx.bot.setInvite(inviteUrl(String(d.application?.id ?? user.id)))
           logger.info('logged in as %s (%s), in %d server(s)', name, user.id, d.guilds?.length ?? 0)
           ctx.bot.setStatus('online')
           return
@@ -388,6 +397,7 @@ export function apply(ctx: Context) {
     segments: DISCORD_SEGMENTS,
     groupRoles: true,
     hiddenFields: { '*': ['endpoint'] },
+    links: [{ url: 'https://discord.com/developers/applications', label: { en: 'Discord Developer Portal', 'zh-CN': 'Discord 开发者门户' } }],
     plugin: Connection,
     describe: () => ({ mode: 'ws', address: 'gateway.discord.gg' }),
   })

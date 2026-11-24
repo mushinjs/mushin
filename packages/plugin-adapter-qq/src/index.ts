@@ -3,11 +3,13 @@ import { type Context, field, z } from '@mushinjs/core'
 import type {} from '@mushinjs/plugin-bots'
 import type {} from '@cordisjs/plugin-server'
 import { QQApi } from './api'
+import { QQBinder } from './bind'
 import { decodeEvent, decodeMessage, QQ_SEGMENTS } from './message'
 import { QQSender } from './sender'
 import { signChallenge, verifyRequest, webhookKey } from './signature'
 
 export * from './api'
+export * from './bind'
 export * from './message'
 export * from './sender'
 export * from './signature'
@@ -331,7 +333,32 @@ function describeConnection(config: AdapterConfig, botId: string) {
   return { mode: 'ws', address: config.sandbox ? 'sandbox.api.sgroup.qq.com' : 'api.sgroup.qq.com' }
 }
 
-export function apply(ctx: Context) {
+export const Config = z.object({
+  bindHost: z.string().default('').meta(field(
+    'Binding host',
+    'Where scan-to-create bindings go; leave empty for q.qq.com',
+    { 'zh-CN': { title: '扫码绑定地址', description: '扫码创建机器人时访问的地址；留空则为 q.qq.com' } },
+  )),
+})
+
+export function apply(ctx: Context, config: z.infer<typeof Config> = { bindHost: '' }) {
+  const binder = new QQBinder(config.bindHost || undefined)
+  ctx.actions.define({
+    name: 'qq.bindStart',
+    description: 'Starts creating a QQ official bot by scanning a QR code with mobile QQ; answers the text to show as a QR code and a binding id for qq.bindPoll.',
+    risk: 'write',
+    agent: false,
+    input: z.object({}),
+    handler: () => binder.start(),
+  })
+  ctx.actions.define({
+    name: 'qq.bindPoll',
+    description: 'Whether a QQ bot binding from qq.bindStart was scanned and confirmed; once created, answers the AppID and AppSecret as adapter config.',
+    risk: 'write',
+    agent: false,
+    input: z.object({ id: z.string() }),
+    handler: ({ id }) => binder.poll(id),
+  })
   ctx.bots.defineAdapter({
     id: 'qq',
     displayName: { en: 'QQ official bot', 'zh-CN': 'QQ 官方机器人' },
@@ -339,6 +366,8 @@ export function apply(ctx: Context) {
     secrets: ['secret'],
     segments: QQ_SEGMENTS,
     hiddenFields: { '*': ['endpoint', 'tokenEndpoint'], websocket: ['path'], webhook: [] },
+    links: [{ url: 'https://q.qq.com/', label: { en: 'QQ Open Platform', 'zh-CN': 'QQ 开放平台' } }],
+    qrSetup: { start: 'qq.bindStart', poll: 'qq.bindPoll' },
     plugin: Connection,
     describe: (config, botId) => describeConnection(AdapterConfig.parse(config), botId),
   })

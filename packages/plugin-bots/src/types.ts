@@ -53,6 +53,15 @@ export interface AdapterType<C = any> {
    * default when unset); `*` lists fields hidden in every mode, such as API addresses for tests.
    */
   hiddenFields?: Record<string, string[]>
+  /** Pages that help set a bot up, such as the platform's developer portal, shown as buttons by the form. */
+  links?: { url: string; label: LocalizedText }[]
+  /**
+   * Creating or binding a bot by scanning a QR code, through two actions the adapter defines:
+   * `start` answers `{ id, qrcode, interval }` (seconds between polls), where `qrcode` is the text
+   * to draw as a QR code; `poll` takes `{ id }` and answers `{ status }`, one of `pending`, `created`
+   * (with the adapter `config` to fill in), `expired` or `error` (with a `message`).
+   */
+  qrSetup?: { start: string; poll: string }
   /**
    * Loaded inside each bot's isolated context with the bot's adapter config.
    * It injects `bot`, opens the connection and registers a transport.

@@ -46,7 +46,7 @@ beforeAll(async () => {
       frames.push(frame)
       if (frame.op === 1) socket.send(JSON.stringify({ op: 11 }))
       if (frame.op === 2) {
-        dispatch('READY', { v: 10, session_id: 'sess', resume_gateway_url: `ws://127.0.0.1:${(server.address() as AddressInfo).port}/gateway`, user: { id: '900', username: 'mushin', global_name: 'Mushin', avatar: 'abc' }, guilds: [{ id: 'g1', unavailable: true }] })
+        dispatch('READY', { v: 10, session_id: 'sess', resume_gateway_url: `ws://127.0.0.1:${(server.address() as AddressInfo).port}/gateway`, user: { id: '900', username: 'mushin', global_name: 'Mushin', avatar: 'abc' }, application: { id: '901' }, guilds: [{ id: 'g1', unavailable: true }] })
         dispatch('GUILD_CREATE', { id: 'g1', name: 'Club', owner_id: '1', roles: [{ id: 'r-admin', permissions: '8' }], channels: [{ id: 'c1', name: 'general', type: 0 }, { id: 'v1', name: 'Voice', type: 2 }] })
       }
       if (frame.op === 6) dispatch('RESUMED', {})
@@ -72,6 +72,7 @@ describe('Discord adapter', () => {
     botId = bot.id
     await waitFor(async () => (await app.call('bots.get', { id: botId })).status === 'online')
     expect(await app.call('bots.get', { id: botId })).toMatchObject({ selfId: '900', selfName: 'Mushin', selfAvatar: 'https://cdn.discordapp.com/avatars/900/abc.png' })
+    expect((await app.call('bots.get', { id: botId })).invite).toBe('https://discord.com/oauth2/authorize?client_id=901&scope=bot&permissions=117760')
     const identify = frames.find((frame) => frame.op === 2)
     expect(identify.d).toMatchObject({ token: TOKEN })
     expect(identify.d.intents & (1 << 15)).toBeTruthy()

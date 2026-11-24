@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Alert, Button, Checkbox, Form, FormItem, Input, Modal, Select, useToast } from '@mushinjs/ui'
+import { Alert, Button, Checkbox, Form, FormItem, Input, Modal, RadioGroup, Select, useToast } from '@mushinjs/ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../api'
@@ -7,6 +7,8 @@ import { useDataStore } from '../stores/data'
 import type { Bot, CatalogEntry } from '../types'
 import { adapterMode, guideKey, hiddenFields } from '../adapters'
 import { localize } from '../utils'
+import AdapterLinks from './AdapterLinks.vue'
+import QrSetup from './QrSetup.vue'
 import SchemaForm from './SchemaForm.vue'
 
 const show = defineModel<boolean>('show', { required: true })
@@ -28,6 +30,7 @@ watch(show, async (visible) => {
   if (!visible) return
   name.value = ''
   config.value = {}
+  method.value = 'scan'
   catalog.value = await call<CatalogEntry[]>('plugins.catalog', { kind: 'bot' }).catch(() => [])
   plugins.value = plugins.value.filter((item) => catalog.value.some((entry) => entry.package === item))
 })
@@ -37,8 +40,21 @@ const adapterOptions = computed(() => data.adapters.map((item) => ({ label: loca
 const mode = computed(() => adapterMode(adapter.value, config.value))
 const hidden = computed(() => hiddenFields(adapter.value, config.value))
 const guide = computed(() => (te(guideKey(adapterType.value, mode.value)) ? t(guideKey(adapterType.value, mode.value)) : ''))
+// Adapters that can create a bot from a QR scan start there; the fields stay one click away.
+const method = ref<'scan' | 'manual'>('scan')
+const scanning = computed(() => !!adapter.value?.qrSetup && method.value === 'scan')
+const methodOptions = computed(() => [{ label: t('bots.qr.methodScan'), value: 'scan' }, { label: t('bots.qr.methodManual'), value: 'manual' }])
 // Another adapter has other fields; start its form from its defaults.
-watch(adapterType, () => (config.value = {}))
+watch(adapterType, () => {
+  config.value = {}
+  method.value = 'scan'
+})
+
+function scanned(result: Record<string, any>) {
+  config.value = { ...config.value, ...result }
+  method.value = 'manual'
+  message.success(t('bots.qr.created'))
+}
 
 async function create() {
   saving.value = true
@@ -71,9 +87,18 @@ async function create() {
         </FormItem>
       </Form>
 
-      <Alert v-if="guide" type="info" :show-icon="false" class="hint">{{ guide }}</Alert>
+      <Form v-if="adapter?.qrSetup">
+        <FormItem :label="t('bots.qr.method')">
+          <RadioGroup v-model:value="method" :options="methodOptions" />
+        </FormItem>
+      </Form>
 
-      <SchemaForm v-if="adapter" v-model="config" :schema="adapter.configSchema" :secrets="adapter.secrets" :hidden="hidden" />
+      <QrSetup v-if="scanning && adapter?.qrSetup" :key="adapterType" :setup="adapter.qrSetup" :adapter-id="adapterType" @created="scanned" />
+
+      <Alert v-if="guide && !scanning" type="info" :show-icon="false" class="hint">{{ guide }}</Alert>
+      <AdapterLinks v-if="!scanning" :adapter="adapter" />
+
+      <SchemaForm v-if="adapter && !scanning" v-model="config" :schema="adapter.configSchema" :secrets="adapter.secrets" :hidden="hidden" />
 
       <Form v-if="catalog.length">
         <FormItem :label="t('bots.initialPlugins')">
@@ -89,7 +114,7 @@ async function create() {
 
     <template #footer>
       <Button @click="show = false">{{ t('common.cancel') }}</Button>
-      <Button type="primary" :loading="saving" :disabled="!name.trim()" @click="create">{{ t('common.create') }}</Button>
+      <Button type="primary" :loading="saving" :disabled="!name.trim() || scanning" @click="create">{{ t('common.create') }}</Button>
     </template>
   </Modal>
 </template>

@@ -41,6 +41,7 @@ export const useDataStore = defineStore('data', () => {
     bot.selfId = info.selfId
     bot.selfName = info.selfName
     bot.selfAvatar = info.selfAvatar
+    bot.invite = info.invite
   }
 
   let bound = false

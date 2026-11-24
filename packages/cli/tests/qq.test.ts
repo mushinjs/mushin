@@ -25,7 +25,8 @@ describe('QQ official adapter over WebSocket', () => {
 
   it('lists the adapter with its hidden fields', async () => {
     const adapters = await app.call<any[]>('bots.adapters')
-    expect(adapters.find((item) => item.id === 'qq')).toMatchObject({ secrets: ['secret'], hiddenFields: { '*': ['endpoint', 'tokenEndpoint'] } })
+    expect(adapters.find((item) => item.id === 'qq')).toMatchObject({ secrets: ['secret'], hiddenFields: { '*': ['endpoint', 'tokenEndpoint'] }, qrSetup: { start: 'qq.bindStart', poll: 'qq.bindPoll' } })
+    expect(adapters.find((item) => item.id === 'telegram').links[0].url).toBe('https://t.me/BotFather')
   })
 
   it('identifies at the gateway and goes online', async () => {

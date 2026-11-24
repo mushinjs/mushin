@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Alert, Card, Form, FormItem, Input, Select, useToast } from '@mushinjs/ui'
+import { Alert, Button, Card, Form, FormItem, Input, Select, useToast } from '@mushinjs/ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../api'
@@ -8,6 +8,8 @@ import { useDataStore } from '../stores/data'
 import type { Bot } from '../types'
 import { adapterMode, guideKey, hiddenFields, isInbound } from '../adapters'
 import { clone } from '../utils'
+import AdapterLinks from './AdapterLinks.vue'
+import QrCode from './QrCode.vue'
 import SchemaForm from './SchemaForm.vue'
 import SaveBar from './SaveBar.vue'
 
@@ -49,6 +51,7 @@ const inboundUrl = computed(() => {
   const url = `${base}${config.value.path || `/${props.bot.adapter.type}/${props.bot.id}`}`
   return mode.value === 'reverse' ? url.replace(/^http/, 'ws') : url
 })
+const inviteHint = computed(() => (te(`bots.invite.${props.bot.adapter.type}`) ? t(`bots.invite.${props.bot.adapter.type}`) : t('bots.invite.default')))
 const providerOptions = computed(() => toProviderOptions(data.providers, data.profiles, t))
 
 async function save() {
@@ -84,6 +87,16 @@ async function save() {
         {{ guide }}
         <div v-if="inboundUrl" class="url mono">{{ inboundUrl }}</div>
       </Alert>
+      <AdapterLinks :adapter="adapter" />
+
+      <div v-if="bot.invite" class="invite">
+        <QrCode :text="bot.invite" :size="132" />
+        <div class="invite-side">
+          <strong>{{ t('bots.invite.title') }}</strong>
+          <span class="muted">{{ inviteHint }}</span>
+          <a :href="bot.invite" target="_blank" rel="noopener"><Button size="small" type="primary" secondary>{{ t('bots.invite.open') }}</Button></a>
+        </div>
+      </div>
 
       <SchemaForm v-if="adapter" v-model="config" :schema="adapter.configSchema" :secrets="adapter.secrets" :hidden="hidden" />
 
@@ -101,6 +114,27 @@ async function save() {
 <style scoped>
 .hint {
   white-space: pre-line;
+}
+
+.invite {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.invite-side {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  flex: 1;
+  min-width: 180px;
+}
+
+.muted {
+  opacity: 0.65;
+  font-size: 13px;
 }
 
 .url {

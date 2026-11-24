@@ -41,6 +41,7 @@
     "pinia": "catalog:",
     "typescript": "catalog:",
     "unocss": "catalog:",
+    "uqr": "catalog:",
     "vite": "catalog:",
     "vue": "catalog:",
     "vue-i18n": "catalog:",

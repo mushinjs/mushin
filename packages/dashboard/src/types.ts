@@ -179,6 +179,8 @@ export interface Bot {
   selfId?: string
   selfName?: string
   selfAvatar?: string
+  /** An address that adds the bot to a group or server. */
+  invite?: string
 }
 
 export interface CommandSettings {
@@ -220,6 +222,7 @@ export interface BotStatusInfo {
   selfId?: string
   selfName?: string
   selfAvatar?: string
+  invite?: string
 }
 
 export interface AdapterType {
@@ -233,6 +236,10 @@ export interface AdapterType {
   avatars?: { user?: string; group?: string }
   /** Fields the form leaves out, by connection mode; `*` in every mode. */
   hiddenFields?: Record<string, string[]>
+  /** Setup pages, such as the platform's developer portal. */
+  links?: { url: string; label: LocalizedText }[]
+  /** Actions that create a bot by scanning a QR code; see QrSetup. */
+  qrSetup?: { start: string; poll: string }
 }
 
 export interface BotPluginInfo {

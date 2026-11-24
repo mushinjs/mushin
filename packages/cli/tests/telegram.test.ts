@@ -70,7 +70,7 @@ describe('Telegram adapter with long polling', () => {
     botId = bot.id
     await waitFor(async () => (await app.call('bots.get', { id: botId })).status === 'online')
     const info = await app.call('bots.get', { id: botId })
-    expect(info).toMatchObject({ selfId: '777', selfName: 'Mushin', connection: { mode: 'polling' } })
+    expect(info).toMatchObject({ selfId: '777', selfName: 'Mushin', connection: { mode: 'polling' }, invite: 'https://t.me/MushinBot?startgroup=true' })
     expect(info.adapter.config.token).not.toBe(TOKEN)
     expect(calls.some((call) => call.method === 'deleteWebhook')).toBe(true)
   })

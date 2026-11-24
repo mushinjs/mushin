@@ -146,6 +146,8 @@ export class Bot extends Service {
   selfName?: string
   /** The account's picture, as a URL the dashboard can load; adapters set it when the platform has one. */
   selfAvatar?: string
+  /** An address that adds the bot to a group or server (a Telegram start link, a Discord invite). */
+  invite?: string
   record: BotRecord
   private hooks: BotHooks
   private transport?: Transport
@@ -187,6 +189,13 @@ export class Bot extends Service {
     this.selfId = id
     this.selfName = name
     this.selfAvatar = avatar
+    this.hooks.status(this)
+  }
+
+  /** Called by adapters once they know the address that adds the bot to a group or server. */
+  setInvite(url: string | undefined) {
+    if (url === this.invite) return
+    this.invite = url
     this.hooks.status(this)
   }
 

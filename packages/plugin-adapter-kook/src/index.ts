@@ -451,6 +451,7 @@ export function apply(ctx: Context) {
     segments: KOOK_SEGMENTS,
     groupRoles: true,
     hiddenFields: { '*': ['endpoint'], websocket: ['verifyToken', 'encryptKey', 'path'], webhook: [] },
+    links: [{ url: 'https://developer.kookapp.cn/app/index', label: { en: 'KOOK developer center', 'zh-CN': 'KOOK 开发者中心' } }],
     plugin: Connection,
     describe: (config, botId) => describeConnection(AdapterConfig.parse(config), botId),
   })

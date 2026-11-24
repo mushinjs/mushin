@@ -85,6 +85,8 @@ class TelegramBot {
     const name = [me.first_name, me.last_name].filter(Boolean).join(' ') || me.username
     this.self = { id: String(me.id), username: me.username, name }
     this.ctx.bot.setSelf(String(me.id), name)
+    // Opens Telegram (the app, when installed) to pick a group to add the bot to.
+    this.ctx.bot.setInvite(me.username ? `https://t.me/${me.username}?startgroup=true` : undefined)
     this.logger.info('logged in as %s (@%s, %s)', name, me.username ?? '?', me.id)
   }
 
@@ -333,6 +335,7 @@ export function apply(ctx: Context) {
     segments: TELEGRAM_SEGMENTS,
     groupRoles: true,
     hiddenFields: { polling: ['publicUrl', 'path'], webhook: [] },
+    links: [{ url: 'https://t.me/BotFather', label: { en: 'Open @BotFather', 'zh-CN': '打开 @BotFather' } }],
     plugin: Connection,
     describe: (config, botId) => describeConnection(AdapterConfig.parse(config), botId),
   })

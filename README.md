@@ -133,13 +133,15 @@ If Mushin.js and NapCat run on different machines, bind Mushin.js to a reachable
 
 Each platform has its own adapter plugin, loaded by default. Pick it as the bot's adapter when you add a bot; the form shows only the fields the chosen connection mode uses, and a short guide for the platform.
 
-**QQ official bot** (`qq`). Create a bot on the [QQ Open Platform](https://q.qq.com), copy its AppID and AppSecret, and add Mushin's public IP to the platform's IP allowlist. In `websocket` mode Mushin connects to QQ's gateway; in `webhook` mode QQ posts Ed25519-signed events to `https://<your domain>/qq/<bot id>` (behind an HTTPS reverse proxy), and Mushin answers the callback check itself. Group chats and C2C chats use openids; guild channels and guild DMs use numeric ids. Group bots only see messages that @-mention them and mostly answer within five minutes of a message, so replies name the message they answer.
+**QQ official bot** (`qq`). The quickest way is **Scan to create** in the add-bot form: scan the code with mobile QQ and confirm, and QQ creates a bot under your account while Mushin fills in its AppID and AppSecret. Otherwise create a bot on the [QQ Open Platform](https://q.qq.com) and copy its AppID and AppSecret. Either way, add Mushin's public IP to the platform's IP allowlist. In `websocket` mode Mushin connects to QQ's gateway; in `webhook` mode QQ posts Ed25519-signed events to `https://<your domain>/qq/<bot id>` (behind an HTTPS reverse proxy), and Mushin answers the callback check itself. Group chats and C2C chats use openids; guild channels and guild DMs use numeric ids. Group bots only see messages that @-mention them and mostly answer within five minutes of a message, so replies name the message they answer.
 
 **Discord** (`discord`). Create an application in the [Developer Portal](https://discord.com/developers/applications), reset the bot token and paste it, turn on the Message Content intent (and Server Members for member events), and invite the bot with the `bot` scope. Guild channels are group chats; a private chat's id is the person's user id, and Mushin opens the DM channel itself.
 
 **Telegram** (`telegram`). Create a bot with [@BotFather](https://t.me/BotFather) and paste its token. `polling` mode needs no public address; `webhook` mode registers `<public address>/telegram/<bot id>` with Telegram and checks a secret token derived from the bot token. Set **API address** to a self-hosted Bot API server or a reverse proxy when api.telegram.org cannot be reached. Turn privacy mode off with `/setprivacy` to see every group message.
 
 **KOOK** (`kook`). Create a bot in the [KOOK developer center](https://developer.kookapp.cn) and paste its token. In `websocket` mode Mushin connects and resumes after drops; in `webhook` mode set the bot's Callback URL to `http(s)://<your address>/kook/<bot id>` and copy its Verify Token (and Encrypt Key, when encryption is on).
+
+Once a Telegram or Discord bot is online, its **Connection** page shows a link and a QR code that add it to a chat: Telegram opens (the desktop app when installed) to pick a group, and Discord asks which server to authorize the bot on.
 
 Platform API calls from flows and the Agent go through the bot's `call`: Telegram takes Bot API method names (`getChat`), and QQ, Discord and KOOK take `"METHOD /path"` (`GET /users/@me`).
 

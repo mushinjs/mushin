@@ -100,6 +100,8 @@ export interface BotStatusInfo {
   selfId?: string
   selfName?: string
   selfAvatar?: string
+  /** An address that adds the bot to a group or server, from `bot.setInvite()`. */
+  invite?: string
 }
 
 interface Runtime {
@@ -267,6 +269,8 @@ export class BotManager extends Service {
       groupRoles: !!adapter.groupRoles,
       avatars: adapter.avatars ?? {},
       hiddenFields: adapter.hiddenFields ?? {},
+      links: adapter.links ?? [],
+      ...(adapter.qrSetup ? { qrSetup: adapter.qrSetup } : {}),
     }))
   }
 
@@ -291,7 +295,7 @@ export class BotManager extends Service {
 
   status(id: string): BotStatusInfo {
     const bot = this.bot(id)
-    if (bot) return { id, status: bot.status, error: bot.error, selfId: bot.selfId, selfName: bot.selfName, selfAvatar: bot.selfAvatar }
+    if (bot) return { id, status: bot.status, error: bot.error, selfId: bot.selfId, selfName: bot.selfName, selfAvatar: bot.selfAvatar, invite: bot.invite }
     const error = this.startErrors.get(id)
     return { id, status: error ? 'error' : 'offline', error }
   }
