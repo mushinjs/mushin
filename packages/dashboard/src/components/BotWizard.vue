@@ -14,6 +14,7 @@ import { useRouter } from 'vue-router'
 import { call } from '../api'
 import { adapterMode, guideKey, hiddenFields, isInbound } from '../adapters'
 import { avatarColor, initial } from '../botAvatar'
+import { confetti } from '../confetti'
 import { useDataStore } from '../stores/data'
 import type { AppPlugin, Bot, CatalogEntry, Contact } from '../types'
 import { localize } from '../utils'
@@ -33,9 +34,19 @@ const dialog = useConfirm()
 
 type Step = 'adapter' | 'connect' | 'name' | 'plugins' | 'roles' | 'done'
 const STEPS: Step[] = ['adapter', 'connect', 'name', 'plugins', 'roles']
+const STEP_ICONS: Record<Step, string> = {
+  adapter: 'i-lucide-layout-grid',
+  connect: 'i-lucide-link',
+  name: 'i-lucide-pen-line',
+  plugins: 'i-lucide-puzzle',
+  roles: 'i-lucide-shield-check',
+  done: 'i-lucide-check',
+}
 const DEFAULT_PLUGINS = ['@mushinjs/bot-plugin-llm-chat']
 
 const step = ref<Step>('adapter')
+/** Which way the last step change went, so the panes slide the right way. */
+const direction = ref<'next' | 'prev'>('next')
 const adapterType = ref('')
 const config = ref<Record<string, any>>({})
 const method = ref<'scan' | 'manual'>('scan')
@@ -61,6 +72,7 @@ const online = computed(() => bot.value?.status === 'online')
 watch(show, async (visible) => {
   if (!visible) return leave()
   step.value = 'adapter'
+  direction.value = 'next'
   adapterType.value = data.adapters[0]?.id ?? ''
   config.value = {}
   method.value = 'scan'
@@ -88,6 +100,7 @@ const index = computed(() => STEPS.indexOf(step.value))
 function go(next: Step) {
   if (next === 'name' && !nameTouched.value) name.value = defaultName()
   if (next === 'roles') loadContacts()
+  direction.value = STEPS.indexOf(next) < index.value ? 'prev' : 'next'
   step.value = next
   // An adapter with nothing to fill in (the sandbox) connects as soon as its step opens.
   if (next === 'connect' && !botId.value && !needsSetup.value) connect()
@@ -158,7 +171,7 @@ function scanned(result: Record<string, any>) {
 
 /** Friends of the account, to pick a master from instead of typing an id. */
 async function loadContacts() {
-  if (!permissions.value || !online.value || adapterType.value === 'sandbox') return
+  if (!permissions.value || !online.value) return
   const list = await call<Contact[]>('bots.contacts', { id: botId.value }).catch(() => [] as Contact[])
   contacts.value = list.filter((item) => item.type === 'private').slice(0, 12)
 }
@@ -190,7 +203,9 @@ async function finish() {
       await call('permissions.update', { bot: id, masters: masters.value.filter(valid), admins: admins.value.filter(valid) })
     }
     await data.refreshBots()
+    direction.value = 'next'
     step.value = 'done'
+    confetti()
   } catch (error) {
     message.error((error as Error).message)
   } finally {
@@ -242,27 +257,42 @@ const pluginName = (pkg: string) => localize(catalog.value.find((entry) => entry
 
 <template>
   <Modal v-model:show="show" :title="step === 'done' ? undefined : t('bots.add')" :label="t('bots.add')" :width="640">
-    <ol v-if="step !== 'done'" class="steps" :aria-label="t('wizard.steps')">
-      <li v-for="(item, i) in STEPS" :key="item" :class="{ on: i === index, past: i < index }" :aria-current="i === index ? 'step' : undefined">
-        <span class="step-dot">
-          <span v-if="i < index" class="i-lucide-check text-[12px]" />
-          <template v-else>{{ i + 1 }}</template>
-        </span>
-        <span class="step-label">{{ t(`wizard.step.${item}`) }}</span>
-      </li>
-    </ol>
+    <nav v-if="step !== 'done'" class="stepper" :aria-label="t('wizard.steps')">
+      <div class="track" aria-hidden="true"><div class="track-fill" :style="{ transform: `scaleX(${index / (STEPS.length - 1)})` }" /></div>
+      <ol class="steps">
+        <li v-for="(item, i) in STEPS" :key="item" :class="{ on: i === index, past: i < index }">
+          <button type="button" class="step" :disabled="i >= index" :aria-current="i === index ? 'step' : undefined" @click="go(item)">
+            <span class="step-dot">
+              <Transition name="pop" mode="out-in">
+                <span v-if="i < index" key="done" class="i-lucide-check text-[14px]" />
+                <span v-else key="icon" class="text-[14px]" :class="STEP_ICONS[item]" />
+              </Transition>
+            </span>
+            <span class="step-label">{{ t(`wizard.step.${item}`) }}</span>
+          </button>
+        </li>
+      </ol>
+    </nav>
 
     <div class="body">
+      <Transition :name="`slide-${direction}`" mode="out-in">
+      <div :key="step" class="pane">
+      <header v-if="step !== 'done'" class="pane-head">
+        <h3>{{ t(`wizard.title.${step}`) }}</h3>
+        <p>{{ t(`wizard.lead.${step}`, { adapter: adapterName }) }}</p>
+      </header>
+
       <!-- 1. platform -->
       <div v-if="step === 'adapter'" class="adapters" role="radiogroup" :aria-label="t('bots.adapter')">
         <button
-          v-for="item in data.adapters"
+          v-for="(item, i) in data.adapters"
           :key="item.id"
           type="button"
           role="radio"
           class="adapter"
           :class="{ on: item.id === adapterType }"
           :aria-checked="item.id === adapterType"
+          :style="{ animationDelay: `${i * 40}ms` }"
           @click="pick(item.id)"
           @dblclick="forward"
         >
@@ -273,7 +303,7 @@ const pluginName = (pkg: string) => localize(catalog.value.find((entry) => entry
             <strong>{{ localize(item.displayName, locale) }}</strong>
             <span v-if="item.description" class="faint">{{ localize(item.description, locale) }}</span>
           </span>
-          <span v-if="item.id === adapterType" class="i-lucide-circle-check check text-[18px]" />
+          <Transition name="pop"><span v-if="item.id === adapterType" class="i-lucide-circle-check check text-[18px]" /></Transition>
         </button>
       </div>
 
@@ -371,6 +401,7 @@ const pluginName = (pkg: string) => localize(catalog.value.find((entry) => entry
           <img v-if="bot?.selfAvatar" :src="bot.selfAvatar" alt="" referrerpolicy="no-referrer">
           <template v-else>{{ initial(bot?.name ?? name) }}</template>
           <span class="done-badge"><AdapterIcon :adapter="adapter" :size="14" /></span>
+          <span class="done-ring" aria-hidden="true" />
         </span>
         <h2>{{ t('wizard.doneTitle', { name: bot?.name ?? name }) }}</h2>
         <span class="pill" :class="state.cls"><span class="dot" />{{ state.text }}</span>
@@ -381,6 +412,8 @@ const pluginName = (pkg: string) => localize(catalog.value.find((entry) => entry
           <span v-for="item in plugins" :key="item" class="chip">{{ pluginName(item) }}</span>
         </div>
       </div>
+      </div>
+      </Transition>
     </div>
 
     <template #footer>
@@ -405,65 +438,173 @@ const pluginName = (pkg: string) => localize(catalog.value.find((entry) => entry
 </template>
 
 <style scoped>
+.stepper {
+  position: relative;
+  margin: 2px 0 22px;
+}
+
+/* The line behind the dots, filled up to the current step. */
+.track {
+  position: absolute;
+  top: 15px;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--line);
+}
+
+.track-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--primary) 70%, #8A63D2));
+  transform-origin: left;
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .steps {
-  display: flex;
-  gap: 4px;
-  margin: 0 0 20px;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.steps li {
+.step {
   display: flex;
-  flex: 1;
+  flex-direction: column;
   align-items: center;
   gap: 6px;
-  min-width: 0;
-  font-size: 12.5px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--fg3);
+  font: inherit;
+  font-size: 12.5px;
 }
 
-.steps li:not(:last-child)::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  margin: 0 4px;
-  background: var(--line);
+.step:not(:disabled) {
+  cursor: pointer;
 }
 
-.steps li.past::after {
-  background: var(--primary);
+.step:not(:disabled):hover .step-label {
+  color: var(--primary);
 }
 
 .step-dot {
   display: grid;
   place-items: center;
-  flex: none;
-  width: 20px;
-  height: 20px;
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--line);
   border-radius: 50%;
-  background: var(--s2);
-  font-size: 11px;
-  font-weight: 600;
+  background: var(--s1);
+  transition: background-color 0.3s, border-color 0.3s, color 0.3s, box-shadow 0.3s, transform 0.3s;
 }
 
-.on .step-dot,
 .past .step-dot {
+  border-color: var(--primary);
   background: var(--primary);
   color: #fff;
 }
 
-.on {
-  color: var(--fg);
-  font-weight: 600;
+.on .step-dot {
+  border-color: var(--primary);
+  color: var(--primary);
+  box-shadow: 0 0 0 5px var(--primary-soft);
+  transform: scale(1.08);
 }
 
 .step-label {
   white-space: nowrap;
+  transition: color 0.3s;
+}
+
+.on .step-label {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.past .step-label {
+  color: var(--fg2);
+}
+
+.pane-head {
+  margin-bottom: 16px;
+}
+
+.pane-head h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.pane-head p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--fg3);
+}
+
+/* Panes slide in the way the steps go. */
+.slide-next-enter-active,
+.slide-next-leave-active,
+.slide-prev-enter-active,
+.slide-prev-leave-active {
+  transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.slide-next-enter-from,
+.slide-prev-leave-to {
+  opacity: 0;
+  transform: translateX(28px);
+}
+
+.slide-next-leave-to,
+.slide-prev-enter-from {
+  opacity: 0;
+  transform: translateX(-28px);
+}
+
+.pop-enter-active {
+  transition: opacity 0.2s, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.pop-leave-active {
+  transition: opacity 0.12s;
+}
+
+.pop-enter-from {
+  opacity: 0;
+  transform: scale(0.4);
+}
+
+.pop-leave-to {
+  opacity: 0;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes avatar-in {
+  0% { opacity: 0; transform: scale(0.3) rotate(-12deg); }
+  60% { opacity: 1; transform: scale(1.12) rotate(3deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+
+@keyframes ring {
+  from { opacity: 0.6; transform: scale(1); }
+  to { opacity: 0; transform: scale(1.8); }
 }
 
 .body {
-  min-height: 260px;
+  min-height: 320px;
+  overflow-x: hidden;
 }
 
 .faint {
@@ -484,6 +625,7 @@ p.faint {
 
 .adapter {
   position: relative;
+  animation: rise 0.35s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -495,11 +637,13 @@ p.faint {
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.15s, background-color 0.15s;
+  transition: border-color 0.15s, background-color 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 
 .adapter:hover {
   border-color: var(--primary);
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
 }
 
 .adapter.on {
@@ -725,9 +869,23 @@ p.faint {
 }
 
 .done-avatar {
-  width: 64px;
-  height: 64px;
-  font-size: 24px;
+  width: 72px;
+  height: 72px;
+  font-size: 26px;
+  animation: avatar-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.1s backwards;
+}
+
+.done-ring {
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--primary);
+  border-radius: 50%;
+  animation: ring 1.2s ease-out 0.4s 2 backwards;
+  pointer-events: none;
+}
+
+.done > :not(.done-avatar) {
+  animation: rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.35s backwards;
 }
 
 .done-badge {
@@ -782,6 +940,20 @@ p.faint {
 @media (max-width: 640px) {
   .step-label {
     display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide-next-enter-active,
+  .slide-next-leave-active,
+  .slide-prev-enter-active,
+  .slide-prev-leave-active,
+  .adapter,
+  .done-avatar,
+  .done-ring,
+  .done > * {
+    animation: none;
+    transition: none;
   }
 }
 </style>

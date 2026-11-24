@@ -135,7 +135,7 @@ function remove() {
           · <RouterLink :to="`/bots/${id}/logs`">{{ t('bot.viewLogs') }}</RouterLink>
         </template>
         <Button v-if="bot.enabled" @click="run('bots.start')">{{ t('bots.restart') }}</Button>
-        <Button v-if="bot.enabled" @click="run('bots.stop')">{{ t('common.stop') }}</Button>
+        <Button v-if="bot.enabled" class="stop" @click="run('bots.stop')">{{ t('common.stop') }}</Button>
         <Button v-else type="primary" @click="run('bots.start')">{{ t('common.start') }}</Button>
       </PageHeader>
 
@@ -194,6 +194,15 @@ function remove() {
 }
 
 .error {
+  color: var(--bad);
+}
+
+.stop {
+  color: var(--bad);
+}
+
+.stop:not(:disabled):hover {
+  border-color: var(--bad);
   color: var(--bad);
 }
 

@@ -95,6 +95,11 @@ const SandboxPlugin = {
 export const sandboxAdapter: AdapterType<AdapterConfig> = {
   id: 'demo',
   displayName: { en: 'Demo sandbox', 'zh-CN': '演示沙盒' },
+  description: { en: 'No account needed: you play the test user in the dashboard', 'zh-CN': '不需要账号，在控制台里扮演测试用户直接试' },
+  icon: '<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2M6.453 15h11.094M8.5 2h7"/>',
+  color: '#8A63D2',
+  // Needs no account, so it is the easiest way to start.
+  order: -1,
   config: AdapterConfig,
   segments: ['text', 'at', 'face', 'reply', 'image'],
   plugin: SandboxPlugin,
