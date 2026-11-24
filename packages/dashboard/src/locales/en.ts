@@ -412,11 +412,11 @@ export default {
         http: 'In NapCat, add an HTTP server (Mushin calls it; put its address above) and an HTTP client that posts events to the address below, with message format "array". Use the same token, and the same secret if you set one.',
       },
       qq: {
-        websocket: 'Create a bot on the QQ Open Platform (q.qq.com), then copy its AppID and AppSecret from Development → Development settings. Add this machine\'s public IP to the IP allowlist there, or QQ refuses API calls. Group bots answer only when @-mentioned, and mostly only within five minutes of a message.',
+        websocket: "Create a bot on the QQ Open Platform (q.qq.com), then copy its AppID and AppSecret from Development → Development settings. Add this machine's public IP to the IP allowlist there, or QQ refuses API calls. Group bots answer only when {'@'}-mentioned, and mostly only within five minutes of a message.",
         webhook: 'QQ posts events to the address below, which must be reachable from the internet over HTTPS (port 443, 80, 8080 or 8443), e.g. through a reverse proxy. Set it as the callback address on the QQ Open Platform (Development → Callback settings) and pick the events to receive. The AppSecret signs the answers.',
       },
       telegram: {
-        polling: 'Talk to @BotFather on Telegram, send /newbot and paste the token it gives. To read every group message, not only commands and mentions, send /setprivacy to @BotFather and turn privacy mode off. If api.telegram.org cannot be reached from this machine, set the API address to a reverse proxy or a self-hosted Bot API server.',
+        polling: "Talk to {'@'}BotFather on Telegram, send /newbot and paste the token it gives. To read every group message, not only commands and mentions, send /setprivacy to {'@'}BotFather and turn privacy mode off. If api.telegram.org cannot be reached from this machine, set the API address to a reverse proxy or a self-hosted Bot API server.",
         webhook: 'Telegram posts updates to <public address><path>, which must be reachable over HTTPS (port 443, 80, 88 or 8443). Mushin registers the webhook itself with a secret token derived from the bot token, so nothing else needs setting up. Switching back to long polling removes the webhook.',
       },
       discord: {
