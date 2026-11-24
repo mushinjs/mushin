@@ -5,7 +5,6 @@ import {
 } from '@mushinjs/core'
 import type {} from '@mushinjs/plugin-storage'
 import { MessageArchive } from './archive'
-import { sandboxAdapter } from './sandbox'
 import { Bot, type BotHooks, byteSize, type PluginRunReport, type Session } from './bot'
 import { type CommandArg, type CommandDef, type CommandEntry, commandConflicts, type CommandSettings, commandMatches, commandUsage, DEFAULT_PREFIXES, helpText, parseArgs, requiredRole, splitCommand } from './commands'
 import { type AdapterType, type BotPluginEntry, type BotRecord, type BotStatus, isSandbox, type PermissionProvider, type PluginRun, roleAtLeast } from './types'
@@ -234,7 +233,6 @@ export class BotManager extends Service {
       export: (message) => this.captureLog(message),
     })
     yield* this.defineActions()
-    yield this.defineAdapter(sandboxAdapter)
     // The Plugins page shows how many commands and adapters each plugin adds.
     yield this.home.manager.defineProvides(() => this.provided())
     this.home.inject(['model', 'database'], async (ctx) => {
@@ -290,10 +288,10 @@ export class BotManager extends Service {
     }, `bots.defineAdapter(${adapter.id})`)
   }
 
-  /** The adapters, the sandbox first: it needs no account, so it is the easiest way to start. */
+  /** The adapters by their `order`, then in the order they were added. */
   adapters() {
     const list = [...this.adapterStore.values()]
-    list.sort((a, b) => Number(b.id === sandboxAdapter.id) - Number(a.id === sandboxAdapter.id))
+    list.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     return list.map((adapter) => ({
       id: adapter.id,
       displayName: adapter.displayName,
@@ -1302,7 +1300,7 @@ export class BotManager extends Service {
 
     yield actions.define({
       name: 'bots.create',
-      description: 'Create a bot and start it. Pick the adapter type and its config from bots.adapters; type "sandbox" needs no account and only answers in the sandbox conversation. With enabled false the bot is saved stopped, and its adapter config may still be incomplete. Returns the bot with its id.',
+      description: 'Create a bot and start it. Pick the adapter type and its config from bots.adapters. With enabled false the bot is saved stopped, and its adapter config may still be incomplete. Returns the bot with its id.',
       risk: 'write',
       input: z.object({
         name: z.string().min(1),

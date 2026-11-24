@@ -39,12 +39,15 @@ export interface AdapterType<C = any> {
   /** One short line on what the adapter connects to, for the adapter picker. */
   description?: LocalizedText
   /**
-   * The platform's logo as the inside of a 24×24 SVG (paths using `currentColor`), shown in the
-   * adapter picker and behind bot cards. Drawn as a mask, so it never runs as markup.
+   * The platform's logo, shown in the adapter picker and behind bot cards: the inside of a 24×24
+   * SVG (paths using `currentColor`), or the address of an image whose alpha is the logo, such as
+   * a PNG data URL. Drawn as a mask in the icon's colour, so it never runs as markup.
    */
   icon?: string
-  /** The platform's brand colour, for the icon. */
+  /** The platform's brand colour, for the icon; left out, the icon takes the text colour. */
   color?: string
+  /** Where the adapter is listed: lower first, 0 by default. A sandbox that needs no account goes first. */
+  order?: number
   config: z.ZodType<C>
   /** Config keys holding secrets. They are kept in .env (the config holds `${NAME}` references), resolved before the adapter starts, and masked in API responses. */
   secrets?: string[]

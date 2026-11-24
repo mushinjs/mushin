@@ -198,7 +198,7 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
             </ul>
             <span v-else>{{ t('bots.noPluginsTip') }}</span>
           </Tooltip>
-          <Button v-if="bot.enabled" size="small" quaternary :loading="busy === bot.id" icon="i-lucide-square" @click="toggle(bot, false)">
+          <Button v-if="bot.enabled" size="small" quaternary class="stop" :loading="busy === bot.id" icon="i-lucide-square" @click="toggle(bot, false)">
             {{ t('common.stop') }}
           </Button>
           <Button v-else size="small" secondary type="primary" :loading="busy === bot.id" icon="i-lucide-play" @click="toggle(bot, true)">
@@ -520,6 +520,16 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
 .add-card .hint {
   font-size: 12.5px;
   color: var(--fg3);
+}
+
+.stop {
+  color: var(--bad);
+}
+
+.stop:not(:disabled):hover {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+  color: var(--bad);
 }
 
 .plugins-link {

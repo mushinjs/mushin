@@ -463,6 +463,14 @@ export default {
     deleteHint: 'Its settings are removed. Message logs on disk are kept.',
   },
   wizard: {
+    title: { adapter: 'Pick a platform', connect: 'Connect to {adapter}', name: 'Name your bot', plugins: 'Pick plugins', roles: 'Who runs it' },
+    lead: {
+      adapter: 'Which chat platform does the bot join? You can add more later.',
+      connect: 'Once connected, the account\'s name and picture are read in. You can also connect later.',
+      name: 'The name is only shown in the dashboard, to tell your bots apart.',
+      plugins: 'Plugins decide what the bot does. Change them any time.',
+      roles: 'Masters and admins can run the commands that need permission.',
+    },
     steps: 'Steps',
     step: { adapter: 'Platform', connect: 'Connect', name: 'Name', plugins: 'Plugins', roles: 'Masters & admins' },
     defaultName: '{adapter} Bot',

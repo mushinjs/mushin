@@ -464,6 +464,14 @@ const zhCN: typeof en = {
     deleteHint: '它的设置会被删除，磁盘上的消息日志会保留。',
   },
   wizard: {
+    title: { adapter: '选择平台', connect: '连接到 {adapter}', name: '给机器人起个名字', plugins: '选择插件', roles: '谁来管理它' },
+    lead: {
+      adapter: '机器人要接入哪个聊天平台？以后也可以再添加更多。',
+      connect: '连上后会自动读取账号的名字和头像；暂时连不上也可以稍后再连接。',
+      name: '名字只在控制台里显示，用来区分你的机器人。',
+      plugins: '插件决定机器人会做什么，可以随时增减。',
+      roles: '主人和管理员可以使用需要权限的指令。',
+    },
     steps: '添加步骤',
     step: { adapter: '平台', connect: '连接', name: '名称', plugins: '插件', roles: '主人与管理员' },
     defaultName: '{adapter} Bot',

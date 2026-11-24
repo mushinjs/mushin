@@ -3,8 +3,9 @@ import { computed } from 'vue'
 import type { AdapterType } from '../types'
 
 /**
- * A platform's logo from its adapter, in the adapter's colour (or `tint`). The SVG is drawn as a CSS
- * mask, so whatever an adapter puts in it never runs as markup. Adapters without one get a plug.
+ * A platform's logo from its adapter, in the adapter's colour (or `tint`, else the text colour). The
+ * SVG or image is drawn as a CSS mask, so whatever an adapter puts in it never runs as markup.
+ * Adapters without one get a plug.
  */
 const props = defineProps<{ adapter: AdapterType | undefined; size?: number; tint?: string }>()
 
@@ -12,7 +13,9 @@ const style = computed(() => {
   const size = `${props.size ?? 20}px`
   const icon = props.adapter?.icon
   if (!icon) return { width: size, height: size, fontSize: size, color: props.tint ?? props.adapter?.color }
-  const url = `url("data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${icon}</svg>`)}")`
+  // An image address (a PNG data URL, say) is used as it is; else the icon is the inside of an SVG.
+  const src = /^(data:image\/|https?:\/\/)/.test(icon) ? icon : `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${icon}</svg>`)}`
+  const url = `url("${src.replace(/"/g, '%22')}")`
   return {
     width: size,
     height: size,
