@@ -91,6 +91,8 @@ export interface CatalogEntry {
   package: string
   version: string
   local: boolean
+  /** The folder of a local plugin. */
+  path?: string
   manifest: PluginManifest
 }
 
