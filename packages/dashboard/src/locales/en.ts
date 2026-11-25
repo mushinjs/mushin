@@ -2006,6 +2006,20 @@ export default {
     askCancelledShort: 'Not answered',
     noTools: 'No matching tools',
     rest: 'Other fields',
+    command: 'Show command',
+    withPurpose: '{action}: {purpose}',
+  },
+  fairyApprovals: {
+    title: 'When Fairy asks first',
+    modes: {
+      ask: { name: 'Ask every time', desc: 'Asks before anything that changes something' },
+      default: { name: 'Default', desc: 'As set up: asks before deleting, running commands and the like' },
+      auto: { name: 'Approve for me', desc: 'Asks only when something could do lasting harm, like deleting files, pushing code or changing system settings' },
+      full: { name: 'Full access', desc: 'Never asks; runs everything' },
+    },
+    hint: 'Tools turned off in the Fairy settings stay off in every mode',
+    approveAuto: 'Approve, then auto',
+    approveAutoHint: 'Approves this one and switches to “Approve for me”: from now on Fairy asks only before risky steps',
   },
   fairyNotice: {
     effort_ignored: 'This model takes no reasoning effort together with tools, so it answers with its default effort.',

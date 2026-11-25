@@ -450,6 +450,7 @@ export type FairyEvent = { session: string; parent?: string; call?: string } & (
   | { type: 'delta'; text: string }
   | { type: 'tool-call'; id: string; action: string; input: unknown; risk: Risk }
   | { type: 'confirm'; id: string; action: string; input: unknown }
+  | { type: 'confirmed'; id: string }
   | { type: 'tool-result'; id: string; ok: boolean; result?: unknown; error?: string }
   | { type: 'done'; text: string; usage?: { inputTokens: number; outputTokens: number } }
   | { type: 'notice'; code: 'effort_ignored' }

@@ -4,7 +4,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { highlight } from '../../highlight'
-import { type AskItem, type ChatItem, DELEGATE } from '../../stores/fairy'
+import { type AskItem, type ChatItem, DELEGATE, useConversation } from '../../stores/fairy'
 import { useDataStore } from '../../stores/data'
 import { type PanelView, workspace } from '../../stores/workspace'
 import type { FairyTaskReport } from '../../types'
@@ -20,14 +20,18 @@ import ToolDetail from './ToolDetail.vue'
 const props = defineProps<{ item: Extract<ChatItem, { kind: 'tool' }>; expanded: boolean; ask?: AskItem }>()
 const emit = defineEmits<{
   toggle: []
-  confirm: [approved: boolean]
-  confirmTask: [approved: boolean]
+  confirm: [approved: boolean, then?: 'auto']
+  confirmTask: [approved: boolean, then?: 'auto']
   openTask: [session: string]
   answer: [result: { choice: number } | { other: string }]
 }>()
 
 const { t, te } = useI18n()
 const data = useDataStore()
+const fairy = useConversation()
+
+/** Asked often? One click approves this and lets Fairy go on without asking, except before risky steps. */
+const offerAuto = computed(() => fairy.approvals === 'ask' || fairy.approvals === 'default')
 
 const label = computed(() => actionLabel(props.item.action, t, te))
 /** The action of an approval a helper waits on, in words. */
@@ -54,8 +58,15 @@ const taskState = computed(() => {
 const steps = computed(() => props.item.task?.steps.slice(-4) ?? [])
 
 /** What a command, file or browser tool works on, shown in its row: `$ ls -la`, a path, an address or what is typed. */
+/** What a command is for, in words, as Fairy put it; shown instead of the command, which can open below. */
+const purpose = computed(() => {
+  const value = (props.item.input as { purpose?: unknown } | undefined)?.purpose
+  return typeof value === 'string' && value.trim() ? value.trim() : ''
+})
+
 const summary = computed(() => {
   const value = props.item.input as { command?: unknown; path?: unknown; url?: unknown; text?: unknown; key?: unknown; ref?: unknown } | undefined
+  if (purpose.value) return purpose.value
   if (typeof value?.command === 'string') return `$ ${value.command.split('\n')[0]}`
   if (props.item.action === 'files.search' && typeof (value as { query?: unknown })?.query === 'string') return `“${(value as { query: string }).query}”`
   if (typeof value?.path === 'string' && /^(files|terminal)\./.test(props.item.action)) return value.path
@@ -67,6 +78,13 @@ const summary = computed(() => {
   }
   if (props.item.action === 'ui.ask') return ''
   return actionTarget(props.item.action, props.item.input, data)
+})
+/** Commands, paths and addresses read as code; names and purposes as words. */
+const summaryCode = computed(() => !purpose.value && /^(terminal|files|browser)\./.test(props.item.action))
+/** The action and what it works on, for "Fairy wants to …". */
+const confirmAction = computed(() => {
+  if (purpose.value) return t('fairyRecord.withPurpose', { action: label.value, purpose: purpose.value })
+  return summary.value && !summaryCode.value ? `${label.value} ${summary.value}` : label.value
 })
 
 /** How a command ended, on its row when it did not go well: its exit code, or that it timed out. */
@@ -168,9 +186,11 @@ const reason = computed(() => {
       <span v-else-if="taskState === 'confirm' || taskState === 'blocked'" class="i-lucide-hand" color="var(--warn)" />
       <span v-else class="i-lucide-circle-x" color="var(--bad)" />
       <span class="task-role">{{ roleName }}</span>
-      <span class="tool-name task-text" :title="input.task">{{ input.task }}</span>
+      <span class="tool-name task-text">{{ input.task }}</span>
       <span class="tool-state">{{ t(`fairyTask.status.${taskState}`) }}</span>
     </button>
+    <!-- The whole task, when opened; the row shows its first line. -->
+    <p v-if="expanded" class="task-full">{{ input.task }}</p>
     <ul v-if="taskState === 'running' && steps.length" class="task-steps">
       <li v-for="step in steps" :key="step.id">
         <Spin v-if="step.state === 'running'" :size="10" />
@@ -186,6 +206,7 @@ const reason = computed(() => {
       <div class="confirm-actions">
         <Button size="small" type="error" @click="emit('confirmTask', true)">{{ t('fairy.approve') }}</Button>
         <Button size="small" @click="emit('confirmTask', false)">{{ t('fairy.deny') }}</Button>
+        <Button v-if="offerAuto" size="small" quaternary class="confirm-auto" :title="t('fairyApprovals.approveAutoHint')" @click="emit('confirmTask', true, 'auto')">{{ t('fairyApprovals.approveAuto') }}</Button>
       </div>
     </div>
     <div v-else-if="report && (expanded || taskState !== 'done')" class="task-report">
@@ -238,7 +259,7 @@ const reason = computed(() => {
       </template>
       <template v-else>
         <span class="tool-name" :title="item.action">{{ label }}</span>
-        <span v-if="summary" class="tool-summary" :class="{ mono: /^(terminal|files|browser)\./.test(item.action) }" :title="summary">{{ summary }}</span>
+        <span v-if="summary" class="tool-summary" :class="{ mono: summaryCode }">{{ summary }}</span>
       </template>
       <span v-if="exit" class="tool-exit" :class="exit.tone">{{ exit.text }}</span>
       <Tag v-if="item.risk === 'dangerous' && item.state === 'confirm'" size="tiny" type="error">{{ t('fairy.dangerous') }}</Tag>
@@ -247,11 +268,12 @@ const reason = computed(() => {
     </button>
     <div v-if="reason && !expanded" class="tool-reason" :title="reason">{{ reason }}</div>
     <div v-if="item.state === 'confirm'" class="confirm">
-      <p>{{ t('fairy.confirmText', { action: summary && !/^(terminal|files|browser)\./.test(item.action) ? `${label} ${summary}` : label }) }}</p>
+      <p>{{ t('fairy.confirmText', { action: confirmAction }) }}</p>
       <ToolDetail :item="item" input-only />
       <div class="confirm-actions">
         <Button size="small" type="error" @click="emit('confirm', true)">{{ t('fairy.approve') }}</Button>
         <Button size="small" @click="emit('confirm', false)">{{ t('fairy.deny') }}</Button>
+        <Button v-if="offerAuto" size="small" quaternary class="confirm-auto" :title="t('fairyApprovals.approveAutoHint')" @click="emit('confirm', true, 'auto')">{{ t('fairyApprovals.approveAuto') }}</Button>
       </div>
     </div>
     <div v-else-if="expanded" class="tool-detail">
@@ -276,6 +298,15 @@ const reason = computed(() => {
 
 .task-text {
   font-family: inherit;
+}
+
+.task-full {
+  margin: -2px 10px 8px 32px;
+  color: var(--fg2);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .task-steps {
@@ -502,7 +533,12 @@ const reason = computed(() => {
 
 .confirm-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+.confirm-auto {
+  margin-left: auto;
 }
 
 .label {

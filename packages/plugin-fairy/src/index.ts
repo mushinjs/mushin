@@ -39,6 +39,8 @@ export type FairyEvent = { session: string; parent?: string; call?: string } & (
   | { type: 'delta'; text: string }
   | { type: 'tool-call'; id: string; action: string; input: unknown; risk: string }
   | { type: 'confirm'; id: string; action: string; input: unknown }
+  /** An approval Fairy waited on was given: by the user, or by switching to a mode that does not ask for it. */
+  | { type: 'confirmed'; id: string }
   | { type: 'tool-result'; id: string; ok: boolean; result?: unknown; error?: string }
   | { type: 'done'; text: string; usage?: { inputTokens: number; outputTokens: number } }
   /** Something the user should know about a turn that still goes on; `effort_ignored`: the model ran without the picked effort. */
@@ -134,7 +136,18 @@ export interface SendOptions {
   effort?: Effort
   /** Replaces the conversation from this user message on (0 is the first), to edit and resend it. */
   rewind?: number
+  /** When Fairy asks before acting in this turn; `default` when omitted. See `APPROVAL_MODES`. */
+  approvals?: ApprovalMode
 }
+
+/**
+ * When Fairy asks before acting, picked next to the input: `ask` before anything that changes something;
+ * `default` as the tool policies and plugins say (dangerous actions and commands ask); `auto` only before what
+ * could do lasting harm (deleting, pushing, changing the system: `actions.risky`); `full` never. Tools turned off
+ * stay off in every mode.
+ */
+export const APPROVAL_MODES = ['ask', 'default', 'auto', 'full'] as const
+export type ApprovalMode = typeof APPROVAL_MODES[number]
 
 /** Commands the dashboard runs itself, without asking the model. */
 export const BUILTIN_COMMANDS = [
@@ -188,6 +201,10 @@ interface Running {
   asking?: number
   /** What the user wrote while the turn runs, read before the next step. */
   queue: Queued[]
+  /** The approval mode, one object shared by a turn and the helpers it starts, so a switch reaches them all. */
+  approvals: { mode: ApprovalMode }
+  /** Calls waiting for approval, to ask again when the mode changes. */
+  pending: Map<string, { name: string; input: unknown; risk: ActionInfo['risk'] }>
 }
 
 /** The user's answer to an approval: yes, no, or a message written instead. */
@@ -204,8 +221,8 @@ interface Queued {
   at: number
 }
 
-function newRunning(): Running {
-  return { abort: new AbortController(), confirms: new Map(), usage: { inputTokens: 0, outputTokens: 0 }, failures: new Map(), queue: [] }
+function newRunning(approvals: { mode: ApprovalMode } = { mode: 'default' }): Running {
+  return { abort: new AbortController(), confirms: new Map(), usage: { inputTokens: 0, outputTokens: 0 }, failures: new Map(), queue: [], approvals, pending: new Map() }
 }
 
 /** The turn used every tool round it may; the dashboard offers to continue. */
@@ -855,6 +872,7 @@ export class Fairy extends Service {
     const session = sessionId ? await this.session(sessionId) : await this.createSession()
     if (this.running.has(session.id)) {
       if (options.rewind !== undefined) throw new MushinError('conflict', 'Fairy is still working on this conversation; stop it before editing a message')
+      if (options.approvals) await this.setApprovals(session.id, options.approvals)
       const queued = await this.steer(session.id, text, options)
       if (queued) return { session: session.id, queued }
       // The turn ended meanwhile: the message starts the next one.
@@ -867,7 +885,7 @@ export class Fairy extends Service {
     }
     // A conversation saved by an older version can hold more tools than a request may carry.
     if (session.tools.length > MAX_TOOLS) session.tools = session.role ? await this.roleTools(this.role(session.role)) : await this.tools()
-    const running = newRunning()
+    const running = newRunning({ mode: options.approvals ?? 'default' })
     this.running.set(session.id, running)
     this.live.set(session.id, session)
     const skills = options.skills?.length ? await Promise.all(options.skills.map((id) => this.skill(id))) : []
@@ -1039,7 +1057,7 @@ export class Fairy extends Service {
     }
 
     const settings = await this.settings()
-    const policy = name in settings.toolPolicy ? settings.toolPolicy[name]! : this.home.actions.approval(name, input) ?? defaultPolicy(info.risk)
+    const policy = this.policyFor(settings, info, input, running.approvals.mode)
     if (policy === 'off') {
       this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: false, error: 'Turned off in the Fairy settings' })
       return reply(`The user turned ${toolName} off for Fairy. Do not use it; tell them if it is needed.`, true)
@@ -1049,7 +1067,9 @@ export class Fairy extends Service {
 
     if (policy === 'confirm') {
       this.emit({ session: session.id, type: 'confirm', id: call.id, action: name, input })
-      const approved = await this.waitForApproval(running, call.id)
+      running.pending.set(call.id, { name, input, risk: info.risk })
+      const approved = await this.waitForApproval(running, call.id).finally(() => running.pending.delete(call.id))
+      if (approved === true) this.emit({ session: session.id, type: 'confirmed', id: call.id })
       if (approved !== true) {
         this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: false, error: 'Declined by the user' })
         return reply(approved === 'replied'
@@ -1105,7 +1125,7 @@ export class Fairy extends Service {
       tags: [`role:${role.id}`],
       messages: [{ role: 'user', content: taskMessage(task, typeof input?.context === 'string' ? input.context : undefined, new Date(now)), display: task, at: now }],
     }
-    const running = newRunning()
+    const running = newRunning(parentRunning.approvals)
     const stop = () => running.abort.abort()
     parentRunning.abort.signal.addEventListener('abort', stop, { once: true })
     this.running.set(child.id, running)
@@ -1196,6 +1216,45 @@ export class Fairy extends Service {
     })
   }
 
+  /**
+   * Whether Fairy asks before a call in this mode. Tools turned off in the settings stay off; a tool set to ask
+   * keeps asking unless everything is allowed.
+   */
+  private policyFor(settings: FairySettings, info: Pick<ActionInfo, 'name' | 'risk'>, input: unknown, mode: ApprovalMode): ToolPolicy {
+    const set = settings.toolPolicy[info.name]
+    if (set === 'off') return 'off'
+    const policy = set ?? this.home.actions.approval(info.name, input) ?? defaultPolicy(info.risk)
+    switch (mode) {
+      case 'full':
+        return 'auto'
+      case 'auto':
+        return set === 'confirm' || this.home.actions.risky(info.name, input) ? 'confirm' : 'auto'
+      case 'ask':
+        return info.risk === 'read' ? policy : 'confirm'
+      default:
+        return policy
+    }
+  }
+
+  /**
+   * Switches the approval mode of a running turn and the helpers it started. Calls waiting for approval that the
+   * new mode would not ask for go ahead.
+   */
+  async setApprovals(sessionId: string, mode: ApprovalMode) {
+    const running = this.running.get(sessionId)
+    if (!running) return { ok: false }
+    const shared = running.approvals
+    shared.mode = mode
+    const settings = await this.settings()
+    for (const turn of this.running.values()) {
+      if (turn.approvals !== shared) continue
+      for (const [id, call] of turn.pending) {
+        if (this.policyFor(settings, call, call.input, mode) === 'auto') turn.confirms.get(id)?.(true)
+      }
+    }
+    return { ok: true }
+  }
+
   confirm(sessionId: string, callId: string, approved: boolean) {
     const resolve = this.running.get(sessionId)?.confirms.get(callId)
     if (!resolve) throw new MushinError('not_found', 'No action is waiting for approval')
@@ -1274,6 +1333,7 @@ export class Fairy extends Service {
         model: z.string().optional().describe('Model for this message; Fairy\'s setting or the provider\'s default when omitted'),
         effort: z.enum(EFFORTS as [Effort, ...Effort[]]).optional().describe('Reasoning effort for this message'),
         rewind: z.number().int().min(0).optional().describe('Edit: drop the conversation from this user message on (0 is the first) and send text in its place'),
+        approvals: z.enum(APPROVAL_MODES).optional().describe('When Fairy asks before acting: ask (before any change), default, auto (only before lasting harm), full (never)'),
       }).refine((input) => input.text.trim() || input.skills?.length, 'Send some text or pick a skill'),
       handler: ({ session, text, ...options }, caller) => this.send(session, text, { client: caller.client, ...options }),
     })
@@ -1479,6 +1539,14 @@ export class Fairy extends Service {
       risk: 'write',
       input: z.object({ session: z.string(), id: z.string(), approved: z.boolean() }),
       handler: ({ session, id, approved }) => this.confirm(session, id, approved),
+    })
+
+    yield actions.define({
+      name: 'fairy.approvals',
+      description: 'Switch when Fairy asks before acting, for the reply it is working on and the helpers it started: ask, default, auto or full. Waiting approvals the new mode does not ask for go ahead.',
+      risk: 'write',
+      input: z.object({ session: z.string(), mode: z.enum(APPROVAL_MODES) }),
+      handler: ({ session, mode }) => this.setApprovals(session, mode),
     })
 
     yield actions.define({

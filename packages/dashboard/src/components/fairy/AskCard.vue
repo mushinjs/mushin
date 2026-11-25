@@ -45,17 +45,22 @@ function other(event: KeyboardEvent) {
   flex-direction: column;
   gap: 6px;
   background: var(--warn-soft);
+  font-size: 13px;
 }
 
+/* The chat's size and weight, so a long question reads like a message rather than a heading. */
 .ask-question {
   display: flex;
   gap: 6px;
-  align-items: center;
-  font-weight: 500;
+  align-items: flex-start;
+  margin-bottom: 2px;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .ask-question span {
   flex: none;
+  margin-top: 4px;
   color: var(--warn);
 }
 

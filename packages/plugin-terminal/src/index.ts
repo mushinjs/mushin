@@ -7,12 +7,14 @@ import type {} from '@mushinjs/plugin-storage'
 import { editText, type FileRoots, listFiles, readText, searchFiles, writeText } from './files'
 import { type ProcessInfo, Processes } from './processes'
 import { isReadOnlyCommand } from './readonly'
+import { isRiskyCommand } from './risky'
 import { type CommandResult, type LocalShell, quote, quotingOf, resolveShell, runLocal } from './shell'
 import { type HostCheck, runSsh, sameFingerprint, type SshTarget } from './ssh'
 
 export * from './files'
 export * from './processes'
 export * from './readonly'
+export * from './risky'
 export * from './shell'
 export * from './ssh'
 
@@ -421,6 +423,8 @@ function defineFairyTools(ctx: Context, config: Config) {
     }
   }
   /** Ask, unless the setting lets this command through. */
+  /** For Fairy's "approve for me": a command that only looks never asks; one that may do lasting harm does. */
+  const commandRisky = (command: string) => !isReadOnlyCommand(command) && isRiskyCommand(command)
   const commandApproval = (command: string) => (config.fairyCommands === 'auto' || (config.fairyCommands === 'readonly' && isReadOnlyCommand(command)) ? 'auto' as const : 'confirm' as const)
   const cwdOf = async (cwd?: string) => {
     if (!cwd) return workDir
@@ -434,6 +438,7 @@ function defineFairyTools(ctx: Context, config: Config) {
   const commandInput = z.object({
     command: z.string().trim().min(1).max(20_000).describe(`A command for ${resolveShell(config.shell)} on ${process.platform}`),
     cwd: z.string().optional().describe('Folder to run in; relative paths start at the working directory (the app folder unless set otherwise)'),
+    purpose: z.string().trim().max(120).optional().describe('What the command is for, in a few plain words in the user\'s language, such as "查看装了哪些中文字体"; the user sees this instead of the command, so always give it'),
   })
 
   ctx.actions.define({
@@ -445,6 +450,7 @@ function defineFairyTools(ctx: Context, config: Config) {
       stdin: z.string().max(100_000).optional().describe('Text sent to the command\'s standard input'),
     }),
     approval: ({ command }) => commandApproval(command),
+    risky: ({ command }) => commandRisky(command),
     handler: async ({ command, cwd, timeout, stdin }, caller) => {
       commandsOn()
       const dir = await cwdOf(cwd)
@@ -481,6 +487,7 @@ function defineFairyTools(ctx: Context, config: Config) {
     risk: 'dangerous',
     input: commandInput,
     approval: ({ command }) => commandApproval(command),
+    risky: ({ command }) => commandRisky(command),
     handler: async ({ command, cwd }, caller) => {
       commandsOn()
       return processes.start(command, { shell: config.shell, cwd: await cwdOf(cwd), ...sessionOf(caller) })
@@ -516,6 +523,8 @@ function defineFairyTools(ctx: Context, config: Config) {
     risk: 'dangerous',
     input: idInput.extend({ text: z.string().max(100_000) }),
     approval: () => (config.fairyCommands === 'auto' ? 'auto' : 'confirm'),
+    // Typing into a command that already runs, such as an answer to its question.
+    risky: () => false,
     handler: ({ id, text }) => {
       commandsOn()
       if (!find(id).running) throw new MushinError('conflict', `Process ${id} has ended`)

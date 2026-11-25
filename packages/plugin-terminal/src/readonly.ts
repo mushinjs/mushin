@@ -9,6 +9,8 @@ const PLAIN = new Set([
   'grep', 'rg', 'findstr', 'which', 'where', 'whoami', 'hostname', 'uname', 'date', 'echo', 'nproc', 'free', 'uptime', 'ps', 'tasklist',
   'get-childitem', 'gci', 'get-content', 'gc', 'get-location', 'gl', 'get-item', 'gi', 'select-string', 'sls', 'test-path', 'resolve-path',
   'get-process', 'gps', 'measure-object', 'select-object', 'sort-object', 'format-table', 'format-list', 'out-string', 'get-date', 'write-output',
+  'get-command', 'gcm', 'get-module', 'get-alias', 'gal', 'get-service', 'gsv', 'get-itemproperty', 'gp', 'get-filehash', 'get-psdrive', 'gdr',
+  'get-help', 'get-host', 'get-culture', 'get-uiculture', 'get-timezone', 'get-computerinfo', 'get-volume', 'get-disk',
 ])
 
 /** Programs that only look with some subcommands or flags. */

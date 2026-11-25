@@ -111,6 +111,7 @@ export const useFairyActivityStore = defineStore('fairyActivity', () => {
         settle(top)
         break
       }
+      case 'confirmed':
       case 'tool-result':
         pending.get(top)?.delete(key)
         settle(top)

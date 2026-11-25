@@ -2007,6 +2007,20 @@ const zhCN: typeof en = {
     askCancelledShort: '没回答',
     noTools: '没找到合适的工具',
     rest: '其余字段',
+    command: '查看命令',
+    withPurpose: '{action}：{purpose}',
+  },
+  fairyApprovals: {
+    title: 'Fairy 什么时候先问你',
+    modes: {
+      ask: { name: '每次都问', desc: '改动任何东西之前都先问你' },
+      default: { name: '默认', desc: '按设置来：删除、运行命令这类操作前问你' },
+      auto: { name: '自动批准', desc: '只在可能造成难以挽回的后果时问你，比如删除文件、推送代码、改系统设置' },
+      full: { name: '完全放开', desc: '什么都不问，直接执行' },
+    },
+    hint: 'Fairy 设置里关掉的工具，在哪种模式下都不会用',
+    approveAuto: '批准，之后自动',
+    approveAutoHint: '批准这一次，并切到「自动批准」：之后只在有风险的操作前问你',
   },
   fairyNotice: {
     effort_ignored: '这个模型不支持带工具时设置推理强度，本次按默认强度回答。',

@@ -93,6 +93,30 @@ export interface AskItem {
 
 const SESSION_KEY = 'mushin.fairy.session'
 const CHOICE_KEY = 'mushin.fairy.choice'
+const APPROVALS_KEY = 'mushin.fairy.approvals'
+
+/**
+ * When Fairy asks before acting, picked next to the input: before any change, as the settings say, only before
+ * what could do lasting harm, or never. One choice for every conversation in this browser.
+ */
+export type ApprovalMode = 'ask' | 'default' | 'auto' | 'full'
+export const APPROVAL_MODES: ApprovalMode[] = ['ask', 'default', 'auto', 'full']
+
+function readApprovals(): ApprovalMode {
+  try {
+    const value = localStorage.getItem(APPROVALS_KEY)
+    return APPROVAL_MODES.includes(value as ApprovalMode) ? value as ApprovalMode : 'default'
+  } catch {
+    return 'default'
+  }
+}
+
+const approvals = ref<ApprovalMode>(readApprovals())
+watch(approvals, (value) => {
+  try {
+    localStorage.setItem(APPROVALS_KEY, value)
+  } catch {}
+})
 
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 export const EFFORTS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max']
@@ -273,6 +297,12 @@ function conversation(pane: string) {
         if (entry) entry.state = 'confirm'
         break
       }
+      case 'confirmed': {
+        const entry = step(event.id)
+        if (entry?.state === 'confirm') entry.state = 'running'
+        if (view.confirm?.id === event.id) view.confirm = undefined
+        break
+      }
       case 'tool-result': {
         const entry = step(event.id)
         if (entry) entry.state = event.ok ? 'ok' : event.error === 'Declined by the user' ? 'declined' : 'error'
@@ -342,6 +372,11 @@ function conversation(pane: string) {
       case 'confirm': {
         const item = tool(event.id)
         if (item) item.state = 'confirm'
+        break
+      }
+      case 'confirmed': {
+        const item = tool(event.id)
+        if (item?.state === 'confirm') item.state = 'running'
         break
       }
       case 'tool-result': {
@@ -465,6 +500,7 @@ function conversation(pane: string) {
         ...(choice.value.provider ? { provider: choice.value.provider } : {}),
         ...(choice.value.model ? { model: choice.value.model } : {}),
         ...(choice.value.effort ? { effort: choice.value.effort } : {}),
+        ...(approvals.value !== 'default' ? { approvals: approvals.value } : {}),
         ...(options.rewind !== undefined ? { rewind: options.rewind } : {}),
       })
       current.value ??= result.session
@@ -475,15 +511,17 @@ function conversation(pane: string) {
     }
   }
 
-  async function confirm(id: string, approved: boolean) {
+  /** Approves or declines what Fairy waits for; `then` switches the approval mode after approving this one. */
+  async function confirm(id: string, approved: boolean, then?: ApprovalMode) {
     if (!current.value) return
     const item = tool(id)
     if (item) item.state = approved ? 'running' : 'declined'
     await call('fairy.confirm', { session: current.value, id, approved })
+    if (then) await setApprovals(then)
   }
 
   /** Approves or declines what a helper waits for, from its task under the fairy.delegate call. */
-  async function confirmTask(id: string, approved: boolean) {
+  async function confirmTask(id: string, approved: boolean, then?: ApprovalMode) {
     const view = tool(id)?.task
     const pending = view?.confirm
     if (!view?.session || !pending) return
@@ -491,6 +529,16 @@ function conversation(pane: string) {
     const step = view.steps.find((entry) => entry.id === pending.id)
     if (step) step.state = approved ? 'running' : 'declined'
     await call('fairy.confirm', { session: view.session, id: pending.id, approved })
+    if (then) await setApprovals(then)
+  }
+
+  /**
+   * Switches when Fairy asks before acting. The reply it is working on switches too, and approvals it waits on
+   * that the new mode would not ask for go ahead.
+   */
+  async function setApprovals(mode: ApprovalMode) {
+    approvals.value = mode
+    if (running.value && current.value) await call('fairy.approvals', { session: current.value, mode }).catch(() => {})
   }
 
   async function cancel() {
@@ -528,8 +576,8 @@ function conversation(pane: string) {
   }
 
   return {
-    pane, open, sessions, groups, current, task, items, queued, choice, streaming, running, usage, skills, commands, toolsStale, asks, quote,
-    refreshSessions, updateSession, refreshPickers, load, newChat, note, ask, visibleAsks, answer, send, edit, retry, confirm, confirmTask, cancel, remove, bind,
+    pane, open, sessions, groups, current, task, items, queued, choice, approvals, streaming, running, usage, skills, commands, toolsStale, asks, quote,
+    refreshSessions, updateSession, refreshPickers, load, newChat, note, ask, visibleAsks, answer, send, edit, retry, confirm, confirmTask, setApprovals, cancel, remove, bind,
   }
 }
 

@@ -117,8 +117,12 @@ const resultView = computed(() => {
   <div class="rec">
     <!-- A command: what ran, where, how it ended, and the end of its output. -->
     <template v-if="kind === 'terminal'">
-      <!-- The row shows a short command; a long one shows here in full. -->
-      <pre v-if="command && (command.includes('\n') || command.length > 40)" class="rec-cmd mono">$ {{ command }}</pre>
+      <!-- With a purpose in words on the row, the command itself folds away; without one, a long command shows in full. -->
+      <details v-if="command && input.purpose" class="rec-fold">
+        <summary>{{ t('fairyRecord.command') }}</summary>
+        <pre class="rec-cmd mono">$ {{ command }}</pre>
+      </details>
+      <pre v-else-if="command && (command.includes('\n') || command.length > 40)" class="rec-cmd mono">$ {{ command }}</pre>
       <div v-if="input.cwd" class="rec-sub mono">{{ t('fairyRecord.cwd', { cwd: input.cwd }) }}</div>
       <pre v-if="item.action === 'terminal.write' && typeof input.text === 'string'" class="rec-cmd mono">{{ input.text }}</pre>
       <div v-if="term" class="rec-meta">

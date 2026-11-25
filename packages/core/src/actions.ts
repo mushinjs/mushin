@@ -48,6 +48,12 @@ export interface ActionDefinition<S extends z.ZodType = z.ZodType, R = unknown> 
    * the risk (dangerous asks). Lets an action ask only for some inputs, such as a command that changes something.
    */
   approval?: (input: z.output<S>) => 'auto' | 'confirm' | undefined
+  /**
+   * Whether a call with this input could do harm that is hard to undo (delete data, push code, change the
+   * system), for Fairy's "approve for me" mode, which asks only then. Undefined goes by the risk: dangerous
+   * actions count as risky. Lets an action such as a command runner ask for `rm -rf` but not for `ls`.
+   */
+  risky?: (input: z.output<S>) => boolean
   handler?: (input: z.output<S>, caller: ActionCaller) => R | Promise<R>
 }
 
@@ -143,6 +149,15 @@ export class Actions extends Service {
     if (!action?.approval) return
     const parsed = action.input.safeParse(input ?? {})
     return parsed.success ? action.approval(parsed.data) : undefined
+  }
+
+  /** Whether this call could do harm that is hard to undo; see `ActionDefinition.risky`. */
+  risky(name: string, input: unknown): boolean {
+    const action = this.store.get(name)
+    if (!action) return true
+    if (!action.risky) return action.risk === 'dangerous'
+    const parsed = action.input.safeParse(input ?? {})
+    return parsed.success ? action.risky(parsed.data) : true
   }
 
   /** The context that defined an action; `manager.packageOf` names its plugin. */

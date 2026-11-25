@@ -14,6 +14,7 @@ import { actionLabel } from './fairy/records'
 import CommandPalette, { type PaletteItem } from './fairy/CommandPalette.vue'
 import HistoryDrawer from './fairy/HistoryDrawer.vue'
 import PanelIcon from './flow/editor/PanelIcon.vue'
+import ApprovalPicker from './fairy/ApprovalPicker.vue'
 import EffortPicker from './fairy/EffortPicker.vue'
 import ModelPicker from './fairy/ModelPicker.vue'
 
@@ -253,7 +254,8 @@ const rows = computed<Row[]>(() => {
     const run = items.slice(index, end) as ToolItem[]
     if (run.length >= GROUP_FROM && !run.some((call) => call.state === 'confirm' || call.action === DELEGATE || call.action.startsWith('ui.'))) {
       const failures = run.filter((call) => call.state === 'error' || call.state === 'declined')
-      const reason = failures.at(-1)?.error?.replace(/^Error:\s*/, '').split('\n')[0] ?? ''
+      const last = failures.at(-1)
+      const reason = last?.state === 'declined' ? t('fairy.state.declined') : last?.error?.replace(/^Error:\s*/, '').split('\n')[0] ?? ''
       out.push({ kind: 'group', key: `group:${item.kind === 'tool' ? item.id : index}`, action: item.kind === 'tool' ? item.action : '', items: run, failed: failures.length, running: run.some((call) => call.state === 'running'), reason })
     } else {
       for (const single of items.slice(index, end)) out.push({ kind: 'item', item: single })
@@ -282,6 +284,10 @@ const otherAsks = computed(() => {
   const shown = new Set(inlineAsks.value.values())
   return fairy.visibleAsks().filter((ask) => !shown.has(ask))
 })
+
+/** Fairy waits for your answer or approval, so it is not thinking meanwhile. */
+const waitingOnYou = computed(() => fairy.visibleAsks().length > 0
+  || fairy.items.some((item) => item.kind === 'tool' && (item.state === 'confirm' || !!item.task?.confirm)))
 
 function groupSummary(row: Extract<Row, { kind: 'group' }>) {
   const ok = row.items.filter((call) => call.state === 'ok').length
@@ -434,8 +440,8 @@ onMounted(() => scrollToEnd(true))
                 :item="item"
                 :expanded="expanded.has(item.id)"
                 @toggle="toggle(item.id)"
-                @confirm="(approved) => fairy.confirm(item.id, approved)"
-                @confirm-task="(approved) => fairy.confirmTask(item.id, approved)"
+                @confirm="(approved, then) => fairy.confirm(item.id, approved, then)"
+                @confirm-task="(approved, then) => fairy.confirmTask(item.id, approved, then)"
                 @open-task="(session) => fairy.load(session)"
               />
             </div>
@@ -499,8 +505,8 @@ onMounted(() => scrollToEnd(true))
                 :ask="inlineAsks.get(item.id)"
                 @toggle="toggle(item.id)"
                 @answer="(result) => fairy.answer(inlineAsks.get(item.id)!.id, result)"
-                @confirm="(approved) => fairy.confirm(item.id, approved)"
-                @confirm-task="(approved) => fairy.confirmTask(item.id, approved)"
+                @confirm="(approved, then) => fairy.confirm(item.id, approved, then)"
+                @confirm-task="(approved, then) => fairy.confirmTask(item.id, approved, then)"
                 @open-task="(session) => fairy.load(session)"
               />
             </template>
@@ -510,7 +516,7 @@ onMounted(() => scrollToEnd(true))
         <AskCard v-for="ask in otherAsks" :key="ask.id" :ask="ask" @answer="(result) => fairy.answer(ask.id, result)" />
 
         <div v-if="fairy.streaming" class="msg assistant streaming"><FairyMessage :text="fairy.streaming" streaming /></div>
-        <div v-else-if="fairy.running" class="thinking"><Spin :size="14" /> {{ t('fairy.thinking') }}</div>
+        <div v-else-if="fairy.running && !waitingOnYou" class="thinking"><Spin :size="14" /> {{ t('fairy.thinking') }}</div>
 
         <!-- Written while Fairy works: below the work until it reads them before its next step. -->
         <div v-for="(item, index) in fairy.queued" :key="`${item.id}-${index}`" class="msg-wrap user queued">
@@ -578,6 +584,7 @@ onMounted(() => scrollToEnd(true))
               <ModelPicker ref="modelPicker" />
               <EffortPicker />
             </div>
+            <div class="composer-approvals"><ApprovalPicker /></div>
             <!-- While Fairy works: stop now, or send what you typed for it to read before its next step. -->
             <Button v-if="fairy.running" size="small" circle quaternary class="composer-stop" :aria-label="t('fairy.stop')" :title="t('fairy.stopHint')" icon="i-lucide-square" @click="fairy.cancel()" />
             <Button
@@ -1236,14 +1243,14 @@ onMounted(() => scrollToEnd(true))
   min-width: 0;
 }
 
-.composer-stop {
-  flex: none;
+.composer-approvals {
+  display: flex;
   margin-left: auto;
 }
 
+.composer-stop,
 .composer-send {
   flex: none;
-  margin-left: auto;
 }
 
 .composer-stop + .composer-send {
