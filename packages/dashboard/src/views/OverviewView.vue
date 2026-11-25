@@ -149,6 +149,7 @@ const cards = computed(() => {
   const value = overview.value
   if (!value) return []
   const problems = data.bots.filter((bot) => bot.enabled && bot.status === 'error').length
+  const offline = data.bots.filter((bot) => bot.enabled && bot.status !== 'error' && bot.status !== 'online').length
   return [
     {
       key: 'bots',
@@ -156,7 +157,7 @@ const cards = computed(() => {
       label: t('overview.botsOnline'),
       value: number(value.bots.online),
       total: value.bots.total,
-      hint: problems ? t('overview.botsProblem', { n: problems }) : t('overview.botsAll', { n: value.bots.total }),
+      hint: problems ? t('overview.botsProblem', { n: problems }) : offline ? t('overview.botsOffline', { n: offline }) : t('overview.botsAllOk'),
       danger: problems > 0,
       to: '/bots',
       spark: '',
@@ -246,7 +247,7 @@ const hasActivity = computed(() => !!activity.value?.points.some((point) => Obje
 // ---- runtime ----
 // CPU and memory are different units, so they get a chart each instead of sharing two y-axes.
 
-const perfTime = (sample: PerfSample) => new Date(sample.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+const perfTime = (sample: PerfSample) => new Date(sample.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 
 function perfOption(name: string, values: number[], color: string): ChartOption {
   return {
@@ -298,7 +299,7 @@ function openSession(id: string) {
 
 <template>
   <div class="page">
-    <PageHeader :title="t('nav.overview')" :lead="t('overview.lead')" />
+    <PageHeader :title="t('nav.overview')" />
 
     <p v-if="unavailable" class="notice">{{ t('overview.unavailable') }}</p>
 

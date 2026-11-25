@@ -18,7 +18,7 @@ export function segmentsText(segments: Segment[]) {
 export function formatTime(ts: number) {
   const date = new Date(ts)
   const now = new Date()
-  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
   if (date.toDateString() === now.toDateString()) return time
   return `${date.toLocaleDateString()} ${time}`
 }

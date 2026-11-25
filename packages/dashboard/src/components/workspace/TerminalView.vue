@@ -134,7 +134,7 @@ onBeforeUnmount(() => offs.forEach((off) => off()))
 
 watch(selected, () => (error.value = ''))
 
-const time = (at: number) => new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+const time = (at: number) => new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
 const stateOf = (item: ProcessInfo) => (item.running ? 'running' : item.code === 0 ? 'ok' : 'bad')
 const openPlugins = () => workspace.openView({ kind: 'page', path: '/plugins?highlight=%40mushinjs%2Fplugin-terminal' })
 </script>

@@ -14,7 +14,7 @@ const steps = computed(() => historyEntries.value.map((entry, index) => ({ entry
 function when(at: number) {
   const date = new Date(at)
   const today = new Date().toDateString() === date.toDateString()
-  return date.toLocaleString(locale.value, today ? { hour: '2-digit', minute: '2-digit', second: '2-digit' } : { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return date.toLocaleString(locale.value, today ? { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' } : { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 }
 </script>
 
