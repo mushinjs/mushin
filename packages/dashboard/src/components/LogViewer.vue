@@ -90,7 +90,7 @@ function clock(ts: number) {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 const millis = (ts: number) => `.${pad(new Date(ts).getMilliseconds(), 3)}`
-const fullTime = (ts: number) => new Date(ts).toLocaleString()
+const fullTime = (ts: number) => new Date(ts).toLocaleString([], { hourCycle: 'h23' })
 
 // ---- virtual list ----
 
