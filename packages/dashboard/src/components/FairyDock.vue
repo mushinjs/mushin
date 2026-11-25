@@ -1,21 +1,21 @@
 <script setup lang="ts">
-import { Button, Dropdown, type DropdownOption, Input, Modal, Popover, Select, Spin, Tag, Tooltip, useConfirm, useToast } from '@mushinjs/ui'
+import { Button, Dropdown, type DropdownOption, Input, Popover, Spin, Tag, Tooltip, useConfirm, useToast } from '@mushinjs/ui'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { call } from '../api'
-import { type ChatItem, DELEGATE, EFFORTS, useConversation } from '../stores/fairy'
+import { type ChatItem, DELEGATE, useConversation } from '../stores/fairy'
 import { type Recommendation, useFairySceneStore } from '../stores/fairyScene'
-import { modelCapabilities, providerOptions as toProviderOptions } from '../models'
 import { useDataStore } from '../stores/data'
 import type { FairySkill } from '../types'
-import { pretty } from '../utils'
 import FairyMessage from './fairy/FairyMessage.vue'
 import FairyToolCall from './fairy/FairyToolCall.vue'
+import AskCard from './fairy/AskCard.vue'
+import { actionLabel } from './fairy/records'
 import CommandPalette, { type PaletteItem } from './fairy/CommandPalette.vue'
 import HistoryDrawer from './fairy/HistoryDrawer.vue'
 import PanelIcon from './flow/editor/PanelIcon.vue'
-import ModelSelect from './ModelSelect.vue'
+import EffortPicker from './fairy/EffortPicker.vue'
+import ModelPicker from './fairy/ModelPicker.vue'
 
 /**
  * `mode` is set where Fairy can float or dock; the button switches between the two. In the workspace
@@ -112,51 +112,12 @@ async function saveEdit() {
 
 // ---- model and effort for the next messages ----
 
-const showPicker = ref(false)
-const modelQuery = ref('')
-const pickerLabel = computed(() => {
-  const model = fairy.choice.model
-    || (fairy.choice.provider ? data.providers.find((item) => item.id === fairy.choice.provider)?.defaultModel ?? data.profiles.find((item) => item.id === fairy.choice.provider)?.name : undefined)
-    || t('fairyPicker.default')
-  return fairy.choice.effort ? `${model} · ${t(`fairyPicker.efforts.${fairy.choice.effort}`)}` : model
-})
+const modelPicker = ref<InstanceType<typeof ModelPicker>>()
 
-/** Chat providers with their models, newest first as fetched, filtered by the search words. */
-const modelGroups = computed(() => {
-  const query = modelQuery.value.trim().toLowerCase()
-  return data.providers
-    .filter((provider) => provider.capabilities?.includes('chat') ?? true)
-    .map((provider) => ({
-      id: provider.id,
-      name: provider.name,
-      models: (provider.models.length ? provider.models : provider.defaultModel ? [provider.defaultModel] : [])
-        .filter((model) => !query || model.toLowerCase().includes(query) || provider.name.toLowerCase().includes(query)),
-    }))
-    .filter((group) => group.models.length)
-})
-const modelCount = computed(() => data.providers.reduce((sum, provider) => sum + provider.models.length, 0))
-
-/** Whether the picked model reasons; the name is all there is to go by, so an unknown model counts as one. */
-const supportsEffort = computed(() => !fairy.choice.model || modelCapabilities(fairy.choice.model).includes('reasoning'))
-
+/** "Try another model" and /model open the model list above the input. */
 function changeModel() {
-  showPicker.value = true
+  modelPicker.value?.open()
 }
-
-/** 0 is the default effort, then one step per level. */
-const effortStep = computed(() => (fairy.choice.effort ? EFFORTS.indexOf(fairy.choice.effort) + 1 : 0))
-function setEffortStep(step: number) {
-  fairy.choice = { ...fairy.choice, effort: step ? EFFORTS[step - 1] : undefined }
-}
-
-function pickModel(provider?: string, model?: string) {
-  fairy.choice = { ...fairy.choice, provider, model }
-  showPicker.value = false
-}
-
-watch(showPicker, (open) => {
-  if (!open) modelQuery.value = ''
-})
 
 /** `/` at the start of the input lists commands; `$` after a space lists skills. */
 const trigger = computed(() => {
@@ -211,9 +172,6 @@ function onPick(item: PaletteItem) {
   paletteClosed.value = item.kind !== 'bot'
 }
 
-const showModel = ref(false)
-const modelForm = ref<{ provider?: string; model?: string }>({})
-
 function runBuiltin(name: string) {
   switch (name) {
     case 'new':
@@ -224,7 +182,7 @@ function runBuiltin(name: string) {
       showHistory.value = true
       break
     case 'model':
-      openModel().catch(() => {})
+      changeModel()
       break
     case 'status': {
       const chars = fairy.items.reduce((sum, item) => sum + ('text' in item ? item.text.length : item.kind === 'tool' ? JSON.stringify(item.input ?? '').length + JSON.stringify(item.result ?? '').length : 0), 0)
@@ -245,25 +203,6 @@ function runBuiltin(name: string) {
       }))
       break
   }
-}
-
-const providerOptions = computed(() => toProviderOptions(data.providers, data.profiles, t, { markDefault: true }))
-
-async function openModel() {
-  const plugins = await call<{ id: string; package: string; config: Record<string, any> }[]>('plugins.list')
-  const entry = plugins.find((plugin) => plugin.package === '@mushinjs/plugin-fairy')
-  modelForm.value = { provider: entry?.config.provider, model: entry?.config.model }
-  showModel.value = true
-}
-
-async function saveModel() {
-  const plugins = await call<{ id: string; package: string; config: Record<string, any> }[]>('plugins.list')
-  const entry = plugins.find((plugin) => plugin.package === '@mushinjs/plugin-fairy')
-  if (!entry) return
-  const config = { ...entry.config, provider: modelForm.value.provider || undefined, model: modelForm.value.model || undefined }
-  await call('plugins.configure', { id: entry.id, config })
-  showModel.value = false
-  fairy.note(t('fairyPalette.modelSaved', { model: modelForm.value.model || t('common.default') }))
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -322,6 +261,26 @@ const rows = computed<Row[]>(() => {
     index = end
   }
   return out
+})
+
+/**
+ * Each question of the open conversation shows on the ui.ask call that asked it; the rest (a helper's
+ * questions) wait below the chat.
+ */
+const inlineAsks = computed(() => {
+  const map = new Map<string, ReturnType<typeof fairy.visibleAsks>[number]>()
+  const open = fairy.visibleAsks().filter((ask) => !ask.session || ask.session === fairy.current)
+  for (const item of fairy.items) {
+    if (item.kind !== 'tool' || item.action !== 'ui.ask' || item.state !== 'running') continue
+    const question = (item.input as { question?: unknown } | undefined)?.question
+    const ask = open.find((entry) => entry.question === question && ![...map.values()].includes(entry))
+    if (ask) map.set(item.id, ask)
+  }
+  return map
+})
+const otherAsks = computed(() => {
+  const shown = new Set(inlineAsks.value.values())
+  return fairy.visibleAsks().filter((ask) => !shown.has(ask))
 })
 
 function groupSummary(row: Extract<Row, { kind: 'group' }>) {
@@ -462,7 +421,7 @@ onMounted(() => scrollToEnd(true))
               <span v-else-if="!row.failed" class="i-lucide-circle-check" color="var(--ok)" />
               <span v-else-if="row.failed === row.items.length" class="i-lucide-circle-x" color="var(--bad)" />
               <span v-else class="i-lucide-circle-alert" color="var(--warn)" />
-              <span class="mono group-name">{{ row.action }}</span>
+              <span class="group-name" :title="row.action">{{ actionLabel(row.action, t, te) }}</span>
               <span class="group-count">×{{ row.items.length }}</span>
               <span class="group-state">{{ groupSummary(row) }}</span>
               <span class="i-lucide-chevron-down group-chevron" />
@@ -537,7 +496,9 @@ onMounted(() => scrollToEnd(true))
                 v-else
                 :item="item"
                 :expanded="expanded.has(item.id)"
+                :ask="inlineAsks.get(item.id)"
                 @toggle="toggle(item.id)"
+                @answer="(result) => fairy.answer(inlineAsks.get(item.id)!.id, result)"
                 @confirm="(approved) => fairy.confirm(item.id, approved)"
                 @confirm-task="(approved) => fairy.confirmTask(item.id, approved)"
                 @open-task="(session) => fairy.load(session)"
@@ -546,29 +507,7 @@ onMounted(() => scrollToEnd(true))
           </template>
         </template>
 
-        <div v-for="ask in fairy.visibleAsks()" :key="ask.id" class="ask">
-          <div class="ask-question"><span class="i-lucide-circle-help" />{{ ask.question }}</div>
-          <button
-            v-for="(option, optionIndex) in ask.options"
-            :key="optionIndex"
-            type="button"
-            class="ask-option"
-            :class="{ recommended: ask.recommended === optionIndex }"
-            @click="fairy.answer(ask.id, { choice: optionIndex })"
-          >
-            <span class="ask-label">
-              {{ option.label }}
-              <Tag v-if="ask.recommended === optionIndex" size="tiny" type="success">{{ t('fairyPalette.recommended') }}</Tag>
-            </span>
-            <span v-if="option.description" class="ask-desc">{{ option.description }}</span>
-          </button>
-          <Input
-            v-if="ask.allowOther"
-            size="small"
-            :placeholder="t('fairyMessage.other')"
-            @keydown.enter="(event: KeyboardEvent) => { const value = (event.target as HTMLInputElement).value.trim(); if (value) fairy.answer(ask.id, { other: value }) }"
-          />
-        </div>
+        <AskCard v-for="ask in otherAsks" :key="ask.id" :ask="ask" @answer="(result) => fairy.answer(ask.id, result)" />
 
         <div v-if="fairy.streaming" class="msg assistant streaming"><FairyMessage :text="fairy.streaming" streaming /></div>
         <div v-else-if="fairy.running" class="thinking"><Spin :size="14" /> {{ t('fairy.thinking') }}</div>
@@ -635,63 +574,10 @@ onMounted(() => scrollToEnd(true))
             @keydown="onKeydown"
           />
           <div class="composer-bar">
-            <Popover v-model:show="showPicker" placement="top" align="start" :padded="false" :width="300">
-              <template #trigger>
-                <button type="button" class="picker-chip" :title="t('fairyPicker.title')">
-                  <span class="picker-label">{{ pickerLabel }}</span>
-                  <span class="i-lucide-chevron-down picker-caret" />
-                </button>
-              </template>
-              <div class="picker">
-                <div class="picker-effort">
-                  <div class="picker-row">
-                    <span class="picker-title">{{ t('fairyPicker.effort') }}</span>
-                    <span class="picker-value">{{ t(`fairyPicker.efforts.${fairy.choice.effort ?? 'default'}`) }}</span>
-                  </div>
-                  <div class="effort-track" :class="{ disabled: !supportsEffort }" :style="{ '--fill': `${(effortStep / EFFORTS.length) * 100}%` }">
-                    <button
-                      v-for="step in EFFORTS.length + 1"
-                      :key="step"
-                      type="button"
-                      class="effort-stop"
-                      :class="{ on: step - 1 <= effortStep, current: step - 1 === effortStep }"
-                      :style="{ left: `${((step - 1) / EFFORTS.length) * 100}%` }"
-                      :aria-label="t(`fairyPicker.efforts.${step === 1 ? 'default' : EFFORTS[step - 2]}`)"
-                      :title="t(`fairyPicker.efforts.${step === 1 ? 'default' : EFFORTS[step - 2]}`)"
-                      @click="setEffortStep(step - 1)"
-                    />
-                  </div>
-                  <div class="effort-ends">
-                    <span>{{ t('fairyPicker.efforts.default') }}</span>
-                    <span>{{ t('fairyPicker.efforts.max') }}</span>
-                  </div>
-                  <p v-if="!supportsEffort" class="effort-off">{{ t('fairyPicker.noEffort') }}</p>
-                </div>
-                <div class="picker-models">
-                  <input v-if="modelCount > 8" v-model="modelQuery" class="picker-search" :placeholder="t('fairyPicker.search')">
-                  <button type="button" class="model-item" :class="{ current: !fairy.choice.provider && !fairy.choice.model }" @click="pickModel()">
-                    <span class="model-name">{{ t('fairyPicker.default') }}<small>{{ t('fairyPicker.defaultHint') }}</small></span>
-                    <span v-if="!fairy.choice.provider && !fairy.choice.model" class="i-lucide-check" />
-                  </button>
-                  <template v-for="group in modelGroups" :key="group.id">
-                    <div class="model-group">{{ group.name }}</div>
-                    <button
-                      v-for="model in group.models"
-                      :key="model"
-                      type="button"
-                      class="model-item"
-                      :class="{ current: fairy.choice.provider === group.id && fairy.choice.model === model }"
-                      @click="pickModel(group.id, model)"
-                    >
-                      <span class="model-name">{{ model }}</span>
-                      <span v-if="fairy.choice.provider === group.id && fairy.choice.model === model" class="i-lucide-check" />
-                    </button>
-                  </template>
-                  <div v-if="!modelGroups.length && modelQuery" class="model-empty">{{ t('fairyPicker.noMatch') }}</div>
-                </div>
-                <p class="picker-hint">{{ t('fairyPicker.hint') }}</p>
-              </div>
-            </Popover>
+            <div class="composer-pickers">
+              <ModelPicker ref="modelPicker" />
+              <EffortPicker />
+            </div>
             <!-- While Fairy works: stop now, or send what you typed for it to read before its next step. -->
             <Button v-if="fairy.running" size="small" circle quaternary class="composer-stop" :aria-label="t('fairy.stop')" :title="t('fairy.stopHint')" icon="i-lucide-square" @click="fairy.cancel()" />
             <Button
@@ -712,13 +598,6 @@ onMounted(() => scrollToEnd(true))
     </footer>
 
     <HistoryDrawer v-model:show="showHistory" />
-    <Modal v-model:show="showModel" :title="t('fairyPalette.modelTitle')" :style="{ width: '400px' }">
-      <div class="model-form">
-        <Select v-model:value="modelForm.provider" clearable :options="providerOptions" :placeholder="t('fairyPalette.defaultProvider')" />
-        <ModelSelect :model-value="modelForm.model" :provider="modelForm.provider" :placeholder="t('fairyPalette.defaultModel')" @update:model-value="(value) => (modelForm.model = value ?? undefined)" />
-        <Button type="primary" @click="saveModel">{{ t('common.save') }}</Button>
-      </div>
-    </Modal>
   </div>
 </template>
 
@@ -780,6 +659,14 @@ onMounted(() => scrollToEnd(true))
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* Tool calls in a row read as one list. */
+.dock-column > .tool + .tool,
+.dock-column > .tool + .tool-group,
+.dock-column > .tool-group + .tool,
+.dock-column > .tool-group + .tool-group {
+  margin-top: -8px;
 }
 
 .dock-empty {
@@ -925,53 +812,6 @@ onMounted(() => scrollToEnd(true))
   flex: none;
 }
 
-.ask {
-  border: 1px solid var(--primary);
-  border-radius: 10px;
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.ask-question {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  font-weight: 500;
-}
-
-.ask-option {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  text-align: left;
-  font: inherit;
-  font-size: 13px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-
-.ask-option:hover,
-.ask-option.recommended {
-  border-color: var(--primary);
-}
-
-.ask-label {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.ask-desc {
-  font-size: 12px;
-  opacity: 0.65;
-}
-
 .stale {
   display: flex;
   align-items: center;
@@ -1054,12 +894,6 @@ onMounted(() => scrollToEnd(true))
   z-index: 10;
 }
 
-.model-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
 .msg {
   max-width: 88%;
   padding: 8px 12px;
@@ -1133,199 +967,45 @@ onMounted(() => scrollToEnd(true))
   gap: 6px;
 }
 
-.picker-chip {
-  display: inline-flex;
+.msg.user {
+  background: var(--primary-soft);
+  color: var(--fg);
+  border: 1px dashed var(--primary);
+}
+
+.queued-note {
+  display: flex;
   align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--fg3);
+}
+
+.msg-actions {
+  display: flex;
   gap: 2px;
-  max-width: 100%;
-  padding: 2px 6px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--fg3);
-  font-size: 12px;
-  cursor: pointer;
+  height: 24px;
+  opacity: 0;
+  transition: opacity 0.15s;
 }
 
-.picker-chip:hover,
-.picker-chip[data-state='open'] {
-  background: var(--s2);
-  color: var(--fg);
+.msg-wrap:hover .msg-actions,
+.msg-actions:focus-within {
+  opacity: 1;
 }
 
-.picker-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.picker-caret {
-  flex: none;
-  font-size: 12px;
-}
-
-.picker {
+.msg-edit {
+  align-self: stretch;
   display: flex;
   flex-direction: column;
-  font-size: 13px;
+  gap: 6px;
 }
 
-.picker-effort {
-  padding: 12px 14px 10px;
-  border-bottom: 1px solid var(--line);
-}
-
-.picker-row {
+.msg-edit-actions {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 12px;
-}
-
-.picker-title {
-  color: var(--fg2);
-}
-
-.picker-value {
-  color: var(--fg);
-  font-weight: 500;
-}
-
-.effort-track {
-  position: relative;
-  height: 4px;
-  margin: 0 7px;
-  border-radius: 2px;
-  background: linear-gradient(to right, var(--primary) var(--fill), var(--line-strong) var(--fill));
-}
-
-.effort-stop {
-  position: absolute;
-  top: 50%;
-  width: 10px;
-  height: 10px;
-  padding: 0;
-  border: 2px solid var(--line-strong);
-  border-radius: 50%;
-  background: var(--s1);
-  transform: translate(-50%, -50%);
-  cursor: pointer;
-}
-
-.effort-stop::before {
-  content: '';
-  position: absolute;
-  inset: -8px;
-}
-
-.effort-stop.on {
-  border-color: var(--primary);
-  background: var(--primary);
-}
-
-.effort-stop.current {
-  width: 14px;
-  height: 14px;
-  background: var(--s1);
-}
-
-.effort-track.disabled {
-  opacity: 0.4;
-  pointer-events: none;
-}
-
-.effort-off {
-  margin: 8px 0 0;
-  color: var(--warn);
-  font-size: 11px;
-}
-
-.effort-ends {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 8px;
-  color: var(--fg3);
-  font-size: 11px;
-}
-
-.picker-models {
-  display: flex;
-  flex-direction: column;
-  max-height: 280px;
-  padding: 6px;
-  overflow-y: auto;
-}
-
-.picker-search {
-  margin: 0 0 6px;
-  padding: 6px 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  color: var(--fg);
-  font: inherit;
-  outline: none;
-}
-
-.picker-search:focus {
-  border-color: var(--primary);
-}
-
-.model-group {
-  padding: 8px 8px 4px;
-  color: var(--fg3);
-  font-size: 11px;
-}
-
-.model-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 8px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--fg);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.model-item:hover {
-  background: var(--s2);
-}
-
-.model-item .i-lucide-check {
-  flex: none;
-  color: var(--primary);
-}
-
-.model-name {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.model-name small {
-  color: var(--fg3);
-  font-size: 11px;
-}
-
-.model-empty {
-  padding: 8px;
-  color: var(--fg3);
-}
-
-.picker-hint {
-  margin: 0;
-  padding: 8px 14px 10px;
-  border-top: 1px solid var(--line);
-  color: var(--fg3);
-  font-size: 11px;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .msg.user {
@@ -1547,6 +1227,13 @@ onMounted(() => scrollToEnd(true))
   align-items: center;
   gap: 6px;
   cursor: default;
+}
+
+.composer-pickers {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
 }
 
 .composer-stop {

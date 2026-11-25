@@ -4,19 +4,35 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { highlight } from '../../highlight'
-import { type ChatItem, DELEGATE } from '../../stores/fairy'
+import { type AskItem, type ChatItem, DELEGATE } from '../../stores/fairy'
+import { useDataStore } from '../../stores/data'
 import { type PanelView, workspace } from '../../stores/workspace'
 import type { FairyTaskReport } from '../../types'
-import { pretty } from '../../utils'
+import AskCard from './AskCard.vue'
+import { actionLabel, actionTarget, askAnswer } from './records'
+import ToolDetail from './ToolDetail.vue'
 
 /**
- * One tool call of a Fairy reply: what it called, how it went, and its input and output on demand. A task
- * handed to a helper shows as a card: the helper, the task, what it is doing, and its report.
+ * One tool call of a Fairy reply: what it did in words, how it went, and what went in and came out on
+ * demand. A task handed to a helper shows as a card: the helper, the task, what it is doing, and its report.
+ * A question Fairy waits on (`ask`) shows where it was asked, to be answered there.
  */
-const props = defineProps<{ item: Extract<ChatItem, { kind: 'tool' }>; expanded: boolean }>()
-const emit = defineEmits<{ toggle: []; confirm: [approved: boolean]; confirmTask: [approved: boolean]; openTask: [session: string] }>()
+const props = defineProps<{ item: Extract<ChatItem, { kind: 'tool' }>; expanded: boolean; ask?: AskItem }>()
+const emit = defineEmits<{
+  toggle: []
+  confirm: [approved: boolean]
+  confirmTask: [approved: boolean]
+  openTask: [session: string]
+  answer: [result: { choice: number } | { other: string }]
+}>()
 
 const { t, te } = useI18n()
+const data = useDataStore()
+
+const label = computed(() => actionLabel(props.item.action, t, te))
+/** The action of an approval a helper waits on, in words. */
+const taskConfirmLabel = computed(() => (props.item.task?.confirm ? actionLabel(props.item.task.confirm.action, t, te) : ''))
+const stepLabel = (action: string) => actionLabel(action, t, te)
 
 const isTask = computed(() => props.item.action === DELEGATE)
 const input = computed(() => (props.item.input ?? {}) as { role?: string; task?: string })
@@ -41,6 +57,7 @@ const steps = computed(() => props.item.task?.steps.slice(-4) ?? [])
 const summary = computed(() => {
   const value = props.item.input as { command?: unknown; path?: unknown; url?: unknown; text?: unknown; key?: unknown; ref?: unknown } | undefined
   if (typeof value?.command === 'string') return `$ ${value.command.split('\n')[0]}`
+  if (props.item.action === 'files.search' && typeof (value as { query?: unknown })?.query === 'string') return `“${(value as { query: string }).query}”`
   if (typeof value?.path === 'string' && /^(files|terminal)\./.test(props.item.action)) return value.path
   if (props.item.action.startsWith('browser.')) {
     if (typeof value?.url === 'string') return value.url
@@ -48,11 +65,26 @@ const summary = computed(() => {
     if (typeof value?.key === 'string') return value.key
     if (typeof value?.ref === 'string') return value.ref
   }
-  return ''
+  if (props.item.action === 'ui.ask') return ''
+  return actionTarget(props.item.action, props.item.input, data)
 })
-const command = computed(() => {
-  const value = props.item.input as { command?: unknown; cwd?: unknown } | undefined
-  return typeof value?.command === 'string' ? { text: value.command, cwd: typeof value.cwd === 'string' ? value.cwd : '' } : undefined
+
+/** How a command ended, on its row when it did not go well: its exit code, or that it timed out. */
+const exit = computed(() => {
+  if (props.item.state !== 'ok' || props.item.action !== 'terminal.run') return undefined
+  const result = props.item.result as { code?: number | null; timedOut?: boolean } | undefined
+  if (result?.timedOut) return { tone: 'warn', text: t('fairyRecord.timedOut') }
+  if (typeof result?.code === 'number' && result.code !== 0) return { tone: 'bad', text: t('fairyRecord.exit', { code: result.code }) }
+  return undefined
+})
+
+/** A question asked with ui.ask, and the answer picked, for its line once answered. */
+const question = computed(() => {
+  if (props.item.action !== 'ui.ask') return undefined
+  const value = props.item.input as { question?: unknown } | undefined
+  const answer = askAnswer(props.item.result)
+  const text = !answer ? '' : answer.kind === 'choice' ? answer.label : answer.kind === 'other' ? answer.text : t(answer.kind === 'skipped' ? 'fairyRecord.askSkippedShort' : 'fairyRecord.askCancelledShort')
+  return { text: typeof value?.question === 'string' ? value.question : '', answer: text, answered: answer?.kind === 'choice' || answer?.kind === 'other' }
 })
 
 // ---- pages Fairy offers or opens, and spots it points at, as cards with a button ----
@@ -145,12 +177,12 @@ const reason = computed(() => {
         <span v-else-if="step.state === 'ok'" class="i-lucide-check" color="var(--ok)" />
         <span v-else-if="step.state === 'confirm'" class="i-lucide-hand" color="var(--warn)" />
         <span v-else class="i-lucide-x" color="var(--bad)" />
-        <span class="mono">{{ step.action }}</span>
+        <span class="task-step" :title="step.action">{{ stepLabel(step.action) }}</span>
       </li>
     </ul>
     <div v-if="item.task?.confirm" class="confirm">
-      <p>{{ t('fairyTask.confirmText', { role: roleName, action: item.task.confirm.action }) }}</p>
-      <pre class="json mono">{{ pretty(item.task.confirm.input) }}</pre>
+      <p>{{ t('fairyTask.confirmText', { role: roleName, action: taskConfirmLabel }) }}</p>
+      <ToolDetail :item="{ kind: 'tool', id: item.task.confirm.id, action: item.task.confirm.action, input: item.task.confirm.input, state: 'confirm' }" input-only />
       <div class="confirm-actions">
         <Button size="small" type="error" @click="emit('confirmTask', true)">{{ t('fairy.approve') }}</Button>
         <Button size="small" @click="emit('confirmTask', false)">{{ t('fairy.deny') }}</Button>
@@ -190,34 +222,40 @@ const reason = computed(() => {
     <span v-if="here" class="ui-card-here"><span class="i-lucide-check" />{{ t('fairyCard.opened') }}</span>
     <Button v-else size="small" secondary @click="act">{{ actLabel }}</Button>
   </div>
-  <div v-else class="tool" :class="item.state">
+  <AskCard v-else-if="ask" :ask="ask" @answer="(result) => emit('answer', result)" />
+  <div v-else class="tool" :class="[item.state, { open: expanded }]">
     <button class="tool-row" type="button" @click="emit('toggle')">
       <Spin v-if="item.state === 'running'" :size="14" />
-      <span v-else-if="item.state === 'ok'" class="i-lucide-circle-check" color="var(--ok)" />
-      <span v-else-if="item.state === 'confirm'" class="i-lucide-hand" color="var(--warn)" />
-      <span v-else class="i-lucide-circle-x" color="var(--bad)" />
-      <span class="mono tool-name">{{ item.action }}</span>
-      <span v-if="summary" class="mono tool-summary" :title="summary">{{ summary }}</span>
-      <Tag v-if="item.risk === 'dangerous'" size="tiny" type="error">{{ t('fairy.dangerous') }}</Tag>
-      <span class="tool-state">{{ t(`fairy.state.${item.state}`) }}</span>
+      <span v-else-if="question && item.state === 'ok'" class="i-lucide-circle-help tool-icon" :class="{ answered: question.answered }" />
+      <span v-else-if="exit" class="i-lucide-circle-alert tool-icon" :class="exit.tone" />
+      <span v-else-if="item.state === 'ok'" class="i-lucide-circle-check tool-icon" />
+      <span v-else-if="item.state === 'confirm'" class="i-lucide-hand tool-icon" />
+      <span v-else-if="item.state === 'declined'" class="i-lucide-ban tool-icon" />
+      <span v-else class="i-lucide-circle-x tool-icon" />
+      <template v-if="question">
+        <span class="tool-name" :title="question.text">{{ question.text || label }}</span>
+        <span v-if="question.answer" class="tool-answer" :class="{ muted: !question.answered }" :title="question.answer">{{ question.answer }}</span>
+      </template>
+      <template v-else>
+        <span class="tool-name" :title="item.action">{{ label }}</span>
+        <span v-if="summary" class="tool-summary" :class="{ mono: /^(terminal|files|browser)\./.test(item.action) }" :title="summary">{{ summary }}</span>
+      </template>
+      <span v-if="exit" class="tool-exit" :class="exit.tone">{{ exit.text }}</span>
+      <Tag v-if="item.risk === 'dangerous' && item.state === 'confirm'" size="tiny" type="error">{{ t('fairy.dangerous') }}</Tag>
+      <span v-if="item.state !== 'ok'" class="tool-state">{{ t(`fairy.state.${item.state}`) }}</span>
+      <span class="i-lucide-chevron-down tool-chevron" />
     </button>
     <div v-if="reason && !expanded" class="tool-reason" :title="reason">{{ reason }}</div>
     <div v-if="item.state === 'confirm'" class="confirm">
-      <p>{{ t('fairy.confirmText', { action: item.action }) }}</p>
-      <pre v-if="command" class="json mono command">$ {{ command.text }}<template v-if="command.cwd">{{ '\n' }}# {{ command.cwd }}</template></pre>
-      <pre v-else class="json mono">{{ pretty(item.input) }}</pre>
+      <p>{{ t('fairy.confirmText', { action: summary && !/^(terminal|files|browser)\./.test(item.action) ? `${label} ${summary}` : label }) }}</p>
+      <ToolDetail :item="item" input-only />
       <div class="confirm-actions">
         <Button size="small" type="error" @click="emit('confirm', true)">{{ t('fairy.approve') }}</Button>
         <Button size="small" @click="emit('confirm', false)">{{ t('fairy.deny') }}</Button>
       </div>
     </div>
     <div v-else-if="expanded" class="tool-detail">
-      <div class="label">{{ t('fairy.input') }}</div>
-      <pre class="json mono">{{ pretty(item.input) }}</pre>
-      <template v-if="item.result !== undefined || item.error">
-        <div class="label">{{ t('fairy.output') }}</div>
-        <pre class="json mono">{{ item.error ?? pretty(item.result) }}</pre>
-      </template>
+      <ToolDetail :item="item" />
     </div>
   </div>
 </template>
@@ -258,7 +296,7 @@ const reason = computed(() => {
   min-width: 0;
 }
 
-.task-steps .mono {
+.task-step {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -299,13 +337,118 @@ const reason = computed(() => {
 }
 
 .tool {
-  border: 1px solid rgba(127, 127, 127, 0.2);
+  border: 1px solid var(--line);
   border-radius: 8px;
   font-size: 13px;
+  transition: border-color 0.15s, background 0.15s;
 }
 
+/* Waiting on you: yellow. Done: a green check and a quieter line. Failed: red, with why. Declined: struck out. */
 .tool.confirm {
   border-color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.tool-icon {
+  flex: none;
+}
+
+.tool.ok .tool-icon {
+  color: var(--ok);
+}
+
+.tool.ok .tool-icon.i-lucide-circle-help {
+  color: var(--fg3);
+}
+
+.tool.ok .tool-icon.answered {
+  color: var(--primary);
+}
+
+.tool.ok:not(.open) .tool-row {
+  color: var(--fg2);
+}
+
+.tool.ok:not(.open, :hover) {
+  border-color: transparent;
+  background: rgba(127, 127, 127, 0.05);
+}
+
+.tool.confirm .tool-icon {
+  color: var(--warn);
+}
+
+.tool.error {
+  border-color: var(--bad-soft);
+}
+
+.tool.error .tool-icon,
+.tool.error .tool-state {
+  color: var(--bad);
+  opacity: 1;
+}
+
+.tool.declined .tool-icon {
+  color: var(--fg3);
+}
+
+.tool.declined .tool-name {
+  color: var(--fg3);
+  text-decoration: line-through;
+}
+
+.tool-chevron {
+  flex: none;
+  font-size: 14px;
+  color: var(--fg3);
+  opacity: 0;
+  transition: transform 0.15s, opacity 0.15s;
+}
+
+.tool-row:hover .tool-chevron,
+.tool.open .tool-chevron {
+  opacity: 1;
+}
+
+.tool.open .tool-chevron {
+  transform: rotate(180deg);
+}
+
+.tool-answer {
+  flex: none;
+  max-width: 45%;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tool-answer {
+  margin-right: auto;
+}
+
+.tool.ok .tool-icon.bad,
+.tool-exit.bad {
+  color: var(--bad);
+}
+
+.tool.ok .tool-icon.warn,
+.tool-exit.warn {
+  color: var(--warn);
+}
+
+.tool-exit {
+  flex: none;
+  font-size: 12px;
+}
+
+.tool-answer.muted {
+  background: rgba(127, 127, 127, 0.12);
+  color: var(--fg3);
 }
 
 .tool-row {
@@ -326,6 +469,7 @@ const reason = computed(() => {
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
 }
 
@@ -365,9 +509,9 @@ const reason = computed(() => {
   font-size: 12px;
   opacity: 0.6;
 }
-.tool-name:has(+ .tool-summary) {
-  flex: none;
-  max-width: 45%;
+.tool-name:has(+ .tool-summary),
+.tool-name:has(+ .tool-answer) {
+  flex: 0 1 auto;
 }
 
 .tool-summary {
@@ -432,10 +576,5 @@ const reason = computed(() => {
   gap: 4px;
   font-size: 12px;
   color: var(--fg3);
-}
-
-.json.command {
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 </style>

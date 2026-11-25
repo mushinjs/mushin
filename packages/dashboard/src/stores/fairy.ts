@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { inject, type InjectionKey, ref, watch } from 'vue'
 import { call, on } from '../api'
+import { unwrapCall } from '../components/fairy/records'
 import { prefs } from '../prefs'
 import type { FairyCommands, FairyEvent, FairyGroup, FairyMessage, FairyScene, FairySessionSummary, FairySkill, FairyTaskReport, Risk } from '../types'
 
@@ -48,7 +49,9 @@ function toItems(messages: FairyMessage[]): ChatItem[] {
     } else if (message.role === 'assistant') {
       if (message.content) items.push({ kind: 'assistant', text: message.content })
       for (const call of message.toolCalls ?? []) {
-        const item = { kind: 'tool' as const, id: call.id, action: call.name.replaceAll('__', '.'), input: parseArgs(call.arguments), state: 'running' as ToolState }
+        // A tool run through call_tool shows as itself, as it did while the reply streamed in.
+        const { action, input } = unwrapCall(call.name.replaceAll('__', '.'), parseArgs(call.arguments))
+        const item = { kind: 'tool' as const, id: call.id, action, input, state: 'running' as ToolState }
         tools.set(call.id, item)
         items.push(item)
       }
