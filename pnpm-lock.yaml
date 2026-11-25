@@ -357,6 +357,9 @@ importers:
 
   packages/dashboard:
     devDependencies:
+      '@mushinjs/core':
+        specifier: workspace:*
+        version: link:../core
       '@mushinjs/ui':
         specifier: workspace:*
         version: link:../ui

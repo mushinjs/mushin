@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useToast } from '@mushinjs/ui'
-import { Button, Input, RadioButton, RadioGroup } from '@mushinjs/ui'
+import { Button, Checkbox, Input, RadioButton, RadioGroup } from '@mushinjs/ui'
+import { foldKey, foldLines } from '@mushinjs/core/log-fold'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { renderLog } from '../logHighlight'
 import { type LogRef, useLogRefs } from '../logRefs'
+import { prefs } from '../prefs'
 import { giveToFairy, useConversation } from '../stores/fairy'
 import type { LogLine } from '../types'
 import { logRef, startRefDrag } from './fairy/refs'
@@ -63,6 +65,109 @@ function keyOf(line: LogLine) {
   return key
 }
 
+// ---- folding repeats ----
+// Display only: after the filters, adjacent repeats of one line or of a block of up to five lines become
+// one row (or one block of rows) with a count. The lines themselves stay as they are.
+
+/** Lines that fold together: the whole run, `period` lines repeating `count` times. */
+interface Group {
+  /** The key of its first line, which stays put as the group grows. */
+  key: number
+  lines: LogLine[]
+  period: number
+  count: number
+}
+
+interface Row {
+  /** In a collapsed group, the key of the first occurrence's line in this place, so it stays put too. */
+  key: number
+  /** The line shown: in a collapsed group, the latest occurrence. */
+  line: LogLine
+  group?: Group
+  /** In a collapsed group, the first occurrence of this row's line. */
+  first?: LogLine
+  /** Bracket part, for a group shown as more than one row. */
+  bracket?: 'top' | 'middle' | 'bottom'
+  /** The count badge goes on a group's last row. */
+  badge?: boolean
+}
+
+const foldKeys = new WeakMap<LogLine, string>()
+function cachedFoldKey(line: LogLine) {
+  let key = foldKeys.get(line)
+  if (key === undefined) foldKeys.set(line, key = foldKey(line))
+  return key
+}
+
+/** Groups opened in place, by group key. */
+const expanded = ref(new Set<number>())
+
+const display = computed<Row[]>(() => {
+  const list = visible.value
+  if (!prefs.logFold) return list.map((line) => ({ key: keyOf(line), line }))
+  const rows: Row[] = []
+  for (const fold of foldLines(list, { key: cachedFoldKey })) {
+    const lines = list.slice(fold.start, fold.start + fold.period * fold.count)
+    if (fold.count === 1) {
+      for (const line of lines) rows.push({ key: keyOf(line), line })
+      continue
+    }
+    const group: Group = { key: keyOf(lines[0]), lines, period: fold.period, count: fold.count }
+    const open = expanded.value.has(group.key)
+    const shown = open ? lines : lines.slice(-fold.period)
+    shown.forEach((line, index) => {
+      const last = index === shown.length - 1
+      rows.push({
+        key: open ? keyOf(line) : keyOf(lines[index]),
+        line,
+        group,
+        first: open ? undefined : lines[index],
+        bracket: shown.length < 2 ? undefined : index === 0 ? 'top' : last ? 'bottom' : 'middle',
+        badge: last,
+      })
+    })
+  }
+  return rows
+})
+
+/** Lines that folding hides right now. */
+const foldedAway = computed(() => visible.value.length - display.value.length)
+
+function toggleGroup(group: Group) {
+  const next = new Set(expanded.value)
+  if (!next.delete(group.key)) next.add(group.key)
+  expanded.value = next
+}
+
+const DIGITS = /\d/
+const MAX_VARIANTS = 8
+
+/** The badge's tooltip: count, first and latest time, and the texts when their numbers differed. */
+function groupTitle(group: Group) {
+  const parts = [
+    group.period > 1 ? t('logs.foldBlock', { lines: group.period, count: number(group.count) }) : t('logs.foldLine', { count: number(group.count) }),
+    t('logs.foldFirst', { time: fullTime(group.lines[0].ts) }),
+    t('logs.foldLatest', { time: fullTime(group.lines.at(-1)!.ts) }),
+  ]
+  const texts = [...new Set(group.lines.map((line) => line.text))]
+  if (texts.length > group.period && texts.some((text) => DIGITS.test(text))) {
+    parts.push('', t('logs.foldVariants', { count: number(texts.length) }))
+    for (const text of texts.slice(-MAX_VARIANTS)) parts.push(`  ${text.length > 160 ? `${text.slice(0, 160)}…` : text}`)
+    if (texts.length > MAX_VARIANTS) parts.push(`  ${t('logs.foldMore', { count: number(texts.length - MAX_VARIANTS) })}`)
+  }
+  parts.push('', t(expanded.value.has(group.key) ? 'logs.foldCollapse' : 'logs.foldExpand'))
+  return parts.join('\n')
+}
+
+const number = (value: number) => value.toLocaleString()
+const countText = computed(() => {
+  const shown = number(display.value.length)
+  const total = number(props.lines.length)
+  if (!foldedAway.value) return t('logs.count', { shown, total })
+  const folded = number(foldedAway.value)
+  return visible.value.length === props.lines.length ? t('logs.countFoldedAll', { shown, folded }) : t('logs.countFolded', { shown, total, folded })
+})
+
 // ---- rendering ----
 
 const levelLabel: Record<string, string> = { debug: 'DBG', info: 'INF', warn: 'WRN', error: 'ERR' }
@@ -97,13 +202,13 @@ const fullTime = (ts: number) => new Date(ts).toLocaleString([], { hourCycle: 'h
 // ---- virtual list ----
 
 const virtualizer = useVirtualizer(computed(() => ({
-  count: visible.value.length,
+  count: display.value.length,
   getScrollElement: () => box.value ?? null,
   estimateSize: () => 23,
   overscan: 16,
-  getItemKey: (index: number) => keyOf(visible.value[index]),
+  getItemKey: (index: number) => display.value[index].key,
 })))
-const rows = computed(() => virtualizer.value.getVirtualItems().map((item) => ({ item, line: visible.value[item.index] })))
+const rows = computed(() => virtualizer.value.getVirtualItems().map((item) => ({ item, row: display.value[item.index] })))
 const totalSize = computed(() => virtualizer.value.getTotalSize())
 
 function measure(el: unknown) {
@@ -122,7 +227,7 @@ function atBottom() {
 
 async function toBottom() {
   await nextTick()
-  const count = visible.value.length
+  const count = display.value.length
   if (!count || !box.value) return
   programmatic++
   virtualizer.value.scrollToIndex(count - 1, { align: 'end' })
@@ -150,8 +255,9 @@ function resume() {
 }
 
 onMounted(toBottom)
-// The last line, not the count: once the buffer is full, old lines leave as new ones arrive.
-watch(() => visible.value.at(-1), () => {
+// The last line, not the count: once the buffer is full, old lines leave as new ones arrive,
+// and the last row of a folded group shows each new repeat.
+watch(() => display.value.at(-1)?.line, () => {
   if (follow.value) toBottom()
 })
 
@@ -162,16 +268,16 @@ const selected = ref(new Set<number>())
 let anchor: number | undefined
 
 // Lines trimmed from the top or cleared simply drop out here.
-const selectedLines = computed(() => selected.value.size ? visible.value.filter((line) => selected.value.has(keyOf(line))) : [])
+const selectedRows = computed(() => selected.value.size ? display.value.filter((row) => selected.value.has(row.key)) : [])
 watch(() => props.lines, () => (selected.value = new Set()))
 
 function indexOfKey(key: number | undefined) {
-  return key === undefined ? -1 : visible.value.findIndex((line) => keyOf(line) === key)
+  return key === undefined ? -1 : display.value.findIndex((row) => row.key === key)
 }
 
 function rangeKeys(from: number, to: number) {
   const [start, end] = from <= to ? [from, to] : [to, from]
-  return visible.value.slice(start, end + 1).map(keyOf)
+  return display.value.slice(start, end + 1).map((row) => row.key)
 }
 
 let dragBase: Set<number> | undefined
@@ -199,9 +305,10 @@ function onMouseDown(event: MouseEvent) {
   if (event.target === el && (event.offsetX >= el.clientWidth || event.offsetY >= el.clientHeight)) return
   const index = rowIndex(event.target as Element)
   const plain = !event.shiftKey && !event.ctrlKey && !event.metaKey
-  if (plain && index >= 0 && selected.value.has(keyOf(visible.value[index]))) {
+  // Rows can be folded, so the row under the pointer is found among the displayed ones.
+  if (plain && index >= 0 && selected.value.has(display.value[index]!.key)) {
     // Left to the browser, so the selected lines can be dragged into Fairy's input.
-    pressed = keyOf(visible.value[index])
+    pressed = display.value[index]!.key
     window.addEventListener('mouseup', () => {
       if (pressed !== undefined) selected.value = new Set([pressed])
       anchor = pressed ?? anchor
@@ -218,7 +325,7 @@ function onMouseDown(event: MouseEvent) {
     if (!toggle && !event.shiftKey) selected.value = new Set()
     return
   }
-  const key = keyOf(visible.value[index])
+  const key = display.value[index].key
   if (event.shiftKey && indexOfKey(anchor) >= 0) {
     dragFrom = indexOfKey(anchor)
     dragBase = toggle ? new Set(selected.value) : new Set()
@@ -285,7 +392,13 @@ function plainLine(line: LogLine) {
   return `${day} ${clock(line.ts)}${millis(line.ts)} ${levelOf(line)} [${line.name}] ${line.text}`
 }
 
-const copyText = () => selectedLines.value.map(plainLine).join('\n')
+/** A folded row copies as its latest line, with the count and the first and latest time. */
+function plainRow(row: Row) {
+  const text = plainLine(row.line)
+  return row.first && row.group ? `${text}  (×${row.group.count}, ${clock(row.first.ts)}–${clock(row.line.ts)})` : text
+}
+
+const copyText = () => selectedRows.value.map(plainRow).join('\n')
 
 // ---- giving lines to Fairy ----
 
@@ -293,12 +406,13 @@ const conversation = useConversation()
 
 /** The selected lines as an attachment for Fairy, named by where they come from when that is one place. */
 function selectionRef() {
-  const lines = selectedLines.value
-  if (!lines.length) return undefined
-  const sources = new Set(lines.map((line) => line.name))
-  const source = sources.size === 1 ? lines[0].name : undefined
-  const label = source ? t('fairyRefs.logLabelFrom', { n: lines.length, source }, lines.length) : t('fairyRefs.logLabel', lines.length)
-  return logRef(lines.map(plainLine), label, source)
+  // Folded rows go as one line each, with their count, as they are copied.
+  const rows = selectedRows.value
+  if (!rows.length) return undefined
+  const sources = new Set(rows.map((row) => row.line.name))
+  const source = sources.size === 1 ? rows[0]!.line.name : undefined
+  const label = source ? t('fairyRefs.logLabelFrom', { n: rows.length, source }, rows.length) : t('fairyRefs.logLabel', rows.length)
+  return logRef(rows.map(plainRow), label, source)
 }
 
 function onRowDragStart(event: DragEvent) {
@@ -320,7 +434,7 @@ function hasTextSelection() {
 }
 
 async function copySelected() {
-  const count = selectedLines.value.length
+  const count = selectedRows.value.length
   if (!count) return
   try {
     await navigator.clipboard.writeText(copyText())
@@ -335,10 +449,10 @@ function onKeyDown(event: KeyboardEvent) {
   const key = event.key.toLowerCase()
   if (mod && key === 'a') {
     event.preventDefault()
-    selected.value = new Set(visible.value.map(keyOf))
+    selected.value = new Set(display.value.map((row) => row.key))
   } else if (key === 'escape' && selected.value.size) {
     selected.value = new Set()
-  } else if (mod && key === 'c' && selectedLines.value.length && !hasTextSelection() && navigator.clipboard) {
+  } else if (mod && key === 'c' && selectedRows.value.length && !hasTextSelection() && navigator.clipboard) {
     event.preventDefault()
     copySelected()
   }
@@ -346,7 +460,7 @@ function onKeyDown(event: KeyboardEvent) {
 
 // Without the async clipboard (plain http on another host) Ctrl+C still lands here.
 function onCopy(event: ClipboardEvent) {
-  if (!selectedLines.value.length || hasTextSelection() || !event.clipboardData) return
+  if (!selectedRows.value.length || hasTextSelection() || !event.clipboardData) return
   event.clipboardData.setData('text/plain', copyText())
   event.preventDefault()
 }
@@ -372,8 +486,10 @@ function onClick(event: MouseEvent) {
         <RadioButton value="warn">{{ t('logs.warnings') }}</RadioButton>
         <RadioButton value="error">{{ t('logs.errors') }}</RadioButton>
       </RadioGroup>
+      <Checkbox v-model:checked="prefs.logFold" size="small">{{ t('logs.fold') }}</Checkbox>
+      <slot name="tools" />
       <div class="spacer" />
-      <IconAction icon="i-lucide-copy" :label="t('logs.copySelected')" :disabled="!selectedLines.length" @click="copySelected" />
+      <IconAction icon="i-lucide-copy" :label="t('logs.copySelected')" :disabled="!selectedRows.length" @click="copySelected" />
       <IconAction icon="i-lucide-trash-2" :label="t('logs.clear')" @click="emit('clear')" />
     </div>
     <div v-if="presentTags.length > 1" class="tags" role="group" :aria-label="t('logs.tagsLabel')">
@@ -407,37 +523,48 @@ function onClick(event: MouseEvent) {
         @copy="onCopy"
         @click="onClick"
       >
-        <div v-if="visible.length" class="rows" :style="{ height: `${totalSize}px` }">
+        <div v-if="display.length" class="rows" :style="{ height: `${totalSize}px` }">
           <div
-            v-for="{ item, line } in rows"
+            v-for="{ item, row } in rows"
             :key="String(item.key)"
             :ref="measure"
             :data-index="item.index"
             class="row"
-            :class="[line.type, { selected: selected.has(item.key as number) }]"
+            :class="[row.line.type, row.bracket && `grp grp-${row.bracket}`, { selected: selected.has(row.key) }]"
             :style="{ transform: `translateY(${item.start}px)` }"
-            :draggable="selected.has(item.key as number)"
+            :draggable="selected.has(row.key)"
             @dragstart="onRowDragStart"
           >
-            <span class="time" :title="fullTime(line.ts)">{{ clock(line.ts) }}<span class="ms">{{ millis(line.ts) }}</span></span>
-            <span class="level" :class="`lv-${line.type}`">{{ levelOf(line) }}</span>
-            <span class="source" :class="`src-${tagOf(line)}`" :title="line.name">{{ line.name }}</span>
-            <span class="text"><span class="msg" v-html="html(line)" /></span>
+            <span class="time" :title="fullTime(row.line.ts)">{{ clock(row.line.ts) }}<span class="ms">{{ millis(row.line.ts) }}</span></span>
+            <span class="level" :class="`lv-${row.line.type}`">{{ levelOf(row.line) }}</span>
+            <span class="source" :class="`src-${tagOf(row.line)}`" :title="row.line.name">{{ row.line.name }}</span>
+            <span class="text"><span class="msg" v-html="html(row.line)" /></span>
+            <button
+              v-if="row.badge && row.group"
+              type="button"
+              class="fold-badge"
+              :class="{ open: expanded.has(row.group.key) }"
+              :title="groupTitle(row.group)"
+              :aria-expanded="expanded.has(row.group.key)"
+              @click="toggleGroup(row.group)"
+            >
+              ×{{ number(row.group.count) }}
+            </button>
           </div>
         </div>
         <div v-else class="empty">{{ emptyText ?? t('logs.empty') }}</div>
       </div>
       <Transition name="fade">
-        <Button v-if="!follow && visible.length" class="latest" size="small" round secondary type="primary" icon="i-lucide-arrow-down" @click="resume">
+        <Button v-if="!follow && display.length" class="latest" size="small" round secondary type="primary" icon="i-lucide-arrow-down" @click="resume">
           {{ t('logs.latest') }}
         </Button>
       </Transition>
     </div>
     <div class="status">
-      <span>{{ t('logs.count', { shown: visible.length, total: lines.length }) }}</span>
-      <template v-if="selectedLines.length">
+      <span>{{ countText }}</span>
+      <template v-if="selectedRows.length">
         <span class="sep">·</span>
-        <span>{{ t('logs.selected', { count: selectedLines.length }) }}</span>
+        <span>{{ t('logs.selected', { count: selectedRows.length }) }}</span>
         <Button text size="tiny" type="primary" @click="copySelected">{{ t('logs.copy') }}</Button>
         <Button text size="tiny" type="primary" icon="i-lucide-sparkles" :title="t('fairyRefs.giveHint')" @click="giveSelection">{{ t('fairyRefs.give') }}</Button>
         <Button text size="tiny" @click="selected = new Set()">{{ t('logs.deselect') }}</Button>
@@ -623,6 +750,58 @@ function onClick(event: MouseEvent) {
 
 .msg {
   cursor: text;
+}
+
+/* A block of lines that repeats: a thin bracket on its left, across its rows. */
+.row.grp::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-left: 1.5px solid var(--log-dim);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.row.grp-top::before {
+  top: 7px;
+  border-top: 1.5px solid var(--log-dim);
+  border-top-left-radius: 3px;
+}
+
+.row.grp-bottom::before {
+  bottom: 7px;
+  border-bottom: 1.5px solid var(--log-dim);
+  border-bottom-left-radius: 3px;
+}
+
+.fold-badge {
+  flex: none;
+  margin-top: 1px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--log-dim);
+  background: var(--log-chip);
+  cursor: pointer;
+  user-select: none;
+}
+
+.fold-badge:hover,
+.fold-badge.open {
+  color: var(--log-accent);
+  background: var(--log-selected);
+}
+
+.fold-badge:focus-visible {
+  outline: 2px solid var(--log-accent);
+  outline-offset: 1px;
 }
 
 .row.debug .msg {

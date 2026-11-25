@@ -63,6 +63,12 @@ export interface LogFilter {
 }
 
 const LEVELS = ['debug', 'info', 'warn', 'error']
+
+/**
+ * Orders log lines read from the daily files. Appending is asynchronous, so lines written in the same
+ * millisecond can land in the file out of order; the sequence number breaks the tie.
+ */
+export const byTime = (a: { ts: number; sn: number }, b: { ts: number; sn: number }) => a.ts - b.ts || a.sn - b.sn
 const DAY = 86_400_000
 
 /** A message ran a registered command. */
@@ -1092,12 +1098,12 @@ export class BotManager extends Service {
       const first = Date.parse(new Date(Math.max(since, until - 31 * DAY)).toISOString().slice(0, 10))
       for (let at = first; at <= until; at += DAY) days.push(new Date(at).toISOString().slice(0, 10))
       lines = (await Promise.all(days.map((day) => this.home.storage.tail<BotLogLine>(`logs/${id}/${day}`, 100_000)))).flat()
-      lines = lines.filter((line) => line.ts >= (filter.since ?? 0) && line.ts <= until)
+      lines = lines.filter((line) => line.ts >= (filter.since ?? 0) && line.ts <= until).sort(byTime)
     } else {
       let buffer = this.logs.get(id)
       if (!buffer) {
         const day = new Date().toISOString().slice(0, 10)
-        buffer = await this.home.storage.tail<BotLogLine>(`logs/${id}/${day}`, LOG_BUFFER_SIZE)
+        buffer = (await this.home.storage.tail<BotLogLine>(`logs/${id}/${day}`, LOG_BUFFER_SIZE)).sort(byTime)
         this.logs.set(id, buffer)
       }
       lines = buffer

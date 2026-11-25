@@ -12,6 +12,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./system": "./src/system.ts",
+    "./log-fold": "./src/log-fold.ts",
     "./package.json": "./package.json"
   },
   "files": [
@@ -27,6 +28,10 @@
       "./system": {
         "types": "./dist/system.d.ts",
         "import": "./dist/system.js"
+      },
+      "./log-fold": {
+        "types": "./dist/log-fold.d.ts",
+        "import": "./dist/log-fold.js"
       },
       "./package.json": "./package.json"
     }

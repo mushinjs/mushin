@@ -40,9 +40,16 @@ interface Client {
   socket: WebSocket
   authed: boolean
   page?: string
+  /** The tab asked for debug lines on its log page (a `logs` message). */
+  debugLogs?: boolean
   lastActive: number
   calls: Map<string, { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>
 }
+
+const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const
+type LogLevel = typeof LOG_LEVELS[number]
+const LOG_LEVEL_DEBUG = 3
+const DEBUG_BUFFER_SIZE = 1000
 
 export interface LogLine {
   sn: number
@@ -94,6 +101,11 @@ export class Console extends Service {
 
   private home: Context
   private clients = new Map<string, Client>()
+  /**
+   * Recent debug lines. The logger's own buffer keeps info and above; debug lines are kept here and sent
+   * only to the tabs that turned them on.
+   */
+  private debugBuffer: Message[] = []
   /** The token in .env. */
   private token?: string
   private reloadedAt = 0
@@ -191,9 +203,16 @@ export class Console extends Service {
     this.home.logger('console').info('dashboard at %s', this.ready.url)
     yield this.home.logger.exporter({
       colors: false,
+      levels: { default: LOG_LEVEL_DEBUG },
       // Lines written inside a bot go to that bot's own log (`bots/log`), not the global one.
       export: (message) => {
-        if (!this.isBotLog(message)) this.broadcast('log', formatLog(message))
+        if (this.isBotLog(message)) return
+        if (message.type !== 'debug') return this.broadcast('log', formatLog(message))
+        this.debugBuffer.push(message)
+        if (this.debugBuffer.length > DEBUG_BUFFER_SIZE) this.debugBuffer.splice(0, this.debugBuffer.length - DEBUG_BUFFER_SIZE)
+        if ([...this.clients.values()].some((client) => client.debugLogs)) {
+          this.broadcast('log', formatLog(message), (client) => !!client.debugLogs)
+        }
       },
     })
     yield () => {
@@ -251,11 +270,29 @@ export class Console extends Service {
     return this.home.get('bots')?.isBotLog(message) ?? false
   }
 
-  broadcast(name: string, data: unknown) {
+  broadcast(name: string, data: unknown, to?: (client: Client) => boolean) {
     const frame = JSON.stringify({ type: 'event', name, data })
     for (const client of this.clients.values()) {
-      if (client.authed && client.socket.readyState === 1) client.socket.send(frame)
+      if (client.authed && client.socket.readyState === 1 && (!to || to(client))) client.socket.send(frame)
     }
+  }
+
+  /** Recent lines of the global log, oldest first; debug lines only when `level` is debug. */
+  recentLogs(options: { limit?: number; tag?: LogTag; level?: LogLevel } = {}) {
+    const min = LOG_LEVELS.indexOf(options.level ?? 'info')
+    let messages = this.home.logger.buffer
+    if (min === 0 && this.debugBuffer.length) {
+      // Debug lines older than the oldest line of a full buffer would leave a gap in the other levels.
+      const full = messages.length >= this.home.logger.bufferSize
+      const from = full ? messages[0]?.sn ?? 0 : 0
+      messages = [...messages, ...this.debugBuffer.filter((message) => message.sn >= from)].sort((a, b) => a.sn - b.sn)
+    }
+    return messages
+      .filter((message) => !this.isBotLog(message)
+        && LOG_LEVELS.indexOf(message.type) >= min
+        && (!options.tag || logTag(message.name) === options.tag))
+      .slice(-(options.limit ?? 200))
+      .map(formatLog)
   }
 
   private attach(socket: WebSocket) {
@@ -308,6 +345,10 @@ export class Console extends Service {
       switch (message.type) {
         case 'page':
           client.page = typeof message.path === 'string' ? message.path : undefined
+          return
+        case 'logs':
+          // The Logs page's "Show debug logs" switch; only this tab starts getting debug lines.
+          client.debugLogs = message.debug === true
           return
         case 'call': {
           const caller: ActionCaller = { kind: 'api', client: client.id }
@@ -427,11 +468,9 @@ export class Console extends Service {
       input: z.object({
         limit: z.number().int().min(1).max(1000).optional(),
         tag: z.enum(LOG_TAGS).optional().describe('Only lines from this source: plugin, bot, adapter, flow, provider, fairy, system or other'),
+        level: z.enum(LOG_LEVELS).optional().describe('This level and above; default info. debug adds the debug lines, which are kept only for a short while'),
       }),
-      handler: ({ limit, tag }) => this.home.logger.buffer
-        .filter((message) => !this.isBotLog(message) && (!tag || logTag(message.name) === tag))
-        .slice(-(limit ?? 200))
-        .map(formatLog),
+      handler: (input) => this.recentLogs(input),
     })
   }
 }
