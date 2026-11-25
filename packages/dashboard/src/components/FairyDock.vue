@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Button, Dropdown, type DropdownOption, Input, Modal, Popover, Select, Spin, Tag, Tooltip, useConfirm, useToast } from '@mushinjs/ui'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { call } from '../api'
@@ -179,6 +179,7 @@ async function send(text = input.value) {
   input.value = ''
   picked.value = []
   commandBot.value = undefined
+  scrollToEnd(true)
   await fairy.send(text.trim(), { skills, scene })
 }
 
@@ -308,7 +309,7 @@ const rows = computed<Row[]>(() => {
       while (end < items.length && items[end].kind === 'tool' && (items[end] as ToolItem).action === item.action) end++
     }
     const run = items.slice(index, end) as ToolItem[]
-    if (run.length >= GROUP_FROM && !run.some((call) => call.state === 'confirm' || call.action === DELEGATE)) {
+    if (run.length >= GROUP_FROM && !run.some((call) => call.state === 'confirm' || call.action === DELEGATE || call.action.startsWith('ui.'))) {
       const failures = run.filter((call) => call.state === 'error' || call.state === 'declined')
       const reason = failures.at(-1)?.error?.replace(/^Error:\s*/, '').split('\n')[0] ?? ''
       out.push({ kind: 'group', key: `group:${item.kind === 'tool' ? item.id : index}`, action: item.kind === 'tool' ? item.action : '', items: run, failed: failures.length, running: run.some((call) => call.state === 'running'), reason })
@@ -336,12 +337,37 @@ function toggle(id: string) {
   expanded.value = next
 }
 
-async function scrollToEnd() {
-  await nextTick()
-  list.value?.scrollTo({ top: list.value.scrollHeight })
+/**
+ * The chat follows new content only while you are at its end (within a few lines); scrolled up to read, it
+ * stays put and a button says there is more below.
+ */
+const pinned = ref(true)
+const unread = ref(false)
+
+function onListScroll() {
+  const el = list.value
+  if (!el) return
+  pinned.value = el.scrollHeight - el.scrollTop - el.clientHeight < 48
+  if (pinned.value) unread.value = false
 }
 
-watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToEnd, { deep: true })
+async function scrollToEnd(force = false) {
+  await nextTick()
+  const el = list.value
+  if (!el) return
+  if (!force && !pinned.value) {
+    unread.value = el.scrollHeight - el.scrollTop - el.clientHeight >= 48
+    return
+  }
+  el.scrollTo({ top: el.scrollHeight, behavior: force && unread.value ? 'smooth' : 'auto' })
+  pinned.value = true
+  unread.value = false
+}
+
+watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1), fairy.visibleAsks().length], () => scrollToEnd(), { deep: true })
+// A conversation opens at its end.
+watch(() => fairy.current, () => scrollToEnd(true))
+onMounted(() => scrollToEnd(true))
 </script>
 
 <template>
@@ -400,7 +426,7 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
       </div>
     </header>
 
-    <div ref="list" class="dock-list">
+    <div ref="list" class="dock-list" @scroll.passive="onListScroll">
       <div class="dock-column">
         <div v-if="fairy.task" class="task-bar">
           <span class="i-lucide-scroll-text" />
@@ -517,7 +543,7 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
           </template>
         </template>
 
-        <div v-for="ask in fairy.asks" :key="ask.id" class="ask">
+        <div v-for="ask in fairy.visibleAsks()" :key="ask.id" class="ask">
           <div class="ask-question"><span class="i-lucide-circle-help" />{{ ask.question }}</div>
           <button
             v-for="(option, optionIndex) in ask.options"
@@ -560,6 +586,9 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
 
     <footer class="dock-input" data-fairy-target="fairy.input">
       <div class="composer-wrap">
+        <button v-if="unread && !trigger" type="button" class="unread" @click="scrollToEnd(true)">
+          <span class="i-lucide-arrow-down" />{{ t('fairy.newBelow') }}
+        </button>
         <CommandPalette
           v-if="trigger"
           ref="palette"
@@ -1405,6 +1434,37 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
   position: relative;
   max-width: 760px;
   margin: 0 auto;
+}
+
+/* Shown while you read further up and more arrives below. */
+.unread {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--s1);
+  color: var(--fg2);
+  font: inherit;
+  font-size: 12px;
+  box-shadow: var(--shadow-pop);
+  cursor: pointer;
+  animation: unread-in 0.15s ease-out;
+}
+
+.unread:hover {
+  color: var(--fg);
+  border-color: var(--line-strong);
+}
+
+@keyframes unread-in {
+  from { opacity: 0; transform: translate(-50%, 4px); }
 }
 
 /* The input, its chips and its buttons in one box that grows with the text. */

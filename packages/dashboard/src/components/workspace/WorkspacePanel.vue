@@ -107,6 +107,7 @@ const external = (view: PanelView) => (view.kind === 'web' ? view.url! : view.pa
         >
           <span :class="iconOf(view)" class="tab-icon" />
           <span class="tab-title">{{ titleOf(view) }}</span>
+          <span v-if="view.unseen" class="tab-dot" :aria-label="t('workspace.panel.unseen')" />
           <span v-if="view.kind !== 'status'" class="i-lucide-x tab-close" role="button" :aria-label="t('workspace.panel.closeTab')" @click.stop="workspace.closeView(view.id)" />
         </button>
       </div>
@@ -213,6 +214,14 @@ const external = (view: PanelView) => (view.kind === 'web' ? view.url! : view.pa
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.tab-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
 }
 
 .tab-close {

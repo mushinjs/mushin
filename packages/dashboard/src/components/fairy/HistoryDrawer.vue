@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
 import { useConversation } from '../../stores/fairy'
+import { useFairyActivityStore } from '../../stores/fairyActivity'
 import type { FairySessionSummary } from '../../types'
 import { formatTime } from '../../utils'
 
@@ -11,6 +12,7 @@ const show = defineModel<boolean>('show', { required: true })
 
 const { t, te } = useI18n()
 const fairy = useConversation()
+const activity = useFairyActivityStore()
 const query = ref('')
 const tags = ref<string[]>([])
 const results = ref<FairySessionSummary[]>([])
@@ -97,7 +99,8 @@ function rowTags(session: FairySessionSummary) {
           </div>
           <div v-if="session.snippet" class="snippet">{{ session.snippet }}</div>
           <div class="item-tags">
-            <Tag v-if="session.running" size="tiny" type="info">{{ t('fairyHistory.status.running') }}</Tag>
+            <Tag v-if="activity.of(session.id)?.waiting" size="tiny" type="warning">{{ t(`fairyActivity.${activity.of(session.id)!.waiting}`) }}</Tag>
+            <Tag v-else-if="activity.of(session.id) ?? session.running" size="tiny" type="info">{{ t('fairyHistory.status.running') }}</Tag>
             <Tag v-if="session.scene" size="tiny">{{ session.scene.label ?? tagLabel(`scene:${session.scene.key}`) }}</Tag>
             <Tag v-for="tag in rowTags(session)" :key="tag" size="tiny" type="success">{{ tagLabel(tag) }}</Tag>
           </div>

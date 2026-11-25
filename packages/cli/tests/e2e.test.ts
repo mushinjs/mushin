@@ -332,6 +332,29 @@ describe('fairy', () => {
     dashboard.close()
   })
 
+  it('says a conversation waits while Fairy\'s question is open', async () => {
+    let asked!: () => void
+    let answer!: (value: unknown) => void
+    const asking = new Promise<void>((resolve) => (asked = resolve))
+    const dashboard = await app.connect((action) => {
+      if (action !== 'ui.ask') return { ok: true }
+      asked()
+      return new Promise((resolve) => (answer = resolve))
+    })
+    llm.enqueue(
+      { toolCalls: [{ name: 'ui__ask', arguments: { question: 'Which bot?', options: [{ label: 'Alpha' }, { label: 'Beta' }] } }] },
+      { text: 'Alpha it is.' },
+    )
+    const sending = dashboard.call('fairy.send', { text: 'Pick a bot for me' })
+    await asking
+    const session = dashboard.fairyEvents().find((event) => event.type === 'start')!.session
+    expect((await app.call<any[]>('fairy.sessions')).find((item) => item.id === session)).toMatchObject({ running: true, waiting: 'ask' })
+    answer({ choice: 0, label: 'Alpha' })
+    await sending
+    expect((await app.call<any[]>('fairy.sessions')).find((item) => item.id === session)).not.toHaveProperty('waiting')
+    dashboard.close()
+  })
+
   it('waits for approval before a dangerous action and honors a decline', async () => {
     const dashboard = await app.connect()
     llm.enqueue(
@@ -341,8 +364,11 @@ describe('fairy', () => {
     const sending = dashboard.call('fairy.send', { text: 'Delete bot Beta' })
     const confirm = await waitFor(() => dashboard.fairyEvents().find((e) => e.type === 'confirm'))
     expect(confirm.action).toBe('bots.delete')
+    // The conversation list says it waits for the user, for the Fairy button on other pages.
+    expect((await app.call<any[]>('fairy.sessions')).find((item) => item.id === confirm.session)).toMatchObject({ running: true, waiting: 'confirm' })
     await dashboard.call('fairy.confirm', { session: confirm.session, id: confirm.id, approved: false })
     await sending
+    expect((await app.call<any[]>('fairy.sessions')).find((item) => item.id === confirm.session)).not.toHaveProperty('waiting')
     expect((await app.call<any[]>('bots.list')).map((b) => b.id)).toContain(botB)
     expect(dashboard.fairyEvents(confirm.session).find((e) => e.type === 'tool-result')).toMatchObject({ ok: false, error: 'Declined by the user' })
     dashboard.close()

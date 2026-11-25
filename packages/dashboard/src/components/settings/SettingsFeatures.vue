@@ -21,6 +21,9 @@ function showPage(page: string, shown: boolean) {
     <FormItem :label="t('settings.features.fairyOpen')" :feedback="t('settings.features.fairyOpenHelp')">
       <Toggle v-model:value="prefs.fairyOpenOnStart" />
     </FormItem>
+    <FormItem :label="t('settings.features.fairyPages')" :feedback="t('settings.features.fairyPagesHelp')">
+      <Toggle v-model:value="prefs.fairyOpensPages" />
+    </FormItem>
     <FormItem :label="t('settings.features.pages')" :feedback="t('settings.features.pagesHelp')">
       <div class="pages">
         <Checkbox

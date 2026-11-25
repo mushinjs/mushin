@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { Button, Spin, Tag } from '@mushinjs/ui'
+import { Button, Spin, Tag, useToast } from '@mushinjs/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
+import { highlight } from '../../highlight'
 import { type ChatItem, DELEGATE } from '../../stores/fairy'
+import { type PanelView, workspace } from '../../stores/workspace'
 import type { FairyTaskReport } from '../../types'
 import { pretty } from '../../utils'
 
@@ -51,6 +54,72 @@ const command = computed(() => {
   const value = props.item.input as { command?: unknown; cwd?: unknown } | undefined
   return typeof value?.command === 'string' ? { text: value.command, cwd: typeof value.cwd === 'string' ? value.cwd : '' } : undefined
 })
+
+// ---- pages Fairy offers or opens, and spots it points at, as cards with a button ----
+
+const router = useRouter()
+const route = useRoute()
+const toast = useToast()
+
+type Card =
+  | { kind: 'offer' | 'opened'; path: string }
+  | { kind: 'panel'; view: Omit<PanelView, 'id' | 'unseen'> }
+  | { kind: 'spot'; target: string; message?: string }
+
+const card = computed<Card | undefined>(() => {
+  if (props.item.state !== 'ok') return undefined
+  const result = (props.item.result ?? {}) as { offered?: string; panel?: string; path?: string; skipped?: boolean; offscreen?: boolean }
+  const input = (props.item.input ?? {}) as { path?: string; kind?: PanelView['kind']; url?: string; title?: string; target?: string; message?: string }
+  if (props.item.action === 'ui.navigate') {
+    if (result.offered) return { kind: 'offer', path: result.offered }
+    if (result.panel) return { kind: 'panel', view: { kind: 'page', path: result.panel } }
+    if (result.path) return { kind: 'opened', path: result.path }
+  }
+  if (props.item.action === 'ui.panel' && input.kind && !result.skipped) {
+    return { kind: 'panel', view: { kind: input.kind, ...(input.path ? { path: input.path } : {}), ...(input.url ? { url: input.url } : {}), ...(input.title ? { title: input.title } : {}) } }
+  }
+  if (props.item.action === 'ui.highlight' && result.offscreen && input.target) return { kind: 'spot', target: input.target, message: input.message }
+  return undefined
+})
+
+/** A page's name from its first path segment, e.g. `/bots/abc/logs` → Bots. */
+function pageName(path: string) {
+  const first = path.split(/[/?#]/)[1] ?? ''
+  return te(`nav.${first}`) ? t(`nav.${first}`) : path
+}
+
+const cardText = computed(() => {
+  const value = card.value
+  if (!value) return { icon: '', title: '', sub: '' }
+  if (value.kind === 'spot') return { icon: 'i-lucide-locate-fixed', title: value.message || t('fairyCard.spot'), sub: t('fairyCard.spotHint') }
+  if (value.kind !== 'panel') return { icon: 'i-lucide-app-window', title: pageName(value.path), sub: value.path }
+  const view = value.view
+  if (view.kind === 'page') return { icon: 'i-lucide-app-window', title: view.title ?? pageName(view.path ?? '/'), sub: `${t('fairyCard.inPanel')} · ${view.path}` }
+  if (view.kind === 'web') return { icon: 'i-lucide-globe', title: view.title ?? view.url ?? '', sub: `${t('fairyCard.inPanel')} · ${view.url}` }
+  return { icon: view.kind === 'terminal' ? 'i-lucide-square-terminal' : view.kind === 'browser' ? 'i-lucide-compass' : 'i-lucide-activity', title: t(`workspace.panel.${view.kind}`), sub: t('fairyCard.inPanel') }
+})
+
+/** The page it opened is the one you are on, so there is nothing to press. */
+const here = computed(() => card.value?.kind === 'opened' && route.path === card.value.path.split(/[?#]/)[0])
+
+async function act() {
+  const value = card.value
+  if (!value) return
+  if (value.kind === 'spot') {
+    const result = await highlight(value.target, value.message, { scroll: true })
+    if (!result.ok) toast.warning(t('fairyCard.gone'))
+  } else if (value.kind === 'panel') {
+    // Outside the workspace the tab cannot open; the page itself can.
+    if (workspace.active) workspace.openView(value.view)
+    else if (value.view.kind === 'page' && value.view.path) router.push(value.view.path)
+    else if (value.view.kind === 'web' && value.view.url) window.open(value.view.url, '_blank', 'noopener')
+    else router.push('/fairy')
+  } else {
+    router.push(value.path)
+  }
+}
+
+const actLabel = computed(() => (card.value?.kind === 'spot' ? t('fairyCard.show') : card.value?.kind === 'panel' ? t('fairyCard.view') : t('fairyCard.open')))
 
 /** The first line of a failure, shown under the row so nobody has to open it to see why. */
 const reason = computed(() => {
@@ -111,6 +180,15 @@ const reason = computed(() => {
     <div v-if="item.task?.session && (expanded || taskState === 'running')" class="task-actions">
       <Button size="tiny" secondary icon="i-lucide-scroll-text" @click="emit('openTask', item.task.session)">{{ t('fairyTask.open') }}</Button>
     </div>
+  </div>
+  <div v-else-if="card && !expanded" class="tool ui-card">
+    <span class="ui-card-icon" :class="cardText.icon" />
+    <button type="button" class="ui-card-text" :title="t('fairyCard.details')" @click="emit('toggle')">
+      <span class="ui-card-title">{{ cardText.title }}</span>
+      <span class="ui-card-sub mono">{{ cardText.sub }}</span>
+    </button>
+    <span v-if="here" class="ui-card-here"><span class="i-lucide-check" />{{ t('fairyCard.opened') }}</span>
+    <Button v-else size="small" secondary @click="act">{{ actLabel }}</Button>
   </div>
   <div v-else class="tool" :class="item.state">
     <button class="tool-row" type="button" @click="emit('toggle')">
@@ -300,6 +378,60 @@ const reason = computed(() => {
   text-overflow: ellipsis;
   color: var(--fg3);
   font-size: 12px;
+}
+
+/* A page Fairy offers or opened, a tab it put in the panel, or a spot off screen: one line and a button. */
+.ui-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--s1);
+}
+
+.ui-card-icon {
+  flex: none;
+  font-size: 18px;
+  color: var(--primary);
+}
+
+.ui-card-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ui-card-title {
+  font-weight: 500;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ui-card-sub {
+  font-size: 12px;
+  color: var(--fg3);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ui-card-here {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--fg3);
 }
 
 .json.command {

@@ -383,6 +383,8 @@ export interface FairySessionSummary {
   createdAt: number
   updatedAt: number
   running: boolean
+  /** While running: it, or a helper it started, waits on the user for an approval or an answer. */
+  waiting?: 'confirm' | 'ask'
   scene?: { key: string; label?: string; page?: string }
   tags: string[]
   /** From a search: the text around the match. */

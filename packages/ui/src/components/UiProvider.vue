@@ -60,6 +60,7 @@ function removeToast(id: number) {
       <div v-for="item in feedback.toasts" :key="item.id" class="mu-toast" :class="`mu-toast--${item.type}`" :role="item.type === 'error' ? 'alert' : 'status'">
         <span class="mu-toast__icon" :class="toastIcon[item.type]" />
         <span class="mu-toast__text">{{ item.content }}</span>
+        <button v-if="item.action" type="button" class="mu-toast__action" @click="removeToast(item.id); item.action.onClick()">{{ item.action.label }}</button>
         <button v-if="item.closable" type="button" class="mu-toast__close" :aria-label="words.close" @click="removeToast(item.id)">
           <span class="i-lucide-x" />
         </button>
@@ -127,6 +128,20 @@ function removeToast(id: number) {
 .mu-toast--error .mu-toast__icon { color: var(--bad); }
 .mu-toast--loading .mu-toast__icon { color: var(--primary); }
 .mu-toast__text { overflow-wrap: anywhere; }
+
+.mu-toast__action {
+  flex: none;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--primary-soft);
+  color: var(--primary);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.mu-toast__action:hover { background: var(--primary-soft-hover); }
 
 .mu-toast__close {
   display: inline-flex;

@@ -9,6 +9,7 @@ import WorkspacePanel from '../components/workspace/WorkspacePanel.vue'
 import WorkspaceSidebar from '../components/workspace/WorkspaceSidebar.vue'
 import { useDataStore } from '../stores/data'
 import { useFairyPane, useFairyStore } from '../stores/fairy'
+import { useFairyActivityStore } from '../stores/fairyActivity'
 import { useFairySceneStore } from '../stores/fairyScene'
 import { useRunsStore } from '../stores/runs'
 import { LEFT_WIDTH, MIN_CENTER, MIN_SIDE, RIGHT_WIDTH, workspace } from '../stores/workspace'
@@ -29,6 +30,7 @@ data.bind()
 fairy.bind()
 scenes.bind()
 runs.bind()
+useFairyActivityStore().bind()
 onMounted(() => {
   workspace.active = true
   data.refreshProviders().catch(() => {})
@@ -41,14 +43,17 @@ onBeforeUnmount(() => {
   scenes.publish(undefined)
 })
 
-// The first command Fairy runs brings up the terminal tab, so its output can be followed; later ones leave the tabs be.
+// A command Fairy runs adds the terminal tab, and a page its browser shows adds the browser tab, without switching
+// to them: a dot on the tab says there is something new. A tab you closed stays closed.
 const offProcess = on('terminal/process', (info: { running: boolean; session?: string }) => {
-  if (info.running && info.session && !layout.views.some((view) => view.kind === 'terminal')) workspace.openView({ kind: 'terminal' })
+  if (info.running && info.session) workspace.openView({ kind: 'terminal' }, { from: 'fairy' })
 })
-// Likewise the first page the browser shows brings up the browser tab.
 const offBrowser = on('browser/frame', () => {
-  if (!layout.views.some((view) => view.kind === 'browser')) workspace.openView({ kind: 'browser' })
+  workspace.openView({ kind: 'browser' }, { from: 'fairy' })
 })
+
+/** Tabs with something new while the panel is folded away: a dot on the button that brings it back. */
+const unseen = computed(() => !layout.rightOpen && layout.views.some((view) => view.unseen))
 onBeforeUnmount(() => {
   offProcess()
   offBrowser()
@@ -201,9 +206,12 @@ function toggleSplit() {
         </Tooltip>
         <Tooltip>
           <template #trigger>
-            <Button size="small" quaternary circle :icon="layout.rightOpen ? 'i-lucide-panel-right-close' : 'i-lucide-panel-right-open'" :aria-label="t('workspace.togglePanel')" :pressed="layout.rightOpen" @click="layout.rightOpen = !layout.rightOpen" />
+            <span class="dot-host">
+              <Button size="small" quaternary circle :icon="layout.rightOpen ? 'i-lucide-panel-right-close' : 'i-lucide-panel-right-open'" :aria-label="t('workspace.togglePanel')" :pressed="layout.rightOpen" @click="layout.rightOpen = !layout.rightOpen" />
+              <span v-if="unseen" class="new-dot" />
+            </span>
           </template>
-          {{ t('workspace.togglePanel') }}
+          {{ unseen ? t('workspace.panelNew') : t('workspace.togglePanel') }}
         </Tooltip>
         <Button type="primary" secondary icon="i-lucide-layout-dashboard" :title="t('workspace.dashboardHint')" @click="router.push(workspace.returnTo)">{{ t('workspace.dashboard') }}</Button>
       </div>
@@ -321,6 +329,23 @@ function toggleSplit() {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.dot-host {
+  position: relative;
+  display: inline-flex;
+}
+
+.new-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 0 2px var(--s1);
+  pointer-events: none;
 }
 
 .ws-body {

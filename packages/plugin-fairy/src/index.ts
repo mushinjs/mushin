@@ -180,6 +180,8 @@ interface Running {
   effortIgnored?: boolean
   /** A helper's report, once it called fairy__report; the turn ends after that round. */
   report?: TaskReport
+  /** ui.ask questions waiting for the user's answer. */
+  asking?: number
 }
 
 /** The turn used every tool round it may; the dashboard offers to continue. */
@@ -600,10 +602,20 @@ export class Fairy extends Service {
   }
 
   private summary({ id, title, createdAt, updatedAt, scene, tags, role, parent, group, done }: FairySession) {
+    const waiting = this.waiting(id)
     return {
       id, title, createdAt, updatedAt, scene, tags: tags ?? [], running: this.running.has(id),
+      ...(waiting ? { waiting } : {}),
       ...(role ? { role } : {}), ...(parent ? { parent } : {}), ...(group ? { group } : {}), ...(done ? { done } : {}),
     }
+  }
+
+  /** What a running conversation, or a helper it started, waits on the user for: an approval or an answer. */
+  private waiting(id: string): 'confirm' | 'ask' | undefined {
+    const turns = [this.running.get(id), ...[...this.links].filter(([, link]) => link.session === id).map(([child]) => this.running.get(child))]
+    if (turns.some((turn) => turn?.confirms.size)) return 'confirm'
+    if (turns.some((turn) => turn?.asking)) return 'ask'
+    return undefined
   }
 
   /** Fairy's own conversations; a helper's conversation is reached from the task that started it. */
@@ -1001,6 +1013,7 @@ export class Fairy extends Service {
       }
     }
 
+    if (name === 'ui.ask') running.asking = (running.asking ?? 0) + 1
     try {
       const result = await this.home.actions.call(name, input, { kind: 'fairy', session: session.id, client: options.client })
       this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: true, result })
@@ -1015,6 +1028,8 @@ export class Fairy extends Service {
         ? `\n${toolName} has failed ${failures} times in this reply. Stop retrying it with guessed inputs: take valid values from the error above or from the tool that lists them, or tell the user what is missing.`
         : ''
       reply(`Error: ${message}${hint}`, true)
+    } finally {
+      if (name === 'ui.ask') running.asking = (running.asking ?? 1) - 1
     }
   }
 

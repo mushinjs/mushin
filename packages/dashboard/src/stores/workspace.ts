@@ -14,6 +14,8 @@ export interface PanelView {
   path?: string
   url?: string
   title?: string
+  /** Fairy opened or changed it while you looked elsewhere; a dot marks it until you switch to it. */
+  unseen?: boolean
 }
 
 export interface WorkspaceLayout {
@@ -78,6 +80,8 @@ const pageOf = (path?: string) => path?.split(/[?#]/)[0]
 
 export const workspace = reactive({
   layout: read(),
+  /** Terminal and browser tabs you closed; Fairy does not bring them back until you open one yourself. */
+  dismissed: new Set<'terminal' | 'browser'>(),
   /** The workspace page is open in this tab, so Fairy's pages go to the panel. */
   active: false,
   /** The pane that takes a conversation picked in the sessions column. */
@@ -86,22 +90,38 @@ export const workspace = reactive({
   returnTo: '/overview',
 
   /**
-   * Shows a view in the panel and opens the panel. A tab that shows the same thing is reused; for pages, the same
-   * page with other query parameters counts, and moves to the new address.
+   * Shows a view in the panel. A tab that shows the same thing is reused; for pages, the same page with other
+   * query parameters counts, and moves to the new address. What you open is shown at once and opens the panel;
+   * what Fairy opens (`from: 'fairy'`) joins the tabs marked unseen and leaves the panel as it is, and a
+   * terminal or browser tab you closed stays closed (the result is then undefined).
    */
-  openView(input: Omit<PanelView, 'id'>): PanelView {
+  openView(input: Omit<PanelView, 'id' | 'unseen'>, options: { from?: 'fairy' } = {}): PanelView | undefined {
     const layout = this.layout
+    const fairy = options.from === 'fairy'
+    if (input.kind === 'terminal' || input.kind === 'browser') {
+      if (fairy && this.dismissed.has(input.kind)) return undefined
+      if (!fairy) this.dismissed.delete(input.kind)
+    }
     let view = layout.views.find((item) => item.kind === input.kind && (input.kind === 'status' || input.kind === 'terminal' || input.kind === 'browser' || (input.kind === 'page' ? pageOf(item.path) === pageOf(input.path) : item.url === input.url)))
-    if (view?.kind === 'page' && input.path) view.path = input.path
+    const hidden = (item: PanelView) => item.id !== layout.activeView || !layout.rightOpen
+    if (view?.kind === 'page' && input.path && view.path !== input.path) {
+      view.path = input.path
+      if (fairy && hidden(view)) view.unseen = true
+    }
+    // New output in the terminal or a new page in the browser.
+    if (fairy && view && (view.kind === 'terminal' || view.kind === 'browser') && hidden(view)) view.unseen = true
     if (!view) {
       view = { ...input, id: `${input.kind}-${Date.now().toString(36)}-${++seq}` }
       layout.views.push(view)
       // Keep the panel to a handful of tabs: the oldest page goes first.
       const closable = layout.views.filter((item) => item.kind !== 'status')
       if (closable.length > 8) layout.views.splice(layout.views.indexOf(closable[0]!), 1)
+      if (fairy) view.unseen = true
     } else if (input.title) {
       view.title = input.title
     }
+    if (fairy) return view
+    view.unseen = false
     layout.activeView = view.id
     layout.rightOpen = true
     return view
@@ -111,6 +131,8 @@ export const workspace = reactive({
     const layout = this.layout
     const index = layout.views.findIndex((view) => view.id === id)
     if (index < 0 || layout.views[index]!.kind === 'status') return
+    const kind = layout.views[index]!.kind
+    if (kind === 'terminal' || kind === 'browser') this.dismissed.add(kind)
     layout.views.splice(index, 1)
     if (layout.activeView === id) layout.activeView = (layout.views[index] ?? layout.views[index - 1] ?? STATUS).id
   },
@@ -122,6 +144,12 @@ export const workspace = reactive({
     else folded.splice(at, 1)
   },
 })
+
+// The tab you are looking at is seen.
+watch(() => [workspace.layout.activeView, workspace.layout.rightOpen] as const, ([id, open]) => {
+  const view = workspace.layout.views.find((item) => item.id === id)
+  if (open && view?.unseen) view.unseen = false
+}, { immediate: true })
 
 watch(() => workspace.layout, (value) => {
   try {

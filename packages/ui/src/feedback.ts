@@ -13,6 +13,8 @@ export interface ToastOptions {
   /** How long it stays, in milliseconds; 0 keeps it until destroyed. */
   duration?: number
   closable?: boolean
+  /** A button on the toast, e.g. to open what it is about; the toast goes once it is pressed. */
+  action?: { label: string; onClick: () => unknown }
 }
 
 export interface Toast {
@@ -21,6 +23,7 @@ export interface Toast {
   content: string
   duration: number
   closable: boolean
+  action?: { label: string; onClick: () => unknown }
 }
 
 export interface ToastHandle {
@@ -58,7 +61,7 @@ let next = 1
 function toast(type: ToastType, content: string, options: ToastOptions = {}): ToastHandle {
   const id = next++
   const duration = options.duration ?? (type === 'loading' ? 0 : type === 'error' ? 5000 : 3000)
-  feedback.toasts.push({ id, type, content, duration, closable: options.closable ?? type === 'error' })
+  feedback.toasts.push({ id, type, content, duration, closable: options.closable ?? type === 'error', ...(options.action ? { action: options.action } : {}) })
   const destroy = () => {
     const index = feedback.toasts.findIndex((item) => item.id === id)
     if (index >= 0) feedback.toasts.splice(index, 1)

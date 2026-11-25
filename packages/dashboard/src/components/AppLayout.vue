@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Drawer, Dropdown, type DropdownOption, Tooltip } from '@mushinjs/ui'
+import { Button, Drawer, Dropdown, type DropdownOption, HoverCard, Spin, Tooltip } from '@mushinjs/ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -8,6 +8,7 @@ import { setLocale } from '../i18n'
 import { clampFloat, clampWidth, DOCK_WIDTH, dockLayout, maxDockWidth } from '../fairyDock'
 import { prefs } from '../prefs'
 import { useFairyStore } from '../stores/fairy'
+import { useFairyActivityStore } from '../stores/fairyActivity'
 import { useFairySceneStore } from '../stores/fairyScene'
 import { useDataStore } from '../stores/data'
 import { useRunsStore } from '../stores/runs'
@@ -27,6 +28,7 @@ const router = useRouter()
 const data = useDataStore()
 const fairy = useFairyStore()
 const fairyScene = useFairySceneStore()
+const activity = useFairyActivityStore()
 const runs = useRunsStore()
 const { isDark } = useTheme()
 
@@ -63,6 +65,8 @@ data.bind()
 fairy.bind()
 fairyScene.bind()
 runs.bind()
+// The workspace panel shows pages in frames of their own; only the page around them tells you about Fairy.
+if (!props.embedded) activity.bind()
 onMounted(() => {
   data.refreshProviders().catch(() => {})
   data.refreshBots().catch(() => {})
@@ -296,9 +300,27 @@ function onAccount(key: string) {
           </template>
           {{ t('layout.toggleDock') }}
         </Tooltip>
-        <Button type="primary" secondary icon="i-lucide-sparkles" class="fairy-button" data-fairy-target="fairy.workspace" :title="t('workspace.enterHint')" @click="router.push('/fairy')">
-          {{ t('nav.fairy') }}
-        </Button>
+        <HoverCard placement="bottom" align="end" :width="320" :padded="false" :disabled="!activity.list.length">
+          <template #trigger>
+            <Button type="primary" secondary icon="i-lucide-sparkles" class="fairy-button" data-fairy-target="fairy.workspace" :title="activity.list.length ? undefined : t('workspace.enterHint')" @click="router.push('/fairy')">
+              {{ t('nav.fairy') }}
+              <span v-if="activity.waitingCount" class="fairy-badge waiting" :aria-label="t('fairyActivity.waitingBadge', { n: activity.waitingCount })">{{ activity.waitingCount }}</span>
+              <span v-else-if="activity.list.length" class="fairy-badge" :aria-label="t('fairyActivity.runningBadge', { n: activity.list.length })"><Spin :size="10" />{{ activity.list.length }}</span>
+            </Button>
+          </template>
+          <div class="activity">
+            <div class="activity-head">{{ t('fairyActivity.title') }}</div>
+            <button v-for="entry in activity.list" :key="entry.session" type="button" class="activity-row" @click="activity.show(entry.session)">
+              <span v-if="entry.waiting" class="i-lucide-hand activity-icon waiting" />
+              <Spin v-else :size="12" class="activity-icon" />
+              <span class="activity-title">{{ activity.titleOf(entry.session) }}</span>
+              <span class="activity-state" :class="{ waiting: entry.waiting }">{{ entry.waiting ? t(`fairyActivity.${entry.waiting}`) : entry.action ?? t('fairyActivity.running') }}</span>
+            </button>
+            <button type="button" class="activity-foot" @click="router.push('/fairy')">
+              <span class="i-lucide-sparkles" />{{ t('fairyActivity.openWorkspace') }}
+            </button>
+          </div>
+        </HoverCard>
         <Dropdown placement="bottom" align="end" :options="accountMenu" @select="onAccount">
           <button type="button" class="account" :aria-label="t('layout.account')" :title="t('layout.account')">
             <span class="i-lucide-user account-icon" />
@@ -620,6 +642,99 @@ a.crumb:hover {
 
 .drag-sheet.size {
   cursor: nwse-resize;
+}
+
+/* How many conversations run, or wait for you, on Fairy's button. */
+.fairy-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  padding: 0 6px;
+  min-width: 18px;
+  height: 18px;
+  justify-content: center;
+  border-radius: 9px;
+  background: var(--primary-soft);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.fairy-badge.waiting {
+  background: var(--warn);
+  color: var(--bg);
+}
+
+.activity {
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+}
+
+.activity-head {
+  padding: 4px 8px 6px;
+  font-size: 12px;
+  color: var(--fg3);
+}
+
+.activity-row,
+.activity-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.activity-row:hover,
+.activity-foot:hover {
+  background: var(--s2);
+}
+
+.activity-icon {
+  flex: none;
+}
+
+.activity-icon.waiting {
+  color: var(--warn);
+}
+
+.activity-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.activity-state {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: var(--fg3);
+}
+
+.activity-state.waiting {
+  color: var(--warn);
+}
+
+.activity-foot {
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 6px 6px;
+  color: var(--fg2);
 }
 
 /* Fairy's button: a band of light sweeps across it from the top left now and then, and at once on hover. */

@@ -83,6 +83,8 @@ export interface AskItem {
   options: { label: string; description?: string }[]
   recommended?: number
   allowOther?: boolean
+  /** The conversation that asks; a question shows only with it, or under the task of a helper that asks. */
+  session?: string
   resolve: (answer: unknown) => void
 }
 
@@ -194,12 +196,20 @@ function conversation(pane: string) {
     items.value.push({ kind: 'note', text })
   }
 
-  /** Shows a ui.ask question; resolves with the user's answer. */
+  /**
+   * Shows a ui.ask question; resolves with the user's answer. The dock stays as it is: the Fairy button and a
+   * toast tell the user a question waits.
+   */
   function ask(input: Omit<AskItem, 'id' | 'resolve'>) {
     return new Promise<unknown>((resolve) => {
       asks.value.push({ ...input, id: ++askSeq, resolve })
-      open.value = true
     })
+  }
+
+  /** The questions of the open conversation and of the helpers it started. */
+  function visibleAsks() {
+    const helpers = new Set(items.value.flatMap((item) => (item.kind === 'tool' && item.task?.session ? [item.task.session] : [])))
+    return asks.value.filter((item) => !item.session || item.session === current.value || helpers.has(item.session))
   }
 
   function answer(id: number, result: { choice: number } | { other: string }) {
@@ -209,14 +219,16 @@ function conversation(pane: string) {
     item.resolve('choice' in result ? { choice: result.choice, label: item.options[result.choice]?.label } : result)
   }
 
-  /** Questions nobody can answer any more, after the turn ended or was stopped. */
-  function dropAsks() {
-    for (const item of asks.value) item.resolve({ cancelled: true })
-    asks.value = []
+  /** Questions nobody can answer any more, after the turn of `session` (or of any, without one) ended or was stopped. */
+  function dropAsks(session?: string) {
+    const gone = asks.value.filter((item) => !session || item.session === session || (!item.session && session === current.value))
+    for (const item of gone) item.resolve({ cancelled: true })
+    asks.value = asks.value.filter((item) => !gone.includes(item))
   }
 
   function newChat() {
-    dropAsks()
+    // Questions from conversations still running stay, for when you open them again.
+    asks.value = asks.value.filter((item) => item.session || (item.resolve({ cancelled: true }), false))
     toolsStale.value = false
     current.value = undefined
     task.value = undefined
@@ -266,6 +278,7 @@ function conversation(pane: string) {
   }
 
   function handle(event: FairyEvent) {
+    if (event.type === 'done' || event.type === 'error') dropAsks(event.session)
     if (event.parent) {
       if (event.parent === current.value) handleTask(event)
       if (event.session !== current.value) return
@@ -311,7 +324,6 @@ function conversation(pane: string) {
         flush()
         running.value = false
         if (event.usage) usage.value = event.usage
-        dropAsks()
         refreshSessions().catch(() => {})
         break
       case 'notice':
@@ -322,7 +334,6 @@ function conversation(pane: string) {
         flush()
         items.value.push({ kind: 'error', text: event.error, ...(event.code === 'max_steps' ? { code: 'max_steps' as const } : {}) })
         running.value = false
-        dropAsks()
         refreshSessions().catch(() => {})
         break
     }
@@ -436,7 +447,7 @@ function conversation(pane: string) {
 
   return {
     pane, open, sessions, groups, current, task, items, choice, streaming, running, usage, skills, commands, toolsStale, asks, quote,
-    refreshSessions, updateSession, refreshPickers, load, newChat, note, ask, answer, send, edit, retry, confirm, confirmTask, cancel, remove, bind,
+    refreshSessions, updateSession, refreshPickers, load, newChat, note, ask, visibleAsks, answer, send, edit, retry, confirm, confirmTask, cancel, remove, bind,
   }
 }
 
@@ -464,13 +475,14 @@ export function useConversation() {
   return inject(FAIRY_CONVERSATION, null) ?? useFairyStore()
 }
 
-/** The open conversation showing a session, for questions Fairy asks from it; the dock's when none does. */
+/**
+ * The open conversation showing a session, or the task of a helper's session, for questions Fairy asks from it;
+ * the dock's when none does (the question then waits there until that conversation is opened).
+ */
 export function conversationOf(session?: string): FairyConversation {
   const main = useFairyStore()
-  if (!session || main.current === session) return main
-  for (const use of panes.values()) {
-    const pane = use()
-    if (pane.current === session) return pane
-  }
-  return main
+  if (!session) return main
+  const all = [main, ...[...panes.values()].map((use) => use())]
+  const shows = (pane: FairyConversation) => pane.current === session || pane.items.some((item) => item.kind === 'tool' && item.task?.session === session)
+  return all.find(shows) ?? main
 }

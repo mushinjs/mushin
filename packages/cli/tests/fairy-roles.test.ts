@@ -80,6 +80,8 @@ describe('Fairy helpers', () => {
     const sending = dashboard.call('fairy.send', { text: 'set up a provider' })
     const confirm = await waitFor(() => dashboard.fairyEvents().find((event) => event.type === 'confirm'))
     expect(confirm).toMatchObject({ action: 'providers.list', parent: expect.any(String), call: expect.any(String) })
+    // A helper's approval counts for the conversation that started it.
+    expect((await app.call<any[]>('fairy.sessions')).find((item) => item.id === confirm.parent)).toMatchObject({ waiting: 'confirm' })
     await dashboard.call('fairy.confirm', { session: confirm.session, id: confirm.id, approved: true })
     const { session } = await sending
     const result = dashboard.fairyEvents(session).find((event) => event.type === 'tool-result')

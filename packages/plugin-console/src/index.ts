@@ -357,10 +357,13 @@ export class Console extends Service {
 
     yield actions.define({
       name: 'ui.navigate',
-      description: 'Open a dashboard page in the user\'s browser, e.g. /bots/<bot id>, /flows/<flow id> or /providers.',
+      description: 'Offer a dashboard page, e.g. /bots/<bot id>, /flows/<flow id> or /providers. The dashboard shows it in the chat as a card the user opens when they want, so their page stays put; with asked it opens the page at once.',
       risk: 'read',
       client: true,
-      input: z.object({ path: z.string().regex(/^\//).describe('Dashboard path starting with /') }),
+      input: z.object({
+        path: z.string().regex(/^\//).describe('Dashboard path starting with /'),
+        asked: z.boolean().optional().describe('True only when the user asked in their last message to be taken to this page'),
+      }),
     })
 
     yield actions.define({
@@ -384,6 +387,7 @@ export class Console extends Service {
       input: z.object({
         target: z.string().describe('Highlight target id'),
         message: z.string().optional().describe('Short hint shown next to the control'),
+        asked: z.boolean().optional().describe('True when the user asked where the control is; the page then scrolls to it. Otherwise it is pointed at only if it is on screen, and the chat offers to show it'),
       }),
     })
 

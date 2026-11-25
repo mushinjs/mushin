@@ -4,6 +4,7 @@ import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
 import { useFairyPane, useFairyStore } from '../../stores/fairy'
+import { useFairyActivityStore } from '../../stores/fairyActivity'
 import { workspace } from '../../stores/workspace'
 import type { FairyGroup, FairySessionSummary } from '../../types'
 import SettingsFairy from '../settings/SettingsFairy.vue'
@@ -19,6 +20,7 @@ const { t, locale } = useI18n()
 const toast = useToast()
 const dialog = useConfirm()
 const fairy = useFairyStore()
+const activity = useFairyActivityStore()
 
 const query = ref('')
 /** The Fairy settings dialog's tab, or undefined while it is closed. */
@@ -323,9 +325,11 @@ const relative = (ts: number) => {
               @blur="saveRename"
             />
             <button v-else type="button" class="row-main" :title="session.title" @click="openSession(session.id)" @dblclick="startRename('session', session.id, session.title)">
-              <Spin v-if="session.running" :size="10" class="row-dot" />
+              <span v-if="activity.of(session.id)?.waiting" class="i-lucide-hand row-dot row-waiting" :title="t(`fairyActivity.${activity.of(session.id)!.waiting}`)" />
+              <Spin v-else-if="activity.of(session.id) ?? session.running" :size="10" class="row-dot" />
               <span v-else class="row-dot dot" :class="{ on: openIn(session.id).length }" />
               <span class="row-title">{{ session.title || t('fairy.untitled') }}</span>
+              <span v-if="activity.of(session.id)?.waiting" class="row-wait">{{ t(`fairyActivity.${activity.of(session.id)!.waiting}`) }}</span>
               <span v-if="openIn(session.id).includes('split')" class="i-lucide-columns-2 row-split" :title="t('workspace.inSplit')" />
               <span class="row-time">{{ relative(session.updatedAt) }}</span>
             </button>
@@ -513,6 +517,17 @@ const relative = (ts: number) => {
 
 .dot.on {
   background: var(--primary);
+}
+
+.row-waiting {
+  font-size: 12px;
+  color: var(--warn);
+}
+
+.row-wait {
+  flex: none;
+  font-size: 11px;
+  color: var(--warn);
 }
 
 .row-title {
