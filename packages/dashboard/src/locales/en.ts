@@ -1261,7 +1261,7 @@ export default {
     hello: 'Hi. Tell me what you want to set up, and I will do it with you.',
     needProvider: 'Fairy needs an LLM provider first.',
     goSetup: 'Set up a provider',
-    placeholder: 'Ask Fairy… (Enter to send)',
+    placeholder: 'Ask Fairy to check or change things…',
     send: 'Send',
     stop: 'Stop',
     thinking: 'Thinking…',
@@ -1292,7 +1292,7 @@ export default {
     maxSteps: 'This reply used all its tool rounds, so Fairy stopped here.',
     continue: 'Continue',
     continuePrompt: 'Continue',
-    newBelow: 'New below',
+    newBelow: 'Jump to latest',
   },
   fairyCard: {
     open: 'Open',
