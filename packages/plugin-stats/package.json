@@ -31,6 +31,7 @@
   ],
   "mushin": {
     "kind": "app",
+    "category": "feature",
     "displayName": {
       "en": "Statistics",
       "zh-CN": "统计"

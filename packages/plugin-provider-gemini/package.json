@@ -31,6 +31,7 @@
   ],
   "mushin": {
     "kind": "app",
+    "category": "provider",
     "displayName": {
       "en": "Gemini provider",
       "zh-CN": "Gemini 提供商"

@@ -12,7 +12,7 @@ import {
 import { MushinError } from './errors'
 import { EnvFile, envReference, resolveEnvReferences } from './env'
 import { type CatalogEntry, manifestProblems, MUSHIN_VERSION, type PluginManifest, readPackageJson, resolvePackageEntry, scanCatalog } from './manifest'
-import { isMasked, mask, writeJsonAtomic } from './utils'
+import { field, isMasked, mask, writeJsonAtomic } from './utils'
 
 declare module 'cordis' {
   interface Context {
@@ -159,6 +159,7 @@ const knownManifests: Record<string, PluginManifest> = {
   '@cordisjs/plugin-server': {
     kind: 'app',
     essential: true,
+    category: 'core',
     provides: ['server'],
     displayName: { en: 'HTTP server', 'zh-CN': 'HTTP 服务器' },
     description: { en: 'Serves the dashboard, the API and OneBot reverse connections', 'zh-CN': '提供控制台、API 和 OneBot 反向连接' },
@@ -167,6 +168,31 @@ const knownManifests: Record<string, PluginManifest> = {
 
 export function knownManifest(name: string) {
   return knownManifests[name]
+}
+
+/** Config forms for those plugins, whose own schemas the dashboard cannot read. */
+const knownSchemas: Record<string, JsonSchema> = {
+  '@cordisjs/plugin-server': {
+    type: 'object',
+    properties: {
+      host: {
+        type: 'string',
+        default: '127.0.0.1',
+        ...field('Host', 'The address to listen on: 127.0.0.1 for this machine only, 0.0.0.0 for every network', {
+          'zh-CN': { title: '监听地址', description: '127.0.0.1 只允许本机访问，0.0.0.0 允许所有网络访问' },
+        }),
+      },
+      port: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 65535,
+        default: 5160,
+        ...field('Port', 'The port of the dashboard and the API', {
+          'zh-CN': { title: '端口', description: '控制台和 API 使用的端口' },
+        }),
+      },
+    },
+  },
 }
 
 /**
@@ -650,6 +676,7 @@ export class PluginManager extends Service {
       configSchema = pluginSchema(plugin)
       secrets = secretFields(plugin)
     } catch {}
+    configSchema ??= knownSchemas[entry.package]
     const report = dependencyReport(this.graphNow(), entry.package)
     return {
       id: entry.id,
@@ -683,7 +710,8 @@ export class PluginManager extends Service {
           const needle = query.toLowerCase()
           list = list.filter((entry) => JSON.stringify([entry.package, entry.manifest]).toLowerCase().includes(needle))
         }
-        return list.map(({ path, ...rest }) => rest)
+        // Where a local plugin's folder is helps; an npm package's path does not.
+        return list.map(({ path, ...rest }) => (rest.local ? { ...rest, path } : rest))
       },
     })
 

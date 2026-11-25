@@ -32,6 +32,7 @@
   "mushin": {
     "kind": "app",
     "essential": true,
+    "category": "adapter",
     "displayName": {
       "en": "Bots",
       "zh-CN": "机器人"

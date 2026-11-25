@@ -31,6 +31,7 @@
   ],
   "mushin": {
     "kind": "app",
+    "category": "provider",
     "displayName": {
       "en": "TypeSafe provider",
       "zh-CN": "TypeSafe 提供商"

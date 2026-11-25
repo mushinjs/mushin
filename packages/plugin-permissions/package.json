@@ -31,7 +31,7 @@
   ],
   "mushin": {
     "kind": "app",
-    "category": "manage",
+    "category": "feature",
     "displayName": {
       "en": "Permissions",
       "zh-CN": "权限"

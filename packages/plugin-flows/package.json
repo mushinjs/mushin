@@ -31,6 +31,7 @@
   ],
   "mushin": {
     "kind": "app",
+    "category": "feature",
     "displayName": {
       "en": "Conversation flows",
       "zh-CN": "对话流程"
