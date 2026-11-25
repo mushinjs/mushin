@@ -53,3 +53,18 @@ describe('bot logs', () => {
     await expect(app.call('bots.logs', { id: botId, since: 'not a time' })).rejects.toThrow(/not a time/)
   })
 })
+
+describe('bot logs read from files', () => {
+  it('come back in time order, even when the file has them out of order', async () => {
+    // Appending is asynchronous: lines of the same millisecond can reach the file in any order.
+    const storage = app.ctx.get('storage') as any
+    const ts = Date.parse('2026-01-02T03:04:05.000Z')
+    const day = new Date(ts).toISOString().slice(0, 10)
+    const line = (sn: number, at: number, text: string) => ({ botId, sn, ts: at, type: 'info', name: 'bot', text })
+    for (const value of [line(3, ts, 'third'), line(1, ts, 'first'), line(4, ts + 1, 'fourth'), line(2, ts, 'second')]) {
+      await storage.append(`logs/${botId}/${day}`, value)
+    }
+    const lines = await app.call<any[]>('bots.logs', { id: botId, since: ts - 1000, until: ts + 1000 })
+    expect(lines.map((item) => item.text)).toEqual(['first', 'second', 'third', 'fourth'])
+  })
+})

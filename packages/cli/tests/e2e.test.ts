@@ -245,6 +245,38 @@ describe('bots over OneBot', () => {
     dashboard.close()
   })
 
+  it('sends debug lines only to the tabs that asked for them', async () => {
+    const plain = await app.connect()
+    const debugging = await app.connect()
+    debugging.send({ type: 'logs', debug: true })
+    // Socket messages are handled in order: once this call answered, the switch is on.
+    await debugging.call('system.info')
+    const logger = app.ctx.logger('debug-test')
+    logger.debug('a debug line %d', 1)
+    logger.info('an info line %d', 2)
+    await waitFor(() => plain.events.some((event) => event.name === 'log' && event.data.text === 'an info line 2'))
+    await waitFor(() => debugging.events.some((event) => event.name === 'log' && event.data.text === 'an info line 2'))
+    const texts = (events: { name: string; data: any }[]) => events.filter((event) => event.name === 'log').map((event) => event.data.text)
+    expect(texts(debugging.events)).toContain('a debug line 1')
+    expect(texts(plain.events)).not.toContain('a debug line 1')
+
+    expect((await app.call<any[]>('logs.recent', { limit: 1000 })).some((line) => line.type === 'debug')).toBe(false)
+    const withDebug = await app.call<any[]>('logs.recent', { limit: 1000, level: 'debug' })
+    const at = withDebug.findIndex((line) => line.text === 'a debug line 1')
+    expect(at).toBeGreaterThanOrEqual(0)
+    expect(withDebug[at + 1]?.text).toBe('an info line 2')
+    expect((await app.call<any[]>('logs.recent', { limit: 1000, level: 'warn' })).every((line) => line.type === 'warn' || line.type === 'error')).toBe(true)
+
+    debugging.send({ type: 'logs', debug: false })
+    await debugging.call('system.info')
+    logger.debug('a debug line %d', 3)
+    logger.info('an info line %d', 4)
+    await waitFor(() => debugging.events.some((event) => event.name === 'log' && event.data.text === 'an info line 4'))
+    expect(texts(debugging.events)).not.toContain('a debug line 3')
+    plain.close()
+    debugging.close()
+  })
+
   it('writes tagged lifecycle lines to the global log', async () => {
     const global = await app.call<any[]>('logs.recent', { limit: 1000 })
     const has = (tag: string, pattern: RegExp) => global.some((line) => line.tag === tag && pattern.test(line.text))

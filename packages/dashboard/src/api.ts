@@ -62,6 +62,7 @@ export function handleClientAction(name: string, handler: ClientHandler) {
 let socket: WebSocket | undefined
 let reconnectTimer: number | undefined
 let currentPage = location.pathname
+let debugLogs = false
 let counter = 0
 const pending = new Map<string, { resolve: (value: any) => void; reject: (error: Error) => void }>()
 
@@ -81,6 +82,8 @@ export function connect() {
       case 'ready':
         connection.connected = true
         connection.clientId = message.client
+        // A new socket starts without debug lines; ask again.
+        if (debugLogs) send({ type: 'logs', debug: true })
         emit('connected', null)
         break
       case 'event':
@@ -126,6 +129,12 @@ export function connect() {
 export function setPage(path: string) {
   currentPage = path
   send({ type: 'page', path })
+}
+
+/** Asks for the global log's debug lines (`log` events of type debug) on this tab's socket, or stops them. */
+export function setDebugLogs(on: boolean) {
+  debugLogs = on
+  send({ type: 'logs', debug: on })
 }
 
 /** Runs an action. Uses the WebSocket when connected, so client actions route back to this tab. */

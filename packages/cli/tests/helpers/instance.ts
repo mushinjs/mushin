@@ -89,6 +89,8 @@ export async function startInstance(options: { baseDir?: string } = {}) {
           socket.send(JSON.stringify({ type: 'call', id, action, input }))
         })
       },
+      /** Sends a raw socket message, such as `{ type: 'logs', debug: true }`. */
+      send: (data: unknown) => socket.send(JSON.stringify(data)),
       close: () => socket.close(),
     }
   }

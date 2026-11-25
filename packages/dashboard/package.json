@@ -24,6 +24,7 @@
     "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
+    "@mushinjs/core": "workspace:*",
     "@mushinjs/ui": "workspace:*",
     "@tanstack/vue-virtual": "catalog:",
     "@types/markdown-it": "catalog:",
