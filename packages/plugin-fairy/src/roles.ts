@@ -171,6 +171,7 @@ Rules:
 - Use only ids and names that your tools returned; never invent them.
 - If a tool fails, read the error, fix the input and try once more; otherwise note the failure in your report.
 - Keep within the task. If it needs something you cannot do with your tools, report that instead of working around it.
+- A message from the user can arrive between your steps while you work. Follow it; when it asks to stop, call fairy__report at once with what is done.
 
 When you are done, or cannot go on, call fairy__report once. Give status (done; blocked when you need something only the user can give, named in next; failed when it could not be done), a short summary, your findings (each with title, detail, where, evidence and fix as fits), the changes you made, and next: what Fairy should do or ask the user next. Write the report in the language of the task.`
 }

@@ -3,7 +3,7 @@ import {
 } from '@mushinjs/core'
 import { type Effort, EFFORTS, type LlmMessage, type LlmResult, type ToolCall, type ToolDefinition } from '@mushinjs/plugin-providers'
 import type {} from '@mushinjs/plugin-storage'
-import { contextNote, type SceneInfo, skillBlock, SYSTEM_PROMPT, type TurnContext } from './prompt'
+import { contextNote, type SceneInfo, skillBlock, steerNote, SYSTEM_PROMPT, type TurnContext } from './prompt'
 import {
   type FairySettings, defaultPolicy, formatSkillMarkdown, parseSkillMarkdown, policyInput, profileInput, SCENE_KEYS, type SceneProfile, today,
   type TokenUsage, type ToolPolicy,
@@ -45,6 +45,10 @@ export type FairyEvent = { session: string; parent?: string; call?: string } & (
   | { type: 'notice'; code: 'effort_ignored' }
   /** `code` is `max_steps` when the turn ran out of tool rounds, so the dashboard can offer to go on. */
   | { type: 'error'; error: string; code?: 'max_steps' }
+  /** The user wrote while the turn runs; Fairy reads it before its next step. */
+  | { type: 'queued'; id: string; text: string }
+  /** Messages written during the turn that Fairy (or a helper) has now read. */
+  | { type: 'delivered'; ids: string[] }
 )
 
 /**
@@ -171,7 +175,7 @@ export type Config = z.infer<typeof Config>
 
 interface Running {
   abort: AbortController
-  confirms: Map<string, (approved: boolean) => void>
+  confirms: Map<string, (approved: Approval) => void>
   /** Tokens of every request in this turn. */
   usage: { inputTokens: number; outputTokens: number }
   /** Failed calls per tool in this turn, to tell the model to stop guessing. */
@@ -182,6 +186,26 @@ interface Running {
   report?: TaskReport
   /** ui.ask questions waiting for the user's answer. */
   asking?: number
+  /** What the user wrote while the turn runs, read before the next step. */
+  queue: Queued[]
+}
+
+/** The user's answer to an approval: yes, no, or a message written instead. */
+type Approval = boolean | 'replied'
+
+/** A message the user sent while a turn was running. */
+interface Queued {
+  id: string
+  text: string
+  /** The message as the model reads it: a note that it came mid-turn, skills, a quoted chat, the text. */
+  content: string
+  skills?: string[]
+  quote?: QuotedChat
+  at: number
+}
+
+function newRunning(): Running {
+  return { abort: new AbortController(), confirms: new Map(), usage: { inputTokens: 0, outputTokens: 0 }, failures: new Map(), queue: [] }
 }
 
 /** The turn used every tool round it may; the dashboard offers to continue. */
@@ -815,7 +839,11 @@ export class Fairy extends Service {
     }
   }
 
-  /** Starts a turn and returns once it finishes. Progress streams as `fairy/event` events. */
+  /**
+   * Starts a turn and returns once it finishes. Progress streams as `fairy/event` events. While a turn of the
+   * conversation runs, the message joins it instead: Fairy reads it before its next step, and so does a helper
+   * at work; an approval it waits for counts as declined. That call returns at once with `queued`.
+   */
   async send(sessionId: string | undefined, text: string, options: SendOptions = {}) {
     if (!this.home.llm.list().length) {
       throw new MushinError('unavailable', 'Add an LLM provider before using Fairy')
@@ -825,7 +853,12 @@ export class Fairy extends Service {
       throw new MushinError('unavailable', `Fairy used its daily budget of ${usage.budget} tokens; raise it in the Fairy settings or wait until tomorrow`)
     }
     const session = sessionId ? await this.session(sessionId) : await this.createSession()
-    if (this.running.has(session.id)) throw new MushinError('conflict', 'Fairy is still working on this conversation')
+    if (this.running.has(session.id)) {
+      if (options.rewind !== undefined) throw new MushinError('conflict', 'Fairy is still working on this conversation; stop it before editing a message')
+      const queued = await this.steer(session.id, text, options)
+      if (queued) return { session: session.id, queued }
+      // The turn ended meanwhile: the message starts the next one.
+    }
     if (options.rewind !== undefined) {
       let seen = -1
       const at = session.messages.findIndex((message) => message.role === 'user' && ++seen === options.rewind)
@@ -834,7 +867,7 @@ export class Fairy extends Service {
     }
     // A conversation saved by an older version can hold more tools than a request may carry.
     if (session.tools.length > MAX_TOOLS) session.tools = session.role ? await this.roleTools(this.role(session.role)) : await this.tools()
-    const running: Running = { abort: new AbortController(), confirms: new Map(), usage: { inputTokens: 0, outputTokens: 0 }, failures: new Map() }
+    const running = newRunning()
     this.running.set(session.id, running)
     this.live.set(session.id, session)
     const skills = options.skills?.length ? await Promise.all(options.skills.map((id) => this.skill(id))) : []
@@ -855,12 +888,16 @@ export class Fairy extends Service {
     await this.save(session)
     this.emit({ session: session.id, type: 'start' })
     try {
-      const final = await this.loop(session, running, options)
+      let final = await this.loop(session, running, options)
+      // A message that came in just as the reply ended still gets its answer.
+      while (running.queue.length && !running.abort.signal.aborted) final = await this.loop(session, running, options)
       this.emit({ session: session.id, type: 'done', text: final?.text ?? '', usage: running.usage })
     } catch (error) {
       const message = running.abort.signal.aborted ? 'Stopped' : error instanceof Error ? error.message : String(error)
       this.emit({ session: session.id, type: 'error', error: message, ...(error instanceof StepLimit && !running.abort.signal.aborted ? { code: 'max_steps' as const } : {}) })
     } finally {
+      // What the user wrote after a stop or failure stays in the conversation for the next turn.
+      this.deliver(session, running)
       this.running.delete(session.id)
       this.live.delete(session.id)
       await this.save(session)
@@ -871,6 +908,8 @@ export class Fairy extends Service {
   private async loop(session: FairySession, running: Running, options: SendOptions) {
     let last: LlmResult | undefined
     for (let step = 0; step < this.config.maxSteps; step++) {
+      // What the user wrote since the last step comes before the next request, after the tool results.
+      this.deliver(session, running)
       const history: LlmMessage[] = [{ role: 'system', content: session.system ?? SYSTEM_PROMPT }, ...session.messages.map(stripMeta)]
       let result: LlmResult | undefined
       // A provider picked for this message comes with its own model choice, not Fairy's.
@@ -905,7 +944,11 @@ export class Fairy extends Service {
         ...(result.raw ? { raw: result.raw } : {}),
         at: Date.now(),
       })
-      if (!result.toolCalls.length) return result
+      // A reply that would end the turn goes on when the user wrote meanwhile; the next step reads it.
+      if (!result.toolCalls.length) {
+        if (running.queue.length && !running.report && step < this.config.maxSteps - 1) continue
+        return result
+      }
 
       // A tool call cut off by the output limit, or in a refused turn, may be truncated: never run it.
       if (result.finishReason === 'length' || result.finishReason === 'refusal') {
@@ -1007,9 +1050,11 @@ export class Fairy extends Service {
     if (policy === 'confirm') {
       this.emit({ session: session.id, type: 'confirm', id: call.id, action: name, input })
       const approved = await this.waitForApproval(running, call.id)
-      if (!approved) {
+      if (approved !== true) {
         this.emit({ session: session.id, type: 'tool-result', id: call.id, ok: false, error: 'Declined by the user' })
-        return reply('The user declined this action. Do not retry it.', true)
+        return reply(approved === 'replied'
+          ? 'The user did not approve this; they wrote a message instead, which follows. Go by what it says.'
+          : 'The user declined this action. Do not retry it.', true)
       }
     }
 
@@ -1060,7 +1105,7 @@ export class Fairy extends Service {
       tags: [`role:${role.id}`],
       messages: [{ role: 'user', content: taskMessage(task, typeof input?.context === 'string' ? input.context : undefined, new Date(now)), display: task, at: now }],
     }
-    const running: Running = { abort: new AbortController(), confirms: new Map(), usage: { inputTokens: 0, outputTokens: 0 }, failures: new Map() }
+    const running = newRunning()
     const stop = () => running.abort.abort()
     parentRunning.abort.signal.addEventListener('abort', stop, { once: true })
     this.running.set(child.id, running)
@@ -1078,6 +1123,8 @@ export class Fairy extends Service {
       report = running.report ?? { status: 'failed', summary: message }
       this.emit({ session: child.id, type: 'error', error: message, ...(error instanceof StepLimit && !running.abort.signal.aborted ? { code: 'max_steps' as const } : {}) })
     } finally {
+      // The conversation that started the helper has the same messages and reads them next.
+      running.queue.length = 0
       parentRunning.abort.signal.removeEventListener('abort', stop)
       this.running.delete(child.id)
       this.live.delete(child.id)
@@ -1090,10 +1137,56 @@ export class Fairy extends Service {
     return { task: child.id, role: role.id, ...report }
   }
 
+  /**
+   * Adds a message to the running turn of a conversation, and to the turns of helpers it has at work, which
+   * read it before their next step. Approvals they wait for count as declined, since the user wrote instead.
+   */
+  private async steer(sessionId: string, text: string, options: SendOptions) {
+    const skills = options.skills?.length ? await Promise.all(options.skills.map((id) => this.skill(id))) : []
+    const quote = options.quote ? await this.quoteChat(options.quote) : undefined
+    const running = this.running.get(sessionId)
+    if (!running) return undefined
+    const id = randomId()
+    const helpers = [...this.links].filter(([child, link]) => link.session === sessionId && this.running.has(child)).map(([child]) => this.running.get(child)!)
+    const item = (note: string): Queued => ({
+      id,
+      text,
+      content: [note, ...skills.map(skillBlock), quote ? quoteBlock(quote) : '', text].filter(Boolean).join('\n\n'),
+      ...(skills.length ? { skills: skills.map((skill) => skill.name) } : {}),
+      ...(quote ? { quote } : {}),
+      at: Date.now(),
+    })
+    running.queue.push(item(steerNote(helpers.length ? 'helper-told' : 'own')))
+    for (const helper of helpers) helper.queue.push(item(steerNote('helper')))
+    for (const turn of [running, ...helpers]) {
+      for (const resolve of [...turn.confirms.values()]) resolve('replied')
+    }
+    this.emit({ session: sessionId, type: 'queued', id, text })
+    return id
+  }
+
+  /** Puts what the user wrote during the turn into the conversation, where the next request reads it. */
+  private deliver(session: FairySession, running: Running) {
+    if (!running.queue.length) return
+    const items = running.queue.splice(0)
+    for (const item of items) {
+      session.messages.push({
+        role: 'user',
+        content: item.content,
+        display: item.text,
+        ...(item.skills ? { skills: item.skills } : {}),
+        ...(item.quote ? { quote: item.quote } : {}),
+        at: item.at,
+      })
+    }
+    this.emit({ session: session.id, type: 'delivered', ids: items.map((item) => item.id) })
+  }
+
+  /** Resolves true or false with the user's answer, or `replied` when they wrote a message instead. */
   private waitForApproval(running: Running, callId: string) {
-    return new Promise<boolean>((resolve) => {
+    return new Promise<Approval>((resolve) => {
       const timer = setTimeout(() => finish(false), this.config.confirmTimeout * 1000)
-      const finish = (approved: boolean) => {
+      const finish = (approved: Approval) => {
         clearTimeout(timer)
         running.confirms.delete(callId)
         resolve(approved)

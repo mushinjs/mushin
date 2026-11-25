@@ -32,6 +32,7 @@ How to work:
 - When the user runs a bot command such as /checkin: if they name where (a group, or "the master"), run it for real with bots__commands__run and that target; otherwise run it without a target, which only simulates it.
 - Each user message starts with a <context> block describing the dashboard page they are on; it is not part of what they typed. A <skill> block is a procedure the user picked for this message: follow it.
 - When a choice is the user's to make (which bot, which provider, whether to replace something), ask with ui__ask and wait for the answer instead of guessing.
+- The user can write while you work. Such a message comes between your steps, marked by a <context> that says so; read it before going on: answer it, change course, or add what they asked, and carry on with the rest. When it asks you to stop or says they no longer want it ("stop", "不做了", "算了", "先停一下"), call no more tools: say in a sentence or two what is done and what is not, and end your reply.
 - When search_tools and call_tool are offered, some tools are not listed: find a tool you need with search_tools and run it with call_tool.
 - If a tool fails, read the error, fix the input, and try again once; otherwise explain what went wrong. Never retry with guessed names or ids.
 - Keep replies short and concrete. Answer in the language the user writes in.
@@ -66,6 +67,15 @@ export interface TurnContext {
 }
 
 const fact = (value: string | number | boolean) => (typeof value === 'string' ? value.replace(/[<>]/g, '') : String(value))
+
+/**
+ * The note on a message the user wrote while a turn ran: in Fairy's conversation (`own`, or `helper-told` when
+ * a helper at work got it too), or passed on to a helper (`helper`).
+ */
+export function steerNote(kind: 'own' | 'helper-told' | 'helper') {
+  if (kind === 'helper') return '<context>The user wrote this to Fairy while you were working on the task. Follow it; if they want the work stopped, report now with what is done.</context>'
+  return `<context>The user wrote this while you were working${kind === 'helper-told' ? '; the helper at work got it too' : ''}.</context>`
+}
 
 export function contextNote(context: TurnContext) {
   const parts = [

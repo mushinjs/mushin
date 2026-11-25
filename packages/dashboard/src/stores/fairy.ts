@@ -155,6 +155,10 @@ function conversation(pane: string) {
   const toolsStale = ref(false)
   const asks = ref<AskItem[]>([])
   let askSeq = 0
+  /** What you wrote while Fairy works, until it reads it; `local` until the server gives the message an id. */
+  const queued = ref<{ id: string; text: string; skills?: string[]; quote?: string }[]>([])
+  /** Ids read already, for a message whose id comes back after it was read. */
+  const read = new Set<string>()
   const commands = ref<FairyCommands>({ builtin: [], bots: [] })
   /** A chat message to quote into the next message, picked in a conversation view. */
   const quote = ref<{ bot: string; channel: string; id: string; label: string }>()
@@ -187,6 +191,7 @@ function conversation(pane: string) {
     current.value = session.id
     task.value = session.role && session.parent ? { role: session.role, parent: session.parent } : undefined
     items.value = toItems(session.messages)
+    queued.value = []
     running.value = session.running
     streaming.value = ''
     usage.value = undefined
@@ -234,6 +239,7 @@ function conversation(pane: string) {
     task.value = undefined
     usage.value = undefined
     items.value = []
+    queued.value = []
     streaming.value = ''
     running.value = false
   }
@@ -277,8 +283,33 @@ function conversation(pane: string) {
     }
   }
 
+  /** A message written during the turn, from this tab or another: shown below the work until Fairy reads it. */
+  function pendingItem(id: string, text: string) {
+    if (read.has(id)) return
+    const local = queued.value.find((item) => item.id === 'local' && item.text === text)
+    if (local) local.id = id
+    else if (!queued.value.some((item) => item.id === id)) queued.value.push({ id, text })
+  }
+
+  /** Fairy read these: they take their place in the conversation, after what it did so far. */
+  function markRead(ids: string[]) {
+    for (const id of ids) read.add(id)
+    const done = queued.value.filter((item) => ids.includes(item.id))
+    if (!done.length) return
+    flush()
+    queued.value = queued.value.filter((item) => !done.includes(item))
+    for (const { text, skills, quote: quoted } of done) items.value.push({ kind: 'user', text, ...(skills ? { skills } : {}), ...(quoted ? { quote: quoted } : {}) })
+  }
+
+  /** The turn is over: whatever was written during it is in the conversation now. */
+  function clearPending() {
+    markRead(queued.value.map((item) => item.id))
+  }
+
   function handle(event: FairyEvent) {
     if (event.type === 'done' || event.type === 'error') dropAsks(event.session)
+    // A helper at work reading the message counts too.
+    if (event.type === 'delivered' && (event.session === current.value || event.parent === current.value)) markRead(event.ids)
     if (event.parent) {
       if (event.parent === current.value) handleTask(event)
       if (event.session !== current.value) return
@@ -292,6 +323,11 @@ function conversation(pane: string) {
       case 'start':
         running.value = true
         streaming.value = ''
+        // Written as the last turn ended: it starts this one.
+        markRead(queued.value.filter((item) => item.id === 'local').map((item) => item.id))
+        break
+      case 'queued':
+        pendingItem(event.id, event.text)
         break
       case 'delta':
         streaming.value += event.text
@@ -322,6 +358,7 @@ function conversation(pane: string) {
       case 'done':
         if (!streaming.value && event.text) streaming.value = event.text
         flush()
+        clearPending()
         running.value = false
         if (event.usage) usage.value = event.usage
         refreshSessions().catch(() => {})
@@ -333,6 +370,7 @@ function conversation(pane: string) {
       case 'error':
         flush()
         items.value.push({ kind: 'error', text: event.error, ...(event.code === 'max_steps' ? { code: 'max_steps' as const } : {}) })
+        clearPending()
         running.value = false
         refreshSessions().catch(() => {})
         break
@@ -365,10 +403,51 @@ function conversation(pane: string) {
     return send(last.text, options)
   }
 
+  /**
+   * Adds to the turn that runs: the message shows at once, marked until Fairy reads it before its next step.
+   * Questions Fairy waits on are answered by it; an approval it waits on counts as declined (the server's part).
+   */
+  async function steer(text: string, picked: FairySkill[]) {
+    const session = current.value!
+    const quoted = quote.value
+    const entry = { id: 'local', text, ...(picked.length ? { skills: picked.map((skill) => skill.name) } : {}), ...(quoted ? { quote: quoted.label } : {}) }
+    queued.value.push(entry)
+    quote.value = undefined
+    try {
+      const result = await call<{ session: string; queued?: string }>('fairy.send', {
+        session,
+        text,
+        ...(picked.length ? { skills: picked.map((skill) => skill.id) } : {}),
+        ...(quoted ? { quote: { bot: quoted.bot, channel: quoted.channel, id: quoted.id } } : {}),
+      })
+      // The id comes with the answer unless its event came first; without one, the turn had ended and this one ran.
+      const mine = queued.value.find((item) => item === entry || (item.id === 'local' && item.text === text))
+      if (mine) {
+        mine.id = result.queued ?? 'ran'
+        if (!result.queued || read.has(result.queued)) markRead([mine.id])
+      }
+    } catch (error) {
+      queued.value = queued.value.filter((item) => item.text !== text || item.id !== 'local')
+      items.value.push({ kind: 'error', text: (error as Error).message })
+      return
+    }
+    // Sent first, so the message is there when Fairy reads the answer.
+    const helpers = new Set(items.value.flatMap((item) => (item.kind === 'tool' && item.task?.session ? [item.task.session] : [])))
+    for (const item of asks.value.filter((entry) => entry.session === session || (entry.session && helpers.has(entry.session)))) {
+      asks.value = asks.value.filter((entry) => entry !== item)
+      item.resolve({ skipped: true, note: 'The user wrote a message instead of picking; it comes next. Go by it.' })
+    }
+  }
+
   async function send(text: string, options: { skills?: FairySkill[]; scene?: FairyScene; rewind?: number } = {}) {
     const picked = options.skills ?? []
     const quoted = quote.value
-    if (running.value || (!text.trim() && !picked.length && !quoted)) return
+    if (!text.trim() && !picked.length && !quoted) return
+    if (running.value) {
+      // A new conversation has no id until its turn starts; editing waits for the turn to end.
+      if (current.value && options.rewind === undefined) await steer(text, picked)
+      return
+    }
     items.value.push({ kind: 'user', text, ...(picked.length ? { skills: picked.map((skill) => skill.name) } : {}), ...(quoted ? { quote: quoted.label } : {}) })
     quote.value = undefined
     running.value = true
@@ -446,7 +525,7 @@ function conversation(pane: string) {
   }
 
   return {
-    pane, open, sessions, groups, current, task, items, choice, streaming, running, usage, skills, commands, toolsStale, asks, quote,
+    pane, open, sessions, groups, current, task, items, queued, choice, streaming, running, usage, skills, commands, toolsStale, asks, quote,
     refreshSessions, updateSession, refreshPickers, load, newChat, note, ask, visibleAsks, answer, send, edit, retry, confirm, confirmTask, cancel, remove, bind,
   }
 }

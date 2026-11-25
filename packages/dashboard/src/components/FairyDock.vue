@@ -170,8 +170,11 @@ const trigger = computed(() => {
 
 watch(input, () => (paletteClosed.value = false))
 
+/** Sends a message; while Fairy works, it joins the turn and Fairy reads it before its next step. */
 async function send(text = input.value) {
-  if ((!text.trim() && !picked.value.length && !fairy.quote) || fairy.running) return
+  if (!text.trim() && !picked.value.length && !fairy.quote) return
+  // A new conversation gets its id when its turn starts; until then there is nothing to add to.
+  if (fairy.running && !fairy.current) return
   const skills = picked.value
   const scene = { ...scenes.scene }
   const bot = commandBot.value
@@ -364,7 +367,7 @@ async function scrollToEnd(force = false) {
   unread.value = false
 }
 
-watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1), fairy.visibleAsks().length], () => scrollToEnd(), { deep: true })
+watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1), fairy.visibleAsks().length, fairy.queued.length], () => scrollToEnd(), { deep: true })
 // A conversation opens at its end.
 watch(() => fairy.current, () => scrollToEnd(true))
 onMounted(() => scrollToEnd(true))
@@ -569,6 +572,18 @@ onMounted(() => scrollToEnd(true))
 
         <div v-if="fairy.streaming" class="msg assistant streaming"><FairyMessage :text="fairy.streaming" streaming /></div>
         <div v-else-if="fairy.running" class="thinking"><Spin :size="14" /> {{ t('fairy.thinking') }}</div>
+
+        <!-- Written while Fairy works: below the work until it reads them before its next step. -->
+        <div v-for="(item, index) in fairy.queued" :key="`${item.id}-${index}`" class="msg-wrap user queued">
+          <div class="msg user">
+            <div v-if="item.skills?.length" class="msg-skills">
+              <span v-for="name in item.skills" :key="name" class="msg-skill"><span class="i-lucide-puzzle" />{{ name }}</span>
+            </div>
+            <div v-if="item.quote" class="msg-quote"><span class="i-lucide-message-circle-more" />{{ item.quote }}</div>
+            {{ item.text }}
+          </div>
+          <div class="queued-note"><span class="i-lucide-clock-3" />{{ t('fairy.queuedNote') }}</div>
+        </div>
       </div>
     </div>
 
@@ -615,7 +630,7 @@ onMounted(() => scrollToEnd(true))
             type="textarea"
             :bordered="false"
             :autosize="{ minRows: 1, maxRows: 8 }"
-            :placeholder="t('fairy.placeholder')"
+            :placeholder="fairy.running ? t('fairy.placeholderRunning') : t('fairy.placeholder')"
             :disabled="!data.providers.length"
             @keydown="onKeydown"
           />
@@ -677,8 +692,20 @@ onMounted(() => scrollToEnd(true))
                 <p class="picker-hint">{{ t('fairyPicker.hint') }}</p>
               </div>
             </Popover>
-            <Button v-if="fairy.running" size="small" circle type="warning" secondary class="composer-send" :aria-label="t('fairy.stop')" :title="t('fairy.stop')" icon="i-lucide-square" @click="fairy.cancel()" />
-            <Button v-else size="small" circle type="primary" class="composer-send" :disabled="!input.trim() && !picked.length && !fairy.quote" :aria-label="t('fairy.send')" :title="t('fairy.send')" icon="i-lucide-arrow-up" @click="send()" />
+            <!-- While Fairy works: stop now, or send what you typed for it to read before its next step. -->
+            <Button v-if="fairy.running" size="small" circle quaternary class="composer-stop" :aria-label="t('fairy.stop')" :title="t('fairy.stopHint')" icon="i-lucide-square" @click="fairy.cancel()" />
+            <Button
+              v-if="!fairy.running || input.trim() || picked.length || fairy.quote"
+              size="small"
+              circle
+              type="primary"
+              class="composer-send"
+              :disabled="!input.trim() && !picked.length && !fairy.quote"
+              :aria-label="fairy.running ? t('fairy.sendRunning') : t('fairy.send')"
+              :title="fairy.running ? t('fairy.sendRunning') : t('fairy.send')"
+              icon="i-lucide-arrow-up"
+              @click="send()"
+            />
           </div>
         </div>
       </div>
@@ -1062,6 +1089,22 @@ onMounted(() => scrollToEnd(true))
 
 .msg-wrap > .msg {
   max-width: 100%;
+}
+
+/* Written while Fairy works and not read yet: a lighter bubble with a note under it. */
+.msg-wrap.queued > .msg.user {
+  background: var(--primary-soft);
+  color: var(--fg);
+  border: 1px dashed var(--primary);
+}
+
+.queued-note {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--fg3);
 }
 
 .msg-actions {
@@ -1506,8 +1549,17 @@ onMounted(() => scrollToEnd(true))
   cursor: default;
 }
 
+.composer-stop {
+  flex: none;
+  margin-left: auto;
+}
+
 .composer-send {
   flex: none;
   margin-left: auto;
+}
+
+.composer-stop + .composer-send {
+  margin-left: 4px;
 }
 </style>

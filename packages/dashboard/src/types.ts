@@ -454,6 +454,10 @@ export type FairyEvent = { session: string; parent?: string; call?: string } & (
   | { type: 'done'; text: string; usage?: { inputTokens: number; outputTokens: number } }
   | { type: 'notice'; code: 'effort_ignored' }
   | { type: 'error'; error: string; code?: 'max_steps' }
+  /** The user wrote while the turn runs; Fairy reads it before its next step. */
+  | { type: 'queued'; id: string; text: string }
+  /** Messages written during the turn that Fairy (or a helper at work) has now read. */
+  | { type: 'delivered'; ids: string[] }
 )
 
 export interface LogLine {
