@@ -2,6 +2,9 @@
 /**
  * A panel that slides in from an edge of the window, over the page. The default slot is the
  * panel; `title` adds a header with a close button. Classes and styles go to the panel.
+ *
+ * With `modal` off there is no mask: the page stays usable beside the panel, clicking it does not
+ * close the panel, and Escape still does.
  */
 import { DialogClose, DialogContent, DialogOverlay, DialogPortal, DialogRoot, DialogTitle, VisuallyHidden } from 'reka-ui'
 import { useText } from '../config'
@@ -18,24 +21,26 @@ withDefaults(defineProps<{
   width?: number | string
   closable?: boolean
   maskClosable?: boolean
-}>(), { show: false, placement: 'right', width: 360, closable: true, maskClosable: true })
+  modal?: boolean
+}>(), { show: false, placement: 'right', width: 360, closable: true, maskClosable: true, modal: true })
 
 const emit = defineEmits<{ 'update:show': [value: boolean] }>()
 const text = useText()
 </script>
 
 <template>
-  <DialogRoot :open="show" @update:open="(value) => emit('update:show', value)">
+  <DialogRoot :open="show" :modal="modal" @update:open="(value) => emit('update:show', value)">
     <DialogPortal>
-      <DialogOverlay class="mu-modal-mask" />
+      <DialogOverlay v-if="modal" class="mu-modal-mask" />
       <DialogContent
         v-bind="$attrs"
         class="mu-drawer"
         :class="`mu-drawer--${placement}`"
         :style="{ width: typeof width === 'number' ? `${width}px` : width }"
         :aria-describedby="undefined"
-        @pointer-down-outside="(event) => !maskClosable && event.preventDefault()"
-        @interact-outside="(event) => !maskClosable && event.preventDefault()"
+        @pointer-down-outside="(event) => (!modal || !maskClosable) && event.preventDefault()"
+        @interact-outside="(event) => (!modal || !maskClosable) && event.preventDefault()"
+        @open-auto-focus="(event) => !modal && event.preventDefault()"
       >
         <header v-if="title" class="mu-drawer__header">
           <DialogTitle class="mu-modal__title">{{ title }}</DialogTitle>

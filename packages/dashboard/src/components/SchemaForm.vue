@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Form } from '@mushinjs/ui'
 import { computed, watch } from 'vue'
+import { differsFromDefault } from '../plugins/config'
 import type { JsonSchema } from '../types'
 import SchemaField from './SchemaField.vue'
 
@@ -13,6 +14,8 @@ const props = defineProps<{
   hidden?: string[]
   /** Dense layout for the flow editor; see SchemaField. */
   compact?: boolean
+  /** Marks fields set to something other than their default, with a button to reset them. */
+  markChanged?: boolean
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [value: Record<string, any>] }>()
@@ -54,7 +57,9 @@ function update(name: string, next: any) {
       :required="required.has(name)"
       :secret="secrets?.includes(name) || field['x-secret'] === true"
       :compact="compact"
+      :changed="markChanged && differsFromDefault(field, modelValue?.[name])"
       @update:model-value="(next: any) => update(name, next)"
+      @reset="update(name, JSON.parse(JSON.stringify(field.default)))"
     />
   </Form>
 </template>

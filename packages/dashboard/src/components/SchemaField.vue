@@ -19,9 +19,11 @@ const props = defineProps<{
    * field asks for an inline hint) and short choices fill the row as buttons.
    */
   compact?: boolean
+  /** Set to something other than its default: a mark and a reset button by the label. */
+  changed?: boolean
 }>()
 
-const emit = defineEmits<{ 'update:modelValue': [value: any] }>()
+const emit = defineEmits<{ 'update:modelValue': [value: any]; reset: [] }>()
 const { locale, t, te } = useI18n()
 
 const value = computed({
@@ -149,6 +151,10 @@ function onJson(text: string) {
           <template #trigger><span class="i-lucide-info info" tabindex="0" /></template>
           {{ description }}
         </Tooltip>
+        <template v-if="changed">
+          <span class="changed-dot" :title="t('plugins.config.changed')" />
+          <button type="button" class="reset" @click="emit('reset')">{{ t('plugins.config.reset') }}</button>
+        </template>
       </span>
       <span v-if="feedback" class="switch-desc">{{ feedback }}</span>
     </div>
@@ -162,6 +168,10 @@ function onJson(text: string) {
     :feedback="feedback"
     :validation-status="problem?.severity ?? (jsonError ? 'error' : undefined)"
   >
+    <template v-if="changed" #label-extra>
+      <span class="changed-dot" :title="t('plugins.config.changed')" />
+      <button type="button" class="reset" @click="emit('reset')">{{ t('plugins.config.reset') }}</button>
+    </template>
     <component
       :is="textEditor"
       v-if="textEditor"
@@ -266,6 +276,31 @@ function onJson(text: string) {
 </template>
 
 <style scoped>
+.changed-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 2px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+.reset {
+  padding: 0 4px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.reset:hover {
+  background: var(--primary-soft);
+}
+
 .switch-row {
   display: flex;
   align-items: center;

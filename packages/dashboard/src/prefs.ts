@@ -14,17 +14,28 @@ export interface Prefs {
   fairyOpensPages: boolean
   /** Sidebar entries the user hid; the pages still open by link. */
   hiddenPages: string[]
+  /** The Plugins page: groups folded (true) or opened (false) by hand, the details panel's width and last section, and how settings are edited. */
+  pluginGroups: Record<string, boolean>
+  pluginPanelWidth: number
+  pluginPanelSection: string
+  pluginConfigMode: 'form' | 'json'
 }
 
 const KEY = 'mushin.prefs'
 
 function read(): Prefs {
-  const prefs: Prefs = { fairyOpenOnStart: true, fairyOpensPages: false, hiddenPages: [] }
+  const prefs: Prefs = { fairyOpenOnStart: true, fairyOpensPages: false, hiddenPages: [], pluginGroups: {}, pluginPanelWidth: 520, pluginPanelSection: 'overview', pluginConfigMode: 'form' }
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}')
     if (typeof saved.fairyOpenOnStart === 'boolean') prefs.fairyOpenOnStart = saved.fairyOpenOnStart
     if (typeof saved.fairyOpensPages === 'boolean') prefs.fairyOpensPages = saved.fairyOpensPages
     if (Array.isArray(saved.hiddenPages)) prefs.hiddenPages = saved.hiddenPages.filter((page: unknown) => typeof page === 'string')
+    if (saved.pluginGroups && typeof saved.pluginGroups === 'object') {
+      prefs.pluginGroups = Object.fromEntries(Object.entries(saved.pluginGroups).filter(([, value]) => typeof value === 'boolean')) as Record<string, boolean>
+    }
+    if (typeof saved.pluginPanelWidth === 'number' && saved.pluginPanelWidth >= 360) prefs.pluginPanelWidth = saved.pluginPanelWidth
+    if (typeof saved.pluginPanelSection === 'string') prefs.pluginPanelSection = saved.pluginPanelSection
+    if (saved.pluginConfigMode === 'form' || saved.pluginConfigMode === 'json') prefs.pluginConfigMode = saved.pluginConfigMode
   } catch {}
   return prefs
 }
