@@ -25,7 +25,7 @@ onMounted(() => {
     @pointerdown="workspace.focused = pane"
     @focusin="workspace.focused = pane"
   >
-    <FairyDock :closable="closable" @close="emit('close')" />
+    <FairyDock variant="workspace" :closable="closable" @close="emit('close')" />
   </section>
 </template>
 

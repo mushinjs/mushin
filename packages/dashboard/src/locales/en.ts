@@ -1268,6 +1268,10 @@ export default {
     history: 'History',
     newChat: 'New chat',
     deleteChat: 'Delete this chat',
+    more: 'More',
+    deleteConfirm: 'Delete this chat?',
+    deleteConfirmText: '"{title}" and everything in it will be deleted. This cannot be undone.',
+    useSuggestion: 'Put it in the input to edit before sending',
     close: 'Close',
     untitled: 'Untitled chat',
     dangerous: 'Needs approval',
@@ -1815,7 +1819,6 @@ export default {
   },
   fairyHistory: {
     title: 'Conversation history',
-    all: 'View all…',
     search: 'Search titles and messages',
     tags: 'Filter by scene, skill, command or status',
     empty: 'No conversations match',

@@ -102,7 +102,7 @@ describe('fairy scenes and skills', () => {
 describe('bot commands from Fairy', () => {
   it('lists Fairy\'s own commands and every bot\'s', async () => {
     const { builtin, bots } = await app.call('fairy.commands')
-    expect(builtin.map((command: any) => command.name)).toEqual(['new', 'history', 'model', 'status', 'clear', 'help'])
+    expect(builtin.map((command: any) => command.name)).toEqual(['new', 'history', 'model', 'status', 'help'])
     expect(bots).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'checkin', bot: botId, description: 'Daily check-in', source: expect.objectContaining({ kind: 'flow' }) })]))
   })
 

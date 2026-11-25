@@ -1269,6 +1269,10 @@ const zhCN: typeof en = {
     history: '历史',
     newChat: '新对话',
     deleteChat: '删除此对话',
+    more: '更多',
+    deleteConfirm: '删除这个对话？',
+    deleteConfirmText: '「{title}」和其中的全部内容都会删除，无法恢复。',
+    useSuggestion: '放进输入框，改好再发送',
     close: '关闭',
     untitled: '未命名对话',
     dangerous: '需确认',
@@ -1816,7 +1820,6 @@ const zhCN: typeof en = {
   },
   fairyHistory: {
     title: '对话历史',
-    all: '查看全部…',
     search: '搜索标题和消息内容',
     tags: '按场景、技能、指令或状态筛选',
     empty: '没有匹配的对话',

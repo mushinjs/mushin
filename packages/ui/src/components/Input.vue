@@ -25,7 +25,9 @@ const props = withDefaults(defineProps<{
   /** Extra attributes for the <input> or <textarea>. */
   inputProps?: Record<string, unknown>
   status?: 'error' | 'warning'
-}>(), { type: 'text', size: 'medium' })
+  /** Off: no border, fill or focus ring, for a field inside a box that draws its own. */
+  bordered?: boolean
+}>(), { type: 'text', size: 'medium', bordered: true })
 
 const emit = defineEmits<{ 'update:value': [value: string]; clear: [] }>()
 const attrs = useAttrs()
@@ -78,7 +80,7 @@ defineExpose({ focus: () => field.value?.focus(), blur: () => field.value?.blur(
   <div
     v-bind="outer"
     class="mu-input"
-    :class="[`mu-input--${size}`, { 'mu-input--textarea': type === 'textarea', 'is-disabled': disabled, [`is-${status}`]: status }]"
+    :class="[`mu-input--${size}`, { 'mu-input--textarea': type === 'textarea', 'mu-input--borderless': !bordered, 'is-disabled': disabled, [`is-${status}`]: status }]"
   >
     <span v-if="$slots.prefix" class="mu-input__affix"><slot name="prefix" /></span>
     <textarea
@@ -86,6 +88,7 @@ defineExpose({ focus: () => field.value?.focus(), blur: () => field.value?.blur(
       ref="field"
       v-bind="inner"
       class="mu-input__field"
+      :class="{ 'is-autosize': autosize }"
       :value="value ?? ''"
       :placeholder="placeholder"
       :disabled="disabled"
@@ -160,6 +163,9 @@ defineExpose({ focus: () => field.value?.focus(), blur: () => field.value?.blur(
 .mu-input.is-warning { border-color: var(--warn); }
 .mu-input.is-disabled { opacity: 0.6; cursor: not-allowed; }
 .mu-input--textarea { align-items: flex-start; padding-top: 0; padding-bottom: 0; }
+.mu-input--borderless,
+.mu-input--borderless:hover,
+.mu-input--borderless:focus-within { padding: 0; border-color: transparent; background: transparent; box-shadow: none; }
 
 .mu-input__field {
   flex: 1;
@@ -177,11 +183,15 @@ defineExpose({ focus: () => field.value?.focus(), blur: () => field.value?.blur(
 .mu-input__field:disabled { cursor: not-allowed; }
 
 textarea.mu-input__field {
+  box-sizing: border-box;
   height: auto;
   padding: 6px 0;
   line-height: 1.55;
   resize: vertical;
 }
+
+/* A field that grows with its text has no handle to drag. */
+textarea.mu-input__field.is-autosize { resize: none; }
 
 .mu-input__affix {
   display: inline-flex;

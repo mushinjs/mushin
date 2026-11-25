@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Dropdown, type DropdownOption, Input, Modal, Spin, Tooltip, useToast } from '@mushinjs/ui'
+import { Button, Dropdown, type DropdownOption, Input, Modal, Spin, Tooltip, useConfirm, useToast } from '@mushinjs/ui'
 import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
@@ -17,6 +17,7 @@ const emit = defineEmits<{ dragging: [session: string | undefined] }>()
 
 const { t, locale } = useI18n()
 const toast = useToast()
+const dialog = useConfirm()
 const fairy = useFairyStore()
 
 const query = ref('')
@@ -148,8 +149,20 @@ async function onSessionMenu(session: FairySessionSummary, key: string) {
       await fairy.updateSession(session.id, { group: group.id })
       startRename('group', group.id, group.name)
     } else if (key === 'delete') {
-      await useFairyStore().remove(session.id)
-      if (useFairyPane('split').current === session.id) useFairyPane('split').newChat()
+      dialog.warning({
+        title: t('fairy.deleteConfirm'),
+        content: t('fairy.deleteConfirmText', { title: session.title || t('fairy.untitled') }),
+        positiveText: t('common.delete'),
+        negativeText: t('common.cancel'),
+        onPositiveClick: async () => {
+          try {
+            await useFairyStore().remove(session.id)
+            if (useFairyPane('split').current === session.id) useFairyPane('split').newChat()
+          } catch (error) {
+            toast.error((error as Error).message)
+          }
+        },
+      })
     }
   } catch (error) {
     toast.error((error as Error).message)

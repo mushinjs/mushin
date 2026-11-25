@@ -138,7 +138,6 @@ export const BUILTIN_COMMANDS = [
   { name: 'history', description: 'Open the full conversation history', 'zh-CN': '打开完整历史' },
   { name: 'model', description: 'Switch Fairy\'s model', 'zh-CN': '切换模型' },
   { name: 'status', description: 'Show how much context this conversation uses', 'zh-CN': '查看上下文用量' },
-  { name: 'clear', description: 'Clear the input and close the conversation', 'zh-CN': '清空当前对话视图' },
   { name: 'help', description: 'Show what you can type', 'zh-CN': '查看可用的指令和技能' },
 ]
 

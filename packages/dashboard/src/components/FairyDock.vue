@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Dropdown, type DropdownOption, Input, Modal, Popover, Select, Spin, Tag, Tooltip, useToast } from '@mushinjs/ui'
+import { Button, Dropdown, type DropdownOption, Input, Modal, Popover, Select, Spin, Tag, Tooltip, useConfirm, useToast } from '@mushinjs/ui'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -17,8 +17,12 @@ import HistoryDrawer from './fairy/HistoryDrawer.vue'
 import PanelIcon from './flow/editor/PanelIcon.vue'
 import ModelSelect from './ModelSelect.vue'
 
-/** `mode` is set where Fairy can float or dock; the button switches between the two. */
-defineProps<{ closable?: boolean; mode?: 'docked' | 'floating' }>()
+/**
+ * `mode` is set where Fairy can float or dock; the button switches between the two. In the workspace
+ * (`variant: 'workspace'`) the sessions column has new, history and delete, so the header only names the
+ * conversation.
+ */
+defineProps<{ closable?: boolean; mode?: 'docked' | 'floating'; variant?: 'dock' | 'workspace' }>()
 const emit = defineEmits<{ close: []; toggleMode: [] }>()
 
 const { t, te } = useI18n()
@@ -37,6 +41,40 @@ const palette = ref<InstanceType<typeof CommandPalette>>()
 const paletteClosed = ref(false)
 const showHistory = ref(false)
 const toast = useToast()
+const dialog = useConfirm()
+const field = ref<InstanceType<typeof Input>>()
+
+/** The conversation's title for the workspace header; a new one has none yet. */
+const title = computed(() => (fairy.current ? fairy.sessions.find((session) => session.id === fairy.current)?.title || t('fairy.untitled') : t('fairy.newChat')))
+
+const moreOptions = computed<DropdownOption[]>(() => [
+  { key: 'delete', label: t('fairy.deleteChat'), icon: 'i-lucide-trash-2', danger: true },
+])
+
+function onMore(key: string) {
+  const id = fairy.current
+  if (key !== 'delete' || !id) return
+  dialog.warning({
+    title: t('fairy.deleteConfirm'),
+    content: t('fairy.deleteConfirmText', { title: title.value }),
+    positiveText: t('common.delete'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: () => fairy.remove(id),
+  })
+}
+
+/** Puts the cursor at the end of the input. */
+async function focusInput() {
+  await nextTick()
+  field.value?.focus()
+  const el = field.value?.el
+  if (el) el.setSelectionRange(el.value.length, el.value.length)
+}
+
+/** A click on the box around the input, outside its buttons, goes to the input. */
+function onComposerClick(event: MouseEvent) {
+  if (!(event.target as HTMLElement).closest('button, a, input, textarea, [role="button"]')) field.value?.focus()
+}
 
 // ---- copy and edit ----
 
@@ -120,17 +158,6 @@ watch(showPicker, (open) => {
   if (!open) modelQuery.value = ''
 })
 
-const ALL = '__all__'
-const sessionOptions = computed<DropdownOption[]>(() => [
-  ...fairy.sessions.slice(0, 8).map((session) => ({ label: session.title || t('fairy.untitled'), key: session.id, icon: session.id === fairy.current ? 'i-lucide-check' : 'i-lucide-message-square' })),
-  ...(fairy.sessions.length ? [{ type: 'divider' as const }, { label: t('fairyHistory.all'), key: ALL, icon: 'i-lucide-history' }] : []),
-])
-
-function pickSession(id: string) {
-  if (id === ALL) showHistory.value = true
-  else fairy.load(id)
-}
-
 /** `/` at the start of the input lists commands; `$` after a space lists skills. */
 const trigger = computed(() => {
   if (paletteClosed.value) return
@@ -155,11 +182,13 @@ async function send(text = input.value) {
   await fairy.send(text.trim(), { skills, scene })
 }
 
-async function sendRecommendation(item: Recommendation) {
+/** A recommendation goes into the input, with its skill, to be edited and sent from there. */
+function useRecommendation(item: Recommendation) {
   const skill = item.skill ? fairy.skills.find((entry) => entry.id === item.skill && entry.enabled) : undefined
   scenes.dismiss(item.id)
-  if (fairy.running) return
-  await fairy.send(item.prompt, { skills: skill ? [skill] : [], scene: scenes.scene })
+  input.value = item.prompt
+  if (skill && !picked.value.some((entry) => entry.id === skill.id)) picked.value = [...picked.value, skill]
+  focusInput()
 }
 
 function onPick(item: PaletteItem) {
@@ -184,7 +213,6 @@ const modelForm = ref<{ provider?: string; model?: string }>({})
 function runBuiltin(name: string) {
   switch (name) {
     case 'new':
-    case 'clear':
       fairy.newChat()
       picked.value = []
       break
@@ -320,8 +348,13 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
   <div class="dock-inner">
     <header class="dock-head">
       <div class="dock-title">
-        <span class="i-lucide-sparkles text-[18px]" />
-        <span>{{ t('nav.fairy') }}</span>
+        <template v-if="variant === 'workspace'">
+          <span class="pane-title" :title="title">{{ title }}</span>
+        </template>
+        <template v-else>
+          <span class="i-lucide-sparkles text-[18px]" />
+          <span>{{ t('nav.fairy') }}</span>
+        </template>
         <Popover placement="bottom" align="start" :style="{ maxWidth: '300px' }">
           <template #trigger>
             <button type="button" class="scene-tag" :title="t('fairyScene.whatHere')" data-fairy-target="fairy.scene">
@@ -335,21 +368,23 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
         </Popover>
       </div>
       <div class="dock-actions">
-        <Dropdown v-if="fairy.sessions.length" :options="sessionOptions" align="end" @select="pickSession">
-          <Button size="small" quaternary>{{ t('fairy.history') }}</Button>
-        </Dropdown>
-        <Tooltip v-if="fairy.current">
-          <template #trigger>
-            <Button size="small" quaternary circle :aria-label="t('fairy.deleteChat')" icon="i-lucide-trash-2" @click="fairy.remove(fairy.current!)" />
-          </template>
-          {{ t('fairy.deleteChat') }}
-        </Tooltip>
-        <Tooltip>
-          <template #trigger>
-            <Button size="small" quaternary circle :aria-label="t('fairy.newChat')" icon="i-lucide-plus" @click="fairy.newChat()" />
-          </template>
-          {{ t('fairy.newChat') }}
-        </Tooltip>
+        <template v-if="variant !== 'workspace'">
+          <Tooltip>
+            <template #trigger>
+              <Button size="small" quaternary circle :aria-label="t('fairy.history')" icon="i-lucide-history" @click="showHistory = true" />
+            </template>
+            {{ t('fairy.history') }}
+          </Tooltip>
+          <Tooltip>
+            <template #trigger>
+              <Button size="small" quaternary circle :aria-label="t('fairy.newChat')" icon="i-lucide-plus" @click="fairy.newChat()" />
+            </template>
+            {{ t('fairy.newChat') }}
+          </Tooltip>
+          <Dropdown v-if="fairy.current" :options="moreOptions" align="end" @select="onMore">
+            <Button size="small" quaternary circle :aria-label="t('fairy.more')" icon="i-lucide-ellipsis" />
+          </Dropdown>
+        </template>
         <Tooltip v-if="mode">
           <template #trigger>
             <Button size="small" quaternary circle :aria-label="mode === 'docked' ? t('fairy.float') : t('fairy.dock')" data-fairy-target="fairy.mode" @click="emit('toggleMode')">
@@ -366,249 +401,258 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
     </header>
 
     <div ref="list" class="dock-list">
-      <div v-if="fairy.task" class="task-bar">
-        <span class="i-lucide-scroll-text" />
-        <span>{{ t('fairyTask.viewing', { role: te(`fairyTask.roles.${fairy.task.role}`) ? t(`fairyTask.roles.${fairy.task.role}`) : fairy.task.role }) }}</span>
-        <Button size="tiny" secondary icon="i-lucide-arrow-left" @click="fairy.load(fairy.task.parent.session)">{{ t('fairyTask.back') }}</Button>
-      </div>
-      <div v-if="data.loadedProviders && !data.providers.length" class="dock-empty">
-        <p>{{ t('fairy.needProvider') }}</p>
-        <Button type="primary" @click="router.push('/setup')">{{ t('fairy.goSetup') }}</Button>
-      </div>
-
-      <div v-else-if="!fairy.items.length && !fairy.running" class="dock-empty">
-        <p class="dock-hello">{{ scenes.welcome ?? t('fairy.hello') }}</p>
-        <button v-for="item in scenes.recommendations" :key="item.id" class="suggestion" :class="{ urgent: item.urgent }" type="button" @click="sendRecommendation(item)">
-          <span>{{ item.text }}</span>
-          <Tag v-if="item.skill" size="tiny" class="suggestion-skill">
-            <template #icon><span class="i-lucide-puzzle" /></template>
-            {{ fairy.skills.find((skill) => skill.id === item.skill)?.name ?? item.skill }}
-          </Tag>
-        </button>
-        <p class="dock-tip">{{ t('fairyPalette.tip') }}</p>
-      </div>
-
-      <template v-for="(row, index) in rows" :key="index">
-        <div v-if="row.kind === 'group'" class="tool-group" :class="{ open: expanded.has(row.key) }">
-          <button class="group-row" type="button" @click="toggle(row.key)">
-            <Spin v-if="row.running" :size="14" />
-            <span v-else-if="!row.failed" class="i-lucide-circle-check" color="var(--ok)" />
-            <span v-else-if="row.failed === row.items.length" class="i-lucide-circle-x" color="var(--bad)" />
-            <span v-else class="i-lucide-circle-alert" color="var(--warn)" />
-            <span class="mono group-name">{{ row.action }}</span>
-            <span class="group-count">×{{ row.items.length }}</span>
-            <span class="group-state">{{ groupSummary(row) }}</span>
-            <span class="i-lucide-chevron-down group-chevron" />
-          </button>
-          <div v-if="row.failed && !expanded.has(row.key)" class="group-reason" :title="row.reason">{{ row.reason }}</div>
-          <div v-if="expanded.has(row.key)" class="group-items">
-            <FairyToolCall
-              v-for="item in row.items"
-              :key="item.id"
-              :item="item"
-              :expanded="expanded.has(item.id)"
-              @toggle="toggle(item.id)"
-              @confirm="(approved) => fairy.confirm(item.id, approved)"
-              @confirm-task="(approved) => fairy.confirmTask(item.id, approved)"
-              @open-task="(session) => fairy.load(session)"
-            />
-          </div>
+      <div class="dock-column">
+        <div v-if="fairy.task" class="task-bar">
+          <span class="i-lucide-scroll-text" />
+          <span>{{ t('fairyTask.viewing', { role: te(`fairyTask.roles.${fairy.task.role}`) ? t(`fairyTask.roles.${fairy.task.role}`) : fairy.task.role }) }}</span>
+          <Button size="tiny" secondary icon="i-lucide-arrow-left" @click="fairy.load(fairy.task.parent.session)">{{ t('fairyTask.back') }}</Button>
         </div>
-        <template v-else>
-          <template v-for="item in [row.item]" :key="index">
-            <div v-if="item.kind === 'user' && editing && editing.ordinal === ordinals.get(item)" class="msg-edit">
-              <Input
-                v-model:value="editing.text"
-                type="textarea"
-                :autosize="{ minRows: 2, maxRows: 8 }"
-                @keydown.enter.exact.prevent="saveEdit()"
-                @keydown.esc="editing = undefined"
+        <div v-if="data.loadedProviders && !data.providers.length" class="dock-empty">
+          <p>{{ t('fairy.needProvider') }}</p>
+          <Button type="primary" @click="router.push('/setup')">{{ t('fairy.goSetup') }}</Button>
+        </div>
+
+        <div v-else-if="!fairy.items.length && !fairy.running" class="dock-empty">
+          <p class="dock-hello">{{ scenes.welcome ?? t('fairy.hello') }}</p>
+          <div v-if="scenes.recommendations.length" class="suggestions">
+            <button v-for="item in scenes.recommendations" :key="item.id" class="suggestion" :class="{ urgent: item.urgent }" type="button" :title="t('fairy.useSuggestion')" @click="useRecommendation(item)">
+              <span class="suggestion-text">{{ item.text }}</span>
+              <Tag v-if="item.skill" size="tiny" class="suggestion-skill">
+                <template #icon><span class="i-lucide-puzzle" /></template>
+                {{ fairy.skills.find((skill) => skill.id === item.skill)?.name ?? item.skill }}
+              </Tag>
+            </button>
+          </div>
+          <p class="dock-tip">{{ t('fairyPalette.tip') }}</p>
+        </div>
+
+        <template v-for="(row, index) in rows" :key="index">
+          <div v-if="row.kind === 'group'" class="tool-group" :class="{ open: expanded.has(row.key) }">
+            <button class="group-row" type="button" @click="toggle(row.key)">
+              <Spin v-if="row.running" :size="14" />
+              <span v-else-if="!row.failed" class="i-lucide-circle-check" color="var(--ok)" />
+              <span v-else-if="row.failed === row.items.length" class="i-lucide-circle-x" color="var(--bad)" />
+              <span v-else class="i-lucide-circle-alert" color="var(--warn)" />
+              <span class="mono group-name">{{ row.action }}</span>
+              <span class="group-count">×{{ row.items.length }}</span>
+              <span class="group-state">{{ groupSummary(row) }}</span>
+              <span class="i-lucide-chevron-down group-chevron" />
+            </button>
+            <div v-if="row.failed && !expanded.has(row.key)" class="group-reason" :title="row.reason">{{ row.reason }}</div>
+            <div v-if="expanded.has(row.key)" class="group-items">
+              <FairyToolCall
+                v-for="item in row.items"
+                :key="item.id"
+                :item="item"
+                :expanded="expanded.has(item.id)"
+                @toggle="toggle(item.id)"
+                @confirm="(approved) => fairy.confirm(item.id, approved)"
+                @confirm-task="(approved) => fairy.confirmTask(item.id, approved)"
+                @open-task="(session) => fairy.load(session)"
               />
-              <div class="msg-edit-actions">
-                <Button size="small" secondary @click="editing = undefined">{{ t('common.cancel') }}</Button>
-                <Button size="small" type="primary" :disabled="!editing.text.trim()" @click="saveEdit()">{{ t('fairy.resend') }}</Button>
-              </div>
             </div>
-            <div v-else-if="item.kind === 'user'" class="msg-wrap user">
-              <div class="msg user">
-                <div v-if="item.skills?.length" class="msg-skills">
-                  <span v-for="name in item.skills" :key="name" class="msg-skill"><span class="i-lucide-puzzle" />{{ name }}</span>
+          </div>
+          <template v-else>
+            <template v-for="item in [row.item]" :key="index">
+              <div v-if="item.kind === 'user' && editing && editing.ordinal === ordinals.get(item)" class="msg-edit">
+                <Input
+                  v-model:value="editing.text"
+                  type="textarea"
+                  :autosize="{ minRows: 2, maxRows: 8 }"
+                  @keydown.enter.exact.prevent="saveEdit()"
+                  @keydown.esc="editing = undefined"
+                />
+                <div class="msg-edit-actions">
+                  <Button size="small" secondary @click="editing = undefined">{{ t('common.cancel') }}</Button>
+                  <Button size="small" type="primary" :disabled="!editing.text.trim()" @click="saveEdit()">{{ t('fairy.resend') }}</Button>
                 </div>
-                <div v-if="item.quote" class="msg-quote"><span class="i-lucide-message-circle-more" />{{ item.quote }}</div>
-                {{ item.text }}
               </div>
-              <div class="msg-actions">
-                <Tooltip><template #trigger><Button size="tiny" quaternary circle icon="i-lucide-copy" :aria-label="t('fairy.copy')" @click="copy(item.text)" /></template>{{ t('fairy.copy') }}</Tooltip>
-                <Tooltip v-if="!fairy.running && item.text"><template #trigger><Button size="tiny" quaternary circle icon="i-lucide-pencil" :aria-label="t('fairy.edit')" @click="startEdit(item)" /></template>{{ t('fairy.edit') }}</Tooltip>
+              <div v-else-if="item.kind === 'user'" class="msg-wrap user">
+                <div class="msg user">
+                  <div v-if="item.skills?.length" class="msg-skills">
+                    <span v-for="name in item.skills" :key="name" class="msg-skill"><span class="i-lucide-puzzle" />{{ name }}</span>
+                  </div>
+                  <div v-if="item.quote" class="msg-quote"><span class="i-lucide-message-circle-more" />{{ item.quote }}</div>
+                  {{ item.text }}
+                </div>
+                <div class="msg-actions">
+                  <Tooltip><template #trigger><Button size="tiny" quaternary circle icon="i-lucide-copy" :aria-label="t('fairy.copy')" @click="copy(item.text)" /></template>{{ t('fairy.copy') }}</Tooltip>
+                  <Tooltip v-if="!fairy.running && item.text"><template #trigger><Button size="tiny" quaternary circle icon="i-lucide-pencil" :aria-label="t('fairy.edit')" @click="startEdit(item)" /></template>{{ t('fairy.edit') }}</Tooltip>
+                </div>
               </div>
-            </div>
-            <div v-else-if="item.kind === 'assistant'" class="msg-wrap assistant">
-              <div class="msg assistant"><FairyMessage :text="item.text" /></div>
-              <div class="msg-actions">
-                <Tooltip><template #trigger><Button size="tiny" quaternary circle icon="i-lucide-copy" :aria-label="t('fairy.copy')" @click="copy(item.text)" /></template>{{ t('fairy.copy') }}</Tooltip>
+              <div v-else-if="item.kind === 'assistant'" class="msg-wrap assistant">
+                <div class="msg assistant"><FairyMessage :text="item.text" /></div>
+                <div class="msg-actions">
+                  <Tooltip><template #trigger><Button size="tiny" quaternary circle icon="i-lucide-copy" :aria-label="t('fairy.copy')" @click="copy(item.text)" /></template>{{ t('fairy.copy') }}</Tooltip>
+                </div>
               </div>
-            </div>
-            <div v-else-if="item.kind === 'note'" class="msg note">
-              <span class="i-lucide-info" /><span>{{ item.text }}</span>
-            </div>
-            <div v-else-if="item.kind === 'error' && item.code === 'max_steps'" class="msg limit">
-              <span class="i-lucide-info" />
-              <span>{{ t('fairy.maxSteps') }}</span>
-              <Button v-if="index === rows.length - 1 && !fairy.running" size="small" secondary @click="send(t('fairy.continuePrompt'))">{{ t('fairy.continue') }}</Button>
-            </div>
-            <div v-else-if="item.kind === 'notice'" class="msg note">
-              <span class="i-lucide-info" /><span>{{ t(`fairyNotice.${item.code}`) }}</span>
-            </div>
-            <div v-else-if="item.kind === 'error'" class="msg error">
-              <div class="error-text"><span class="i-lucide-circle-alert" /> {{ item.text }}</div>
-              <div v-if="index === rows.length - 1 && !fairy.running" class="error-actions">
-                <Button size="tiny" secondary icon="i-lucide-rotate-ccw" @click="fairy.retry({ scene: { ...scenes.scene } })">{{ t('fairy.retry') }}</Button>
-                <Button size="tiny" secondary icon="i-lucide-replace" @click="changeModel">{{ t('fairy.changeModel') }}</Button>
+              <div v-else-if="item.kind === 'note'" class="msg note">
+                <span class="i-lucide-info" /><span>{{ item.text }}</span>
               </div>
-            </div>
-            <FairyToolCall
-              v-else
-              :item="item"
-              :expanded="expanded.has(item.id)"
-              @toggle="toggle(item.id)"
-              @confirm="(approved) => fairy.confirm(item.id, approved)"
-              @confirm-task="(approved) => fairy.confirmTask(item.id, approved)"
-              @open-task="(session) => fairy.load(session)"
-            />
+              <div v-else-if="item.kind === 'error' && item.code === 'max_steps'" class="msg limit">
+                <span class="i-lucide-info" />
+                <span>{{ t('fairy.maxSteps') }}</span>
+                <Button v-if="index === rows.length - 1 && !fairy.running" size="small" secondary @click="send(t('fairy.continuePrompt'))">{{ t('fairy.continue') }}</Button>
+              </div>
+              <div v-else-if="item.kind === 'notice'" class="msg note">
+                <span class="i-lucide-info" /><span>{{ t(`fairyNotice.${item.code}`) }}</span>
+              </div>
+              <div v-else-if="item.kind === 'error'" class="msg error">
+                <div class="error-text"><span class="i-lucide-circle-alert" /> {{ item.text }}</div>
+                <div v-if="index === rows.length - 1 && !fairy.running" class="error-actions">
+                  <Button size="tiny" secondary icon="i-lucide-rotate-ccw" @click="fairy.retry({ scene: { ...scenes.scene } })">{{ t('fairy.retry') }}</Button>
+                  <Button size="tiny" secondary icon="i-lucide-replace" @click="changeModel">{{ t('fairy.changeModel') }}</Button>
+                </div>
+              </div>
+              <FairyToolCall
+                v-else
+                :item="item"
+                :expanded="expanded.has(item.id)"
+                @toggle="toggle(item.id)"
+                @confirm="(approved) => fairy.confirm(item.id, approved)"
+                @confirm-task="(approved) => fairy.confirmTask(item.id, approved)"
+                @open-task="(session) => fairy.load(session)"
+              />
+            </template>
           </template>
         </template>
-      </template>
 
-      <div v-for="ask in fairy.asks" :key="ask.id" class="ask">
-        <div class="ask-question"><span class="i-lucide-circle-help" />{{ ask.question }}</div>
-        <button
-          v-for="(option, optionIndex) in ask.options"
-          :key="optionIndex"
-          type="button"
-          class="ask-option"
-          :class="{ recommended: ask.recommended === optionIndex }"
-          @click="fairy.answer(ask.id, { choice: optionIndex })"
-        >
-          <span class="ask-label">
-            {{ option.label }}
-            <Tag v-if="ask.recommended === optionIndex" size="tiny" type="success">{{ t('fairyPalette.recommended') }}</Tag>
-          </span>
-          <span v-if="option.description" class="ask-desc">{{ option.description }}</span>
-        </button>
-        <Input
-          v-if="ask.allowOther"
-          size="small"
-          :placeholder="t('fairyMessage.other')"
-          @keydown.enter="(event: KeyboardEvent) => { const value = (event.target as HTMLInputElement).value.trim(); if (value) fairy.answer(ask.id, { other: value }) }"
-        />
+        <div v-for="ask in fairy.asks" :key="ask.id" class="ask">
+          <div class="ask-question"><span class="i-lucide-circle-help" />{{ ask.question }}</div>
+          <button
+            v-for="(option, optionIndex) in ask.options"
+            :key="optionIndex"
+            type="button"
+            class="ask-option"
+            :class="{ recommended: ask.recommended === optionIndex }"
+            @click="fairy.answer(ask.id, { choice: optionIndex })"
+          >
+            <span class="ask-label">
+              {{ option.label }}
+              <Tag v-if="ask.recommended === optionIndex" size="tiny" type="success">{{ t('fairyPalette.recommended') }}</Tag>
+            </span>
+            <span v-if="option.description" class="ask-desc">{{ option.description }}</span>
+          </button>
+          <Input
+            v-if="ask.allowOther"
+            size="small"
+            :placeholder="t('fairyMessage.other')"
+            @keydown.enter="(event: KeyboardEvent) => { const value = (event.target as HTMLInputElement).value.trim(); if (value) fairy.answer(ask.id, { other: value }) }"
+          />
+        </div>
+
+        <div v-if="fairy.streaming" class="msg assistant streaming"><FairyMessage :text="fairy.streaming" streaming /></div>
+        <div v-else-if="fairy.running" class="thinking"><Spin :size="14" /> {{ t('fairy.thinking') }}</div>
       </div>
-
-      <div v-if="fairy.streaming" class="msg assistant streaming"><FairyMessage :text="fairy.streaming" streaming /></div>
-      <div v-else-if="fairy.running" class="thinking"><Spin :size="14" /> {{ t('fairy.thinking') }}</div>
     </div>
 
     <div v-if="fairy.toolsStale && fairy.items.length" class="stale">
+      <span class="i-lucide-info" />
       <span>{{ t('fairyMessage.toolsStale') }}</span>
-      <Button size="tiny" secondary @click="fairy.newChat()">{{ t('fairy.newChat') }}</Button>
+      <button type="button" class="text-link" @click="fairy.newChat()">{{ t('fairy.newChat') }}</button>
     </div>
 
     <div v-if="fairy.items.length && scenes.banner && !fairy.running" class="banner">
       <span class="i-lucide-info" color="var(--warn)" />
-      <button type="button" class="banner-text" @click="sendRecommendation(scenes.banner!)">{{ scenes.banner.text }}</button>
+      <button type="button" class="banner-text" :title="t('fairy.useSuggestion')" @click="useRecommendation(scenes.banner!)">{{ scenes.banner.text }}</button>
       <Button size="tiny" quaternary circle :aria-label="t('fairy.close')" icon="i-lucide-x" @click="scenes.dismiss(scenes.banner!.id)" />
     </div>
 
     <footer class="dock-input" data-fairy-target="fairy.input">
-      <CommandPalette
-        v-if="trigger"
-        ref="palette"
-        class="dock-palette"
-        :mode="trigger.mode"
-        :query="trigger.query"
-        :scene="scenes.key"
-        @pick="onPick"
-      />
-      <div class="input-box">
-        <div v-if="picked.length || fairy.quote" class="chips">
-          <Tag v-if="fairy.quote" size="small" type="info" closable class="quote-chip" :title="fairy.quote.label" @close="fairy.quote = undefined">
-            <template #icon><span class="i-lucide-message-circle-more" /></template>
-            {{ t('fairy.quoted', { label: fairy.quote.label }) }}
-          </Tag>
-          <Tag v-for="skill in picked" :key="skill.id" size="small" type="success" closable @close="picked = picked.filter((item) => item.id !== skill.id)">
-            <template #icon><span class="i-lucide-puzzle" /></template>
-            {{ skill.name }}
-          </Tag>
-        </div>
-        <Input
-          v-model:value="input"
-          type="textarea"
-          :autosize="{ minRows: 1, maxRows: 6 }"
-          :placeholder="t('fairy.placeholder')"
-          :disabled="!data.providers.length"
-          @keydown="onKeydown"
+      <div class="composer-wrap">
+        <CommandPalette
+          v-if="trigger"
+          ref="palette"
+          class="dock-palette"
+          :mode="trigger.mode"
+          :query="trigger.query"
+          :scene="scenes.key"
+          @pick="onPick"
         />
-        <div class="input-tools">
-          <Popover v-model:show="showPicker" placement="top" align="end" :padded="false" :width="300">
-            <template #trigger>
-              <button type="button" class="picker-chip" :title="t('fairyPicker.title')">
-                <span class="picker-label">{{ pickerLabel }}</span>
-                <span class="i-lucide-chevron-down picker-caret" />
-              </button>
-            </template>
-            <div class="picker">
-              <div class="picker-effort">
-                <div class="picker-row">
-                  <span class="picker-title">{{ t('fairyPicker.effort') }}</span>
-                  <span class="picker-value">{{ t(`fairyPicker.efforts.${fairy.choice.effort ?? 'default'}`) }}</span>
-                </div>
-                <div class="effort-track" :class="{ disabled: !supportsEffort }" :style="{ '--fill': `${(effortStep / EFFORTS.length) * 100}%` }">
-                  <button
-                    v-for="step in EFFORTS.length + 1"
-                    :key="step"
-                    type="button"
-                    class="effort-stop"
-                    :class="{ on: step - 1 <= effortStep, current: step - 1 === effortStep }"
-                    :style="{ left: `${((step - 1) / EFFORTS.length) * 100}%` }"
-                    :aria-label="t(`fairyPicker.efforts.${step === 1 ? 'default' : EFFORTS[step - 2]}`)"
-                    :title="t(`fairyPicker.efforts.${step === 1 ? 'default' : EFFORTS[step - 2]}`)"
-                    @click="setEffortStep(step - 1)"
-                  />
-                </div>
-                <div class="effort-ends">
-                  <span>{{ t('fairyPicker.efforts.default') }}</span>
-                  <span>{{ t('fairyPicker.efforts.max') }}</span>
-                </div>
-                <p v-if="!supportsEffort" class="effort-off">{{ t('fairyPicker.noEffort') }}</p>
-              </div>
-              <div class="picker-models">
-                <input v-if="modelCount > 8" v-model="modelQuery" class="picker-search" :placeholder="t('fairyPicker.search')">
-                <button type="button" class="model-item" :class="{ current: !fairy.choice.provider && !fairy.choice.model }" @click="pickModel()">
-                  <span class="model-name">{{ t('fairyPicker.default') }}<small>{{ t('fairyPicker.defaultHint') }}</small></span>
-                  <span v-if="!fairy.choice.provider && !fairy.choice.model" class="i-lucide-check" />
+        <div class="composer" :class="{ disabled: !data.providers.length }" @click="onComposerClick">
+          <div v-if="picked.length || fairy.quote" class="chips">
+            <Tag v-if="fairy.quote" size="small" type="info" closable class="quote-chip" :title="fairy.quote.label" @close="fairy.quote = undefined">
+              <template #icon><span class="i-lucide-message-circle-more" /></template>
+              {{ t('fairy.quoted', { label: fairy.quote.label }) }}
+            </Tag>
+            <Tag v-for="skill in picked" :key="skill.id" size="small" type="success" closable @close="picked = picked.filter((item) => item.id !== skill.id)">
+              <template #icon><span class="i-lucide-puzzle" /></template>
+              {{ skill.name }}
+            </Tag>
+          </div>
+          <Input
+            ref="field"
+            v-model:value="input"
+            type="textarea"
+            :bordered="false"
+            :autosize="{ minRows: 1, maxRows: 8 }"
+            :placeholder="t('fairy.placeholder')"
+            :disabled="!data.providers.length"
+            @keydown="onKeydown"
+          />
+          <div class="composer-bar">
+            <Popover v-model:show="showPicker" placement="top" align="start" :padded="false" :width="300">
+              <template #trigger>
+                <button type="button" class="picker-chip" :title="t('fairyPicker.title')">
+                  <span class="picker-label">{{ pickerLabel }}</span>
+                  <span class="i-lucide-chevron-down picker-caret" />
                 </button>
-                <template v-for="group in modelGroups" :key="group.id">
-                  <div class="model-group">{{ group.name }}</div>
-                  <button
-                    v-for="model in group.models"
-                    :key="model"
-                    type="button"
-                    class="model-item"
-                    :class="{ current: fairy.choice.provider === group.id && fairy.choice.model === model }"
-                    @click="pickModel(group.id, model)"
-                  >
-                    <span class="model-name">{{ model }}</span>
-                    <span v-if="fairy.choice.provider === group.id && fairy.choice.model === model" class="i-lucide-check" />
+              </template>
+              <div class="picker">
+                <div class="picker-effort">
+                  <div class="picker-row">
+                    <span class="picker-title">{{ t('fairyPicker.effort') }}</span>
+                    <span class="picker-value">{{ t(`fairyPicker.efforts.${fairy.choice.effort ?? 'default'}`) }}</span>
+                  </div>
+                  <div class="effort-track" :class="{ disabled: !supportsEffort }" :style="{ '--fill': `${(effortStep / EFFORTS.length) * 100}%` }">
+                    <button
+                      v-for="step in EFFORTS.length + 1"
+                      :key="step"
+                      type="button"
+                      class="effort-stop"
+                      :class="{ on: step - 1 <= effortStep, current: step - 1 === effortStep }"
+                      :style="{ left: `${((step - 1) / EFFORTS.length) * 100}%` }"
+                      :aria-label="t(`fairyPicker.efforts.${step === 1 ? 'default' : EFFORTS[step - 2]}`)"
+                      :title="t(`fairyPicker.efforts.${step === 1 ? 'default' : EFFORTS[step - 2]}`)"
+                      @click="setEffortStep(step - 1)"
+                    />
+                  </div>
+                  <div class="effort-ends">
+                    <span>{{ t('fairyPicker.efforts.default') }}</span>
+                    <span>{{ t('fairyPicker.efforts.max') }}</span>
+                  </div>
+                  <p v-if="!supportsEffort" class="effort-off">{{ t('fairyPicker.noEffort') }}</p>
+                </div>
+                <div class="picker-models">
+                  <input v-if="modelCount > 8" v-model="modelQuery" class="picker-search" :placeholder="t('fairyPicker.search')">
+                  <button type="button" class="model-item" :class="{ current: !fairy.choice.provider && !fairy.choice.model }" @click="pickModel()">
+                    <span class="model-name">{{ t('fairyPicker.default') }}<small>{{ t('fairyPicker.defaultHint') }}</small></span>
+                    <span v-if="!fairy.choice.provider && !fairy.choice.model" class="i-lucide-check" />
                   </button>
-                </template>
-                <div v-if="!modelGroups.length && modelQuery" class="model-empty">{{ t('fairyPicker.noMatch') }}</div>
+                  <template v-for="group in modelGroups" :key="group.id">
+                    <div class="model-group">{{ group.name }}</div>
+                    <button
+                      v-for="model in group.models"
+                      :key="model"
+                      type="button"
+                      class="model-item"
+                      :class="{ current: fairy.choice.provider === group.id && fairy.choice.model === model }"
+                      @click="pickModel(group.id, model)"
+                    >
+                      <span class="model-name">{{ model }}</span>
+                      <span v-if="fairy.choice.provider === group.id && fairy.choice.model === model" class="i-lucide-check" />
+                    </button>
+                  </template>
+                  <div v-if="!modelGroups.length && modelQuery" class="model-empty">{{ t('fairyPicker.noMatch') }}</div>
+                </div>
+                <p class="picker-hint">{{ t('fairyPicker.hint') }}</p>
               </div>
-              <p class="picker-hint">{{ t('fairyPicker.hint') }}</p>
-            </div>
-          </Popover>
+            </Popover>
+            <Button v-if="fairy.running" size="small" circle type="warning" secondary class="composer-send" :aria-label="t('fairy.stop')" :title="t('fairy.stop')" icon="i-lucide-square" @click="fairy.cancel()" />
+            <Button v-else size="small" circle type="primary" class="composer-send" :disabled="!input.trim() && !picked.length && !fairy.quote" :aria-label="t('fairy.send')" :title="t('fairy.send')" icon="i-lucide-arrow-up" @click="send()" />
+          </div>
         </div>
       </div>
-      <Button v-if="fairy.running" type="warning" secondary :aria-label="t('fairy.stop')" icon="i-lucide-circle-stop" @click="fairy.cancel()" />
-      <Button v-else type="primary" :disabled="!input.trim() && !picked.length && !fairy.quote" :aria-label="t('fairy.send')" icon="i-lucide-send" @click="send()" />
     </footer>
 
     <HistoryDrawer v-model:show="showHistory" />
@@ -634,19 +678,29 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 10px 12px 10px 16px;
-  border-bottom: 1px solid rgba(127, 127, 127, 0.18);
+  border-bottom: 1px solid var(--line);
 }
 
 .dock-title {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   font-weight: 600;
+}
+
+.pane-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dock-actions {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 2px;
 }
@@ -659,7 +713,17 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+}
+
+/* The conversation as one column; on a wide screen it stays readable instead of running edge to edge. */
+.dock-column {
+  flex: 1 0 auto;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .dock-empty {
@@ -667,7 +731,7 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
   display: flex;
   flex-direction: column;
   gap: 8px;
-  align-items: stretch;
+  align-items: center;
   text-align: center;
 }
 
@@ -677,7 +741,7 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
   gap: 8px;
   padding: 6px 10px;
   border-radius: 8px;
-  background: rgba(127, 127, 127, 0.1);
+  background: var(--s2);
   font-size: 13px;
 }
 
@@ -692,31 +756,42 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
   margin: 0 0 8px;
 }
 
-.suggestion {
-  text-align: left;
-  font: inherit;
-  font-size: 13px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid rgba(127, 127, 127, 0.25);
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-
-.suggestion:hover {
-  border-color: var(--primary);
+.suggestions {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .suggestion {
   display: flex;
   align-items: center;
-  gap: 8px;
   justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.suggestion:hover {
+  border-color: var(--primary);
+  background: var(--s2);
 }
 
 .suggestion.urgent {
-  border-color: rgba(240, 160, 32, 0.6);
+  border-color: var(--warn);
+}
+
+.suggestion-text {
+  min-width: 0;
 }
 
 .suggestion-skill {
@@ -735,7 +810,7 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
   font-weight: 400;
   padding: 1px 8px;
   border-radius: 10px;
-  border: 1px solid rgba(127, 127, 127, 0.3);
+  border: 1px solid var(--line-strong);
   background: transparent;
   color: inherit;
   opacity: 0.8;
@@ -819,7 +894,7 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
   font-size: 13px;
   padding: 8px 10px;
   border-radius: 8px;
-  border: 1px solid rgba(127, 127, 127, 0.25);
+  border: 1px solid var(--line);
   background: transparent;
   color: inherit;
   cursor: pointer;
@@ -844,11 +919,24 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
 .stale {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 0 12px 6px;
+  justify-content: center;
+  gap: 6px;
+  margin: 0 12px;
   font-size: 12px;
-  opacity: 0.8;
+  color: var(--fg3);
+}
+
+.text-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.text-link:hover {
+  text-decoration: underline;
 }
 
 .banner {
@@ -858,7 +946,7 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
   margin: 0 12px;
   padding: 6px 8px 6px 10px;
   border-radius: 8px;
-  background: rgba(240, 160, 32, 0.1);
+  background: var(--warn-soft);
   font-size: 13px;
 }
 
@@ -875,14 +963,6 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
 
 .banner-text:hover {
   text-decoration: underline;
-}
-
-.input-box {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
 }
 
 .chips {
@@ -904,7 +984,7 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
   opacity: 0.75;
   padding-left: 6px;
   margin-bottom: 4px;
-  border-left: 2px solid rgba(127, 127, 127, 0.5);
+  border-left: 2px solid currentColor;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -912,9 +992,9 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
 
 .dock-palette {
   position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: calc(100% - 4px);
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
   z-index: 10;
 }
 
@@ -979,11 +1059,6 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
   display: flex;
   justify-content: flex-end;
   gap: 6px;
-}
-
-.input-tools {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .picker-chip {
@@ -1184,18 +1259,21 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
 .msg.user {
   align-self: flex-end;
   background: var(--primary);
-  color: #fff;
+  color: var(--primary-fg);
   border-bottom-right-radius: 4px;
 }
 
+/* Fairy's replies sit in the column as text; only your own messages are bubbles. */
 .msg.assistant {
-  align-self: flex-start;
-  background: rgba(127, 127, 127, 0.12);
-  border-bottom-left-radius: 4px;
+  align-self: stretch;
+  max-width: none;
+  padding: 0;
+  white-space: normal;
 }
 
-.msg.assistant {
-  white-space: normal;
+.msg-wrap.assistant {
+  align-self: stretch;
+  max-width: none;
 }
 
 .msg.streaming :deep(.fairy-md > :last-child)::after {
@@ -1208,7 +1286,7 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
   align-self: stretch;
   max-width: none;
   color: var(--bad);
-  background: rgba(208, 48, 80, 0.08);
+  background: var(--bad-soft);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1241,7 +1319,7 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(127, 127, 127, 0.1);
+  background: var(--s2);
 }
 
 .msg.limit span {
@@ -1249,7 +1327,7 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
 }
 
 .tool-group {
-  border: 1px solid rgba(127, 127, 127, 0.2);
+  border: 1px solid var(--line);
   border-radius: 8px;
   font-size: 13px;
 }
@@ -1320,11 +1398,56 @@ watch(() => [fairy.items.length, fairy.streaming, fairy.items.at(-1)], scrollToE
 }
 
 .dock-input {
+  padding: 4px 12px 12px;
+}
+
+.composer-wrap {
   position: relative;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+/* The input, its chips and its buttons in one box that grows with the text. */
+.composer {
   display: flex;
-  gap: 8px;
-  align-items: flex-end;
-  padding: 12px;
-  border-top: 1px solid rgba(127, 127, 127, 0.18);
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 8px 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--s2);
+  cursor: text;
+  transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
+}
+
+.composer:hover {
+  border-color: var(--line-strong);
+}
+
+.composer:focus-within {
+  border-color: var(--primary);
+  background: var(--s1);
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.composer.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.composer.disabled :deep(.mu-input.is-disabled) {
+  opacity: 1;
+}
+
+.composer-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: default;
+}
+
+.composer-send {
+  flex: none;
+  margin-left: auto;
 }
 </style>
