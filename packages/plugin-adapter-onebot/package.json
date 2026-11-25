@@ -31,6 +31,7 @@
   ],
   "mushin": {
     "kind": "app",
+    "category": "adapter",
     "displayName": {
       "en": "OneBot v11 adapter",
       "zh-CN": "OneBot v11 适配器"

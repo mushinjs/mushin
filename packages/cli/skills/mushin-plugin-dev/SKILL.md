@@ -27,6 +27,8 @@ Then say in two or three sentences what you will build, and wait for a yes.
 
 Call `plugins__new` with the name (lowercase letters, digits and dashes) and, when the user keeps plugins in another plugin folder, that folder from `plugins__folders`. It writes `<folder>/<name>/package.json` and `src/index.ts` and turns the plugin on. When Mushin.js is not running, `npx mushin new plugin <name>` in the app folder does the same in `plugins/`. Read the generated `src/index.ts` first: it shows the shape of a plugin with one action.
 
+Set `mushin.category` in `package.json` so the Plugins page lists it in the right group: `adapter` (connects a chat platform), `provider` (model provider), `ai` (agents, knowledge, tools for Fairy), `feature` (something bots and flows use; the usual choice), `core` (what Mushin.js itself runs on), `example` or `bundle` (an integration pack). Bot plugins are listed together whatever their category. Without one, a plugin that adds bot adapters shows under adapters and any other under "Other".
+
 ## 3. Rules for the code
 
 **Settings.** Every value the user may want to change is a field in `Config`, never a constant in the code: groups, times, cities, prompts, limits.

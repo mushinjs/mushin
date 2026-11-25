@@ -31,6 +31,7 @@
   ],
   "mushin": {
     "kind": "app",
+    "category": "provider",
     "displayName": {
       "en": "OpenAI-compatible provider",
       "zh-CN": "OpenAI 兼容提供商"

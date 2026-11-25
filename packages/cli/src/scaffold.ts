@@ -32,6 +32,7 @@ export function pluginFiles(name: string): Record<string, string> {
       keywords: ['mushin-plugin'],
       mushin: {
         kind: 'app',
+        category: 'feature',
         displayName: { en: title(name) },
         description: { en: `Adds the ${action} action. Replace this with what the plugin does.` },
       },

@@ -31,6 +31,7 @@
   ],
   "mushin": {
     "kind": "app",
+    "category": "adapter",
     "displayName": {
       "en": "Telegram adapter",
       "zh-CN": "Telegram 适配器"

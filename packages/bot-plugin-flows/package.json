@@ -35,7 +35,7 @@
     "platforms": [
       "onebot"
     ],
-    "category": "flows",
+    "category": "feature",
     "displayName": {
       "en": "Conversation flows",
       "zh-CN": "对话流程"

@@ -16,7 +16,14 @@ export interface PluginManifest {
    */
   essential?: boolean
   platforms?: string[]
-  category?: string
+  /**
+   * Where the dashboard's Plugins page lists the plugin, one of PLUGIN_CATEGORIES: `adapter` (chat platforms),
+   * `provider` (model providers), `ai` (agents, knowledge, tools for Fairy), `feature` (things bots and flows use),
+   * `core` (what Mushin.js itself runs on), `example`, or `bundle` (integration packs). Bot plugins are listed
+   * together whatever their category. Without one, a plugin that adds bot adapters goes under `adapter`, and any
+   * other under "Other".
+   */
+  category?: PluginCategory
   /** Service names this plugin provides, such as `flows`; maps `inject` names to packages. */
   provides?: string[]
   /** Needed to run: without them the plugin cannot be enabled. */
@@ -26,6 +33,11 @@ export interface PluginManifest {
   /** Flow node types this plugin adds, such as `logic.permission` or `onebot.*`, so the editor can say which plugin to enable for an unknown node. */
   nodes?: string[]
 }
+
+/** The values of `mushin.category`; see PluginManifest. */
+export const PLUGIN_CATEGORIES = ['adapter', 'provider', 'ai', 'feature', 'core', 'example', 'bundle'] as const
+
+export type PluginCategory = typeof PLUGIN_CATEGORIES[number] | (string & {})
 
 export interface DependencySpec {
   /** A version range of Mushin.js, such as `>=0.2.0`. */

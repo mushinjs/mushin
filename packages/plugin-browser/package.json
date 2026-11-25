@@ -31,6 +31,7 @@
   ],
   "mushin": {
     "kind": "app",
+    "category": "feature",
     "displayName": {
       "en": "Browser",
       "zh-CN": "浏览器"
