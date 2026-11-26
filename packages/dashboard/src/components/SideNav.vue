@@ -13,7 +13,8 @@ import { useI18n } from 'vue-i18n'
 
 import type { NavGroup } from './nav'
 
-defineProps<{ groups: NavGroup[], active: string }>()
+/** `badges`: a small count by an entry, by its key, such as updates by Plugins. */
+defineProps<{ groups: NavGroup[], active: string, badges?: Record<string, number> }>()
 const collapsed = defineModel<boolean>('collapsed', { required: true })
 const { t } = useI18n()
 
@@ -58,6 +59,7 @@ onBeforeUnmount(() => clearTimeout(timer))
             <RouterLink :to="item.key" class="item" :class="{ on: active === item.key }" :aria-current="active === item.key ? 'page' : undefined" :aria-label="collapsed ? item.label : undefined">
               <span class="item-icon" :class="item.icon" />
               <span class="item-label" data-fade>{{ item.label }}</span>
+              <span v-if="badges?.[item.key]" class="item-badge">{{ badges[item.key] }}</span>
             </RouterLink>
           </template>
           {{ item.label }}
@@ -68,6 +70,37 @@ onBeforeUnmount(() => clearTimeout(timer))
 </template>
 
 <style scoped>
+.item {
+  position: relative;
+}
+
+/* By the label when open; on the icon's corner when the sidebar is narrow. */
+.item-badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+.side.narrow .item-badge {
+  position: absolute;
+  top: 3px;
+  left: 34px;
+  min-width: 8px;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  font-size: 0;
+}
+
 /*
  * Geometry that does not change between the two states: the icons sit 23px from the left edge
  * (centred in the 64px rail), rows keep their height, and group titles keep theirs as a divider.

@@ -4,6 +4,7 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
 import type { StatsOverview } from '../../types'
+import UpdateSettings from './UpdateSettings.vue'
 
 const { t } = useI18n()
 
@@ -38,6 +39,8 @@ onMounted(() => {
         <dt>{{ t('settings.about.license') }}</dt><dd>MIT</dd>
       </dl>
     </Card>
+
+    <UpdateSettings />
 
     <p class="credits">
       {{ t('settings.about.builtOn') }}

@@ -35,6 +35,6 @@ export const GROUP_ICONS: Record<GroupKey, string> = {
 }
 
 /** The sections of the details panel, in order. */
-export const PANEL_SECTIONS = ['overview', 'usage', 'config', 'deps', 'contents'] as const
+export const PANEL_SECTIONS = ['overview', 'usage', 'config', 'deps', 'contents', 'updates'] as const
 
 export type PanelSection = typeof PANEL_SECTIONS[number]

@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import AppLayout from './components/AppLayout.vue'
 import HighlightLayer from './components/HighlightLayer.vue'
+import UpdateOverlay from './components/updates/UpdateOverlay.vue'
 import { useTheme } from './theme'
 
 const route = useRoute()
@@ -26,5 +27,6 @@ const uiText = computed(() => {
     <RouterView v-if="route.meta.public || (route.meta.workspace && !embedded)" />
     <AppLayout v-else :embedded="embedded" />
     <HighlightLayer />
+    <UpdateOverlay v-if="!route.meta.public && !embedded" />
   </UiProvider>
 </template>

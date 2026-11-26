@@ -8,6 +8,7 @@ import type { GroupKey } from '../../plugins/groups'
 import type { AdapterType, Bot, DependencyState, FlowSummary } from '../../types'
 import AdapterIcon from '../AdapterIcon.vue'
 import PluginConfig from './PluginConfig.vue'
+import { type PluginUpdateInfo, updates } from '../../updates'
 
 /** Another plugin's relation to this one, for the dependencies section. */
 export interface Dependent {
@@ -31,6 +32,8 @@ const props = defineProps<{
   dependents: Dependent[]
   bots: Bot[]
   flows: FlowSummary[]
+  /** Its newer version on npm, for third-party plugins. */
+  update?: PluginUpdateInfo
 }>()
 
 const emit = defineEmits<{
@@ -43,6 +46,8 @@ const emit = defineEmits<{
   enableMissing: []
   saved: []
   'update:section': [section: PanelSection]
+  /** Open the update dialog with these ticked: `mushin`, or package names. */
+  update: [preset: string[]]
 }>()
 
 const { t } = useI18n()
@@ -99,6 +104,9 @@ watch(() => props.section, (section) => {
 })
 
 const app = computed(() => props.item.app)
+const updateInfo = computed(() => updates.info)
+/** Official packages (and the Cordis ones they bring) update with Mushin.js. */
+const official = computed(() => props.item.package.startsWith('@mushinjs/') || props.item.package.startsWith('@cordisjs/'))
 const name = computed(() => props.item.name)
 
 const menu = computed<DropdownOption[]>(() => [
@@ -310,7 +318,7 @@ defineExpose({ scrollTo })
       <p v-if="noDeps" class="faint">{{ t('plugins.panel.noDeps') }}</p>
     </section>
 
-    <section :ref="(el) => (sectionEls.contents = el as HTMLElement)" class="section last">
+    <section :ref="(el) => (sectionEls.contents = el as HTMLElement)" class="section">
       <h3>{{ t('plugins.panel.sections.contents') }}</h3>
       <div v-for="part in contents" :key="part.key" class="group">
         <h4><span :class="part.icon" class="kind-icon" />{{ t(`plugins.provides.${part.key}`, part.names.length) }}</h4>
@@ -319,6 +327,48 @@ defineExpose({ scrollTo })
         </div>
       </div>
       <p v-if="!contents.length" class="faint">{{ item.enabled ? t('plugins.panel.noContents') : t('plugins.panel.notRunning') }}</p>
+    </section>
+
+    <section :ref="(el) => (sectionEls.updates = el as HTMLElement)" class="section last">
+      <h3>{{ t('plugins.panel.sections.updates') }}</h3>
+      <p v-if="updateInfo?.mode === 'development'" class="faint">{{ t('updates.development') }}</p>
+      <template v-else-if="official">
+        <dl class="facts">
+          <dt>{{ t('updates.current') }}</dt><dd class="mono">{{ item.version ?? updateInfo?.version ?? '—' }}</dd>
+        </dl>
+        <p class="note">{{ t('updates.official') }}</p>
+        <div v-if="updateInfo?.mushin?.available" class="update-row">
+          <span>{{ t('updates.mushinAvailable', { version: updateInfo.mushin.available }) }}</span>
+          <a :href="updateInfo.mushin.notesUrl" target="_blank" rel="noopener" class="link">{{ t('updates.notes') }}</a>
+          <Tooltip :disabled="updateInfo.supervised" :max-width="320">
+            <template #trigger><span><Button size="small" type="primary" :disabled="!updateInfo.supervised" @click="emit('update', ['mushin'])">{{ t('updates.apply') }}</Button></span></template>
+            {{ t('updates.needsSupervisor') }}
+          </Tooltip>
+        </div>
+        <p v-else class="faint">{{ t('updates.upToDate') }}</p>
+      </template>
+      <p v-else-if="item.entry?.local" class="faint">{{ t('updates.local') }}</p>
+      <template v-else-if="update">
+        <dl class="facts">
+          <dt>{{ t('updates.current') }}</dt><dd class="mono">{{ update.current }}</dd>
+          <dt>{{ t('updates.available') }}</dt><dd class="mono">{{ update.available ?? t('updates.upToDate') }}</dd>
+          <template v-if="update.available">
+            <dt>{{ t('updates.compatibility') }}</dt>
+            <dd :class="update.compatible ? 'ok-text' : 'bad-text'">{{ update.compatible ? t('updates.compatible') : t('updates.incompatible', { range: update.requires }) }}</dd>
+          </template>
+        </dl>
+        <div v-if="update.available" class="update-row">
+          <a :href="`https://www.npmjs.com/package/${item.package}/v/${update.available}`" target="_blank" rel="noopener" class="link">{{ t('updates.npmPage') }}</a>
+          <Tooltip :disabled="!!updateInfo?.supervised && update.compatible" :max-width="320">
+            <template #trigger>
+              <span><Button size="small" type="primary" :disabled="!updateInfo?.supervised || !update.compatible" @click="emit('update', [item.package])">{{ t('updates.update') }}</Button></span>
+            </template>
+            {{ !updateInfo?.supervised ? t('updates.needsSupervisor') : t('updates.incompatible', { range: update.requires }) }}
+          </Tooltip>
+        </div>
+        <p v-if="update.error" class="faint">{{ t('updates.checkFailed', { error: update.error }) }}</p>
+      </template>
+      <p v-else class="faint">{{ t('updates.noInfo') }}</p>
       <p class="keys">{{ t('plugins.panel.keys') }}</p>
     </section>
   </div>
@@ -596,6 +646,27 @@ h4 {
   font-size: 13px;
   color: var(--fg3);
 }
+
+.update-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.link {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.ok-text { color: var(--ok); }
+.bad-text { color: var(--bad); }
 
 .keys {
   margin: 24px 0 0;
