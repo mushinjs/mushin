@@ -11,6 +11,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
+    "./system": "./src/system.ts",
     "./package.json": "./package.json"
   },
   "files": [
@@ -22,6 +23,10 @@
       ".": {
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js"
+      },
+      "./system": {
+        "types": "./dist/system.d.ts",
+        "import": "./dist/system.js"
       },
       "./package.json": "./package.json"
     }

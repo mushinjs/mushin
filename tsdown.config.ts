@@ -13,7 +13,8 @@ const special = new Set(['dashboard', 'ui'])
 
 /** Extra entries a package needs besides src/index.ts. */
 const extraEntries: Record<string, string[]> = {
-  cli: ['src/cli.ts'],
+  cli: ['src/cli.ts', 'src/supervisor.ts'],
+  core: ['src/system.ts'],
   'create-mushin': ['src/cli.ts'],
 }
 
