@@ -11,7 +11,7 @@ import { actionLabel } from './records'
  * Fairy took and an approval it waits on. `task` is a helper's conversation under its task card, which names the
  * task itself: only the helper's own words show. It loads when shown and keeps up while the conversation works.
  */
-const props = defineProps<{ session: string; variant?: 'session' | 'task' }>()
+const props = defineProps<{ session: string; variant?: 'session' | 'task'; /** When the list last saw it change. */ updatedAt?: number }>()
 
 const { t, te } = useI18n()
 const activity = useFairyActivityStore()
@@ -21,7 +21,8 @@ const failed = ref(false)
 let timer = 0
 async function refresh() {
   try {
-    data.value = await loadPreview(props.session)
+    // One at work, by what the activity bar knows, is asked for anew even when the last look found it resting.
+    data.value = await loadPreview(props.session, { fresh: !!activity.of(props.session), updatedAt: props.updatedAt })
     failed.value = false
   } catch {
     failed.value = !data.value

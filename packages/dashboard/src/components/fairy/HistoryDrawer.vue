@@ -108,7 +108,7 @@ function rowTags(session: FairySessionSummary) {
               </div>
             </button>
           </template>
-          <SessionPeek :session="session.id" />
+          <SessionPeek :session="session.id" :updated-at="session.updatedAt" />
         </HoverCard>
       </Spin>
     </div>
