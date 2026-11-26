@@ -51,6 +51,7 @@ export function defaultConfig(): InstanceConfig {
       { id: 'fairy', package: '@mushinjs/plugin-fairy', config: {} },
       { id: 'mcp', package: '@mushinjs/plugin-mcp', config: {} },
       { id: 'stats', package: '@mushinjs/plugin-stats', config: {} },
+      { id: 'market', package: '@mushinjs/plugin-market', config: {} },
       { id: 'console', package: '@mushinjs/plugin-console', config: {} },
     ],
   }
