@@ -16,7 +16,7 @@ import { GROUP_ICONS, PANEL_SECTIONS, type PanelSection, type PluginItem } from 
 import { prefs } from '../prefs'
 import { useDataStore } from '../stores/data'
 import type { AppPlugin, CatalogEntry, DependencyPlan, FlowSummary, PluginDependencies, PluginProvides, ProjectChatPlugin } from '../types'
-import { pluginUpdate } from '../updates'
+import { pluginUpdate, updates } from '../updates'
 import { localize } from '../utils'
 
 const { t, locale } = useI18n()
@@ -55,7 +55,8 @@ async function refresh(rescan = false) {
     appCatalog.value = catalog.filter((entry) => entry.manifest.kind === 'app')
     botCatalog.value = catalog.filter((entry) => entry.manifest.kind === 'bot')
   } catch (error) {
-    message.error((error as Error).message)
+    // While Mushin.js restarts or updates it is away on purpose; the overlay says so.
+    if (!updates.pending) message.error((error as Error).message)
   } finally {
     loading.value = false
   }
