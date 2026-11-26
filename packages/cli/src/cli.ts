@@ -1,22 +1,24 @@
+import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { type InstanceConfig, readJson } from '@mushinjs/core'
-import { resetAdminToken, type SignInInfo } from '@mushinjs/plugin-console'
+import { readAdminToken, resetAdminToken, type SignInInfo } from '@mushinjs/plugin-console'
 import { LAYOUT_VERSION, migrateLayout } from '@mushinjs/plugin-storage'
 import { AGENT_FILES, defaultAgentIds, parseAgentIds, refreshAgentFiles, writeAgentFiles } from './agents'
 import { mcpConfig, runBridge } from './mcp'
 import { multiSelect } from './prompt'
 import { appPackageManager, appPackages, CLI_VERSION, newPlugin, run, upgradeCommand, upgradeTag } from './scaffold'
 import { installSkills, SKILLS_TARGET } from './skills'
-import { instanceDirs, start } from './start'
+import { instanceDirs, LOG_LEVEL_ENV, LOG_LEVELS, parseLogLevel, start } from './start'
 import { testCommand } from './test'
 
 const usage = `Usage: mushin <command> [options]
 
 Commands:
   start           Start Mushin.js (default)
+  open            Open the dashboard in the browser, signed in; works while Mushin.js runs in another terminal
   token reset     Create a new admin token for the dashboard
   test            Run the saved test cases of every flow, offline; exits with 1 when one fails
   migrate         Move a data folder from an older version to the current layout (start does this too)
@@ -30,6 +32,9 @@ Commands:
 Options:
   -d, --dir <path>   Instance directory (default: the current directory, or ./instance if it holds one)
   -p, --port <port>  Override the server port
+  --log-level <level>
+                     start: what the terminal shows, ${LOG_LEVELS.join(', ')} (default: info while starting,
+                     then warn; also ${LOG_LEVEL_ENV} in the shell or .env)
   --flow <id|name>   test: only this flow
   --json             test: print the results as JSON
   --dry-run          migrate: only list the moves
@@ -48,6 +53,7 @@ const { values, positionals } = parseArgs({
     'dry-run': { type: 'boolean' },
     tag: { type: 'string' },
     files: { type: 'string' },
+    'log-level': { type: 'string' },
   },
 })
 
@@ -60,10 +66,54 @@ function instanceDir() {
   return resolve('.')
 }
 
-/** How to point the CLI at this instance from the current directory, for messages. */
+/**
+ * Where the user typed the command. A package script (`pnpm dev`, `npm start`) runs in the package's folder,
+ * and the package manager puts the folder it was started from in INIT_CWD.
+ */
+function userDir() {
+  return process.env.npm_lifecycle_event && process.env.INIT_CWD ? process.env.INIT_CWD : process.cwd()
+}
+
+/** How to point the CLI at this instance from where the user is, for messages. */
 function dirFlag(dir: string) {
-  const path = relative(process.cwd(), dir) || '.'
+  const path = relative(userDir(), dir) || '.'
   return path === '.' ? '' : ` --dir ${path.includes(' ') ? JSON.stringify(path) : path}`
+}
+
+/**
+ * A `mushin` command line that runs as-is where the user is. Started through a package script, `mushin`
+ * is usually not on the PATH, so the command goes through the same package manager.
+ */
+function mushinCommand(args: string, dir: string) {
+  let runner = 'mushin'
+  if (process.env.npm_lifecycle_event) {
+    const agent = process.env.npm_config_user_agent ?? ''
+    runner = agent.startsWith('pnpm') ? 'pnpm exec mushin' : agent.startsWith('yarn') ? 'yarn mushin' : agent.startsWith('bun') ? 'bunx mushin' : 'npx mushin'
+  }
+  return `${runner} ${args}${dirFlag(dir)}`
+}
+
+/** The dashboard address from the server entry of mushin.config.json, as a browser on this machine reaches it. */
+function serverUrl(config: InstanceConfig, port?: string) {
+  const server = config.plugins.find((entry) => entry.package === '@cordisjs/plugin-server')
+  const host = server?.config?.host === '0.0.0.0' || !server?.config?.host ? '127.0.0.1' : server.config.host
+  return `http://${host}:${port ?? server?.config?.port ?? 5160}`
+}
+
+/** Opens a link in the default browser; false when there is no way to. */
+function openBrowser(url: string) {
+  const [command, args, verbatim] = process.platform === 'win32'
+    // `start` is built into cmd. Its first quoted argument is the window title, so an empty one comes first.
+    ? ['cmd', ['/c', 'start', '""', `"${url}"`], true]
+    : process.platform === 'darwin' ? ['open', [url], false] : ['xdg-open', [url], false]
+  return new Promise<boolean>((resolve) => {
+    const child = spawn(command as string, args as string[], { stdio: 'ignore', detached: true, windowsVerbatimArguments: verbatim as boolean })
+    child.once('error', () => resolve(false))
+    child.once('spawn', () => {
+      child.unref()
+      resolve(true)
+    })
+  })
 }
 
 function signInLink(url: string, token: string) {
@@ -78,9 +128,10 @@ function printSignIn(info: SignInInfo, dir: string) {
     lines.push(
       `  Sign in:     ${signInLink(info.url, info.token)}`,
       `  Admin token: ${info.token}`,
-      `  New token:   mushin token reset${dirFlag(dir)}`,
+      `  New token:   ${mushinCommand('token reset', dir)}`,
     )
   }
+  lines.push(`  Open again:  ${mushinCommand('open', dir)}`)
   console.log(lines.join('\n') + '\n')
 }
 
@@ -96,18 +147,26 @@ if (values.help) {
     await installSkills(baseDir).catch(() => {})
     await refreshAgentFiles(baseDir).catch(() => {})
   }
-  let signedIn = false
+  let logLevel
+  try {
+    logLevel = parseLogLevel(values['log-level'])
+  } catch (error) {
+    console.error((error as Error).message)
+    process.exit(1)
+  }
+  let signIn: SignInInfo | undefined
   const instance = await start({
     baseDir,
     port: values.port ? Number(values.port) : undefined,
+    logLevel,
     onSignIn: (info) => {
-      signedIn = true
-      printSignIn(info, baseDir)
+      signIn = info
     },
   })
+  const signedIn = () => !!signIn
   // Without a server nothing keeps the process alive, so it would exit silently; say why instead.
   const watchdog = setInterval(() => {
-    if (signedIn) return clearInterval(watchdog)
+    if (signedIn()) return clearInterval(watchdog)
     const server = instance.ctx.manager.entries.find((entry) => entry.package === '@cordisjs/plugin-server')
     const { status, error } = server ? instance.ctx.manager.status(server.id) : { status: 'failed', error: 'no server entry in mushin.config.json' }
     if (status !== 'failed') return
@@ -128,6 +187,24 @@ if (values.help) {
   }
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
+  // The sign-in block comes last, once the plugins and bots have started and printed their lines.
+  await instance.started
+  if (signIn && !stopping) printSignIn(signIn, baseDir)
+} else if (command === 'open') {
+  const config = await readJson<InstanceConfig>(join(baseDir, CONFIG))
+  if (!config) {
+    console.error(`No Mushin.js instance in ${baseDir}. Pass the instance folder with --dir.`)
+    process.exit(1)
+  }
+  // Only reads .env, so it is safe while Mushin.js runs.
+  const token = readAdminToken(baseDir)
+  if (!token) {
+    console.error(`This app has no admin token yet. Start Mushin.js once, or create one with "${mushinCommand('token reset', baseDir)}".`)
+    process.exit(1)
+  }
+  const link = signInLink(serverUrl(config, values.port), token)
+  console.log(`Sign in: ${link}`)
+  if (!await openBrowser(link)) console.log('Could not open a browser here; open the link above yourself.')
 } else if (command === 'test') {
   if (!existsSync(join(baseDir, CONFIG))) {
     console.error(`No Mushin.js instance in ${baseDir}. Pass the instance folder with --dir.`)
@@ -152,13 +229,10 @@ if (values.help) {
     console.error(`No Mushin.js instance in ${baseDir}. Pass the instance folder with --dir, e.g. "mushin token reset --dir instance".`)
     process.exit(1)
   }
-  const server = config.plugins.find((entry) => entry.package === '@cordisjs/plugin-server')
   await migrateLayout(instanceDirs(baseDir, config))
   const token = await resetAdminToken(baseDir)
-  const host = server?.config?.host === '0.0.0.0' || !server?.config?.host ? '127.0.0.1' : server.config.host
-  const url = `http://${host}:${server?.config?.port ?? 5160}`
   console.log(`New admin token: ${token}`)
-  console.log(`Sign in: ${signInLink(url, token)}`)
+  console.log(`Sign in: ${signInLink(serverUrl(config), token)}`)
   console.log('A running Mushin.js accepts the new token right away; the old one stops working.')
 } else if (command === 'new' && sub === 'plugin') {
   const name = positionals[2]
