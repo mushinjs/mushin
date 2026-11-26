@@ -1,0 +1,57 @@
+{
+  "name": "@mushinjs/plugin-market",
+  "version": "0.3.0",
+  "description": "Updates of Mushin.js and its plugins, and restarting it",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mushinjs/mushin.git",
+    "directory": "packages/plugin-market"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "keywords": [
+    "mushin-plugin"
+  ],
+  "mushin": {
+    "kind": "app",
+    "category": "core",
+    "displayName": {
+      "en": "Updates",
+      "zh-CN": "更新"
+    },
+    "description": {
+      "en": "Checks npm for newer versions of Mushin.js and its plugins, installs them while the app restarts, and goes back when an update fails",
+      "zh-CN": "检查 npm 上 Mushin.js 和插件的新版本，在重启时安装，更新失败时自动回滚"
+    },
+    "provides": [
+      "market"
+    ],
+    "requires": {
+      "plugins": {
+        "@mushinjs/plugin-storage": "*"
+      }
+    }
+  },
+  "dependencies": {
+    "@mushinjs/core": "workspace:*",
+    "@mushinjs/plugin-storage": "workspace:*",
+    "cordis": "catalog:"
+  }
+}

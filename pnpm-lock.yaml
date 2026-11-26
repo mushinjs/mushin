@@ -294,6 +294,9 @@ importers:
       '@mushinjs/plugin-knowledge':
         specifier: workspace:*
         version: link:../plugin-knowledge
+      '@mushinjs/plugin-market':
+        specifier: workspace:*
+        version: link:../plugin-market
       '@mushinjs/plugin-mcp':
         specifier: workspace:*
         version: link:../plugin-mcp
@@ -652,6 +655,18 @@ importers:
       '@mushinjs/plugin-fairy':
         specifier: workspace:*
         version: link:../plugin-fairy
+
+  packages/plugin-market:
+    dependencies:
+      '@mushinjs/core':
+        specifier: workspace:*
+        version: link:../core
+      '@mushinjs/plugin-storage':
+        specifier: workspace:*
+        version: link:../plugin-storage
+      cordis:
+        specifier: 'catalog:'
+        version: 4.0.0-rc.11
 
   packages/plugin-mcp:
     dependencies:

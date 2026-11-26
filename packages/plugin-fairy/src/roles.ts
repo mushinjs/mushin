@@ -105,7 +105,7 @@ export const BUILTIN_ROLES: RoleDefinition[] = [
     ].join('\n'),
     tools: {
       include: ['plugins.*', 'bots.*', 'providers.*', 'mcp.servers.*', 'mcp.tools.*', 'personas.*', 'permissions.*', 'logs.recent', 'system.info', 'commands.list'],
-      exclude: ['bots.send', 'bots.forward', 'bots.sandbox', 'bots.commands.run'],
+      exclude: ['bots.send', 'bots.forward', 'bots.sandbox', 'bots.commands.run', 'plugins.applyUpdates', 'system.restart'],
     },
   },
   {
@@ -155,7 +155,7 @@ export const BUILTIN_ROLES: RoleDefinition[] = [
     ].join('\n'),
     tools: {
       include: ['files.*', 'terminal.*', 'plugins.*', 'browser.open', 'browser.snapshot', 'bots.list', 'bots.get', 'bots.plugins.list', 'bots.plugins.enable', 'bots.plugins.disable', 'bots.runs', 'bots.sandbox', 'bots.messages', 'bots.channels', 'bots.groupChoices', 'logs.recent', 'commands.list', 'system.info', 'providers.list'],
-      exclude: ['plugins.remove', 'plugins.folders.set', 'terminal.processes.remove'],
+      exclude: ['plugins.remove', 'plugins.folders.set', 'terminal.processes.remove', 'plugins.applyUpdates', 'system.restart'],
       call: ['read'],
     },
   },

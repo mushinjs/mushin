@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import { type InstanceConfig, readJson } from '@mushinjs/core'
+import { type InstanceConfig, readJson, supervisor } from '@mushinjs/core'
 import { resetAdminToken, type SignInInfo } from '@mushinjs/plugin-console'
 import { LAYOUT_VERSION, migrateLayout } from '@mushinjs/plugin-storage'
 import { AGENT_FILES, defaultAgentIds, parseAgentIds, refreshAgentFiles, writeAgentFiles } from './agents'
@@ -30,6 +30,7 @@ Commands:
 Options:
   -d, --dir <path>   Instance directory (default: the current directory, or ./instance if it holds one)
   -p, --port <port>  Override the server port
+  --no-supervisor    start: run in this one process; restarting and updating from the dashboard need the supervisor
   --flow <id|name>   test: only this flow
   --json             test: print the results as JSON
   --dry-run          migrate: only list the moves
@@ -103,8 +104,11 @@ if (values.help) {
     onSignIn: (info) => {
       signedIn = true
       printSignIn(info, baseDir)
+      // Under the supervisor (see supervisor.ts): the app is up, and it stops when asked.
+      supervisor()?.send({ type: 'ready', version: CLI_VERSION }).catch(() => {})
     },
   })
+  supervisor()?.on('shutdown', () => shutdown())
   // Without a server nothing keeps the process alive, so it would exit silently; say why instead.
   const watchdog = setInterval(() => {
     if (signedIn) return clearInterval(watchdog)
