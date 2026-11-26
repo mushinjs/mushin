@@ -384,6 +384,8 @@ export interface ShownRef {
   kind: FairyRefKind
   id?: string
   label: string
+  /** The attachment as it was sent, to send it again when the message is edited or retried. */
+  ref?: FairyRef
 }
 
 export interface FairyMessage {
@@ -392,6 +394,8 @@ export interface FairyMessage {
   display?: string
   /** Names of the skills picked for this message. */
   skills?: string[]
+  /** Their ids, in the same order. */
+  skillIds?: string[]
   /** A bot's chat quoted into the message. */
   quote?: { bot: string; botName: string; channel: { type: 'group' | 'private'; id: string; name?: string }; focus: string; lines: { id: string; user: string; text: string }[] }
   /** What the user attached to the message, as it shows. */

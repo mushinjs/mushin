@@ -19,7 +19,8 @@ export interface TaskView {
 }
 
 export type ChatItem =
-  | { kind: 'user'; text: string; skills?: string[]; refs?: ShownRef[] }
+  /** `skills` are names, shown; `skillIds` the same skills, to apply them again when the message is edited or retried. */
+  | { kind: 'user'; text: string; skills?: string[]; skillIds?: string[]; refs?: ShownRef[] }
   | { kind: 'assistant'; text: string }
   | { kind: 'tool'; id: string; action: string; input: unknown; risk?: Risk; state: ToolState; result?: unknown; error?: string; task?: TaskView }
   /** `code` is `max_steps` when the reply ran out of tool rounds; the dock offers to continue. */
@@ -42,11 +43,15 @@ function quotedRef(message: FairyMessage): ShownRef[] | undefined {
   const quote = message.quote
   if (!quote) return undefined
   const focus = quote.lines.find((line) => line.id === quote.focus)
-  return [{ kind: 'chat', id: quote.focus, label: focus ? `${focus.user}：${focus.text.slice(0, 40)}` : quote.channel.name ?? quote.channel.id }]
+  const label = focus ? `${focus.user}：${focus.text.slice(0, 40)}` : quote.channel.name ?? quote.channel.id
+  return [{ kind: 'chat', id: quote.focus, label, ref: { kind: 'chat', bot: quote.bot, channel: quote.channel.id, id: quote.focus, label } }]
 }
 
-/** The chips a sent message shows for what was attached to it. */
-const shown = (refs: PendingRef[]): ShownRef[] => refs.map((item) => ({ kind: item.kind, ...('id' in item ? { id: item.id } : {}), label: item.label }))
+/** The chips a sent message shows for what was attached to it, each with what to send to attach it again. */
+const shown = (refs: PendingRef[]): ShownRef[] => refs.map((item) => ({ kind: item.kind, ...('id' in item ? { id: item.id } : {}), label: item.label, ref: wireRef(item) }))
+
+/** A sent message's attachment, to send again; one kept without what was sent cannot be. */
+export const resendable = (item: ShownRef): PendingRef | undefined => (item.ref ? { ...item.ref, label: item.label } as PendingRef : undefined)
 
 /** Turns a stored conversation into chat items: user and assistant text, and one row per tool call. */
 function toItems(messages: FairyMessage[]): ChatItem[] {
@@ -56,7 +61,9 @@ function toItems(messages: FairyMessage[]): ChatItem[] {
     if (message.role === 'user') {
       const text = message.display ?? (typeof message.content === 'string' ? message.content : '')
       const refs = message.refs ?? quotedRef(message)
-      if (text || message.skills?.length || refs?.length) items.push({ kind: 'user', text, ...(message.skills?.length ? { skills: message.skills } : {}), ...(refs?.length ? { refs } : {}) })
+      if (text || message.skills?.length || refs?.length) {
+        items.push({ kind: 'user', text, ...(message.skills?.length ? { skills: message.skills, ...(message.skillIds ? { skillIds: message.skillIds } : {}) } : {}), ...(refs?.length ? { refs } : {}) })
+      }
     } else if (message.role === 'assistant') {
       if (message.content) items.push({ kind: 'assistant', text: message.content })
       for (const call of message.toolCalls ?? []) {
@@ -194,7 +201,7 @@ function conversation(pane: string) {
   const asks = ref<AskItem[]>([])
   let askSeq = 0
   /** What you wrote while Fairy works, until it reads it; `local` until the server gives the message an id. */
-  const queued = ref<{ id: string; text: string; skills?: string[]; refs?: ShownRef[] }[]>([])
+  const queued = ref<{ id: string; text: string; skills?: string[]; skillIds?: string[]; refs?: ShownRef[] }[]>([])
   /** Ids read already, for a message whose id comes back after it was read. */
   const read = new Set<string>()
   const commands = ref<FairyCommands>({ builtin: [], bots: [] })
@@ -354,7 +361,9 @@ function conversation(pane: string) {
     if (!done.length) return
     flush()
     queued.value = queued.value.filter((item) => !done.includes(item))
-    for (const { text, skills, refs: attached } of done) items.value.push({ kind: 'user', text, ...(skills ? { skills } : {}), ...(attached ? { refs: attached } : {}) })
+    for (const { text, skills, skillIds, refs: attached } of done) {
+      items.value.push({ kind: 'user', text, ...(skills ? { skills } : {}), ...(skillIds ? { skillIds } : {}), ...(attached ? { refs: attached } : {}) })
+    }
   }
 
   /** The turn is over: whatever was written during it is in the conversation now. */
@@ -439,13 +448,32 @@ function conversation(pane: string) {
   }
 
   /** Edits the user message `ordinal` (0 is the first): what follows it goes, and the new text is sent in its place. */
-  async function edit(ordinal: number, text: string, options: { scene?: FairyScene } = {}) {
-    if (running.value || !current.value || !text.trim()) return
+  /** The skills of a sent message, as they can be picked again: ones since removed are left out. */
+  function skillsOf(item: Extract<ChatItem, { kind: 'user' }>): FairySkill[] {
+    const ids = item.skillIds ?? []
+    return ids.flatMap((id, index) => {
+      const skill = skills.value.find((entry) => entry.id === id)
+      if (skill) return [skill]
+      // Before the list has loaded there is nothing to check against: the server says if one is gone.
+      return skills.value.length ? [] : [{ id, name: item.skills?.[index] ?? id } as FairySkill]
+    })
+  }
+
+  /**
+   * Replaces a sent message and what came after it. The message keeps its skills and attachments unless others
+   * are given, as the edit box shows them with the ones you took off left out.
+   */
+  async function edit(ordinal: number, text: string, options: { scene?: FairyScene; skills?: FairySkill[]; refs?: ShownRef[] } = {}) {
+    if (running.value || !current.value) return
     let seen = -1
     const at = items.value.findIndex((item) => item.kind === 'user' && ++seen === ordinal)
-    if (at < 0) return
+    const original = items.value[at]
+    if (at < 0 || original?.kind !== 'user') return
+    const picked = options.skills ?? skillsOf(original)
+    const attached = (options.refs ?? original.refs ?? []).flatMap((item) => resendable(item) ?? [])
+    if (!text.trim() && !picked.length && !attached.length) return
     items.value = items.value.slice(0, at)
-    await send(text, { ...options, rewind: ordinal })
+    await send(text, { scene: options.scene, skills: picked, refs: attached, rewind: ordinal })
   }
 
   /** Sends the last user message again, replacing what came after it. */
@@ -461,7 +489,7 @@ function conversation(pane: string) {
     if (current.value) return edit(ordinal, last.text, options)
     // The conversation never started, so there is nothing to rewind.
     items.value = items.value.slice(0, items.value.indexOf(last))
-    return send(last.text, options)
+    return send(last.text, { ...options, skills: skillsOf(last), refs: (last.refs ?? []).flatMap((item) => resendable(item) ?? []) })
   }
 
   /**
@@ -471,7 +499,12 @@ function conversation(pane: string) {
   async function steer(text: string, picked: FairySkill[]) {
     const session = current.value!
     const attached = refs.value
-    const entry = { id: 'local', text, ...(picked.length ? { skills: picked.map((skill) => skill.name) } : {}), ...(attached.length ? { refs: shown(attached) } : {}) }
+    const entry = {
+      id: 'local',
+      text,
+      ...(picked.length ? { skills: picked.map((skill) => skill.name), skillIds: picked.map((skill) => skill.id) } : {}),
+      ...(attached.length ? { refs: shown(attached) } : {}),
+    }
     queued.value.push(entry)
     refs.value = []
     try {
@@ -502,17 +535,29 @@ function conversation(pane: string) {
     }
   }
 
-  async function send(text: string, options: { skills?: FairySkill[]; scene?: FairyScene; rewind?: number } = {}) {
+  /**
+   * Sends a message with the skills picked and what waits in the input; `refs` sends those instead and leaves
+   * the input as it is, to send a message again.
+   */
+  async function send(text: string, options: { skills?: FairySkill[]; scene?: FairyScene; rewind?: number; refs?: PendingRef[] } = {}) {
     const picked = options.skills ?? []
-    const attached = refs.value
+    const fromInput = !options.refs
+    const attached = options.refs ?? refs.value
     if (!text.trim() && !picked.length && !attached.length) return
     if (running.value) {
       // A new conversation has no id until its turn starts; editing waits for the turn to end.
       if (current.value && options.rewind === undefined) await steer(text, picked)
       return
     }
-    items.value.push({ kind: 'user', text, ...(picked.length ? { skills: picked.map((skill) => skill.name) } : {}), ...(attached.length ? { refs: shown(attached) } : {}) })
-    refs.value = []
+    items.value.push({
+      kind: 'user',
+      text,
+      ...(picked.length ? { skills: picked.map((skill) => skill.name), skillIds: picked.map((skill) => skill.id) } : {}),
+      ...(attached.length ? { refs: shown(attached) } : {}),
+    })
+    if (fromInput) refs.value = []
+    // In place of a sent message, none means none: otherwise the server keeps the ones it had.
+    const replacing = options.rewind !== undefined
     running.value = true
     adopting = !current.value
     try {
@@ -520,8 +565,8 @@ function conversation(pane: string) {
         session: current.value,
         text,
         ...(options.scene ? { scene: options.scene } : {}),
-        ...(picked.length ? { skills: picked.map((skill) => skill.id) } : {}),
-        ...(attached.length ? { refs: attached.map(wireRef) } : {}),
+        ...(picked.length || replacing ? { skills: picked.map((skill) => skill.id) } : {}),
+        ...(attached.length || replacing ? { refs: attached.map(wireRef) } : {}),
         ...(choice.value.provider ? { provider: choice.value.provider } : {}),
         ...(choice.value.model ? { model: choice.value.model } : {}),
         ...(choice.value.effort ? { effort: choice.value.effort } : {}),
@@ -531,7 +576,7 @@ function conversation(pane: string) {
       current.value ??= result.session
     } catch (error) {
       items.value.push({ kind: 'error', text: (error as Error).message })
-      if (!refs.value.length) refs.value = attached
+      if (fromInput && !refs.value.length) refs.value = attached
       running.value = false
       adopting = false
     }

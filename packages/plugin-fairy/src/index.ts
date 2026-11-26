@@ -66,6 +66,8 @@ export type FairyMessage = LlmMessage & {
   quote?: QuotedChat
   /** What the user attached to the message (bots, flows, runs, log lines, …), as the message shows it. */
   refs?: ShownRef[]
+  /** Ids of the skills picked for it, to apply them again when the message is edited or retried. */
+  skillIds?: string[]
   at: number
 }
 
@@ -223,6 +225,7 @@ interface Queued {
   /** The message as the model reads it: a note that it came mid-turn, skills, a quoted chat, the text. */
   content: string
   skills?: string[]
+  skillIds?: string[]
   quote?: QuotedChat
   refs?: ShownRef[]
   at: number
@@ -863,6 +866,16 @@ export class Fairy extends Service {
     }
   }
 
+  /** The skills and attachments of a stored message, to send with the message that replaces it. */
+  private async carried(message: FairyMessage) {
+    const known = new Set((await this.skills()).map((skill) => skill.id))
+    const quoted = message.quote && !message.refs ? [{ kind: 'chat' as const, bot: message.quote.bot, channel: message.quote.channel.id, id: message.quote.focus }] : []
+    return {
+      skills: (message.skillIds ?? []).filter((id) => known.has(id)),
+      refs: [...quoted, ...(message.refs ?? []).flatMap((item) => (item.ref ? [item.ref] : []))],
+    }
+  }
+
   /**
    * What the user attached to a message, read now: the blocks the model reads, the references the message shows,
    * and the first quoted chat. One that cannot be read says why instead of failing the message.
@@ -876,7 +889,7 @@ export class Fairy extends Service {
         const chat = await this.quoteChat(ref)
         quote ??= chat
         const focus = chat.lines.find((line) => line.id === chat.focus)
-        return { block: quoteBlock(chat), shown: { kind: 'chat', id: ref.id, label: ref.label || (focus ? `${focus.user}：${focus.text.slice(0, 40)}` : chat.channel.name ?? chat.channel.id) } as ShownRef }
+        return { block: quoteBlock(chat), shown: { kind: 'chat', id: ref.id, label: ref.label || (focus ? `${focus.user}：${focus.text.slice(0, 40)}` : chat.channel.name ?? chat.channel.id), ref } as ShownRef }
       } catch (error) {
         return missingRef(ref, error)
       }
@@ -909,6 +922,8 @@ export class Fairy extends Service {
       let seen = -1
       const at = session.messages.findIndex((message) => message.role === 'user' && ++seen === options.rewind)
       if (at < 0) throw new MushinError('not_found', `This conversation has no user message ${options.rewind}`)
+      // The message sent in its place keeps the skills and attachments it had, unless others are given.
+      if (options.skills === undefined && options.refs === undefined && options.quote === undefined) options = { ...options, ...await this.carried(session.messages[at]) }
       session.messages = session.messages.slice(0, at)
     }
     // A conversation saved by an older version can hold more tools than a request may carry.
@@ -927,7 +942,7 @@ export class Fairy extends Service {
       role: 'user',
       content: [contextNote(this.turnContext(options.page, options.scene)), ...skills.map(skillBlock), ...attached.blocks, text].filter(Boolean).join('\n\n'),
       display: text,
-      ...(skills.length ? { skills: skills.map((skill) => skill.name) } : {}),
+      ...(skills.length ? { skills: skills.map((skill) => skill.name), skillIds: skills.map((skill) => skill.id) } : {}),
       ...(attached.quote ? { quote: attached.quote } : {}),
       ...(attached.refs.length ? { refs: attached.refs } : {}),
       at: Date.now(),
@@ -1201,7 +1216,7 @@ export class Fairy extends Service {
       id,
       text,
       content: [note, ...skills.map(skillBlock), ...attached.blocks, text].filter(Boolean).join('\n\n'),
-      ...(skills.length ? { skills: skills.map((skill) => skill.name) } : {}),
+      ...(skills.length ? { skills: skills.map((skill) => skill.name), skillIds: skills.map((skill) => skill.id) } : {}),
       ...(attached.quote ? { quote: attached.quote } : {}),
       ...(attached.refs.length ? { refs: attached.refs } : {}),
       at: Date.now(),
@@ -1225,6 +1240,7 @@ export class Fairy extends Service {
         content: item.content,
         display: item.text,
         ...(item.skills ? { skills: item.skills } : {}),
+        ...(item.skillIds ? { skillIds: item.skillIds } : {}),
         ...(item.quote ? { quote: item.quote } : {}),
         ...(item.refs ? { refs: item.refs } : {}),
         at: item.at,
@@ -1694,7 +1710,7 @@ function parseReport(input: any): TaskReport {
 }
 
 function stripMeta(message: FairyMessage): LlmMessage {
-  const { display, skills, quote, refs, at, ...rest } = message
+  const { display, skills, skillIds, quote, refs, at, ...rest } = message
   return rest as LlmMessage
 }
 

@@ -42,6 +42,8 @@ export interface ShownRef {
   kind: FairyRefKind
   id?: string
   label: string
+  /** The reference as it was sent, to send it again when the message is edited or retried. */
+  ref?: FairyRef
 }
 
 /** Most references one message may carry. */
@@ -77,7 +79,7 @@ export async function readRef(home: Context, ref: FairyRef): Promise<{ block: st
       const label = ref.label || bot.name || ref.id
       return {
         block: block({ kind: 'bot', id: ref.id, name: label }, 'The user attached this bot. What bots.get returns now:', cut(json(bot), 'read the rest with bots.get')),
-        shown: { kind: 'bot', id: ref.id, label },
+        shown: { kind: 'bot', id: ref.id, label, ref },
       }
     }
     case 'flow': {
@@ -85,7 +87,7 @@ export async function readRef(home: Context, ref: FairyRef): Promise<{ block: st
       const label = ref.label || flow.name || ref.id
       return {
         block: block({ kind: 'flow', id: ref.id, name: label }, 'The user attached this flow. What flows.get returns now (nodes, edges and issues):', cut(json(flow), 'read the rest with flows.get')),
-        shown: { kind: 'flow', id: ref.id, label },
+        shown: { kind: 'flow', id: ref.id, label, ref },
       }
     }
     case 'plugin': {
@@ -107,7 +109,7 @@ export async function readRef(home: Context, ref: FairyRef): Promise<{ block: st
       })
       return {
         block: block({ kind: 'plugin', package: ref.id, name: label }, 'The user attached this plugin: its package, its app plugin entries (status and config, secrets masked) and what it adds:', cut(body, 'read the rest with plugins.catalog, plugins.list and plugins.provides')),
-        shown: { kind: 'plugin', id: ref.id, label },
+        shown: { kind: 'plugin', id: ref.id, label, ref },
       }
     }
     case 'run': {
@@ -120,14 +122,14 @@ export async function readRef(home: Context, ref: FairyRef): Promise<{ block: st
         const body = json({ run, logs: (lines as any[]).map((line) => `${new Date(line.ts).toISOString()} ${line.type} [${line.name}] ${line.text}`) })
         return {
           block: block({ kind: 'run', id: ref.id, bot: ref.bot }, 'The user attached this run of a plugin on a message (bots.runs), with the log lines written while handling the message:', cut(body, 'read more with bots.logs')),
-          shown: { kind: 'run', id: ref.id, label },
+          shown: { kind: 'run', id: ref.id, label, ref },
         }
       }
       const run = await call('flows.run', { id: ref.id })
       const label = ref.label || `${run.flowName ?? run.flowId}`
       return {
         block: block({ kind: 'run', id: ref.id, flow: run.flowId }, 'The user attached this flow run. What flows.run returns (the steps it went through with inputs and outputs, replies and error):', cut(json(run), 'read the rest with flows.run')),
-        shown: { kind: 'run', id: ref.id, label },
+        shown: { kind: 'run', id: ref.id, label, ref },
       }
     }
     case 'log': {
@@ -135,7 +137,7 @@ export async function readRef(home: Context, ref: FairyRef): Promise<{ block: st
       const intro = `The user attached ${ref.lines.length === 1 ? 'this log line' : `these ${ref.lines.length} log lines`}${ref.source ? ` from ${ref.source}` : ''}:`
       return {
         block: block({ kind: 'log', ...(ref.source ? { source: ref.source } : {}) }, intro, cut(ref.lines.join('\n'), 'ask the user for the rest, or read logs.recent or bots.logs')),
-        shown: { kind: 'log', label },
+        shown: { kind: 'log', label, ref },
       }
     }
     case 'chat':
@@ -149,6 +151,6 @@ export function missingRef(ref: FairyRef, error: unknown) {
   const what = 'id' in ref ? `${ref.kind} "${ref.id}"` : ref.kind
   return {
     block: `<ref kind="${ref.kind}" missing="true">\nThe user attached the ${what}${ref.label ? ` (${attr(ref.label)})` : ''}, but it could not be read: ${error instanceof Error ? error.message : String(error)}\n</ref>`,
-    shown: { kind: ref.kind, ...('id' in ref ? { id: ref.id } : {}), label: ref.label || ('id' in ref ? ref.id : ref.kind) } as ShownRef,
+    shown: { kind: ref.kind, ...('id' in ref ? { id: ref.id } : {}), label: ref.label || ('id' in ref ? ref.id : ref.kind), ref } as ShownRef,
   }
 }

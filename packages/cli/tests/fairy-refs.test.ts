@@ -63,7 +63,7 @@ describe('attaching things to a Fairy message', () => {
     expect(user).toContain('<ref kind="log" source="bots">\nThe user attached these 2 log lines from bots:\n10:00:01 WRN [bots] slow reply\n10:00:02 ERR [bots] timed out\n</ref>')
     expect(user).toContain('<ref kind="plugin" package="@mushinjs/plugin-demo"')
     expect(user.endsWith('</ref>\n\nWhy did it say that?')).toBe(true)
-    expect(stored.messages[0].refs).toEqual([
+    expect(stored.messages[0].refs).toMatchObject([
       { kind: 'bot', id: botId, label: 'Demo bot' },
       { kind: 'flow', id: flowId, label: 'Check-in' },
       { kind: 'run', id: run.id, label: 'Check-in 10:00' },
@@ -93,6 +93,27 @@ describe('attaching things to a Fairy message', () => {
     expect(user).toMatch(/→ \[\d\d:\d\d\] Dog \(30002\): 能加个天气功能吗/)
     expect(stored.messages[0]).toMatchObject({ quote: { focus: record.id }, refs: [{ kind: 'chat', id: record.id, label: 'Dog：能加个天气功能吗' }] })
     await app.call('fairy.deleteSession', { id: session })
+  })
+
+  it('keeps a message\'s skills and attachments when it is edited, unless others are given', async () => {
+    const first = await send({ text: 'Is it online?', skills: ['diagnose-bot'], refs: [{ kind: 'bot', id: botId, label: 'Demo bot' }, { kind: 'log', lines: ['ERR [bots] timed out'], label: '1 line' }] })
+    expect(first.stored.messages[0]).toMatchObject({ skills: ['排查机器人连接'], skillIds: ['diagnose-bot'] })
+    expect(first.stored.messages[0].refs[1]).toEqual({ kind: 'log', label: '1 line', ref: { kind: 'log', lines: ['ERR [bots] timed out'], label: '1 line' } })
+
+    const edited = await send({ session: first.session, text: 'Is it online now?', rewind: 0 })
+    expect(edited.user).toContain('<skill name="排查机器人连接">')
+    expect(edited.user).toContain(`<ref kind="bot" id="${botId}" name="Demo bot">`)
+    expect(edited.user).toContain('ERR [bots] timed out')
+    expect(edited.user.endsWith('\n\nIs it online now?')).toBe(true)
+    expect(edited.stored.messages.filter((message: any) => message.role === 'user')).toHaveLength(1)
+    expect(edited.stored.messages[0].refs.map((ref: any) => ref.label)).toEqual(['Demo bot', '1 line'])
+
+    // The edit box took the log lines and the skill off.
+    const trimmed = await send({ session: first.session, text: 'Just the bot', rewind: 0, skills: [], refs: [{ kind: 'bot', id: botId, label: 'Demo bot' }] })
+    expect(trimmed.user).not.toContain('<skill')
+    expect(trimmed.user).not.toContain('timed out')
+    expect(trimmed.stored.messages[0].skillIds).toBeUndefined()
+    await app.call('fairy.deleteSession', { id: first.session })
   })
 
   it('reads a plugin\'s run on a message with the log lines it wrote', async () => {

@@ -3,10 +3,10 @@ import { Button, Dropdown, type DropdownOption, Input, Popover, Spin, Tag, Toolt
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { type ChatItem, DELEGATE, useConversation } from '../stores/fairy'
+import { type ChatItem, DELEGATE, resendable, useConversation } from '../stores/fairy'
 import { type Recommendation, useFairySceneStore } from '../stores/fairyScene'
 import { useDataStore } from '../stores/data'
-import type { FairySkill } from '../types'
+import type { FairySkill, ShownRef } from '../types'
 import FairyMessage from './fairy/FairyMessage.vue'
 import FairyToolCall from './fairy/FairyToolCall.vue'
 import AskCard from './fairy/AskCard.vue'
@@ -80,8 +80,8 @@ function onComposerClick(event: MouseEvent) {
 
 // ---- copy and edit ----
 
-/** The user message being edited: its place among the user messages, and the draft. */
-const editing = ref<{ ordinal: number; text: string }>()
+/** The user message being edited: its place among the user messages, the draft, and the skills and attachments it keeps. */
+const editing = ref<{ ordinal: number; text: string; skills: Pick<FairySkill, 'id' | 'name'>[]; refs: ShownRef[] }>()
 
 /** Each user item's place among the user messages, which the server counts the same way. */
 const ordinals = computed(() => {
@@ -102,14 +102,21 @@ async function copy(text: string) {
 
 function startEdit(item: ChatItem) {
   if (item.kind !== 'user' || fairy.running) return
-  editing.value = { ordinal: ordinals.value.get(item) ?? 0, text: item.text }
+  editing.value = {
+    ordinal: ordinals.value.get(item) ?? 0,
+    text: item.text,
+    skills: (item.skillIds ?? []).map((id, index) => ({ id, name: item.skills?.[index] ?? id })),
+    refs: (item.refs ?? []).filter((ref) => resendable(ref)),
+  }
 }
+
+const editReady = computed(() => !!editing.value && (!!editing.value.text.trim() || !!editing.value.skills.length || !!editing.value.refs.length))
 
 async function saveEdit() {
   const draft = editing.value
-  if (!draft?.text.trim()) return
+  if (!draft || !editReady.value) return
   editing.value = undefined
-  await fairy.edit(draft.ordinal, draft.text.trim(), { scene: { ...scenes.scene } })
+  await fairy.edit(draft.ordinal, draft.text.trim(), { scene: { ...scenes.scene }, skills: draft.skills as FairySkill[], refs: draft.refs })
 }
 
 // ---- model and effort for the next messages ----
@@ -501,6 +508,26 @@ onMounted(() => scrollToEnd(true))
           <template v-else>
             <template v-for="item in [row.item]" :key="index">
               <div v-if="item.kind === 'user' && editing && editing.ordinal === ordinals.get(item)" class="msg-edit">
+                <!-- What the message carried goes with it again; take off what it should no longer carry. -->
+                <div v-if="editing.refs.length || editing.skills.length" class="chips">
+                  <Tag
+                    v-for="(ref, refIndex) in editing.refs"
+                    :key="`ref-${refIndex}`"
+                    size="small"
+                    type="info"
+                    closable
+                    class="ref-chip"
+                    :title="`${t(`fairyRefs.kinds.${ref.kind}`)} · ${ref.label}`"
+                    @close="editing.refs = editing.refs.filter((entry) => entry !== ref)"
+                  >
+                    <template #icon><span :class="REF_ICONS[ref.kind]" /></template>
+                    <span class="ref-chip-label">{{ ref.label }}</span>
+                  </Tag>
+                  <Tag v-for="skill in editing.skills" :key="skill.id" size="small" type="success" closable @close="editing.skills = editing.skills.filter((entry) => entry !== skill)">
+                    <template #icon><span class="i-lucide-puzzle" /></template>
+                    {{ skill.name }}
+                  </Tag>
+                </div>
                 <Input
                   v-model:value="editing.text"
                   type="textarea"
@@ -510,7 +537,7 @@ onMounted(() => scrollToEnd(true))
                 />
                 <div class="msg-edit-actions">
                   <Button size="small" secondary @click="editing = undefined">{{ t('common.cancel') }}</Button>
-                  <Button size="small" type="primary" :disabled="!editing.text.trim()" @click="saveEdit()">{{ t('fairy.resend') }}</Button>
+                  <Button size="small" type="primary" :disabled="!editReady" @click="saveEdit()">{{ t('fairy.resend') }}</Button>
                 </div>
               </div>
               <div v-else-if="item.kind === 'user'" class="msg-wrap user">
@@ -523,7 +550,7 @@ onMounted(() => scrollToEnd(true))
                 </div>
                 <div class="msg-actions">
                   <Tooltip><template #trigger><Button size="tiny" quaternary circle icon="i-lucide-copy" :aria-label="t('fairy.copy')" @click="copy(item.text)" /></template>{{ t('fairy.copy') }}</Tooltip>
-                  <Tooltip v-if="!fairy.running && item.text"><template #trigger><Button size="tiny" quaternary circle icon="i-lucide-pencil" :aria-label="t('fairy.edit')" @click="startEdit(item)" /></template>{{ t('fairy.edit') }}</Tooltip>
+                  <Tooltip v-if="!fairy.running && (item.text || item.refs?.length || item.skills?.length)"><template #trigger><Button size="tiny" quaternary circle icon="i-lucide-pencil" :aria-label="t('fairy.edit')" @click="startEdit(item)" /></template>{{ t('fairy.edit') }}</Tooltip>
                 </div>
               </div>
               <div v-else-if="item.kind === 'assistant'" class="msg-wrap assistant">
