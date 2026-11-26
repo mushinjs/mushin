@@ -369,6 +369,23 @@ export interface ToolCall {
   arguments: string
 }
 
+export type FairyRefKind = 'bot' | 'plugin' | 'flow' | 'run' | 'log' | 'chat'
+
+/** Something attached to a Fairy message for it to read, as it is sent; see `fairy.send`. */
+export type FairyRef =
+  | { kind: 'bot' | 'plugin' | 'flow'; id: string; label?: string }
+  /** `bot` and `at` (when it started) are set on a plugin's run, from bots.runs; a flow run has neither. */
+  | { kind: 'run'; id: string; bot?: string; at?: number; label?: string }
+  | { kind: 'log'; lines: string[]; source?: string; label?: string }
+  | { kind: 'chat'; bot: string; channel: string; id: string; label?: string }
+
+/** An attachment as a sent message keeps it. */
+export interface ShownRef {
+  kind: FairyRefKind
+  id?: string
+  label: string
+}
+
 export interface FairyMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: any
@@ -377,6 +394,8 @@ export interface FairyMessage {
   skills?: string[]
   /** A bot's chat quoted into the message. */
   quote?: { bot: string; botName: string; channel: { type: 'group' | 'private'; id: string; name?: string }; focus: string; lines: { id: string; user: string; text: string }[] }
+  /** What the user attached to the message, as it shows. */
+  refs?: ShownRef[]
   toolCalls?: ToolCall[]
   toolCallId?: string
   isError?: boolean

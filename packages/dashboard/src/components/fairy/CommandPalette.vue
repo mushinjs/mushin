@@ -1,20 +1,33 @@
 <script setup lang="ts">
 import { Tag } from '@mushinjs/ui'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { call } from '../../api'
+import { useDataStore } from '../../stores/data'
 import { useFairyStore } from '../../stores/fairy'
 import { useFairySceneStore } from '../../stores/fairyScene'
-import type { FairyCommands, FairySkill } from '../../types'
+import type { Bot, CatalogEntry, FairyCommands, FairySkill, FlowSummary } from '../../types'
+import { localize } from '../../utils'
+import { botRef, flowRef, type PendingRef, pluginRef, REF_ICONS } from './refs'
 
-/** One row: a Fairy command, a bot command or a skill. */
+/** One row: a Fairy command, a bot command, a skill, or something to attach with `@`. */
 export type PaletteItem =
   | { kind: 'builtin'; key: string; name: string; description: string }
   | { kind: 'bot'; key: string; name: string; description: string; command: FairyCommands['bots'][number] }
   | { kind: 'skill'; key: string; name: string; description: string; skill: FairySkill; recommended: boolean }
+  | { kind: 'ref'; key: string; name: string; description: string; ref: PendingRef; source: string }
+
+// What `@` lists besides bots, fetched each time it opens so it is never stale for long.
+const flows = shallowRef<FlowSummary[]>([])
+const plugins = shallowRef<CatalogEntry[]>([])
+function loadAttachables() {
+  call<FlowSummary[]>('flows.list').then((list) => (flows.value = list), () => {})
+  call<CatalogEntry[]>('plugins.catalog').then((list) => (plugins.value = list), () => {})
+}
 
 const props = defineProps<{
-  /** `/` lists commands and skills, `$` only skills. */
-  mode: '/' | '$'
+  /** `/` lists commands and skills, `$` only skills, `@` bots, plugins and flows to attach. */
+  mode: '/' | '$' | '@'
   query: string
   /** Scene key, so skills recommended here come first. */
   scene: string
@@ -24,6 +37,7 @@ const emit = defineEmits<{ pick: [item: PaletteItem] }>()
 const { t, locale } = useI18n()
 const fairy = useFairyStore()
 const scenes = useFairySceneStore()
+const data = useDataStore()
 const active = ref(0)
 const listEl = ref<HTMLElement>()
 
@@ -37,7 +51,58 @@ const skillItems = computed<PaletteItem[]>(() => fairy.skills
   .map((skill) => ({ kind: 'skill' as const, key: `skill:${skill.id}`, name: skill.name, description: skill.description, skill, recommended: !!skill.scenes?.includes(props.scene) || scenes.skills.includes(skill.id) }))
   .sort((a, b) => Number(b.recommended) - Number(a.recommended)))
 
+watch(() => props.mode, (mode) => {
+  if (mode === '@') loadAttachables()
+}, { immediate: true })
+
+/** Up to this many of each kind; typing narrows them down. */
+const PER_GROUP = 30
+
+function botState(bot: Bot) {
+  return t(`bots.state.${!bot.enabled ? 'stopped' : bot.status === 'error' ? 'problem' : bot.status}`)
+}
+
+const attachGroups = computed(() => {
+  const bots: PaletteItem[] = data.bots
+    .filter((bot) => matches(bot.name, bot.id, bot.selfName, bot.selfId, bot.adapter.type))
+    .slice(0, PER_GROUP)
+    .map((bot) => {
+      const account = [bot.selfName, bot.selfId].filter(Boolean).join(' ')
+      const state = botState(bot)
+      return { kind: 'ref', key: `ref:bot:${bot.id}`, name: bot.name, description: account, ref: botRef(bot, [state, account].filter(Boolean).join(' · ')), source: state }
+    })
+  const pluginItems: PaletteItem[] = plugins.value
+    .map((entry) => ({ entry, name: localize(entry.manifest.displayName, locale.value) || entry.package, description: localize(entry.manifest.description, locale.value) }))
+    .filter((item) => matches(item.name, item.entry.package, item.description))
+    .slice(0, PER_GROUP)
+    .map(({ entry, name, description }) => ({
+      kind: 'ref',
+      key: `ref:plugin:${entry.package}`,
+      name,
+      description,
+      ref: pluginRef(entry.package, name, description || entry.package),
+      source: t(`fairyRefs.pluginKind.${entry.manifest.kind}`),
+    }))
+  const flowItems: PaletteItem[] = flows.value
+    .filter((flow) => matches(flow.name, flow.description, ...flow.triggers.map((trigger) => trigger.summary)))
+    .slice(0, PER_GROUP)
+    .map((flow) => ({
+      kind: 'ref',
+      key: `ref:flow:${flow.id}`,
+      name: flow.name,
+      description: flow.description || flow.triggers.map((trigger) => trigger.summary).join('、'),
+      ref: flowRef(flow),
+      source: flow.enabled ? t('fairyRefs.nodes', { n: flow.nodes }) : t('fairyRefs.flowOff'),
+    }))
+  return [
+    { title: t('fairyRefs.kinds.bot'), items: bots },
+    { title: t('fairyRefs.kinds.plugin'), items: pluginItems },
+    { title: t('fairyRefs.kinds.flow'), items: flowItems },
+  ].filter((group) => group.items.length)
+})
+
 const groups = computed(() => {
+  if (props.mode === '@') return attachGroups.value
   if (props.mode === '$') return [{ title: t('fairyPalette.skills'), items: skillItems.value }]
   const builtin: PaletteItem[] = fairy.commands.builtin
     .filter((command) => matches(command.name))
@@ -63,10 +128,20 @@ const flat = computed(() => groups.value.flatMap((group) => group.items))
 watch(() => [props.query, props.mode], () => (active.value = 0))
 
 function sourceLabel(item: PaletteItem) {
+  if (item.kind === 'ref') return item.source
   if (item.kind === 'builtin') return t('fairyPalette.source.builtin')
   if (item.kind === 'bot') return item.command.botName ?? item.command.bot
   if (item.skill.source === 'plugin') return item.skill.plugin ?? t('fairyPalette.source.plugin')
   return t(`fairyPalette.source.${item.skill.source}`)
+}
+
+function iconOf(item: PaletteItem) {
+  switch (item.kind) {
+    case 'builtin': return 'i-lucide-terminal'
+    case 'bot': return 'i-lucide-message-circle-more'
+    case 'ref': return REF_ICONS[item.ref.kind]
+    default: return item.recommended ? 'i-lucide-zap' : 'i-lucide-puzzle'
+  }
 }
 
 async function move(step: number) {
@@ -89,7 +164,7 @@ defineExpose({ move, choose, count: () => flat.value.length })
 
 <template>
   <div ref="listEl" class="palette" role="listbox">
-    <div v-if="!flat.length" class="empty">{{ mode === '$' ? t('fairyPalette.noSkills') : t('fairyPalette.none') }}</div>
+    <div v-if="!flat.length" class="empty">{{ mode === '@' ? t('fairyRefs.none') : mode === '$' ? t('fairyPalette.noSkills') : t('fairyPalette.none') }}</div>
     <template v-for="group in groups" :key="group.title">
       <div class="group">{{ group.title }}</div>
       <button
@@ -103,8 +178,8 @@ defineExpose({ move, choose, count: () => flat.value.length })
         @mouseenter="active = flat.indexOf(item)"
         @mousedown.prevent="emit('pick', item)"
       >
-        <span class="icon text-[16px]" :class="item.kind === 'builtin' ? 'i-lucide-terminal' : item.kind === 'bot' ? 'i-lucide-message-circle-more' : item.recommended ? 'i-lucide-zap' : 'i-lucide-puzzle'" />
-        <span class="name">{{ item.kind === 'skill' ? item.name : `/${item.name}` }}</span>
+        <span class="icon text-[16px]" :class="iconOf(item)" />
+        <span class="name">{{ item.kind === 'skill' || item.kind === 'ref' ? item.name : `/${item.name}` }}</span>
         <span class="desc">{{ item.description }}</span>
         <Tag v-if="item.kind === 'skill' && item.recommended" size="tiny" type="success">{{ t('fairyPalette.recommended') }}</Tag>
         <span class="source">{{ sourceLabel(item) }}</span>

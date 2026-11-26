@@ -7,7 +7,9 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { renderLog } from '../logHighlight'
 import { type LogRef, useLogRefs } from '../logRefs'
+import { giveToFairy, useConversation } from '../stores/fairy'
 import type { LogLine } from '../types'
+import { logRef, startRefDrag } from './fairy/refs'
 import IconAction from './IconAction.vue'
 
 const props = defineProps<{ lines: LogLine[]; emptyText?: string; height?: string }>()
@@ -187,12 +189,26 @@ function rowIndex(target: Element | null) {
   return row && box.value?.contains(row) ? Number(row.dataset.index) : -1
 }
 
+/** A plain press on a selected row: it may start dragging the selection; a click without dragging selects just that row. */
+let pressed: number | undefined
+
 function onMouseDown(event: MouseEvent) {
   const el = box.value
   if (event.button !== 0 || !el || isText(event.target)) return
   // The scrollbar keeps working.
   if (event.target === el && (event.offsetX >= el.clientWidth || event.offsetY >= el.clientHeight)) return
   const index = rowIndex(event.target as Element)
+  const plain = !event.shiftKey && !event.ctrlKey && !event.metaKey
+  if (plain && index >= 0 && selected.value.has(keyOf(visible.value[index]))) {
+    // Left to the browser, so the selected lines can be dragged into Fairy's input.
+    pressed = keyOf(visible.value[index])
+    window.addEventListener('mouseup', () => {
+      if (pressed !== undefined) selected.value = new Set([pressed])
+      anchor = pressed ?? anchor
+      pressed = undefined
+    }, { once: true })
+    return
+  }
   // Starting here would otherwise begin a text selection across rows.
   event.preventDefault()
   window.getSelection()?.removeAllRanges()
@@ -270,6 +286,32 @@ function plainLine(line: LogLine) {
 }
 
 const copyText = () => selectedLines.value.map(plainLine).join('\n')
+
+// ---- giving lines to Fairy ----
+
+const conversation = useConversation()
+
+/** The selected lines as an attachment for Fairy, named by where they come from when that is one place. */
+function selectionRef() {
+  const lines = selectedLines.value
+  if (!lines.length) return undefined
+  const sources = new Set(lines.map((line) => line.name))
+  const source = sources.size === 1 ? lines[0].name : undefined
+  const label = source ? t('fairyRefs.logLabelFrom', { n: lines.length, source }, lines.length) : t('fairyRefs.logLabel', lines.length)
+  return logRef(lines.map(plainLine), label, source)
+}
+
+function onRowDragStart(event: DragEvent) {
+  pressed = undefined
+  const item = selectionRef()
+  if (item) startRefDrag(event, item)
+  else event.preventDefault()
+}
+
+function giveSelection() {
+  const item = selectionRef()
+  if (item && !giveToFairy(item, conversation)) message.warning(t('fairyRefs.full'))
+}
 
 /** True while text is selected inside the list: then copying copies that text, as usual. */
 function hasTextSelection() {
@@ -374,6 +416,8 @@ function onClick(event: MouseEvent) {
             class="row"
             :class="[line.type, { selected: selected.has(item.key as number) }]"
             :style="{ transform: `translateY(${item.start}px)` }"
+            :draggable="selected.has(item.key as number)"
+            @dragstart="onRowDragStart"
           >
             <span class="time" :title="fullTime(line.ts)">{{ clock(line.ts) }}<span class="ms">{{ millis(line.ts) }}</span></span>
             <span class="level" :class="`lv-${line.type}`">{{ levelOf(line) }}</span>
@@ -395,6 +439,7 @@ function onClick(event: MouseEvent) {
         <span class="sep">·</span>
         <span>{{ t('logs.selected', { count: selectedLines.length }) }}</span>
         <Button text size="tiny" type="primary" @click="copySelected">{{ t('logs.copy') }}</Button>
+        <Button text size="tiny" type="primary" icon="i-lucide-sparkles" :title="t('fairyRefs.giveHint')" @click="giveSelection">{{ t('fairyRefs.give') }}</Button>
         <Button text size="tiny" @click="selected = new Set()">{{ t('logs.deselect') }}</Button>
       </template>
       <span class="spacer" />
@@ -507,6 +552,11 @@ function onClick(event: MouseEvent) {
 .row.selected:hover {
   background: var(--log-selected);
   border-left-color: var(--log-accent);
+}
+
+/* Selected lines can be dragged into Fairy's input. */
+.row.selected {
+  cursor: grab;
 }
 
 .time,

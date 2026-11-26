@@ -9,6 +9,7 @@ import WorkspacePanel from '../components/workspace/WorkspacePanel.vue'
 import WorkspaceSidebar from '../components/workspace/WorkspaceSidebar.vue'
 import { useDataStore } from '../stores/data'
 import { useFairyPane, useFairyStore } from '../stores/fairy'
+import { ATTACH_MESSAGE, type PendingRef } from '../components/fairy/refs'
 import { useFairyActivityStore } from '../stores/fairyActivity'
 import { useFairySceneStore } from '../stores/fairyScene'
 import { useRunsStore } from '../stores/runs'
@@ -72,6 +73,15 @@ const width = ref(window.innerWidth)
 const onResize = () => (width.value = window.innerWidth)
 onMounted(() => window.addEventListener('resize', onResize))
 onBeforeUnmount(() => window.removeEventListener('resize', onResize))
+
+// A page in the panel gives something to Fairy (a quoted chat message, log lines): it goes to the conversation in focus.
+function onPanelMessage(event: MessageEvent<{ type?: string; ref?: PendingRef }>) {
+  if (event.origin !== location.origin || event.data?.type !== ATTACH_MESSAGE || !event.data.ref) return
+  const conversation = layout.split ? useFairyPane(workspace.focused) : fairy
+  conversation.attach(event.data.ref)
+}
+onMounted(() => window.addEventListener('message', onPanelMessage))
+onBeforeUnmount(() => window.removeEventListener('message', onPanelMessage))
 
 /** Sides as wide as they were left, but never squeezing the middle below its minimum. */
 const sides = computed(() => {

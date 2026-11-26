@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { call, on } from '../api'
 import { avatarColor, initial } from '../botAvatar'
-import { useFairyStore } from '../stores/fairy'
+import { giveToFairy, useConversation } from '../stores/fairy'
 import { useDataStore } from '../stores/data'
 import type { ChannelSummary, Contact, MessageRecord, Segment } from '../types'
 import { formatTime, segmentsText } from '../utils'
@@ -16,7 +16,7 @@ const { t } = useI18n()
 const message = useToast()
 const data = useDataStore()
 const router = useRouter()
-const fairy = useFairyStore()
+const fairy = useConversation()
 
 /** The chat that only exists in Mushin, where the dashboard plays a test user; see `bots.sandbox`. */
 const SANDBOX_ID = '@sandbox'
@@ -77,13 +77,15 @@ async function newFlow(record: MessageRecord) {
 }
 
 function quoteToFairy(record: MessageRecord) {
-  fairy.quote = {
+  const given = giveToFairy({
+    kind: 'chat',
     bot: props.botId,
     channel: record.channel.id,
     id: record.id,
     label: `${senderName(record)}：${segmentsText(record.segments).slice(0, 40)}`,
-  }
-  fairy.open = true
+    detail: record.channel.name ?? record.channel.id,
+  }, fairy)
+  if (!given) message.warning(t('fairyRefs.full'))
 }
 
 // ---- the channel list: the sandbox on top, then chats with messages, then the account's other friends and groups ----

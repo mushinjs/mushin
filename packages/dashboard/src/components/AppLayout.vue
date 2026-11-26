@@ -15,6 +15,7 @@ import { useRunsStore } from '../stores/runs'
 import { workspace } from '../stores/workspace'
 import { themeMode, useTheme } from '../theme'
 import FairyDock from './FairyDock.vue'
+import { carriesRef, draggingRef, droppedRef } from './fairy/refs'
 import GlobalSearch from './GlobalSearch.vue'
 import type { NavGroup, NavItem } from './nav'
 import SideNav from './SideNav.vue'
@@ -57,6 +58,34 @@ watch(collapsed, (value) => {
   } catch {}
 })
 if (window.innerWidth < 1100 || props.embedded) fairy.open = false
+
+// ---- something dragged to Fairy while it is closed ----
+
+let springTimer = 0
+function onToggleDragEnter(event: DragEvent) {
+  if (!carriesRef(event) || fairy.open) return
+  event.preventDefault()
+  // Held over the button for a moment, Fairy opens, so the drag can go on to its input.
+  window.clearTimeout(springTimer)
+  springTimer = window.setTimeout(() => (fairy.open = true), 450)
+}
+function onToggleDragOver(event: DragEvent) {
+  if (!carriesRef(event)) return
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+}
+function onToggleDragLeave() {
+  window.clearTimeout(springTimer)
+}
+function onToggleDrop(event: DragEvent) {
+  window.clearTimeout(springTimer)
+  const item = droppedRef(event)
+  if (!item) return
+  event.preventDefault()
+  draggingRef.value = false
+  fairy.attach(item)
+  fairy.open = true
+}
 
 // The workspace's Console button comes back to the page you left.
 watch(() => route.fullPath, (path) => !props.embedded && (workspace.returnTo = path), { immediate: true })
@@ -285,21 +314,31 @@ function onAccount(key: string) {
           <span class="search-label">{{ t('search.button') }}</span>
           <span class="search-keys"><kbd>{{ isMac ? '⌘' : 'Ctrl' }}</kbd><kbd>K</kbd></span>
         </button>
-        <Tooltip>
-          <template #trigger>
-            <Button
-              size="small"
-              quaternary
-              circle
-              :icon="fairy.open ? 'i-lucide-panel-right-close' : 'i-lucide-panel-right-open'"
-              data-fairy-target="fairy.toggle"
-              :aria-label="t('layout.toggleDock')"
-              :pressed="fairy.open"
-              @click="fairy.open = !fairy.open"
-            />
-          </template>
-          {{ t('layout.toggleDock') }}
-        </Tooltip>
+        <!-- With Fairy closed, something dragged to Fairy opens it on the way, or is attached when let go here. -->
+        <span
+          class="dock-toggle"
+          :class="{ 'drop-target': draggingRef && !fairy.open }"
+          @dragenter="onToggleDragEnter"
+          @dragover="onToggleDragOver"
+          @dragleave="onToggleDragLeave"
+          @drop="onToggleDrop"
+        >
+          <Tooltip>
+            <template #trigger>
+              <Button
+                size="small"
+                quaternary
+                circle
+                :icon="fairy.open ? 'i-lucide-panel-right-close' : 'i-lucide-panel-right-open'"
+                data-fairy-target="fairy.toggle"
+                :aria-label="t('layout.toggleDock')"
+                :pressed="fairy.open"
+                @click="fairy.open = !fairy.open"
+              />
+            </template>
+            {{ t('layout.toggleDock') }}
+          </Tooltip>
+        </span>
         <HoverCard placement="bottom" align="end" :width="320" :padded="false" :disabled="!activity.list.length">
           <template #trigger>
             <Button type="primary" secondary icon="i-lucide-sparkles" class="fairy-button" data-fairy-target="fairy.workspace" :title="activity.list.length ? undefined : t('workspace.enterHint')" @click="router.push('/fairy')">
@@ -738,6 +777,19 @@ a.crumb:hover {
 }
 
 /* Fairy's button: a band of light sweeps across it from the top left now and then, and at once on hover. */
+.dock-toggle {
+  display: inline-flex;
+  border-radius: 999px;
+  transition: box-shadow 0.15s, background-color 0.15s;
+}
+
+/* Fairy is closed and something it can take is being dragged: this is where it goes. */
+.dock-toggle.drop-target {
+  background: var(--primary-soft);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 60%, transparent);
+  animation: fairy-pulse 1.2s ease-out infinite;
+}
+
 .fairy-button {
   position: relative;
   overflow: hidden;

@@ -2,8 +2,9 @@ import { defineStore } from 'pinia'
 import { inject, type InjectionKey, ref, watch } from 'vue'
 import { call, on } from '../api'
 import { unwrapCall } from '../components/fairy/records'
+import { ATTACH_MESSAGE, embedded, MAX_REFS, type PendingRef, refKey, wireRef } from '../components/fairy/refs'
 import { prefs } from '../prefs'
-import type { FairyCommands, FairyEvent, FairyGroup, FairyMessage, FairyScene, FairySessionSummary, FairySkill, FairyTaskReport, Risk } from '../types'
+import type { FairyCommands, FairyEvent, FairyGroup, FairyMessage, FairyScene, FairySessionSummary, FairySkill, FairyTaskReport, Risk, ShownRef } from '../types'
 
 export type ToolState = 'running' | 'confirm' | 'ok' | 'error' | 'declined'
 
@@ -18,7 +19,7 @@ export interface TaskView {
 }
 
 export type ChatItem =
-  | { kind: 'user'; text: string; skills?: string[]; quote?: string }
+  | { kind: 'user'; text: string; skills?: string[]; refs?: ShownRef[] }
   | { kind: 'assistant'; text: string }
   | { kind: 'tool'; id: string; action: string; input: unknown; risk?: Risk; state: ToolState; result?: unknown; error?: string; task?: TaskView }
   /** `code` is `max_steps` when the reply ran out of tool rounds; the dock offers to continue. */
@@ -36,6 +37,17 @@ function parseArgs(json: string) {
   }
 }
 
+/** A chat quoted by an older version, which kept no attachments, as the one attachment it is. */
+function quotedRef(message: FairyMessage): ShownRef[] | undefined {
+  const quote = message.quote
+  if (!quote) return undefined
+  const focus = quote.lines.find((line) => line.id === quote.focus)
+  return [{ kind: 'chat', id: quote.focus, label: focus ? `${focus.user}：${focus.text.slice(0, 40)}` : quote.channel.name ?? quote.channel.id }]
+}
+
+/** The chips a sent message shows for what was attached to it. */
+const shown = (refs: PendingRef[]): ShownRef[] => refs.map((item) => ({ kind: item.kind, ...('id' in item ? { id: item.id } : {}), label: item.label }))
+
 /** Turns a stored conversation into chat items: user and assistant text, and one row per tool call. */
 function toItems(messages: FairyMessage[]): ChatItem[] {
   const items: ChatItem[] = []
@@ -43,9 +55,8 @@ function toItems(messages: FairyMessage[]): ChatItem[] {
   for (const message of messages) {
     if (message.role === 'user') {
       const text = message.display ?? (typeof message.content === 'string' ? message.content : '')
-      const focus = message.quote?.lines.find((line) => line.id === message.quote!.focus)
-      const quote = focus ? `${focus.user}：${focus.text.slice(0, 40)}` : message.quote ? message.quote.channel.name ?? message.quote.channel.id : undefined
-      if (text || message.skills?.length || quote) items.push({ kind: 'user', text, ...(message.skills?.length ? { skills: message.skills } : {}), ...(quote ? { quote } : {}) })
+      const refs = message.refs ?? quotedRef(message)
+      if (text || message.skills?.length || refs?.length) items.push({ kind: 'user', text, ...(message.skills?.length ? { skills: message.skills } : {}), ...(refs?.length ? { refs } : {}) })
     } else if (message.role === 'assistant') {
       if (message.content) items.push({ kind: 'assistant', text: message.content })
       for (const call of message.toolCalls ?? []) {
@@ -183,12 +194,24 @@ function conversation(pane: string) {
   const asks = ref<AskItem[]>([])
   let askSeq = 0
   /** What you wrote while Fairy works, until it reads it; `local` until the server gives the message an id. */
-  const queued = ref<{ id: string; text: string; skills?: string[]; quote?: string }[]>([])
+  const queued = ref<{ id: string; text: string; skills?: string[]; refs?: ShownRef[] }[]>([])
   /** Ids read already, for a message whose id comes back after it was read. */
   const read = new Set<string>()
   const commands = ref<FairyCommands>({ builtin: [], bots: [] })
-  /** A chat message to quote into the next message, picked in a conversation view. */
-  const quote = ref<{ bot: string; channel: string; id: string; label: string }>()
+  /** What goes with the next message for Fairy to read: picked with `@`, dragged in, or a chat message quoted. */
+  const refs = ref<PendingRef[]>([])
+
+  /** Attaches something to the next message; false when it is there already or the message holds no more. */
+  function attach(item: PendingRef) {
+    const key = refKey(item)
+    if (refs.value.some((entry) => refKey(entry) === key) || refs.value.length >= MAX_REFS) return false
+    refs.value = [...refs.value, item]
+    return true
+  }
+
+  function detach(item: PendingRef) {
+    refs.value = refs.value.filter((entry) => entry !== item)
+  }
 
   async function refreshSessions() {
     const [list, groupList] = await Promise.all([call<FairySessionSummary[]>('fairy.sessions'), call<FairyGroup[]>('fairy.groups.list')])
@@ -331,7 +354,7 @@ function conversation(pane: string) {
     if (!done.length) return
     flush()
     queued.value = queued.value.filter((item) => !done.includes(item))
-    for (const { text, skills, quote: quoted } of done) items.value.push({ kind: 'user', text, ...(skills ? { skills } : {}), ...(quoted ? { quote: quoted } : {}) })
+    for (const { text, skills, refs: attached } of done) items.value.push({ kind: 'user', text, ...(skills ? { skills } : {}), ...(attached ? { refs: attached } : {}) })
   }
 
   /** The turn is over: whatever was written during it is in the conversation now. */
@@ -447,16 +470,16 @@ function conversation(pane: string) {
    */
   async function steer(text: string, picked: FairySkill[]) {
     const session = current.value!
-    const quoted = quote.value
-    const entry = { id: 'local', text, ...(picked.length ? { skills: picked.map((skill) => skill.name) } : {}), ...(quoted ? { quote: quoted.label } : {}) }
+    const attached = refs.value
+    const entry = { id: 'local', text, ...(picked.length ? { skills: picked.map((skill) => skill.name) } : {}), ...(attached.length ? { refs: shown(attached) } : {}) }
     queued.value.push(entry)
-    quote.value = undefined
+    refs.value = []
     try {
       const result = await call<{ session: string; queued?: string }>('fairy.send', {
         session,
         text,
         ...(picked.length ? { skills: picked.map((skill) => skill.id) } : {}),
-        ...(quoted ? { quote: { bot: quoted.bot, channel: quoted.channel, id: quoted.id } } : {}),
+        ...(attached.length ? { refs: attached.map(wireRef) } : {}),
       })
       // The id comes with the answer unless its event came first; without one, the turn had ended and this one ran.
       const mine = queued.value.find((item) => item === entry || (item.id === 'local' && item.text === text))
@@ -467,6 +490,8 @@ function conversation(pane: string) {
     } catch (error) {
       queued.value = queued.value.filter((item) => item.text !== text || item.id !== 'local')
       items.value.push({ kind: 'error', text: (error as Error).message })
+      // What was attached waits in the input again, to send once more.
+      if (!refs.value.length) refs.value = attached
       return
     }
     // Sent first, so the message is there when Fairy reads the answer.
@@ -479,15 +504,15 @@ function conversation(pane: string) {
 
   async function send(text: string, options: { skills?: FairySkill[]; scene?: FairyScene; rewind?: number } = {}) {
     const picked = options.skills ?? []
-    const quoted = quote.value
-    if (!text.trim() && !picked.length && !quoted) return
+    const attached = refs.value
+    if (!text.trim() && !picked.length && !attached.length) return
     if (running.value) {
       // A new conversation has no id until its turn starts; editing waits for the turn to end.
       if (current.value && options.rewind === undefined) await steer(text, picked)
       return
     }
-    items.value.push({ kind: 'user', text, ...(picked.length ? { skills: picked.map((skill) => skill.name) } : {}), ...(quoted ? { quote: quoted.label } : {}) })
-    quote.value = undefined
+    items.value.push({ kind: 'user', text, ...(picked.length ? { skills: picked.map((skill) => skill.name) } : {}), ...(attached.length ? { refs: shown(attached) } : {}) })
+    refs.value = []
     running.value = true
     adopting = !current.value
     try {
@@ -496,7 +521,7 @@ function conversation(pane: string) {
         text,
         ...(options.scene ? { scene: options.scene } : {}),
         ...(picked.length ? { skills: picked.map((skill) => skill.id) } : {}),
-        ...(quoted ? { quote: { bot: quoted.bot, channel: quoted.channel, id: quoted.id } } : {}),
+        ...(attached.length ? { refs: attached.map(wireRef) } : {}),
         ...(choice.value.provider ? { provider: choice.value.provider } : {}),
         ...(choice.value.model ? { model: choice.value.model } : {}),
         ...(choice.value.effort ? { effort: choice.value.effort } : {}),
@@ -506,6 +531,7 @@ function conversation(pane: string) {
       current.value ??= result.session
     } catch (error) {
       items.value.push({ kind: 'error', text: (error as Error).message })
+      if (!refs.value.length) refs.value = attached
       running.value = false
       adopting = false
     }
@@ -576,7 +602,7 @@ function conversation(pane: string) {
   }
 
   return {
-    pane, open, sessions, groups, current, task, items, queued, choice, approvals, streaming, running, usage, skills, commands, toolsStale, asks, quote,
+    pane, open, sessions, groups, current, task, items, queued, choice, approvals, streaming, running, usage, skills, commands, toolsStale, asks, refs, attach, detach,
     refreshSessions, updateSession, refreshPickers, load, newChat, note, ask, visibleAsks, answer, send, edit, retry, confirm, confirmTask, setApprovals, cancel, remove, bind,
   }
 }
@@ -603,6 +629,20 @@ export const FAIRY_CONVERSATION: InjectionKey<FairyConversation> = Symbol('fairy
 
 export function useConversation() {
   return inject(FAIRY_CONVERSATION, null) ?? useFairyStore()
+}
+
+/**
+ * Gives something on a page to Fairy, for the next message: to the conversation around the page, opening the
+ * dock to show it, or to the workspace's when the page shows in its panel. False when the message holds no more.
+ */
+export function giveToFairy(item: PendingRef, conversation: FairyConversation) {
+  if (embedded) {
+    window.parent.postMessage({ type: ATTACH_MESSAGE, ref: item }, location.origin)
+    return true
+  }
+  const added = conversation.attach(item)
+  if (conversation.pane === 'main') conversation.open = true
+  return added || conversation.refs.length < MAX_REFS
 }
 
 /**

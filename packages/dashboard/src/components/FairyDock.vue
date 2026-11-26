@@ -17,6 +17,7 @@ import PanelIcon from './flow/editor/PanelIcon.vue'
 import ApprovalPicker from './fairy/ApprovalPicker.vue'
 import EffortPicker from './fairy/EffortPicker.vue'
 import ModelPicker from './fairy/ModelPicker.vue'
+import { carriesRef, draggingRef, droppedRef, MAX_REFS, type PendingRef, REF_ICONS, refKey as refKeyOf } from './fairy/refs'
 
 /**
  * `mode` is set where Fairy can float or dock; the button switches between the two. In the workspace
@@ -120,21 +121,67 @@ function changeModel() {
   modelPicker.value?.open()
 }
 
-/** `/` at the start of the input lists commands; `$` after a space lists skills. */
+/** `/` at the start of the input lists commands; `$` after a space lists skills, `@` things to attach. */
 const trigger = computed(() => {
   if (paletteClosed.value) return
   const slash = /^\/([^\s/]*)$/.exec(input.value)
   if (slash) return { mode: '/' as const, query: slash[1], from: 0 }
   const dollar = /(^|\s)\$([^\s$]*)$/.exec(input.value)
   if (dollar) return { mode: '$' as const, query: dollar[2], from: dollar.index + dollar[1].length }
+  const at = /(^|\s)@([^\s@]*)$/.exec(input.value)
+  if (at) return { mode: '@' as const, query: at[2], from: at.index + at[1].length }
   return undefined
 })
+
+/** Something to send: text, a skill or an attachment. */
+const hasDraft = computed(() => !!input.value.trim() || !!picked.value.length || !!fairy.refs.length)
+
+// ---- attachments dragged in ----
+
+/** Counts enters and leaves over the input's children, so leaving one for another is not leaving the input. */
+let dragDepth = 0
+const dropping = ref(false)
+
+function onDragEnter(event: DragEvent) {
+  if (!carriesRef(event)) return
+  event.preventDefault()
+  dragDepth++
+  dropping.value = true
+}
+
+function onDragOver(event: DragEvent) {
+  if (!carriesRef(event)) return
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+}
+
+function onDragLeave(event: DragEvent) {
+  if (!carriesRef(event)) return
+  dragDepth = Math.max(0, dragDepth - 1)
+  if (!dragDepth) dropping.value = false
+}
+
+function onDrop(event: DragEvent) {
+  dragDepth = 0
+  dropping.value = false
+  draggingRef.value = false
+  const item = droppedRef(event)
+  if (!item) return
+  event.preventDefault()
+  if (!fairy.attach(item) && fairy.refs.length >= MAX_REFS) toast.warning(t('fairyRefs.full'))
+  focusInput()
+}
+
+/** The line under a chip: what kind of thing it is, and what the dashboard knew of it when it was attached. */
+function refTip(item: PendingRef) {
+  return [t(`fairyRefs.kinds.${item.kind}`), item.kind === 'log' ? t('fairyRefs.lines', item.lines.length) : '', item.detail].filter(Boolean).join(' · ')
+}
 
 watch(input, () => (paletteClosed.value = false))
 
 /** Sends a message; while Fairy works, it joins the turn and Fairy reads it before its next step. */
 async function send(text = input.value) {
-  if (!text.trim() && !picked.value.length && !fairy.quote) return
+  if (!text.trim() && !picked.value.length && !fairy.refs.length) return
   // A new conversation gets its id when its turn starts; until then there is nothing to add to.
   if (fairy.running && !fairy.current) return
   const skills = picked.value
@@ -159,7 +206,11 @@ function useRecommendation(item: Recommendation) {
 
 function onPick(item: PaletteItem) {
   const at = trigger.value
-  if (item.kind === 'skill') {
+  if (item.kind === 'ref') {
+    if (!fairy.attach(item.ref) && fairy.refs.length >= MAX_REFS) toast.warning(t('fairyRefs.full'))
+    input.value = at ? input.value.slice(0, at.from).trimEnd() : input.value
+    if (input.value) input.value += ' '
+  } else if (item.kind === 'skill') {
     if (!picked.value.some((skill) => skill.id === item.skill.id)) picked.value = [...picked.value, item.skill]
     input.value = at ? input.value.slice(0, at.from).trimEnd() : input.value
     if (input.value) input.value += ' '
@@ -224,8 +275,9 @@ function onKeydown(event: KeyboardEvent) {
     paletteClosed.value = true
     return
   }
-  if (event.key === 'Backspace' && !input.value && picked.value.length) {
-    picked.value = picked.value.slice(0, -1)
+  if (event.key === 'Backspace' && !input.value && (picked.value.length || fairy.refs.length)) {
+    if (picked.value.length) picked.value = picked.value.slice(0, -1)
+    else fairy.detach(fairy.refs.at(-1)!)
     return
   }
   if (event.key === 'Enter' && !event.shiftKey) {
@@ -463,10 +515,10 @@ onMounted(() => scrollToEnd(true))
               </div>
               <div v-else-if="item.kind === 'user'" class="msg-wrap user">
                 <div class="msg user">
-                  <div v-if="item.skills?.length" class="msg-skills">
+                  <div v-if="item.skills?.length || item.refs?.length" class="msg-skills">
+                    <span v-for="(ref, refIndex) in item.refs" :key="`ref-${refIndex}`" class="msg-skill msg-ref" :title="`${t(`fairyRefs.kinds.${ref.kind}`)} · ${ref.label}`"><span :class="REF_ICONS[ref.kind]" /><span class="msg-ref-label">{{ ref.label }}</span></span>
                     <span v-for="name in item.skills" :key="name" class="msg-skill"><span class="i-lucide-puzzle" />{{ name }}</span>
                   </div>
-                  <div v-if="item.quote" class="msg-quote"><span class="i-lucide-message-circle-more" />{{ item.quote }}</div>
                   {{ item.text }}
                 </div>
                 <div class="msg-actions">
@@ -521,10 +573,10 @@ onMounted(() => scrollToEnd(true))
         <!-- Written while Fairy works: below the work until it reads them before its next step. -->
         <div v-for="(item, index) in fairy.queued" :key="`${item.id}-${index}`" class="msg-wrap user queued">
           <div class="msg user">
-            <div v-if="item.skills?.length" class="msg-skills">
+            <div v-if="item.skills?.length || item.refs?.length" class="msg-skills">
+              <span v-for="(ref, refIndex) in item.refs" :key="`ref-${refIndex}`" class="msg-skill msg-ref" :title="`${t(`fairyRefs.kinds.${ref.kind}`)} · ${ref.label}`"><span :class="REF_ICONS[ref.kind]" /><span class="msg-ref-label">{{ ref.label }}</span></span>
               <span v-for="name in item.skills" :key="name" class="msg-skill"><span class="i-lucide-puzzle" />{{ name }}</span>
             </div>
-            <div v-if="item.quote" class="msg-quote"><span class="i-lucide-message-circle-more" />{{ item.quote }}</div>
             {{ item.text }}
           </div>
           <div class="queued-note"><span class="i-lucide-clock-3" />{{ t('fairy.queuedNote') }}</div>
@@ -558,12 +610,28 @@ onMounted(() => scrollToEnd(true))
           :scene="scenes.key"
           @pick="onPick"
         />
-        <div class="composer" :class="{ disabled: !data.providers.length }" @click="onComposerClick">
-          <div v-if="picked.length || fairy.quote" class="chips">
-            <Tag v-if="fairy.quote" size="small" type="info" closable class="quote-chip" :title="fairy.quote.label" @close="fairy.quote = undefined">
-              <template #icon><span class="i-lucide-message-circle-more" /></template>
-              {{ t('fairy.quoted', { label: fairy.quote.label }) }}
-            </Tag>
+        <div
+          class="composer"
+          :class="{ disabled: !data.providers.length, 'drop-ready': draggingRef && data.providers.length, dropping }"
+          @click="onComposerClick"
+          @dragenter="onDragEnter"
+          @dragover="onDragOver"
+          @dragleave="onDragLeave"
+          @drop="onDrop"
+        >
+          <div v-if="dropping || (draggingRef && data.providers.length)" class="drop-hint" aria-hidden="true">
+            <span class="i-lucide-paperclip" />{{ dropping ? t('fairyRefs.dropHere') : t('fairyRefs.dragHere') }}
+          </div>
+          <div v-if="picked.length || fairy.refs.length" class="chips">
+            <Tooltip v-for="item in fairy.refs" :key="refKeyOf(item)" placement="top" :show-arrow="false">
+              <template #trigger>
+                <Tag size="small" type="info" closable class="ref-chip" @close="fairy.detach(item)">
+                  <template #icon><span :class="REF_ICONS[item.kind]" /></template>
+                  <span class="ref-chip-label">{{ item.label }}</span>
+                </Tag>
+              </template>
+              {{ refTip(item) }}
+            </Tooltip>
             <Tag v-for="skill in picked" :key="skill.id" size="small" type="success" closable @close="picked = picked.filter((item) => item.id !== skill.id)">
               <template #icon><span class="i-lucide-puzzle" /></template>
               {{ skill.name }}
@@ -588,12 +656,12 @@ onMounted(() => scrollToEnd(true))
             <!-- While Fairy works: stop now, or send what you typed for it to read before its next step. -->
             <Button v-if="fairy.running" size="small" circle quaternary class="composer-stop" :aria-label="t('fairy.stop')" :title="t('fairy.stopHint')" icon="i-lucide-square" @click="fairy.cancel()" />
             <Button
-              v-if="!fairy.running || input.trim() || picked.length || fairy.quote"
+              v-if="!fairy.running || hasDraft"
               size="small"
               circle
               type="primary"
               class="composer-send"
-              :disabled="!input.trim() && !picked.length && !fairy.quote"
+              :disabled="!hasDraft"
               :aria-label="fairy.running ? t('fairy.sendRunning') : t('fairy.send')"
               :title="fairy.running ? t('fairy.sendRunning') : t('fairy.send')"
               icon="i-lucide-arrow-up"
@@ -874,23 +942,60 @@ onMounted(() => scrollToEnd(true))
   gap: 4px;
 }
 
-.quote-chip {
-  max-width: 100%;
-  overflow: hidden;
+.ref-chip {
+  max-width: 220px;
 }
 
-.msg-quote {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  opacity: 0.75;
-  padding-left: 6px;
-  margin-bottom: 4px;
-  border-left: 2px solid currentColor;
-  white-space: nowrap;
+.ref-chip-label {
+  display: inline-block;
+  max-width: 170px;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.msg-ref {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.msg-ref-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* While something is dragged that Fairy can take, the input shows it can go here; over it, it lights up. */
+.composer.drop-ready {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--primary) 60%, transparent);
+}
+
+.composer.dropping {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.drop-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--s1) 88%, transparent);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+.composer.dropping .drop-hint {
+  background: linear-gradient(var(--primary-soft), var(--primary-soft)), var(--s1);
 }
 
 .dock-palette {
@@ -1199,6 +1304,7 @@ onMounted(() => scrollToEnd(true))
 
 /* The input, its chips and its buttons in one box that grows with the text. */
 .composer {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 4px;

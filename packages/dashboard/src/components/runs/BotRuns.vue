@@ -8,6 +8,7 @@ import { isLive, useRunsStore } from '../../stores/runs'
 import type { CatalogEntry, FlowRunInfo, FlowRunStatus, LogLine, PluginRunInfo } from '../../types'
 import { formatTime, localize } from '../../utils'
 import { runColors, useRunText } from './useRunText'
+import { flowRunRef, pluginRunRef, startRefDrag } from '../fairy/refs'
 
 /**
  * A bot's runs, newest first: flow runs (open in the editor with their trace) and plugin runs, each message a plugin
@@ -176,6 +177,16 @@ function pluginDetail(run: PluginRunInfo) {
   return parts.filter(Boolean).join(' · ')
 }
 
+/** A run dragged into Fairy's input goes with the next message: named by what ran and when, with its outcome. */
+function dragFlowRun(event: DragEvent, run: FlowRunInfo) {
+  startRefDrag(event, flowRunRef({ ...run, flowName: `${run.flowName} ${formatTime(run.startedAt)}` }, [statusText(run), trigger(run), detail(run)].filter(Boolean).join(' · ')))
+}
+
+function dragPluginRun(event: DragEvent, run: PluginRunInfo) {
+  const said = t('runs.saidBy', { name: run.user.name || run.user.id, text: run.text })
+  startRefDrag(event, pluginRunRef(run, `${pluginName(run.plugin)} ${formatTime(run.startedAt)}`, [pluginState(run), said, pluginDetail(run)].filter(Boolean).join(' · ')))
+}
+
 function stop(run: FlowRunInfo) {
   dialog.warning({
     title: t('runs.stopTitle'),
@@ -237,6 +248,8 @@ async function toggleLines(run: PluginRunInfo) {
             :class="{ live: isLive(item.run) }"
             :style="{ '--state': runColors[item.run.status] }"
             tabindex="0"
+            draggable="true"
+            @dragstart="dragFlowRun($event, item.run)"
             @click="open(item.run)"
             @keyup.enter="open(item.run)"
           >
@@ -270,7 +283,9 @@ async function toggleLines(run: PluginRunInfo) {
             :class="{ open: expanded === item.run.id }"
             :style="{ '--state': runColors[item.run.status] }"
             tabindex="0"
+            draggable="true"
             :aria-expanded="expanded === item.run.id"
+            @dragstart="dragPluginRun($event, item.run)"
             @click="toggleLines(item.run)"
             @keyup.enter="toggleLines(item.run)"
           >

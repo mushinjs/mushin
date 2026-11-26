@@ -10,8 +10,10 @@ import {
 } from './settings'
 import { BUILTIN_ROLES, type FairyRole, type RoleDefinition, roleAllows, roleCalls, rolePrompt, type TaskReport, taskMessage } from './roles'
 import { type FairySkill, BUILTIN_SKILLS, type SkillDefinition, skillFields, skillInput } from './skills'
+import { type FairyRef, MAX_REFS, missingRef, readRef, refInput, refTags, type ShownRef } from './refs'
 
 export * from './prompt'
+export * from './refs'
 export * from './roles'
 export * from './settings'
 export * from './skills'
@@ -62,6 +64,8 @@ export type FairyMessage = LlmMessage & {
   skills?: string[]
   /** A chat quoted into the message, as the dashboard shows it: who said what, and where. */
   quote?: QuotedChat
+  /** What the user attached to the message (bots, flows, runs, log lines, …), as the message shows it. */
+  refs?: ShownRef[]
   at: number
 }
 
@@ -128,8 +132,10 @@ export interface SendOptions {
   scene?: SceneInfo
   /** Ids of skills whose instructions go into this message. */
   skills?: string[]
-  /** A message of a bot's chat to quote, with a few messages around it. */
+  /** A message of a bot's chat to quote, with a few messages around it; the same as a `chat` reference. */
   quote?: { bot: string; channel: string; id: string; before?: number; after?: number }
+  /** Things attached for Fairy to read with the message: bots, plugins, flows, runs, log lines, chat messages. */
+  refs?: FairyRef[]
   /** Provider or profile, model and reasoning effort for this message; Fairy's settings when omitted. */
   provider?: string
   model?: string
@@ -218,6 +224,7 @@ interface Queued {
   content: string
   skills?: string[]
   quote?: QuotedChat
+  refs?: ShownRef[]
   at: number
 }
 
@@ -857,6 +864,27 @@ export class Fairy extends Service {
   }
 
   /**
+   * What the user attached to a message, read now: the blocks the model reads, the references the message shows,
+   * and the first quoted chat. One that cannot be read says why instead of failing the message.
+   */
+  private async attachments(options: SendOptions) {
+    const all: FairyRef[] = [...(options.quote ? [{ kind: 'chat' as const, ...options.quote }] : []), ...options.refs ?? []].slice(0, MAX_REFS)
+    let quote: QuotedChat | undefined
+    const read = await Promise.all(all.map(async (ref) => {
+      try {
+        if (ref.kind !== 'chat') return await readRef(this.home, ref)
+        const chat = await this.quoteChat(ref)
+        quote ??= chat
+        const focus = chat.lines.find((line) => line.id === chat.focus)
+        return { block: quoteBlock(chat), shown: { kind: 'chat', id: ref.id, label: ref.label || (focus ? `${focus.user}：${focus.text.slice(0, 40)}` : chat.channel.name ?? chat.channel.id) } as ShownRef }
+      } catch (error) {
+        return missingRef(ref, error)
+      }
+    }))
+    return { blocks: read.map((item) => item.block), refs: read.map((item) => item.shown), quote }
+  }
+
+  /**
    * Starts a turn and returns once it finishes. Progress streams as `fairy/event` events. While a turn of the
    * conversation runs, the message joins it instead: Fairy reads it before its next step, and so does a helper
    * at work; an approval it waits for counts as declined. That call returns at once with `queued`.
@@ -889,18 +917,19 @@ export class Fairy extends Service {
     this.running.set(session.id, running)
     this.live.set(session.id, session)
     const skills = options.skills?.length ? await Promise.all(options.skills.map((id) => this.skill(id))) : []
-    if (!session.title) session.title = (text || skills.map((skill) => skill.name).join(', ')).replace(/\s+/g, ' ').slice(0, 48)
+    const attached = await this.attachments(options)
+    if (!session.title) session.title = (text || [...skills.map((skill) => skill.name), ...attached.refs.map((ref) => ref.label)].join(', ')).replace(/\s+/g, ' ').slice(0, 48)
     if (!session.messages.length && options.scene) {
       session.scene = { key: options.scene.key, ...(options.scene.label ? { label: options.scene.label } : {}), ...(options.page ? { page: options.page } : {}) }
     }
     session.tags = [...new Set([...session.tags ?? [], ...turnTags(text, options, skills)])]
-    const quote = options.quote ? await this.quoteChat(options.quote) : undefined
     session.messages.push({
       role: 'user',
-      content: [contextNote(this.turnContext(options.page, options.scene)), ...skills.map(skillBlock), quote ? quoteBlock(quote) : '', text].filter(Boolean).join('\n\n'),
+      content: [contextNote(this.turnContext(options.page, options.scene)), ...skills.map(skillBlock), ...attached.blocks, text].filter(Boolean).join('\n\n'),
       display: text,
       ...(skills.length ? { skills: skills.map((skill) => skill.name) } : {}),
-      ...(quote ? { quote } : {}),
+      ...(attached.quote ? { quote: attached.quote } : {}),
+      ...(attached.refs.length ? { refs: attached.refs } : {}),
       at: Date.now(),
     })
     await this.save(session)
@@ -1163,7 +1192,7 @@ export class Fairy extends Service {
    */
   private async steer(sessionId: string, text: string, options: SendOptions) {
     const skills = options.skills?.length ? await Promise.all(options.skills.map((id) => this.skill(id))) : []
-    const quote = options.quote ? await this.quoteChat(options.quote) : undefined
+    const attached = await this.attachments(options)
     const running = this.running.get(sessionId)
     if (!running) return undefined
     const id = randomId()
@@ -1171,9 +1200,10 @@ export class Fairy extends Service {
     const item = (note: string): Queued => ({
       id,
       text,
-      content: [note, ...skills.map(skillBlock), quote ? quoteBlock(quote) : '', text].filter(Boolean).join('\n\n'),
+      content: [note, ...skills.map(skillBlock), ...attached.blocks, text].filter(Boolean).join('\n\n'),
       ...(skills.length ? { skills: skills.map((skill) => skill.name) } : {}),
-      ...(quote ? { quote } : {}),
+      ...(attached.quote ? { quote: attached.quote } : {}),
+      ...(attached.refs.length ? { refs: attached.refs } : {}),
       at: Date.now(),
     })
     running.queue.push(item(steerNote(helpers.length ? 'helper-told' : 'own')))
@@ -1196,6 +1226,7 @@ export class Fairy extends Service {
         display: item.text,
         ...(item.skills ? { skills: item.skills } : {}),
         ...(item.quote ? { quote: item.quote } : {}),
+        ...(item.refs ? { refs: item.refs } : {}),
         at: item.at,
       })
     }
@@ -1329,12 +1360,13 @@ export class Fairy extends Service {
           before: z.number().int().min(0).max(30).optional(),
           after: z.number().int().min(0).max(10).optional(),
         }).optional().describe('A message of a bot\'s chat to quote, with a few messages around it'),
+        refs: z.array(refInput).max(MAX_REFS).optional().describe('Things to attach for Fairy to read: bots, plugins, flows, runs, log lines, chat messages'),
         provider: z.string().optional().describe('Provider or profile id for this message; Fairy\'s setting when omitted'),
         model: z.string().optional().describe('Model for this message; Fairy\'s setting or the provider\'s default when omitted'),
         effort: z.enum(EFFORTS as [Effort, ...Effort[]]).optional().describe('Reasoning effort for this message'),
         rewind: z.number().int().min(0).optional().describe('Edit: drop the conversation from this user message on (0 is the first) and send text in its place'),
         approvals: z.enum(APPROVAL_MODES).optional().describe('When Fairy asks before acting: ask (before any change), default, auto (only before lasting harm), full (never)'),
-      }).refine((input) => input.text.trim() || input.skills?.length, 'Send some text or pick a skill'),
+      }).refine((input) => input.text.trim() || input.skills?.length || input.refs?.length || input.quote, 'Send some text, pick a skill or attach something'),
       handler: ({ session, text, ...options }, caller) => this.send(session, text, { client: caller.client, ...options }),
     })
 
@@ -1611,6 +1643,7 @@ function turnTags(text: string, options: SendOptions, skills: FairySkill[]) {
   if (options.scene) tags.push(`scene:${options.scene.key}`)
   if (options.scene?.resource) tags.push(`resource:${options.scene.resource}`)
   for (const skill of skills) tags.push(`skill:${skill.id}`)
+  tags.push(...refTags(options.refs ?? []))
   const command = /^\s*\/([\p{L}\p{N}_-]+)/u.exec(text)
   if (command) tags.push(`command:${command[1]}`)
   return tags
@@ -1661,7 +1694,7 @@ function parseReport(input: any): TaskReport {
 }
 
 function stripMeta(message: FairyMessage): LlmMessage {
-  const { display, skills, quote, at, ...rest } = message
+  const { display, skills, quote, refs, at, ...rest } = message
   return rest as LlmMessage
 }
 

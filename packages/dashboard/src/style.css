@@ -214,3 +214,27 @@ html[data-theme='dark'] img[src='/logo.png'] {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* The picture under the pointer while something is dragged to Fairy: the chip it becomes (see fairy/refs.ts). */
+.ref-drag-chip {
+  position: fixed;
+  top: -100px;
+  left: -100px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 320px;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, transparent);
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--fg);
+  font-size: 13px;
+  white-space: nowrap;
+  box-shadow: var(--shadow-pop);
+}
+
+.ref-drag-chip > span {
+  color: var(--primary);
+  font-size: 14px;
+}

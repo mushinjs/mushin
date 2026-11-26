@@ -9,6 +9,7 @@ import EmptyState from '../components/EmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { nodeIcon } from '../components/flow/icons'
 import IconAction from '../components/IconAction.vue'
+import { flowRef, startRefDrag } from '../components/fairy/refs'
 import { flowTemplates } from '../flow'
 import { useDataStore } from '../stores/data'
 import type { FlowDoc, FlowSummary } from '../types'
@@ -358,7 +359,12 @@ function tagsOf(flow: FlowSummary) {
   return tags
 }
 
-const rowProps = (flow: FlowSummary) => ({ class: ['flow-row', { off: !flow.enabled }], onClick: () => open(flow) })
+const rowProps = (flow: FlowSummary) => ({
+  class: ['flow-row', { off: !flow.enabled }],
+  draggable: true,
+  onClick: () => open(flow),
+  onDragstart: (event: DragEvent) => startRefDrag(event, flowRef(flow)),
+})
 
 // ---- creating, switching and deleting ----
 
@@ -522,6 +528,8 @@ function remove(flow: FlowSummary) {
               :class="{ off: !flow.enabled }"
               tabindex="0"
               :aria-label="flow.name"
+              draggable="true"
+              @dragstart="startRefDrag($event, flowRef(flow))"
               @click="open(flow)"
               @keyup.enter.self="open(flow)"
             >

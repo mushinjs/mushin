@@ -9,6 +9,7 @@ import BotWizard from '../components/BotWizard.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
 import BotActivity from '../components/runs/BotActivity.vue'
+import { botRef, startRefDrag } from '../components/fairy/refs'
 import { avatarColor, initial } from '../botAvatar'
 import { useDataStore } from '../stores/data'
 import type { AppPlugin, Bot, CatalogEntry } from '../types'
@@ -148,6 +149,8 @@ const open = (bot: Bot) => router.push(`/bots/${bot.id}`)
         :class="{ stopped: !bot.enabled }"
         tabindex="0"
         :aria-label="bot.name"
+        draggable="true"
+        @dragstart="startRefDrag($event, botRef(bot, `${stateLabel(stateOf(bot))} · ${account(bot)}`))"
         @click="open(bot)"
         @keyup.enter.self="open(bot)"
       >
