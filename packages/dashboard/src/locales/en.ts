@@ -2090,6 +2090,18 @@ export default {
     setDefault: 'Set as Fairy default',
     savedDefault: 'Fairy now uses {model} by default',
   },
+  fairyPeek: {
+    idle: 'Idle',
+    idleAgo: 'Idle · {time} ago',
+    messages: '{n} message | {n} messages',
+    failed: 'Could not load this conversation',
+    you: 'You',
+    empty: 'Nothing said yet',
+    noWords: 'Working, nothing said yet',
+    steps: 'Last steps',
+    waiting: 'Waiting for you to approve: {action}',
+    earlier: '{n} earlier call not shown | {n} earlier calls not shown',
+  },
   fairyRefs: {
     kinds: { bot: 'Bot', plugin: 'Plugin', flow: 'Flow', run: 'Run', log: 'Log', chat: 'Chat message' },
     pluginKind: { app: 'App plugin', bot: 'Bot plugin' },

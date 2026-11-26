@@ -2091,6 +2091,18 @@ const zhCN: typeof en = {
     setDefault: '设为 Fairy 默认',
     savedDefault: 'Fairy 默认改用 {model}',
   },
+  fairyPeek: {
+    idle: '空闲',
+    idleAgo: '空闲 · {time}前',
+    messages: '{n} 条消息',
+    failed: '读不到这个对话',
+    you: '你',
+    empty: '还没有消息',
+    noWords: '正在做，还没说话',
+    steps: '最近几步',
+    waiting: '等你批准：{action}',
+    earlier: '更早的 {n} 次没有列出',
+  },
   fairyRefs: {
     kinds: { bot: '机器人', plugin: '插件', flow: '流程', run: '运行记录', log: '日志', chat: '聊天消息' },
     pluginKind: { app: '应用插件', bot: '机器人插件' },

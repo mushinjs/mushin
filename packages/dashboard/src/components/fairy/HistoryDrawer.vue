@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Drawer, Empty, Input, Select, Spin, Tag } from '@mushinjs/ui'
+import { Drawer, Empty, HoverCard, Input, Select, Spin, Tag } from '@mushinjs/ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
@@ -7,6 +7,7 @@ import { useConversation } from '../../stores/fairy'
 import { useFairyActivityStore } from '../../stores/fairyActivity'
 import type { FairySessionSummary } from '../../types'
 import { formatTime } from '../../utils'
+import SessionPeek from './SessionPeek.vue'
 
 const show = defineModel<boolean>('show', { required: true })
 
@@ -85,26 +86,30 @@ function rowTags(session: FairySessionSummary) {
       </div>
       <Spin :show="loading" size="small">
         <Empty v-if="!results.length && !loading" :description="t('fairyHistory.empty')" class="empty" />
-        <button
-          v-for="session in results"
-          :key="session.id"
-          type="button"
-          class="item"
-          :class="{ current: session.id === fairy.current }"
-          @click="openSession(session.id)"
-        >
-          <div class="item-head">
-            <span class="title">{{ session.title || t('fairy.untitled') }}</span>
-            <span class="time">{{ formatTime(session.updatedAt) }}</span>
-          </div>
-          <div v-if="session.snippet" class="snippet">{{ session.snippet }}</div>
-          <div class="item-tags">
-            <Tag v-if="activity.of(session.id)?.waiting" size="tiny" type="warning">{{ t(`fairyActivity.${activity.of(session.id)!.waiting}`) }}</Tag>
-            <Tag v-else-if="activity.of(session.id) ?? session.running" size="tiny" type="info">{{ t('fairyHistory.status.running') }}</Tag>
-            <Tag v-if="session.scene" size="tiny">{{ session.scene.label ?? tagLabel(`scene:${session.scene.key}`) }}</Tag>
-            <Tag v-for="tag in rowTags(session)" :key="tag" size="tiny" type="success">{{ tagLabel(tag) }}</Tag>
-          </div>
-        </button>
+        <!-- Resting on one shows its last messages and steps. -->
+        <HoverCard v-for="session in results" :key="session.id" placement="left" align="start" :width="340" :delay="450" :padded="false">
+          <template #trigger>
+            <button
+              type="button"
+              class="item"
+              :class="{ current: session.id === fairy.current }"
+              @click="openSession(session.id)"
+            >
+              <div class="item-head">
+                <span class="title">{{ session.title || t('fairy.untitled') }}</span>
+                <span class="time">{{ formatTime(session.updatedAt) }}</span>
+              </div>
+              <div v-if="session.snippet" class="snippet">{{ session.snippet }}</div>
+              <div class="item-tags">
+                <Tag v-if="activity.of(session.id)?.waiting" size="tiny" type="warning">{{ t(`fairyActivity.${activity.of(session.id)!.waiting}`) }}</Tag>
+                <Tag v-else-if="activity.of(session.id) ?? session.running" size="tiny" type="info">{{ t('fairyHistory.status.running') }}</Tag>
+                <Tag v-if="session.scene" size="tiny">{{ session.scene.label ?? tagLabel(`scene:${session.scene.key}`) }}</Tag>
+                <Tag v-for="tag in rowTags(session)" :key="tag" size="tiny" type="success">{{ tagLabel(tag) }}</Tag>
+              </div>
+            </button>
+          </template>
+          <SessionPeek :session="session.id" />
+        </HoverCard>
       </Spin>
     </div>
   </Drawer>

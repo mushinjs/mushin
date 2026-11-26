@@ -84,6 +84,27 @@ export function unwrapCall(action: string, input: unknown): { action: string; in
   return { action: value.name.includes('.') ? value.name : value.name.replaceAll('__', '.'), input: value.input ?? {} }
 }
 
+/**
+ * What a call works on, for its row: what a command is for (as Fairy put it), else the command, a path, an address
+ * or what is typed, else the thing it names. `code` is set when it reads as code rather than words.
+ */
+export function callSummary(action: string, input: unknown, known: Known): { text: string; code: boolean } {
+  const value = (input ?? {}) as { purpose?: unknown; command?: unknown; path?: unknown; url?: unknown; text?: unknown; key?: unknown; ref?: unknown; query?: unknown }
+  if (typeof value.purpose === 'string' && value.purpose.trim()) return { text: value.purpose.trim(), code: false }
+  const code = /^(terminal|files|browser)\./.test(action)
+  if (typeof value.command === 'string') return { text: `$ ${value.command.split('\n')[0]}`, code }
+  if (action === 'files.search' && typeof value.query === 'string') return { text: `“${value.query}”`, code }
+  if (typeof value.path === 'string' && /^(files|terminal)\./.test(action)) return { text: value.path, code }
+  if (action.startsWith('browser.')) {
+    if (typeof value.url === 'string') return { text: value.url, code }
+    if (typeof value.text === 'string') return { text: `"${value.text.split('\n')[0]}"`, code }
+    if (typeof value.key === 'string') return { text: value.key, code }
+    if (typeof value.ref === 'string') return { text: value.ref, code }
+  }
+  if (action === 'ui.ask') return { text: '', code: false }
+  return { text: actionTarget(action, input, known), code: false }
+}
+
 /** Which way a record is drawn when opened. */
 export type RecordKind = 'terminal' | 'read' | 'edit' | 'write' | 'list' | 'grep' | 'browser' | 'ask' | 'tools' | 'plain'
 
