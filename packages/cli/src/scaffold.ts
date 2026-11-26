@@ -1,8 +1,7 @@
-import { spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { type InstanceConfig, readJson, writeJsonAtomic } from '@mushinjs/core'
+import { type InstanceConfig, readJson, upgradeTag as coreUpgradeTag, writeJsonAtomic } from '@mushinjs/core'
 import { defaultConfig } from './start'
 
 /** The version of the CLI, which every `@mushinjs/*` package shares. */
@@ -108,36 +107,10 @@ export async function newPlugin(baseDir: string, name: string) {
   return { dir, package: pkg, added }
 }
 
-export type PackageManager = 'npm' | 'pnpm'
-
-/** The package manager an app uses, from its lock file. */
-export function appPackageManager(baseDir: string): PackageManager {
-  return existsSync(join(baseDir, 'pnpm-lock.yaml')) ? 'pnpm' : 'npm'
-}
-
-/** The `@mushinjs/*` packages an app depends on. */
-export async function appPackages(baseDir: string) {
-  const pkg = await readJson<{ dependencies?: Record<string, string>; devDependencies?: Record<string, string> }>(join(baseDir, 'package.json'))
-  if (!pkg) return undefined
-  return Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).filter((name) => name.startsWith('@mushinjs/')).sort()
-}
+// Installing and upgrading live in core, where the supervisor and the update actions use them too.
+export { appPackageManager, appPackages, type PackageManager, run, upgradeCommand } from '@mushinjs/core'
 
 /** The dist-tag an upgrade follows: `next` for a preview, `latest` for a release. */
 export function upgradeTag(version = CLI_VERSION) {
-  return version.includes('-next') ? 'next' : 'latest'
-}
-
-/** The command that installs `packages` at `tag`. */
-export function upgradeCommand(packageManager: PackageManager, packages: string[], tag: string) {
-  const specs = packages.map((name) => `${name}@${tag}`)
-  return packageManager === 'pnpm' ? ['pnpm', ['add', ...specs]] as const : ['npm', ['install', ...specs]] as const
-}
-
-export function run(command: string, args: readonly string[], cwd: string) {
-  return new Promise<void>((done, reject) => {
-    // npm and pnpm are .cmd files on Windows, which only start through a shell.
-    const child = spawn(command, args, { cwd, stdio: 'inherit', shell: process.platform === 'win32' && command !== process.execPath })
-    child.on('error', reject)
-    child.on('exit', (code) => (code ? reject(new Error(`${command} ${args.join(' ')} exited with ${code}`)) : done()))
-  })
+  return coreUpgradeTag(version)
 }
