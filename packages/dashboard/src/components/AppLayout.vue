@@ -17,6 +17,7 @@ import FairyDock from './FairyDock.vue'
 import GlobalSearch from './GlobalSearch.vue'
 import type { NavGroup, NavItem } from './nav'
 import SideNav from './SideNav.vue'
+import { updateCount } from '../updates'
 
 /** `embedded`: the page alone, as the Fairy workspace's panel shows it; no sidebar, top bar or Fairy. */
 const props = defineProps<{ embedded?: boolean }>()
@@ -250,7 +251,7 @@ function onAccount(key: string) {
     </main>
   </div>
   <div v-else class="layout">
-    <SideNav v-model:collapsed="collapsed" :groups="navGroups" :active="activeKey" />
+    <SideNav v-model:collapsed="collapsed" :groups="navGroups" :active="activeKey" :badges="{ '/plugins': updateCount }" />
 
     <div class="main">
       <header class="topbar">

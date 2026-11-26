@@ -8,12 +8,15 @@ import AdapterIcon from '../components/AdapterIcon.vue'
 import IconAction from '../components/IconAction.vue'
 import PageHeader from '../components/PageHeader.vue'
 import PluginPanel, { type Dependent } from '../components/plugins/PluginPanel.vue'
+import UpdateBanner from '../components/updates/UpdateBanner.vue'
+import UpdateDialog from '../components/updates/UpdateDialog.vue'
 import { configPreview } from '../plugins/config'
 import { type GroupKey, groupOf, groupPlugins, relationsOf, toggleImpact } from '../plugins/groups'
 import { GROUP_ICONS, PANEL_SECTIONS, type PanelSection, type PluginItem } from '../plugins/item'
 import { prefs } from '../prefs'
 import { useDataStore } from '../stores/data'
 import type { AppPlugin, CatalogEntry, DependencyPlan, FlowSummary, PluginDependencies, PluginProvides, ProjectChatPlugin } from '../types'
+import { pluginUpdate } from '../updates'
 import { localize } from '../utils'
 
 const { t, locale } = useI18n()
@@ -183,23 +186,36 @@ const shortList = (names: string[], limit = 6) => list(names.slice(0, limit)) + 
 
 // ---- search, filters and groups ----
 
-type Filter = 'all' | 'on' | 'problem' | 'off'
+type Filter = 'all' | 'on' | 'problem' | 'off' | 'updates'
 const query = ref('')
 const filter = ref<Filter>('all')
+
+/** A newer version of a third-party plugin from npm; official plugins update with Mushin.js. */
+const updateOf = (item: PluginItem) => (item.package.startsWith('@mushinjs/') || item.entry?.local ? undefined : pluginUpdate(item.package)?.available ? pluginUpdate(item.package) : undefined)
+
+// The update dialog, opened from the banner (everything) or a plugin's panel (that plugin).
+const updateOpen = ref(false)
+const updatePreset = ref<string[]>()
+function openUpdate(preset?: string[]) {
+  updatePreset.value = preset
+  updateOpen.value = true
+}
 
 const counts = computed(() => ({
   all: items.value.length,
   on: items.value.filter((item) => item.enabled).length,
   problem: items.value.filter((item) => item.problem).length,
   off: items.value.filter((item) => !item.enabled).length,
+  updates: items.value.filter((item) => updateOf(item)).length,
 }))
 
-const filters = computed(() => (['all', 'on', 'problem', 'off'] as const).filter((key) => key === 'all' || counts.value[key] > 0 || filter.value === key))
+const filters = computed(() => (['all', 'on', 'problem', 'off', 'updates'] as const).filter((key) => key === 'all' || counts.value[key] > 0 || filter.value === key))
 
 function matches(item: PluginItem) {
   if (filter.value === 'on' && !item.enabled) return false
   if (filter.value === 'off' && item.enabled) return false
   if (filter.value === 'problem' && !item.problem) return false
+  if (filter.value === 'updates' && !updateOf(item)) return false
   const text = query.value.trim().toLowerCase()
   return !text || [item.package, item.name, item.description].some((value) => value.toLowerCase().includes(text))
 }
@@ -578,6 +594,8 @@ async function saveFolders() {
       </Button>
     </PageHeader>
 
+    <UpdateBanner @update="openUpdate()" />
+
     <div class="toolbar">
       <Input v-model:value="query" clearable :placeholder="t('plugins.search')" class="search">
         <template #prefix><span class="i-lucide-search" /></template>
@@ -593,7 +611,8 @@ async function saveFolders() {
           :aria-checked="filter === key"
           @click="filter = key"
         >
-          <span v-if="key !== 'all'" class="dot" :class="{ ok: key === 'on', bad: key === 'problem' }" />
+          <span v-if="key === 'updates'" class="i-lucide-circle-arrow-up chip-icon" />
+          <span v-else-if="key !== 'all'" class="dot" :class="{ ok: key === 'on', bad: key === 'problem' }" />
           {{ t(`plugins.filter.${key}`) }}
           <span class="count">{{ counts[key] }}</span>
         </button>
@@ -653,6 +672,7 @@ async function saveFolders() {
                   {{ t('plugins.baseServiceHint') }}
                 </Tooltip>
                 <span v-if="item.entry?.local" class="tag warn">{{ t('plugins.local') }}</span>
+                <button v-if="updateOf(item)" type="button" class="tag update mono" @click.stop="open(item, 'updates')">{{ updateOf(item)!.current }} → {{ updateOf(item)!.available }}</button>
                 <Tooltip v-if="stateOf(item)" :disabled="!item.error" :max-width="360">
                   <template #trigger><span class="pill" :class="stateOf(item)!.cls"><span class="dot" />{{ stateOf(item)!.text }}</span></template>
                   {{ item.error }}
@@ -729,6 +749,7 @@ async function saveFolders() {
         :dependents="dependentsOf(openItem)"
         :bots="data.bots"
         :flows="flows"
+        :update="pluginUpdate(openItem.package)"
         @update:section="setSection"
         @toggle="(value) => toggle(openItem!, value)"
         @reload="reload(openItem!)"
@@ -738,8 +759,11 @@ async function saveFolders() {
         @hover-dep="(pkg) => (pinged = pkg)"
         @enable-missing="enableMissing(openItem!)"
         @saved="refresh()"
+        @update="(preset) => openUpdate(preset)"
       />
     </Drawer>
+
+    <UpdateDialog v-model:show="updateOpen" :preset="updatePreset" />
 
     <Modal :show="foldersOpen" :title="t('plugins.folders.title')" :width="600" @update:show="(value: boolean) => !value && (foldersOpen = false)">
       <p class="faint folders-lead">{{ t('plugins.folders.lead') }}</p>
@@ -1125,6 +1149,19 @@ async function saveFolders() {
 
 .row:hover .tag {
   background: var(--s1);
+}
+
+.tag.update {
+  border: none;
+  color: var(--primary);
+  background: var(--primary-soft);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.chip-icon {
+  font-size: 13px;
+  color: var(--primary);
 }
 
 .tag.warn {
