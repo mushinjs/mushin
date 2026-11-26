@@ -66,5 +66,24 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          pnpm changeset publish
+          pnpm changeset publish | tee publish.log
           git push origin --tags
+
+      # A release of Mushin.js (the CLI carries its version) gets a GitHub Release whose notes collect that version's
+      # changes from every changelog; the dashboard's update banner shows them. Nothing published, no release.
+      - name: Create the GitHub Release
+        if: steps.changesets.outputs.hasChangesets == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./packages/cli/package.json').version")
+          if ! grep -q "New tag:.*@mushinjs/cli@$VERSION" publish.log; then
+            echo "Mushin.js $VERSION was not published now, no release."
+            exit 0
+          fi
+          if gh release view "v$VERSION" > /dev/null 2>&1; then
+            echo "Release v$VERSION already exists."
+            exit 0
+          fi
+          pnpm exec tsx scripts/release-notes.ts "$VERSION" > release-notes.md
+          gh release create "v$VERSION" --title "Mushin.js $VERSION" --notes-file release-notes.md --target "$GITHUB_SHA"
