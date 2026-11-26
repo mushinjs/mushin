@@ -108,7 +108,8 @@ if (values.help) {
       supervisor()?.send({ type: 'ready', version: CLI_VERSION }).catch(() => {})
     },
   })
-  supervisor()?.on('shutdown', () => shutdown())
+  // Asked by the supervisor, or it went away; Ctrl+C reaches this process as well, so only the first one counts.
+  supervisor()?.on('shutdown', () => !stopping && shutdown())
   // Without a server nothing keeps the process alive, so it would exit silently; say why instead.
   const watchdog = setInterval(() => {
     if (signedIn) return clearInterval(watchdog)

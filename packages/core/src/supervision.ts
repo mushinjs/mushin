@@ -64,11 +64,21 @@ export class SupervisorLink extends EventEmitter<{ shutdown: [] }> {
       // The supervisor going away must not keep the app alive or crash it.
       socket.unref()
       readLines(socket, (message: SupervisorMessage) => {
-        if (message?.type === 'shutdown') this.emit('shutdown')
+        if (message?.type === 'shutdown') this.stop()
       })
+      // A supervisor that is gone (killed, its window closed) leaves nobody to stop this app: it stops too.
+      socket.on('close', () => this.stop())
       this.socket = socket
     })
     this.ready.catch(() => {})
+  }
+
+  private stopped = false
+
+  private stop() {
+    if (this.stopped) return
+    this.stopped = true
+    this.emit('shutdown')
   }
 
   async send(message: ChildMessage) {
