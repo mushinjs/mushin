@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Spin, Tag, useToast } from '@mushinjs/ui'
+import { Button, HoverCard, Spin, Tag, useToast } from '@mushinjs/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -9,8 +9,10 @@ import { useDataStore } from '../../stores/data'
 import { type PanelView, workspace } from '../../stores/workspace'
 import type { FairyTaskReport } from '../../types'
 import AskCard from './AskCard.vue'
-import { actionLabel, actionTarget, askAnswer } from './records'
+import { actionLabel, askAnswer, callSummary } from './records'
+import SessionPeek from './SessionPeek.vue'
 import ToolDetail from './ToolDetail.vue'
+import ToolPeek from './ToolPeek.vue'
 
 /**
  * One tool call of a Fairy reply: what it did in words, how it went, and what went in and came out on
@@ -57,30 +59,17 @@ const taskState = computed(() => {
 /** The last few things the helper did, newest last. */
 const steps = computed(() => props.item.task?.steps.slice(-4) ?? [])
 
-/** What a command, file or browser tool works on, shown in its row: `$ ls -la`, a path, an address or what is typed. */
 /** What a command is for, in words, as Fairy put it; shown instead of the command, which can open below. */
 const purpose = computed(() => {
   const value = (props.item.input as { purpose?: unknown } | undefined)?.purpose
   return typeof value === 'string' && value.trim() ? value.trim() : ''
 })
 
-const summary = computed(() => {
-  const value = props.item.input as { command?: unknown; path?: unknown; url?: unknown; text?: unknown; key?: unknown; ref?: unknown } | undefined
-  if (purpose.value) return purpose.value
-  if (typeof value?.command === 'string') return `$ ${value.command.split('\n')[0]}`
-  if (props.item.action === 'files.search' && typeof (value as { query?: unknown })?.query === 'string') return `“${(value as { query: string }).query}”`
-  if (typeof value?.path === 'string' && /^(files|terminal)\./.test(props.item.action)) return value.path
-  if (props.item.action.startsWith('browser.')) {
-    if (typeof value?.url === 'string') return value.url
-    if (typeof value?.text === 'string') return `"${value.text.split('\n')[0]}"`
-    if (typeof value?.key === 'string') return value.key
-    if (typeof value?.ref === 'string') return value.ref
-  }
-  if (props.item.action === 'ui.ask') return ''
-  return actionTarget(props.item.action, props.item.input, data)
-})
+/** What the call works on, in its row: `$ ls -la`, a path, an address, what is typed, or the thing it names. */
+const summarized = computed(() => callSummary(props.item.action, props.item.input, data))
+const summary = computed(() => summarized.value.text)
 /** Commands, paths and addresses read as code; names and purposes as words. */
-const summaryCode = computed(() => !purpose.value && /^(terminal|files|browser)\./.test(props.item.action))
+const summaryCode = computed(() => summarized.value.code)
 /** The action and what it works on, for "Fairy wants to …". */
 const confirmAction = computed(() => {
   if (purpose.value) return t('fairyRecord.withPurpose', { action: label.value, purpose: purpose.value })
@@ -180,15 +169,28 @@ const reason = computed(() => {
 
 <template>
   <div v-if="isTask" class="tool task" :class="taskState">
-    <button class="tool-row" type="button" @click="emit('toggle')">
-      <Spin v-if="taskState === 'running'" :size="14" />
-      <span v-else-if="taskState === 'done'" class="i-lucide-circle-check" color="var(--ok)" />
-      <span v-else-if="taskState === 'confirm' || taskState === 'blocked'" class="i-lucide-hand" color="var(--warn)" />
-      <span v-else class="i-lucide-circle-x" color="var(--bad)" />
-      <span class="task-role">{{ roleName }}</span>
-      <span class="tool-name task-text">{{ input.task }}</span>
-      <span class="tool-state">{{ t(`fairyTask.status.${taskState}`) }}</span>
-    </button>
+    <!-- Resting on the task shows the helper's last words, its last steps and what it waits on. -->
+    <HoverCard :disabled="!item.task?.session" placement="top" align="start" :width="360" :delay="400" :padded="false">
+      <template #trigger>
+        <button class="tool-row" type="button" @click="emit('toggle')">
+          <Spin v-if="taskState === 'running'" :size="14" />
+          <span v-else-if="taskState === 'done'" class="i-lucide-circle-check" color="var(--ok)" />
+          <span v-else-if="taskState === 'confirm' || taskState === 'blocked'" class="i-lucide-hand" color="var(--warn)" />
+          <span v-else class="i-lucide-circle-x" color="var(--bad)" />
+          <span class="task-role">{{ roleName }}</span>
+          <span class="tool-name task-text">{{ input.task }}</span>
+          <span class="tool-state">{{ t(`fairyTask.status.${taskState}`) }}</span>
+        </button>
+      </template>
+      <SessionPeek v-if="item.task?.session" :session="item.task.session" variant="task">
+        <template #head>
+          <div class="task-peek">
+            <span class="task-role">{{ roleName }}</span>
+            <p class="task-peek-text">{{ input.task }}</p>
+          </div>
+        </template>
+      </SessionPeek>
+    </HoverCard>
     <!-- The whole task, when opened; the row shows its first line. -->
     <p v-if="expanded" class="task-full">{{ input.task }}</p>
     <ul v-if="taskState === 'running' && steps.length" class="task-steps">
@@ -245,27 +247,33 @@ const reason = computed(() => {
   </div>
   <AskCard v-else-if="ask" :ask="ask" @answer="(result) => emit('answer', result)" />
   <div v-else class="tool" :class="[item.state, { open: expanded }]">
-    <button class="tool-row" type="button" @click="emit('toggle')">
-      <Spin v-if="item.state === 'running'" :size="14" />
-      <span v-else-if="question && item.state === 'ok'" class="i-lucide-circle-help tool-icon" :class="{ answered: question.answered }" />
-      <span v-else-if="exit" class="i-lucide-circle-alert tool-icon" :class="exit.tone" />
-      <span v-else-if="item.state === 'ok'" class="i-lucide-circle-check tool-icon" />
-      <span v-else-if="item.state === 'confirm'" class="i-lucide-hand tool-icon" />
-      <span v-else-if="item.state === 'declined'" class="i-lucide-ban tool-icon" />
-      <span v-else class="i-lucide-circle-x tool-icon" />
-      <template v-if="question">
-        <span class="tool-name" :title="question.text">{{ question.text || label }}</span>
-        <span v-if="question.answer" class="tool-answer" :class="{ muted: !question.answered }" :title="question.answer">{{ question.answer }}</span>
+    <!-- Folded, resting on it shows what went in and came out. -->
+    <HoverCard :disabled="expanded || item.state === 'confirm' || item.state === 'running'" placement="top" align="start" :width="400" :delay="500" :padded="false">
+      <template #trigger>
+        <button class="tool-row" type="button" @click="emit('toggle')">
+          <Spin v-if="item.state === 'running'" :size="14" />
+          <span v-else-if="question && item.state === 'ok'" class="i-lucide-circle-help tool-icon" :class="{ answered: question.answered }" />
+          <span v-else-if="exit" class="i-lucide-circle-alert tool-icon" :class="exit.tone" />
+          <span v-else-if="item.state === 'ok'" class="i-lucide-circle-check tool-icon" />
+          <span v-else-if="item.state === 'confirm'" class="i-lucide-hand tool-icon" />
+          <span v-else-if="item.state === 'declined'" class="i-lucide-ban tool-icon" />
+          <span v-else class="i-lucide-circle-x tool-icon" />
+          <template v-if="question">
+            <span class="tool-name">{{ question.text || label }}</span>
+            <span v-if="question.answer" class="tool-answer" :class="{ muted: !question.answered }">{{ question.answer }}</span>
+          </template>
+          <template v-else>
+            <span class="tool-name">{{ label }}</span>
+            <span v-if="summary" class="tool-summary" :class="{ mono: summaryCode }">{{ summary }}</span>
+          </template>
+          <span v-if="exit" class="tool-exit" :class="exit.tone">{{ exit.text }}</span>
+          <Tag v-if="item.risk === 'dangerous' && item.state === 'confirm'" size="tiny" type="error">{{ t('fairy.dangerous') }}</Tag>
+          <span v-if="item.state !== 'ok'" class="tool-state">{{ t(`fairy.state.${item.state}`) }}</span>
+          <span class="i-lucide-chevron-down tool-chevron" />
+        </button>
       </template>
-      <template v-else>
-        <span class="tool-name" :title="item.action">{{ label }}</span>
-        <span v-if="summary" class="tool-summary" :class="{ mono: summaryCode }">{{ summary }}</span>
-      </template>
-      <span v-if="exit" class="tool-exit" :class="exit.tone">{{ exit.text }}</span>
-      <Tag v-if="item.risk === 'dangerous' && item.state === 'confirm'" size="tiny" type="error">{{ t('fairy.dangerous') }}</Tag>
-      <span v-if="item.state !== 'ok'" class="tool-state">{{ t(`fairy.state.${item.state}`) }}</span>
-      <span class="i-lucide-chevron-down tool-chevron" />
-    </button>
+      <ToolPeek :items="[item]" />
+    </HoverCard>
     <div v-if="reason && !expanded" class="tool-reason" :title="reason">{{ reason }}</div>
     <div v-if="item.state === 'confirm'" class="confirm">
       <p>{{ t('fairy.confirmText', { action: confirmAction }) }}</p>
@@ -298,6 +306,25 @@ const reason = computed(() => {
 
 .task-text {
   font-family: inherit;
+}
+
+.task-peek {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.task-peek-text {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .task-full {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Dropdown, type DropdownOption, Input, Modal, Spin, Tooltip, useConfirm, useToast } from '@mushinjs/ui'
+import { Button, Dropdown, type DropdownOption, HoverCard, Input, Modal, Spin, Tooltip, useConfirm, useToast } from '@mushinjs/ui'
 import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { call } from '../../api'
@@ -8,6 +8,8 @@ import { useFairyActivityStore } from '../../stores/fairyActivity'
 import { workspace } from '../../stores/workspace'
 import type { FairyGroup, FairySessionSummary } from '../../types'
 import SettingsFairy from '../settings/SettingsFairy.vue'
+import { relativeTime } from '../fairy/preview'
+import SessionPeek from '../fairy/SessionPeek.vue'
 
 /**
  * The sessions column: a new conversation, Fairy's skills and settings (in a dialog), and the conversations
@@ -238,14 +240,7 @@ async function onDrop(event: DragEvent, section: Section) {
   }
 }
 
-const relative = (ts: number) => {
-  const minutes = Math.round((Date.now() - ts) / 60_000)
-  if (minutes < 1) return t('workspace.justNow')
-  if (minutes < 60) return t('workspace.minutesAgo', { n: minutes })
-  const hours = Math.round(minutes / 60)
-  if (hours < 24) return t('workspace.hoursAgo', { n: hours })
-  return t('workspace.daysAgo', { n: Math.round(hours / 24) })
-}
+const relative = (ts: number) => relativeTime(ts, t)
 </script>
 
 <template>
@@ -324,15 +319,21 @@ const relative = (ts: number) => {
               @keydown.esc="renaming = undefined"
               @blur="saveRename"
             />
-            <button v-else type="button" class="row-main" :title="session.title" @click="openSession(session.id)" @dblclick="startRename('session', session.id, session.title)">
-              <span v-if="activity.of(session.id)?.waiting" class="i-lucide-hand row-dot row-waiting" :title="t(`fairyActivity.${activity.of(session.id)!.waiting}`)" />
-              <Spin v-else-if="activity.of(session.id) ?? session.running" :size="10" class="row-dot" />
-              <span v-else class="row-dot dot" :class="{ on: openIn(session.id).length }" />
-              <span class="row-title">{{ session.title || t('fairy.untitled') }}</span>
-              <span v-if="activity.of(session.id)?.waiting" class="row-wait">{{ t(`fairyActivity.${activity.of(session.id)!.waiting}`) }}</span>
-              <span v-if="openIn(session.id).includes('split')" class="i-lucide-columns-2 row-split" :title="t('workspace.inSplit')" />
-              <span class="row-time">{{ relative(session.updatedAt) }}</span>
-            </button>
+            <!-- Resting on a conversation shows its last messages and steps without opening it. -->
+            <HoverCard v-else placement="right" align="start" :width="340" :delay="450" :padded="false">
+              <template #trigger>
+                <button type="button" class="row-main" @click="openSession(session.id)" @dblclick="startRename('session', session.id, session.title)">
+                  <span v-if="activity.of(session.id)?.waiting" class="i-lucide-hand row-dot row-waiting" :title="t(`fairyActivity.${activity.of(session.id)!.waiting}`)" />
+                  <Spin v-else-if="activity.of(session.id) ?? session.running" :size="10" class="row-dot" />
+                  <span v-else class="row-dot dot" :class="{ on: openIn(session.id).length }" />
+                  <span class="row-title">{{ session.title || t('fairy.untitled') }}</span>
+                  <span v-if="activity.of(session.id)?.waiting" class="row-wait">{{ t(`fairyActivity.${activity.of(session.id)!.waiting}`) }}</span>
+                  <span v-if="openIn(session.id).includes('split')" class="i-lucide-columns-2 row-split" :title="t('workspace.inSplit')" />
+                  <span class="row-time">{{ relative(session.updatedAt) }}</span>
+                </button>
+              </template>
+              <SessionPeek :session="session.id" />
+            </HoverCard>
             <Dropdown :options="sessionMenu(session)" placement="bottom" align="end" @select="(key: string) => onSessionMenu(session, key)">
               <Button size="tiny" quaternary circle icon="i-lucide-ellipsis" :aria-label="t('workspace.sessionMenu')" class="row-menu" />
             </Dropdown>

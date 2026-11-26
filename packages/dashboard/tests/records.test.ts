@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createI18n } from 'vue-i18n'
-import { actionLabel, actionTarget, askAnswer, diff, numbered, unwrapCall } from '../src/components/fairy/records'
+import { actionLabel, actionTarget, askAnswer, callSummary, diff, numbered, unwrapCall } from '../src/components/fairy/records'
 import en from '../src/locales/en'
 import zhCN from '../src/locales/zh-CN'
 
@@ -90,5 +90,17 @@ describe('records', () => {
   it('numbers lines and diffs a replacement', () => {
     expect(numbered('a\nb', 10)).toEqual([{ text: 'a', no: 10 }, { text: 'b', no: 11 }])
     expect(diff('old', 'new\nmore')).toEqual([{ text: 'old', mark: '-' }, { text: 'new', mark: '+' }, { text: 'more', mark: '+' }])
+  })
+})
+
+describe('what a call works on', () => {
+  const known = { bots: [{ id: 'b1', name: 'Alpha' }], providers: [], profiles: [] } as any
+  it('prefers the purpose Fairy gave, then the command, path or address, then the thing named', () => {
+    expect(callSummary('terminal.run', { command: 'ls -la\necho hi', purpose: '看看有哪些文件' }, known)).toEqual({ text: '看看有哪些文件', code: false })
+    expect(callSummary('terminal.run', { command: 'ls -la\necho hi' }, known)).toEqual({ text: '$ ls -la', code: true })
+    expect(callSummary('files.read', { path: 'src/index.ts' }, known)).toEqual({ text: 'src/index.ts', code: true })
+    expect(callSummary('browser.open', { url: 'https://example.com' }, known)).toEqual({ text: 'https://example.com', code: true })
+    expect(callSummary('bots.get', { id: 'b1' }, known)).toEqual({ text: 'Alpha', code: false })
+    expect(callSummary('ui.ask', { question: 'Which?' }, known)).toEqual({ text: '', code: false })
   })
 })

@@ -126,6 +126,23 @@ export interface FairyGroup {
   createdAt: number
 }
 
+/** A glance at a conversation: its last messages and tool calls, and what it waits on; see `Fairy.preview`. */
+export interface SessionPreview {
+  id: string
+  title: string
+  role?: string
+  running: boolean
+  updatedAt: number
+  /** Messages from you and Fairy, tool calls aside. */
+  total: number
+  /** The last few, oldest first, cut short. */
+  messages: { role: 'user' | 'assistant'; text: string; at: number; refs?: string[] }[]
+  /** The last tool calls, oldest first; `running` has no result yet. */
+  steps: { action: string; state: 'running' | 'ok' | 'error' }[]
+  /** An approval it waits on now. */
+  waiting?: { action: string }
+}
+
 export interface SendOptions {
   /** Dashboard connection id; client actions such as ui.navigate are routed back to it. */
   client?: string
@@ -806,6 +823,51 @@ export class Fairy extends Service {
     return session
   }
 
+  /**
+   * The last `count` messages of a conversation and its last tool calls, for a look without opening it;
+   * a conversation at work is read as it is now.
+   */
+  async preview(id: string, count = 4): Promise<SessionPreview> {
+    const session = this.live.get(id) ?? await this.session(id)
+    const running = this.running.get(id)
+    const cut = (text: string) => (text.length > 280 ? `${text.slice(0, 280)}…` : text)
+    const messages: SessionPreview['messages'] = []
+    const steps: (SessionPreview['steps'][number] & { id: string })[] = []
+    for (const message of session.messages) {
+      if (message.role === 'user') {
+        const text = (message.display ?? (typeof message.content === 'string' ? message.content : '')).trim()
+        if (text || message.refs?.length) messages.push({ role: 'user', text: cut(text), at: message.at, ...(message.refs?.length ? { refs: message.refs.map((ref) => ref.label) } : {}) })
+      } else if (message.role === 'assistant') {
+        if (typeof message.content === 'string' && message.content.trim()) messages.push({ role: 'assistant', text: cut(message.content.trim()), at: message.at })
+        for (const call of message.toolCalls ?? []) {
+          let name = call.name
+          if (name === CALL_TOOL) {
+            try {
+              name = String(JSON.parse(call.arguments)?.name ?? name)
+            } catch {}
+          }
+          steps.push({ id: call.id, action: name.includes('.') || name === SEARCH_TOOL || name === CALL_TOOL ? name : fromToolName(name), state: 'running' })
+        }
+      } else if (message.role === 'tool' && message.toolCallId) {
+        const step = steps.find((item) => item.id === message.toolCallId)
+        if (step) step.state = message.isError ? 'error' : 'ok'
+      }
+    }
+    const waiting = running ? [...running.pending.values()][0] : undefined
+    return {
+      id: session.id,
+      title: session.title,
+      ...(session.role ? { role: session.role } : {}),
+      running: !!running,
+      updatedAt: session.updatedAt,
+      total: messages.length,
+      messages: messages.slice(-count),
+      // A call cut short by a stop never got a result; only a conversation at work has one going.
+      steps: steps.slice(-6).map(({ id: _, ...step }) => (step.state === 'running' && !running ? { ...step, state: 'error' as const } : step)),
+      ...(waiting ? { waiting: { action: waiting.name } } : {}),
+    }
+  }
+
   async createSession(): Promise<FairySession> {
     const now = Date.now()
     const session: FairySession = { id: randomId(), title: '', createdAt: now, updatedAt: now, tools: await this.tools(), messages: [] }
@@ -1351,6 +1413,14 @@ export class Fairy extends Service {
         const toolsStale = tools.length !== now.size || tools.some((tool) => !now.has(tool.name))
         return { ...session, messages: session.messages.map(({ raw, ...message }: any) => message), running: this.running.has(id), toolsStale }
       },
+    })
+
+    yield actions.define({
+      name: 'fairy.preview',
+      description: 'A glance at one Fairy conversation: its last few messages (cut short), its last tool calls and an approval it waits on.',
+      risk: 'read',
+      input: z.object({ id: z.string(), count: z.number().int().min(1).max(10).optional() }),
+      handler: ({ id, count }) => this.preview(id, count),
     })
 
     yield actions.define({

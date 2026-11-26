@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Dropdown, type DropdownOption, Input, Popover, Spin, Tag, Tooltip, useConfirm, useToast } from '@mushinjs/ui'
+import { Button, Dropdown, type DropdownOption, HoverCard, Input, Popover, Spin, Tag, Tooltip, useConfirm, useToast } from '@mushinjs/ui'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -9,6 +9,7 @@ import { useDataStore } from '../stores/data'
 import type { FairySkill, ShownRef } from '../types'
 import FairyMessage from './fairy/FairyMessage.vue'
 import FairyToolCall from './fairy/FairyToolCall.vue'
+import ToolPeek from './fairy/ToolPeek.vue'
 import AskCard from './fairy/AskCard.vue'
 import { actionLabel } from './fairy/records'
 import CommandPalette, { type PaletteItem } from './fairy/CommandPalette.vue'
@@ -481,16 +482,22 @@ onMounted(() => scrollToEnd(true))
 
         <template v-for="(row, index) in rows" :key="index">
           <div v-if="row.kind === 'group'" class="tool-group" :class="{ open: expanded.has(row.key) }">
-            <button class="group-row" type="button" @click="toggle(row.key)">
-              <Spin v-if="row.running" :size="14" />
-              <span v-else-if="!row.failed" class="i-lucide-circle-check" color="var(--ok)" />
-              <span v-else-if="row.failed === row.items.length" class="i-lucide-circle-x" color="var(--bad)" />
-              <span v-else class="i-lucide-circle-alert" color="var(--warn)" />
-              <span class="group-name" :title="row.action">{{ actionLabel(row.action, t, te) }}</span>
-              <span class="group-count">×{{ row.items.length }}</span>
-              <span class="group-state">{{ groupSummary(row) }}</span>
-              <span class="i-lucide-chevron-down group-chevron" />
-            </button>
+            <!-- Folded, resting on it lists each call with what it worked on. -->
+            <HoverCard :disabled="expanded.has(row.key)" placement="top" align="start" :width="380" :delay="500" :padded="false">
+              <template #trigger>
+                <button class="group-row" type="button" @click="toggle(row.key)">
+                  <Spin v-if="row.running" :size="14" />
+                  <span v-else-if="!row.failed" class="i-lucide-circle-check" color="var(--ok)" />
+                  <span v-else-if="row.failed === row.items.length" class="i-lucide-circle-x" color="var(--bad)" />
+                  <span v-else class="i-lucide-circle-alert" color="var(--warn)" />
+                  <span class="group-name">{{ actionLabel(row.action, t, te) }}</span>
+                  <span class="group-count">×{{ row.items.length }}</span>
+                  <span class="group-state">{{ groupSummary(row) }}</span>
+                  <span class="i-lucide-chevron-down group-chevron" />
+                </button>
+              </template>
+              <ToolPeek :items="row.items" />
+            </HoverCard>
             <div v-if="row.failed && !expanded.has(row.key)" class="group-reason" :title="row.reason">{{ row.reason }}</div>
             <div v-if="expanded.has(row.key)" class="group-items">
               <FairyToolCall
