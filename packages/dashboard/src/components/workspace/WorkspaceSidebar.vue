@@ -332,7 +332,7 @@ const relative = (ts: number) => relativeTime(ts, t)
                   <span class="row-time">{{ relative(session.updatedAt) }}</span>
                 </button>
               </template>
-              <SessionPeek :session="session.id" />
+              <SessionPeek :session="session.id" :updated-at="session.updatedAt" />
             </HoverCard>
             <Dropdown :options="sessionMenu(session)" placement="bottom" align="end" @select="(key: string) => onSessionMenu(session, key)">
               <Button size="tiny" quaternary circle icon="i-lucide-ellipsis" :aria-label="t('workspace.sessionMenu')" class="row-menu" />
