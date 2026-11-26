@@ -1,10 +1,10 @@
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
-import { connect, type Socket } from 'node:net'
+import { connect, createServer, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { readLines, SUPERVISOR_ENV, type UpgradePlan, type UpgradeResult, writeLine } from '@mushinjs/core/system'
+import { readLines, SUPERVISOR_ENV, SupervisorLink, supervisorPath, type UpgradePlan, type UpgradeResult, writeLine } from '@mushinjs/core/system'
 import { type AppProcess, type Runner, Supervisor } from '../src/supervisor'
 
 /** How a fake app behaves: whether it says ready, and whether it stops soon after. */
@@ -162,5 +162,43 @@ describe('the supervisor', () => {
     expect(JSON.parse(await readFile(join(second.dir, 'result.json'), 'utf8'))).toMatchObject({ ok: false, error: expect.stringContaining('right after it started') })
     supervisor2.interrupt()
     await done2
+  })
+})
+
+describe("the app's end of the line", () => {
+  it('sends messages, and stops the app once when asked or when the supervisor goes away', async () => {
+    const path = supervisorPath()
+    const received: unknown[] = []
+    let peer!: Socket
+    const server = createServer((socket) => {
+      peer = socket
+      readLines(socket, (message) => received.push(message))
+    })
+    await new Promise<void>((resolve) => server.listen(path, resolve))
+    const link = new SupervisorLink(path)
+    let stops = 0
+    link.on('shutdown', () => stops++)
+    await link.send({ type: 'ready', version: '1.0.0' })
+    await until(() => received.length === 1)
+    expect(received[0]).toEqual({ type: 'ready', version: '1.0.0' })
+    writeLine(peer, { type: 'shutdown' })
+    await until(() => stops === 1)
+    peer.destroy()
+    server.close()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(stops).toBe(1)
+
+    // A supervisor killed without a word.
+    const path2 = supervisorPath()
+    let peer2!: Socket
+    const server2 = createServer((socket) => (peer2 = socket))
+    await new Promise<void>((resolve) => server2.listen(path2, resolve))
+    const orphan = new SupervisorLink(path2)
+    let orphaned = false
+    orphan.on('shutdown', () => (orphaned = true))
+    await orphan.send({ type: 'ready' })
+    peer2.destroy()
+    server2.close()
+    await until(() => orphaned)
   })
 })
