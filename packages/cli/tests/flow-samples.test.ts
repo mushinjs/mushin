@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { startInstance, type TestInstance, waitFor } from './helpers/instance'
+import { demoBotReady, startInstance, type TestInstance, waitFor } from './helpers/instance'
 
 let app: TestInstance
 let botId: string
@@ -13,7 +13,8 @@ beforeAll(async () => {
   await app.call('plugins.enable', { package: '@mushinjs/plugin-demo' })
   await app.call('plugins.configure', { id: 'demo', config: { bot: true } })
   botId = (await app.call<any[]>('bots.list'))[0].id
-  await waitFor(async () => (await app.call('bots.get', { id: botId })).status === 'online')
+  // The greeting /help and its answer come first, always: on a slow start they would land among the test's messages.
+  await demoBotReady(app, botId)
   const flow = await app.call('flows.create', {
     name: 'Samples',
     bots: [botId],
@@ -64,6 +65,9 @@ describe('flows and real messages', () => {
     expect(preview.reached).toBe(true)
     expect(preview.messages).toEqual([
       expect.objectContaining({ role: 'system', content: '你是 Ann 的助手', from: 0, kind: 'system' }),
+      // The greeting the sandbox starts the chat with.
+      expect.objectContaining({ role: 'user', content: 'Demo user: /help', from: 1, kind: 'history' }),
+      expect.objectContaining({ role: 'assistant', from: 1, kind: 'history' }),
       expect.objectContaining({ role: 'user', content: 'Ann: 早上好', from: 1, kind: 'history' }),
       expect.objectContaining({ role: 'user', content: 'Ann: 今天天气怎样', from: 2, kind: 'message' }),
     ])

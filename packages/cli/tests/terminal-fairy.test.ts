@@ -8,7 +8,14 @@ import { createMockOpenAI } from './helpers/mock-openai'
 let app: TestInstance
 let llm: Awaited<ReturnType<typeof createMockOpenAI>>
 
-const node = (code: string) => `node -e ${JSON.stringify(code)}`
+/**
+ * A node one-liner every shell runs alike, PowerShell and cmd included: in double quotes, with no double quote,
+ * `$` or backtick inside (write strings in single quotes).
+ */
+const node = (code: string) => {
+  if (/["$`]/.test(code)) throw new Error(`write ${code} with single quotes and no $ or backtick`)
+  return `node -e "${code}"`
+}
 
 beforeAll(async () => {
   llm = await createMockOpenAI()
@@ -67,7 +74,7 @@ describe('risky commands', () => {
 
 describe('commands', () => {
   it('runs a command and returns its output and exit code', async () => {
-    const result = await app.call('terminal.run', { command: node('console.log("hello"); console.error("oops"); process.exit(3)') })
+    const result = await app.call('terminal.run', { command: node("console.log('hello'); console.error('oops'); process.exit(3)") })
     expect(result).toMatchObject({ code: 3 })
     expect(result.output).toContain('hello')
     expect(result.output).toContain('oops')
@@ -80,7 +87,7 @@ describe('commands', () => {
   })
 
   it('starts a command that keeps running, reads it from an offset, and stops it', async () => {
-    const started = await app.call('terminal.start', { command: node('let n = 0; setInterval(() => console.log("tick " + n++), 50)') })
+    const started = await app.call('terminal.start', { command: node("let n = 0; setInterval(() => console.log('tick ' + n++), 50)") })
     expect(started).toMatchObject({ running: true })
     const first = await app.call('terminal.output', { id: started.id, wait: 5 })
     expect(first.text).toContain('tick 0')
@@ -93,7 +100,7 @@ describe('commands', () => {
 
   it('tells the dashboard when a command starts, prints and ends', async () => {
     const dashboard = await app.connect()
-    const { id } = await app.call('terminal.run', { command: node('console.log("seen")') })
+    const { id } = await app.call('terminal.run', { command: node("console.log('seen')") })
     await waitFor(() => dashboard.events.some((event) => event.name === 'terminal/process' && event.data.id === id && !event.data.running))
     expect(dashboard.events.filter((event) => event.name === 'terminal/output' && event.data.id === id).map((event) => event.data.text).join('')).toContain('seen')
     dashboard.close()

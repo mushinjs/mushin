@@ -5,7 +5,14 @@ import { createMockOpenAI } from './helpers/mock-openai'
 let app: TestInstance
 let llm: Awaited<ReturnType<typeof createMockOpenAI>>
 
-const node = (code: string) => `node -e ${JSON.stringify(code)}`
+/**
+ * A node one-liner every shell runs alike, PowerShell and cmd included: in double quotes, with no double quote,
+ * `$` or backtick inside (write strings in single quotes).
+ */
+const node = (code: string) => {
+  if (/["$`]/.test(code)) throw new Error(`write ${code} with single quotes and no $ or backtick`)
+  return `node -e "${code}"`
+}
 
 beforeAll(async () => {
   llm = await createMockOpenAI()
@@ -32,7 +39,7 @@ const types = (events: any[]) => events.map((event) => event.type).filter((type)
 
 describe('approval modes', () => {
   it('asks in the default mode before running a command that changes something', async () => {
-    llm.enqueue({ toolCalls: [{ name: 'terminal__run', arguments: { command: node('console.log("hi")') } }] }, { text: 'Ran it.' })
+    llm.enqueue({ toolCalls: [{ name: 'terminal__run', arguments: { command: node("console.log('hi')") } }] }, { text: 'Ran it.' })
     const { dashboard, sending, session } = await start('Run the script')
     const confirm = await waitFor(() => dashboard.fairyEvents(session).find((event) => event.type === 'confirm'))
     await dashboard.call('fairy.confirm', { session, id: confirm.id, approved: true })
@@ -43,7 +50,7 @@ describe('approval modes', () => {
 
   it('runs everyday commands without asking when Fairy approves for you, and asks before risky ones', async () => {
     llm.enqueue(
-      { toolCalls: [{ name: 'terminal__run', arguments: { command: node('console.log("hi")') } }] },
+      { toolCalls: [{ name: 'terminal__run', arguments: { command: node("console.log('hi')") } }] },
       { toolCalls: [{ name: 'terminal__run', arguments: { command: 'rm -rf build' } }] },
       { text: 'Built; I did not delete anything.' },
     )
@@ -84,7 +91,7 @@ describe('approval modes', () => {
   })
 
   it('lets a waiting call go ahead when the mode switches to one that does not ask for it', async () => {
-    llm.enqueue({ toolCalls: [{ name: 'terminal__run', arguments: { command: node('console.log("go")') } }] }, { text: 'Done.' })
+    llm.enqueue({ toolCalls: [{ name: 'terminal__run', arguments: { command: node("console.log('go')") } }] }, { text: 'Done.' })
     const { dashboard, sending, session } = await start('Run it')
     await waitFor(() => dashboard.fairyEvents(session).find((event) => event.type === 'confirm'))
     expect(await dashboard.call('fairy.approvals', { session, mode: 'auto' })).toEqual({ ok: true })
