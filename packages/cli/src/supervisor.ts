@@ -16,7 +16,7 @@ import { copyFile, cp, readdir, rm } from 'node:fs/promises'
 import { createServer, type Server, type Socket } from 'node:net'
 import { join, resolve } from 'node:path'
 import {
-  appPackageManager, type ChildMessage, installCommand, readJsonFile, readLines, reinstallCommand, run, SUPERVISOR_ENV,
+  appPackageManager, type ChildMessage, installCommand, uninstallCommand, readJsonFile, readLines, reinstallCommand, run, SUPERVISOR_ENV,
   supervisorPath, type UpgradePlan, type UpgradeResult, writeJsonFile, writeLine,
 } from '@mushinjs/core/system'
 
@@ -176,7 +176,8 @@ export class Supervisor {
       this.print(line)
       write(`[${new Date().toISOString()}] ${line}\n`)
     }
-    const result: UpgradeResult = { ok: false, from: plan?.from ?? '?', to: plan?.to, packages, log, time: Date.now() }
+    const remove = plan?.remove ?? []
+    const result: UpgradeResult = { ok: false, kind: plan?.kind ?? 'update', from: plan?.from ?? '?', to: plan?.to, packages, ...(remove.length ? { remove } : {}), log, time: Date.now() }
     const pm = appPackageManager(baseDir)
     const backupsBefore = plan?.dataDir ? await listDir(join(plan.dataDir, 'backups')) : []
     const exec = (command: string, args: readonly string[]) => {
@@ -184,12 +185,18 @@ export class Supervisor {
       return this.runner(command, args, baseDir, write)
     }
 
-    say(`Updating Mushin.js: ${packages.join(', ')}`)
+    say(`${{ update: 'Updating', install: 'Installing', uninstall: 'Uninstalling' }[result.kind!]}: ${[...packages, ...remove.map((name) => `-${name}`)].join(', ')}`)
     let failure: string | undefined
     let running: Running | undefined
     try {
-      const [command, args] = installCommand(pm, packages)
-      await exec(command, args)
+      if (remove.length) {
+        const [command, args] = uninstallCommand(pm, remove)
+        await exec(command, args)
+      }
+      if (packages.length) {
+        const [command, args] = installCommand(pm, packages)
+        await exec(command, args)
+      }
       // The new version decides the data layout and the skills, so its own CLI does them.
       const bin = join(baseDir, 'node_modules', '@mushinjs', 'cli', 'bin', 'mushin.js')
       if (existsSync(bin)) {

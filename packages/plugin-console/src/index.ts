@@ -58,6 +58,8 @@ export interface LogLine {
   name: string
   /** Source category from the logger name, for the dashboard's quick filters. */
   tag: LogTag
+  /** The app plugin that wrote it, when the line comes from a plugin's code. */
+  plugin?: string
   text: string
 }
 
@@ -75,13 +77,14 @@ const FORWARDED_EVENTS = [
 
 const plainExporter: Exporter = { colors: false, export() {} }
 
-function formatLog(message: Message): LogLine {
+function formatLog(message: Message, plugin?: string): LogLine {
   return {
     sn: message.sn,
     ts: message.ts,
     type: message.type,
     name: message.name,
     tag: logTag(message.name),
+    ...(plugin ? { plugin } : {}),
     text: Logger.format(plainExporter, message),
   }
 }
@@ -207,11 +210,11 @@ export class Console extends Service {
       // Lines written inside a bot go to that bot's own log (`bots/log`), not the global one.
       export: (message) => {
         if (this.isBotLog(message)) return
-        if (message.type !== 'debug') return this.broadcast('log', formatLog(message))
+        if (message.type !== 'debug') return this.broadcast('log', this.format(message))
         this.debugBuffer.push(message)
         if (this.debugBuffer.length > DEBUG_BUFFER_SIZE) this.debugBuffer.splice(0, this.debugBuffer.length - DEBUG_BUFFER_SIZE)
         if ([...this.clients.values()].some((client) => client.debugLogs)) {
-          this.broadcast('log', formatLog(message), (client) => !!client.debugLogs)
+          this.broadcast('log', this.format(message), (client) => !!client.debugLogs)
         }
       },
     })
@@ -278,7 +281,12 @@ export class Console extends Service {
   }
 
   /** Recent lines of the global log, oldest first; debug lines only when `level` is debug. */
-  recentLogs(options: { limit?: number; tag?: LogTag; level?: LogLevel } = {}) {
+  /** A log line for the dashboard, with the plugin that wrote it. */
+  private format(message: Message) {
+    return formatLog(message, this.home.get('manager')?.packageOf(message.fiber?.deref()))
+  }
+
+  recentLogs(options: { limit?: number; tag?: LogTag; level?: LogLevel; plugin?: string } = {}) {
     const min = LOG_LEVELS.indexOf(options.level ?? 'info')
     let messages = this.home.logger.buffer
     if (min === 0 && this.debugBuffer.length) {
@@ -291,8 +299,9 @@ export class Console extends Service {
       .filter((message) => !this.isBotLog(message)
         && LOG_LEVELS.indexOf(message.type) >= min
         && (!options.tag || logTag(message.name) === options.tag))
+      .map((message) => this.format(message))
+      .filter((line) => !options.plugin || line.plugin === options.plugin)
       .slice(-(options.limit ?? 200))
-      .map(formatLog)
   }
 
   private attach(socket: WebSocket) {
@@ -469,6 +478,7 @@ export class Console extends Service {
         limit: z.number().int().min(1).max(1000).optional(),
         tag: z.enum(LOG_TAGS).optional().describe('Only lines from this source: plugin, bot, adapter, flow, provider, fairy, system or other'),
         level: z.enum(LOG_LEVELS).optional().describe('This level and above; default info. debug adds the debug lines, which are kept only for a short while'),
+        plugin: z.string().optional().describe('Only lines written by this app plugin package'),
       }),
       handler: (input) => this.recentLogs(input),
     })

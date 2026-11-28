@@ -103,7 +103,7 @@ describe('versions and commands', () => {
   })
 
   it('installs exact versions', () => {
-    expect(installCommand('npm', ['@mushinjs/cli@0.4.0'])).toEqual(['npm', ['install', '@mushinjs/cli@0.4.0']])
-    expect(installCommand('pnpm', ['a@1.0.0'])).toEqual(['pnpm', ['add', 'a@1.0.0']])
+    expect(installCommand('npm', ['@mushinjs/cli@0.4.0'])).toEqual(['npm', ['install', '--save-exact', '@mushinjs/cli@0.4.0']])
+    expect(installCommand('pnpm', ['a@1.0.0'])).toEqual(['pnpm', ['add', '--save-exact', 'a@1.0.0']])
   })
 })

@@ -64,7 +64,40 @@ export function upgradeTag(version: string) {
 
 /** The command that installs `specs`, such as `@mushinjs/cli@0.4.0`. */
 export function installCommand(packageManager: PackageManager, specs: string[]) {
-  return packageManager === 'pnpm' ? ['pnpm', ['add', ...specs]] as const : ['npm', ['install', ...specs]] as const
+  // Exact versions in package.json: an update or install is a decision, not a range for later installs to move.
+  return packageManager === 'pnpm' ? ['pnpm', ['add', '--save-exact', ...specs]] as const : ['npm', ['install', '--save-exact', ...specs]] as const
+}
+
+/** The command that removes `names` from the app. */
+export function uninstallCommand(packageManager: PackageManager, names: string[]) {
+  return packageManager === 'pnpm' ? ['pnpm', ['remove', ...names]] as const : ['npm', ['uninstall', ...names]] as const
+}
+
+/** What `npm install` would do, from its dry run: packages it adds, changes and removes in node_modules. */
+export interface InstallChanges {
+  added: string[]
+  changed: string[]
+  removed: string[]
+}
+
+/**
+ * Asks npm what an install or uninstall would change, without changing anything. Undefined for pnpm, or when
+ * npm does not say: the caller then takes the careful way.
+ */
+export function previewInstall(baseDir: string, args: string[]): Promise<InstallChanges | undefined> {
+  if (appPackageManager(baseDir) !== 'npm') return Promise.resolve(undefined)
+  return new Promise((resolve) => {
+    execFile('npm', [...args, '--dry-run', '--json', '--no-audit', '--no-fund'], { cwd: baseDir, shell: process.platform === 'win32', timeout: 120_000, maxBuffer: 16 * 1024 * 1024 }, (error, stdout) => {
+      try {
+        const result = JSON.parse(String(stdout))
+        const names = (list: unknown) => (Array.isArray(list) ? list.map((item: { name?: string }) => item?.name).filter((name): name is string => !!name) : [])
+        resolve({ added: names(result.added), changed: names(result.changed), removed: names(result.removed) })
+      } catch {
+        resolve(undefined)
+      }
+      void error
+    })
+  })
 }
 
 /** The command that installs what package.json and the lock file say, after they were put back. */
@@ -100,6 +133,11 @@ export function run(command: string, args: readonly string[], cwd: string, optio
 // ---- the registry ----
 
 const registries = new Map<string, Promise<string>>()
+
+/** Forgets the registry asked before, after the app's .npmrc changed. */
+export function forgetRegistry(baseDir: string) {
+  registries.delete(baseDir)
+}
 
 /** The registry npm uses in the app's folder (its .npmrc, the user's, or the default), asked once per folder. */
 export function registryUrl(baseDir: string): Promise<string> {
@@ -299,7 +337,12 @@ export function updateCount(report: UpdateReport | undefined) {
 
 /** What the app asks the supervisor to install, written before it stops. */
 export interface UpgradePlan {
+  /** `name@version` to install. */
   packages: string[]
+  /** Package names to uninstall, before installing. */
+  remove?: string[]
+  /** What it is for the people reading the result: an update (the default), an install or an uninstall. */
+  kind?: 'update' | 'install' | 'uninstall'
   from: string
   to?: string
   time: number
@@ -311,6 +354,8 @@ export interface UpgradePlan {
 /** How the last update went, written by the supervisor and read by the app when it starts. */
 export interface UpgradeResult {
   ok: boolean
+  kind?: 'update' | 'install' | 'uninstall'
+  remove?: string[]
   from: string
   to?: string
   /** The version that runs now. */

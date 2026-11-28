@@ -110,7 +110,7 @@ describe('the supervisor', () => {
     await until(() => existsSync(join(dir, 'result.json')))
     const result = JSON.parse(await readFile(join(dir, 'result.json'), 'utf8')) as UpgradeResult
     expect(result).toMatchObject({ ok: true, from: '0.3.0', to: '0.4.0', version: '0.4.0', packages: ['@mushinjs/cli@0.4.0'] })
-    expect(commands).toEqual(['npm install @mushinjs/cli@0.4.0'])
+    expect(commands).toEqual(['npm install --save-exact @mushinjs/cli@0.4.0'])
     expect(await readFile(result.log!, 'utf8')).toContain('ran npm')
     expect(apps.started).toHaveLength(2)
     supervisor.interrupt()
@@ -129,7 +129,7 @@ describe('the supervisor', () => {
     await until(() => apps.started.length === 3)
     const result = JSON.parse(await readFile(join(dir, 'result.json'), 'utf8')) as UpgradeResult
     expect(result).toMatchObject({ ok: false, from: '0.3.0', to: '0.4.0', version: '0.3.0', error: expect.stringContaining('before it was ready') })
-    expect(commands).toEqual(['npm install @mushinjs/cli@0.4.0', 'npm install'])
+    expect(commands).toEqual(['npm install --save-exact @mushinjs/cli@0.4.0', 'npm install'])
     expect(await readFile(join(baseDir, 'package.json'), 'utf8')).toContain('0.3.0')
     expect(await readFile(join(baseDir, 'package-lock.json'), 'utf8')).toBe('{"lock":"old"}')
     expect(await readFile(join(dataDir, 'bots.json'), 'utf8')).toBe('old layout')
