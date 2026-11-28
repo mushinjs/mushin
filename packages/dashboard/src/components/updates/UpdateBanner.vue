@@ -10,7 +10,7 @@ const { t } = useI18n()
 
 const info = computed(() => (updates.info?.mode === 'app' ? updates.info : undefined))
 const mushin = computed(() => (info.value?.mushin?.available ? info.value.mushin : undefined))
-const pluginCount = computed(() => info.value?.plugins.filter((plugin) => plugin.available).length ?? 0)
+const pluginCount = computed(() => info.value?.plugins.filter((plugin) => plugin.available && plugin.compatible).length ?? 0)
 const shown = computed(() => !!mushin.value || pluginCount.value > 0)
 </script>
 

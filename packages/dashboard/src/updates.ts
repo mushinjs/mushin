@@ -66,10 +66,15 @@ export const updates = reactive({
 export const updateCount = computed(() => {
   const info = updates.info
   if (!info || info.mode !== 'app') return 0
-  return (info.mushin?.available ? 1 : 0) + info.plugins.filter((plugin) => plugin.available).length
+  return (info.mushin?.available ? 1 : 0) + info.plugins.filter((plugin) => plugin.available && plugin.compatible).length
 })
 
 export const pluginUpdate = (pkg: string) => updates.info?.plugins.find((plugin) => plugin.package === pkg)
+/** A newer version of a plugin that runs on this Mushin.js; an incompatible one is shown only in its panel. */
+export const usableUpdate = (pkg: string) => {
+  const found = pluginUpdate(pkg)
+  return found?.available && found.compatible ? found : undefined
+}
 
 export async function loadUpdates(refresh = false) {
   updates.checking = refresh

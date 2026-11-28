@@ -507,6 +507,20 @@ defineExpose({ scrollTo })
         <p v-else class="faint">{{ t('updates.upToDate') }}</p>
       </template>
       <p v-else-if="item.entry?.local" class="faint">{{ t('updates.local') }}</p>
+      <template v-else-if="!update && item.market?.installed">
+        <dl class="facts">
+          <dt>{{ t('updates.current') }}</dt><dd class="mono">{{ item.market.installed.version }}</dd>
+          <dt>{{ t('updates.available') }}</dt><dd class="mono">{{ item.market.version }}</dd>
+          <template v-if="item.market.version !== item.market.installed.version">
+            <dt>{{ t('updates.compatibility') }}</dt>
+            <dd :class="item.market.update ? 'ok-text' : 'bad-text'">{{ item.market.update ? t('updates.compatible') : t('market.needs', { range: marketChoice?.needs ?? item.market.requires?.mushin }) }}</dd>
+          </template>
+        </dl>
+        <p v-if="!item.market.update && item.market.version === item.market.installed.version" class="faint">{{ t('updates.upToDate') }}</p>
+        <div v-else-if="item.market.update" class="update-row">
+          <Button size="small" type="primary" :disabled="!!blocker" @click="emit('update', [item.package])">{{ t('updates.update') }}</Button>
+        </div>
+      </template>
       <template v-else-if="update">
         <dl class="facts">
           <dt>{{ t('updates.current') }}</dt><dd class="mono">{{ update.current }}</dd>

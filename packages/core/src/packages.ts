@@ -89,9 +89,13 @@ export function previewInstall(baseDir: string, args: string[]): Promise<Install
   return new Promise((resolve) => {
     execFile('npm', [...args, '--dry-run', '--json', '--no-audit', '--no-fund'], { cwd: baseDir, shell: process.platform === 'win32', timeout: 120_000, maxBuffer: 16 * 1024 * 1024 }, (error, stdout) => {
       try {
-        const result = JSON.parse(String(stdout))
-        const names = (list: unknown) => (Array.isArray(list) ? list.map((item: { name?: string }) => item?.name).filter((name): name is string => !!name) : [])
-        resolve({ added: names(result.added), changed: names(result.changed), removed: names(result.removed) })
+        // npm prints a summary line ("add x 1.0.0") before the JSON; the lists are `add`, `change` and `remove`.
+        const text = String(stdout)
+        const result = JSON.parse(text.slice(text.indexOf('{')))
+        type Item = { name?: string; from?: { name?: string }; to?: { name?: string } }
+        const names = (list: unknown) => (Array.isArray(list) ? list.map((item: Item) => item?.name ?? item?.to?.name ?? item?.from?.name).filter((name): name is string => !!name) : [])
+        if (!Array.isArray(result.add) && !Array.isArray(result.change) && !Array.isArray(result.remove)) return resolve(undefined)
+        resolve({ added: names(result.add), changed: names(result.change), removed: names(result.remove) })
       } catch {
         resolve(undefined)
       }
@@ -330,7 +334,7 @@ export async function checkUpdates(options: CheckOptions): Promise<UpdateReport>
 /** How many updates a report offers: Mushin.js counts once. */
 export function updateCount(report: UpdateReport | undefined) {
   if (!report || report.mode !== 'app') return 0
-  return (report.mushin?.available ? 1 : 0) + report.plugins.filter((plugin) => plugin.available).length
+  return (report.mushin?.available ? 1 : 0) + report.plugins.filter((plugin) => plugin.available && plugin.compatible).length
 }
 
 // ---- the files of an update ----

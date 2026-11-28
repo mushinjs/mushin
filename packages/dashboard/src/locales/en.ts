@@ -1179,7 +1179,7 @@ export default {
     loadFailed: 'The market could not be loaded: {error}',
     empty: 'No plugins match.',
     nothing: 'The market is empty.',
-    filterOrigin: { all: 'All', official: 'Official', community: 'Community' },
+    filterOrigin: { all: 'Official and community', official: 'Official', community: 'Community' },
     sort: { downloads: 'Most downloaded', updated: 'Recently updated', name: 'Name' },
     sortLabel: 'Sort',
     official: 'Official',

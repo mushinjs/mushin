@@ -210,7 +210,8 @@ const NPM = 'https://registry.npmjs.org/'
             <span v-if="summary(entry.readme)" class="tip-readme">{{ summary(entry.readme) }}</span>
             <span v-if="entry.requires?.plugins">{{ t('market.requires') }}：{{ Object.keys(entry.requires.plugins).join(t('plugins.listSeparator')) }}</span>
             <span v-if="entry.platforms?.length">{{ t('market.platforms') }}：{{ entry.platforms.join(', ') }}</span>
-            <span v-if="entry.requires?.mushin">{{ t('market.needsRange', { range: entry.requires.mushin }) }}</span>
+            <span v-if="entry.choice.version && entry.choice.version !== entry.version">{{ t('market.willInstall', { version: entry.choice.version }) }}</span>
+            <span v-else-if="entry.requires?.mushin">{{ t('market.needsRange', { range: entry.requires.mushin }) }}</span>
             <span v-if="stateOf(entry).reason" class="tip-warn">{{ stateOf(entry).reason }}</span>
           </div>
         </Tooltip>

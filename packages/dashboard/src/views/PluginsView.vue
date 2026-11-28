@@ -19,7 +19,7 @@ import { GROUP_ICONS, PANEL_SECTIONS, type PanelSection, type PluginItem } from 
 import { prefs } from '../prefs'
 import { useDataStore } from '../stores/data'
 import type { AppPlugin, CatalogEntry, DependencyPlan, FlowSummary, PluginDependencies, PluginProvides, ProjectChatPlugin } from '../types'
-import { pluginUpdate, updates } from '../updates'
+import { loadUpdates, pluginUpdate, updates, usableUpdate } from '../updates'
 import { localize } from '../utils'
 
 const { t, locale } = useI18n()
@@ -223,7 +223,7 @@ const query = ref('')
 const filter = ref<Filter>('all')
 
 /** A newer version of a third-party plugin from npm; official plugins update with Mushin.js. */
-const updateOf = (item: PluginItem) => (item.package.startsWith('@mushinjs/') || item.entry?.local ? undefined : pluginUpdate(item.package)?.available ? pluginUpdate(item.package) : undefined)
+const updateOf = (item: PluginItem) => (item.package.startsWith('@mushinjs/') || item.entry?.local ? undefined : usableUpdate(item.package))
 
 // The update dialog, opened from the banner (everything) or a plugin's panel (that plugin).
 const updateOpen = ref(false)
@@ -484,6 +484,7 @@ function openInstall(entry: MarketItem) {
 /** A market package was installed in place: rescan, and turn it on when asked (with the usual dependency questions). */
 async function afterInstall(name: string, enable: boolean) {
   await refresh(true)
+  void loadUpdates(true)
   const item = itemOf(name)
   if (enable && item?.kind === 'app' && !item.enabled) await toggle(item, true)
 }

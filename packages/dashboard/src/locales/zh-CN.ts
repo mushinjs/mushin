@@ -1180,7 +1180,7 @@ const zhCN: typeof en = {
     loadFailed: '市场加载失败：{error}',
     empty: '没有符合条件的插件',
     nothing: '市场里还没有插件',
-    filterOrigin: { all: '全部', official: '官方', community: '社区' },
+    filterOrigin: { all: '官方和社区', official: '官方', community: '社区' },
     sort: { downloads: '下载最多', updated: '最近更新', name: '名称' },
     sortLabel: '排序',
     official: '官方',
