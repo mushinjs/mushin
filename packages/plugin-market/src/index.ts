@@ -1,10 +1,11 @@
 import { copyFile, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
-  appLockFile, checkUpdates, type Context, MUSHIN_VERSION, MushinError, readJsonFile, supervisor, UPDATE_CHECK_INTERVAL,
+  appLockFile, checkUpdates, type Context, type Fetch, MUSHIN_VERSION, MushinError, readJsonFile, supervisor, UPDATE_CHECK_INTERVAL,
   type UpdateChannel, type UpdateReport, upgradeDir, type UpgradePlan, type UpgradeResult, writeJsonFile, z,
 } from '@mushinjs/core'
 import type {} from '@mushinjs/plugin-storage'
+import { defineMarket } from './market'
 
 export const name = 'market'
 export const inject = ['actions', 'storage']
@@ -36,6 +37,8 @@ export interface MarketOptions {
   link?: () => ReturnType<typeof supervisor>
   /** For tests: the app folder whose package.json is backed up. */
   baseDir?: string
+  /** For tests: requests to the registry and the market index. */
+  fetch?: Fetch
 }
 
 export function apply(ctx: Context, _config: unknown, options: MarketOptions = {}) {
@@ -80,6 +83,27 @@ export function apply(ctx: Context, _config: unknown, options: MarketOptions = {
     if (!force && report && Date.now() - report.checkedAt < UPDATE_CHECK_INTERVAL) return report
     return refresh()
   }
+
+  /**
+   * Hands an install, update or uninstall to the supervisor: writes the plan, backs up package.json and the lock
+   * file for going back, and asks it to stop the app and do it.
+   */
+  async function startPlan(input: Pick<UpgradePlan, 'kind' | 'packages' | 'remove' | 'to'>) {
+    const line = link()
+    if (!line) throw new MushinError('unavailable', NO_SUPERVISOR)
+    const plan: UpgradePlan = { ...input, from: MUSHIN_VERSION, to: input.to ?? MUSHIN_VERSION, time: Date.now(), dataDir: dirs.data, logsDir: dirs.logs }
+    await mkdir(join(dir, 'backup'), { recursive: true })
+    await copyFile(join(baseDir, 'package.json'), join(dir, 'backup', 'package.json'))
+    const lock = appLockFile(baseDir)
+    if (lock) await copyFile(lock, join(dir, 'backup', lock.endsWith('pnpm-lock.yaml') ? 'pnpm-lock.yaml' : 'package-lock.json'))
+    await writeJsonFile(join(dir, 'plan.json'), plan)
+    logger.info('%s: %s', plan.kind ?? 'update', [...plan.packages, ...(plan.remove ?? []).map((name) => `-${name}`)].join(' '))
+    // Answer first, so the dashboard hears it before the app stops.
+    setTimeout(() => line.send({ type: 'update', packages: plan.packages, dir }).catch((error) => logger.error('could not reach the supervisor: %s', error)), 300)
+    return plan
+  }
+
+  defineMarket(ctx, { baseDir, dataDir: dirs.data, logsDir: dirs.logs, link, startPlan, afterChange: () => refresh().catch(() => {}), fetch: options.fetch })
 
   // At start (after the plugins settle) and every six hours.
   ctx.effect(() => {
@@ -142,16 +166,7 @@ export function apply(ctx: Context, _config: unknown, options: MarketOptions = {
         if (!plugin?.available) throw new MushinError('invalid_input', `${pkg} has no update`)
         specs.push(`${pkg}@${plugin.available}`)
       }
-      const plan: UpgradePlan = { packages: specs, from: MUSHIN_VERSION, to, time: Date.now(), dataDir: dirs.data, logsDir: dirs.logs }
-      // package.json and the lock file as they are, for going back.
-      await mkdir(join(dir, 'backup'), { recursive: true })
-      await copyFile(join(baseDir, 'package.json'), join(dir, 'backup', 'package.json'))
-      const lock = appLockFile(baseDir)
-      if (lock) await copyFile(lock, join(dir, 'backup', lock.endsWith('pnpm-lock.yaml') ? 'pnpm-lock.yaml' : 'package-lock.json'))
-      await writeJsonFile(join(dir, 'plan.json'), plan)
-      logger.info('updating: %s', specs.join(' '))
-      // Answer first, so the dashboard hears it before the app stops.
-      setTimeout(() => line.send({ type: 'update', packages: specs, dir }).catch((error) => logger.error('could not reach the supervisor: %s', error)), 300)
+      const plan = await startPlan({ kind: 'update', packages: specs, to })
       return { started: true, time: plan.time, packages: specs, from: plan.from, to }
     },
   })
