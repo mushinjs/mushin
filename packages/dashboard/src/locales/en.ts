@@ -1189,6 +1189,7 @@ export default {
     builtin: 'Built in',
     builtinHint: 'Comes with Mushin.js: it can be turned off, not uninstalled.',
     downloads: '{n} a week',
+    downloadsLabel: 'Downloads',
     updated: 'Updated {time}',
     install: 'Install',
     installed: 'Installed {list}',

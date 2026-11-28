@@ -77,7 +77,8 @@ describe('checkUpdates', () => {
       { package: 'mushin-plugin-old', current: '2.0.0', available: '3.0.0', compatible: false, requires: '>=0.5.0' },
       { package: 'mushin-plugin-weather', current: '1.0.0', available: '1.2.0', compatible: true, requires: '>=0.3.0' },
     ])
-    expect(updateCount(report)).toBe(2)
+    // The incompatible one is not counted as an update.
+    expect(updateCount(report)).toBe(1)
   })
 
   it('treats an app without official dependencies as the repository: development mode', async () => {

@@ -329,7 +329,7 @@ defineExpose({ scrollTo })
             <span v-if="item.market.curated" class="badge curated">{{ t('market.curated') }}</span>
           </dd>
           <template v-if="item.market.downloads !== undefined">
-            <dt>{{ t('market.sort.downloads') }}</dt><dd>{{ t('market.downloads', { n: item.market.downloads }) }}</dd>
+            <dt>{{ t('market.downloadsLabel') }}</dt><dd>{{ t('market.downloads', { n: item.market.downloads }) }}</dd>
           </template>
           <template v-if="item.market.license">
             <dt>{{ t('market.license') }}</dt><dd>{{ item.market.license }}</dd>

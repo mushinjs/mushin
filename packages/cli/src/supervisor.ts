@@ -219,7 +219,7 @@ export class Supervisor {
       failure = (error as Error).message
     }
 
-    say(`The update failed: ${failure}. Going back to ${result.from}.`)
+    say(`The ${result.kind} failed: ${failure}. Going back to how it was (${result.from}).`)
     if (running) await this.stop(running)
     try {
       const backup = join(request.dir, 'backup')

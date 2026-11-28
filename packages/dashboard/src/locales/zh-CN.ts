@@ -1190,6 +1190,7 @@ const zhCN: typeof en = {
     builtin: '内置',
     builtinHint: '随 Mushin.js 一起安装：可以停用，不能卸载。',
     downloads: '每周 {n} 次下载',
+    downloadsLabel: '下载量',
     updated: '{time}更新',
     install: '安装',
     installed: '已安装 {list}',

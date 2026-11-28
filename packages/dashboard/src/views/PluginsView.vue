@@ -201,6 +201,8 @@ function marketItem(entry: MarketItem): PluginItem {
     category: entry.category,
     enabled: false,
     requires: Object.keys(entry.requires?.plugins ?? {}),
+    // Its dependencies as an installed plugin's would show, from the market's manifest.
+    deps: depsOf({ id: '', package: entry.name, enabled: false, config: {}, status: 'disabled', manifest: { kind: entry.kind, requires: entry.requires, optional: entry.optional } }),
     version: entry.choice.version ?? entry.version,
     missing: [],
     market: entry,
