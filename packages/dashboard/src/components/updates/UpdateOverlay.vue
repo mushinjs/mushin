@@ -15,6 +15,25 @@ const value = computed(() => result.value?.value)
 const officialTo = computed(() => (value.value?.to && value.value.to !== value.value.from ? value.value.to : undefined))
 const pluginsOnly = computed(() => (value.value?.packages ?? []).filter((spec) => !spec.startsWith('@mushinjs/')))
 
+const list = (names: string[]) => names.join(t('plugins.listSeparator'))
+/** Package names without their versions. */
+const names = (specs: string[]) => specs.map((spec) => spec.replace(/(.)@[^@]*$/, '$1'))
+
+const pendingTitle = computed(() => ({ update: t('updates.updating'), restart: t('updates.restarting'), install: t('market.installing'), uninstall: t('market.uninstalling') })[pending.value!.kind])
+const pendingHint = computed(() => {
+  const kind = pending.value!.kind
+  if (kind === 'restart') return t('updates.restartingHint')
+  if (kind === 'update') return t('updates.updatingHint', { list: list(pending.value!.packages ?? []) })
+  return t(kind === 'install' ? 'market.installingHint' : 'market.uninstallingHint', { list: list(names(pending.value!.packages ?? [])) })
+})
+const doneTitle = computed(() => {
+  const kind = result.value?.kind
+  if (kind === 'install') return t('market.installed', { list: list(names(pluginsOnly.value)) })
+  if (kind === 'uninstall') return t('market.uninstalled', { list: list(value.value?.remove ?? []) })
+  return officialTo.value ? t('updates.done', { version: officialTo.value }) : t('updates.donePlugins', { list: list(pluginsOnly.value) })
+})
+const failedTitle = computed(() => ({ install: t('market.installFailed'), uninstall: t('market.uninstallFailed') } as Record<string, string>)[result.value?.kind ?? ''] ?? t('updates.failed'))
+
 function reload() {
   dismissResult()
   location.reload()
@@ -27,8 +46,8 @@ function reload() {
       <div class="card">
         <template v-if="pending">
           <span class="i-lucide-loader-circle spin big" />
-          <h2>{{ pending.kind === 'update' ? t('updates.updating') : t('updates.restarting') }}</h2>
-          <p>{{ pending.kind === 'update' ? t('updates.updatingHint', { list: (pending.packages ?? []).join(t('plugins.listSeparator')) }) : t('updates.restartingHint') }}</p>
+          <h2>{{ pendingTitle }}</h2>
+          <p>{{ pendingHint }}</p>
         </template>
         <template v-else-if="result?.kind === 'restart'">
           <span class="i-lucide-circle-check big ok" />
@@ -37,8 +56,8 @@ function reload() {
         </template>
         <template v-else-if="value?.ok">
           <span class="i-lucide-circle-check big ok" />
-          <h2>{{ officialTo ? t('updates.done', { version: officialTo }) : t('updates.donePlugins', { list: pluginsOnly.join(t('plugins.listSeparator')) }) }}</h2>
-          <p>{{ t('updates.doneHint') }}</p>
+          <h2>{{ doneTitle }}</h2>
+          <p>{{ result?.kind === 'install' ? t('market.installedHint') : t('updates.doneHint') }}</p>
           <div class="actions">
             <Button @click="dismissResult">{{ t('updates.close') }}</Button>
             <Button type="primary" @click="reload">{{ t('updates.reload') }}</Button>
@@ -46,7 +65,7 @@ function reload() {
         </template>
         <template v-else-if="value">
           <span class="i-lucide-circle-x big bad" />
-          <h2>{{ t('updates.failed') }}</h2>
+          <h2>{{ failedTitle }}</h2>
           <p v-if="value.error" class="reason">{{ t('updates.failedReason', { error: value.error }) }}</p>
           <p v-if="value.log" class="mono log">{{ t('updates.log', { path: value.log }) }}</p>
           <div class="actions"><Button type="primary" @click="dismissResult">{{ t('updates.close') }}</Button></div>

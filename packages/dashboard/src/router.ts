@@ -22,7 +22,7 @@ export const router = createRouter({
     // The Fairy settings used to be a page of their own.
     { path: '/fairy/:tab(scenes|skills|mcp|tools|model|styles)', redirect: (to) => `/settings/fairy/${to.params.tab}` },
     { path: '/database', component: () => import('./views/DatabaseView.vue') },
-    { path: '/plugins', component: () => import('./views/PluginsView.vue') },
+    { path: '/plugins/:tab(market)?', component: () => import('./views/PluginsView.vue') },
     { path: '/logs', component: () => import('./views/LogsView.vue') },
     { path: '/:pathMatch(.*)*', redirect: '/overview' },
   ],

@@ -1,4 +1,5 @@
 import type { AppPlugin, CatalogEntry, DependencyState, PluginDependencies, PluginProvides, PluginStatus, ProjectChatPlugin } from '../types'
+import type { MarketItem } from '../market'
 import type { GroupKey, ListedPlugin } from './groups'
 
 /** One row of the Plugins page: an app plugin (configured or only installed) or a bot plugin. */
@@ -19,6 +20,10 @@ export interface PluginItem extends ListedPlugin {
   version?: string
   /** Required plugins that are missing, disabled or the wrong version. */
   missing: DependencyState[]
+  /** Its listing in the plugin market, when it is there. */
+  market?: MarketItem
+  /** False for a market package that is not installed here. */
+  installed: boolean
 }
 
 /** The icon of a group, and of plugins in it that have no platform logo. */
@@ -35,6 +40,6 @@ export const GROUP_ICONS: Record<GroupKey, string> = {
 }
 
 /** The sections of the details panel, in order. */
-export const PANEL_SECTIONS = ['overview', 'usage', 'config', 'deps', 'contents', 'updates'] as const
+export const PANEL_SECTIONS = ['overview', 'usage', 'config', 'deps', 'contents', 'logs', 'readme', 'updates'] as const
 
 export type PanelSection = typeof PANEL_SECTIONS[number]

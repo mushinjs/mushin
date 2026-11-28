@@ -501,6 +501,8 @@ export interface LogLine {
   name: string
   /** Source category: plugin, bot, adapter, flow, provider, fairy, system or other. */
   tag?: string
+  /** The app plugin that wrote it. */
+  plugin?: string
   text: string
 }
 

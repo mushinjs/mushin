@@ -30,6 +30,8 @@ export interface UpdatesInfo {
 
 export interface UpgradeResultInfo {
   ok: boolean
+  kind?: 'update' | 'install' | 'uninstall'
+  remove?: string[]
   from: string
   to?: string
   version?: string
@@ -41,8 +43,10 @@ export interface UpgradeResultInfo {
 }
 
 /** A restart or update in progress, from the moment it was asked for. */
+export type ChangeKind = 'update' | 'restart' | 'install' | 'uninstall'
+
 interface Pending {
-  kind: 'update' | 'restart'
+  kind: ChangeKind
   time: number
   to?: string
   packages?: string[]
@@ -55,7 +59,7 @@ export const updates = reactive({
   checking: false,
   pending: undefined as Pending | undefined,
   /** What to show when the app is back, or an earlier result not seen yet. */
-  result: undefined as { kind: 'update' | 'restart'; value?: UpgradeResultInfo } | undefined,
+  result: undefined as { kind: ChangeKind; value?: UpgradeResultInfo } | undefined,
 })
 
 /** How many updates there are: Mushin.js counts once, each plugin once. */
@@ -87,7 +91,7 @@ export function initUpdates() {
   void loadUpdates()
   call<{ result: UpgradeResultInfo | null }>('system.updateResult')
     .then(({ result }) => {
-      if (result && !result.seen && !updates.pending) updates.result = { kind: 'update', value: result }
+      if (result && !result.seen && !updates.pending) updates.result = { kind: result.kind ?? 'update', value: result }
     })
     .catch(() => {})
 }
@@ -112,7 +116,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
  * Asks the app every two seconds until it is back: for an update, until it reports a result of this update (the
  * old app answers with an older one until it stops); for a restart, until it started after the request.
  */
-async function waitForApp() {
+export async function waitForApp() {
   const pending = updates.pending
   if (!pending) return
   const deadline = Date.now() + 15 * 60_000
@@ -121,8 +125,8 @@ async function waitForApp() {
     try {
       const answer = await call<{ result: UpgradeResultInfo | null; startedAt: number }>('system.updateResult')
       if (pending.kind === 'restart' && answer.startedAt > pending.time) break
-      if (pending.kind === 'update' && answer.result && answer.result.time >= pending.time && answer.startedAt > pending.time) {
-        updates.result = { kind: 'update', value: answer.result }
+      if (pending.kind !== 'restart' && answer.result && answer.result.time >= pending.time && answer.startedAt > pending.time) {
+        updates.result = { kind: pending.kind, value: answer.result }
         break
       }
     } catch {}

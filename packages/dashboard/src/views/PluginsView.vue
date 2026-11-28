@@ -10,6 +10,9 @@ import PageHeader from '../components/PageHeader.vue'
 import PluginPanel, { type Dependent } from '../components/plugins/PluginPanel.vue'
 import UpdateBanner from '../components/updates/UpdateBanner.vue'
 import UpdateDialog from '../components/updates/UpdateDialog.vue'
+import InstallDialog from '../components/market/InstallDialog.vue'
+import MarketGrid from '../components/market/MarketGrid.vue'
+import { loadMarket, marketEntry, type MarketItem } from '../market'
 import { configPreview } from '../plugins/config'
 import { type GroupKey, groupOf, groupPlugins, relationsOf, toggleImpact } from '../plugins/groups'
 import { GROUP_ICONS, PANEL_SECTIONS, type PanelSection, type PluginItem } from '../plugins/item'
@@ -65,7 +68,13 @@ async function refresh(rescan = false) {
 onMounted(() => {
   refresh()
   if (!data.loadedBots) data.refreshBots().catch(() => {})
+  // The market listing gives installed plugins their README and versions; the server keeps it for hours.
+  void loadMarket()
 })
+
+/** /plugins is what is installed, /plugins/market what can be. */
+const tab = computed(() => (route.params.tab === 'market' ? 'market' : 'installed'))
+const goTab = (next: 'installed' | 'market') => router.push({ path: next === 'market' ? '/plugins/market' : '/plugins', query: route.query })
 
 let timer: number | undefined
 const later = () => {
@@ -147,6 +156,8 @@ const items = computed<PluginItem[]>(() => [
       error: plugin.error,
       version: plugin.version ?? entry?.version,
       missing,
+      market: marketEntry(plugin.package),
+      installed: true,
     }
   }),
   ...botCatalog.value.map((entry): PluginItem => {
@@ -171,11 +182,31 @@ const items = computed<PluginItem[]>(() => [
       chat,
       version: entry.version,
       missing,
+      market: marketEntry(entry.package),
+      installed: true,
     }
   }),
 ])
 
 const itemOf = (pkg: string) => items.value.find((item) => item.package === pkg)
+
+/** A market package that is not installed, as a row of the panel. */
+function marketItem(entry: MarketItem): PluginItem {
+  return {
+    key: `market:${entry.name}`,
+    package: entry.name,
+    kind: entry.kind,
+    name: localize(entry.displayName, locale.value) || entry.name,
+    description: localize(entry.description, locale.value),
+    category: entry.category,
+    enabled: false,
+    requires: Object.keys(entry.requires?.plugins ?? {}),
+    version: entry.choice.version ?? entry.version,
+    missing: [],
+    market: entry,
+    installed: false,
+  }
+}
 const relations = computed(() => relationsOf(items.value))
 const adapterOf = (item: PluginItem) => {
   const id = item.provides?.adapters[0]
@@ -433,7 +464,38 @@ function remove(item: PluginItem) {
 /** The package open in the panel; the URL says it as ?open=<package>&tab=<section>. */
 const openPkg = ref<string>()
 const section = ref<PanelSection>((PANEL_SECTIONS as readonly string[]).includes(prefs.pluginPanelSection) ? prefs.pluginPanelSection as PanelSection : 'overview')
-const openItem = computed(() => (openPkg.value ? itemOf(openPkg.value) : undefined))
+const openItem = computed(() => {
+  if (!openPkg.value) return undefined
+  const installed = itemOf(openPkg.value)
+  if (installed) return installed
+  const entry = marketEntry(openPkg.value)
+  return entry ? marketItem(entry) : undefined
+})
+
+// ---- the market tab ----
+
+const installOpen = ref(false)
+const installTarget = ref<MarketItem>()
+function openInstall(entry: MarketItem) {
+  installTarget.value = entry
+  installOpen.value = true
+}
+
+/** A market package was installed in place: rescan, and turn it on when asked (with the usual dependency questions). */
+async function afterInstall(name: string, enable: boolean) {
+  await refresh(true)
+  const item = itemOf(name)
+  if (enable && item?.kind === 'app' && !item.enabled) await toggle(item, true)
+}
+
+function openMarketEntry(entry: MarketItem) {
+  openPkg.value = entry.name
+}
+
+function enableFromMarket(entry: MarketItem) {
+  const item = itemOf(entry.name)
+  if (item) void toggle(item, true)
+}
 
 function open(item: PluginItem, at?: PanelSection) {
   openPkg.value = item.package
@@ -459,7 +521,7 @@ function select(pkg: string) {
 // The URL follows the panel, and opens it when the page is loaded with ?open=.
 watch(() => [route.query.open, route.query.tab, items.value.length] as const, ([target, tab]) => {
   if (typeof tab === 'string' && (PANEL_SECTIONS as readonly string[]).includes(tab)) section.value = tab as PanelSection
-  if (typeof target === 'string' && items.value.length && target !== openPkg.value && itemOf(target)) {
+  if (typeof target === 'string' && items.value.length && target !== openPkg.value && (itemOf(target) || marketEntry(target))) {
     reveal(target)
     openPkg.value = target
   }
@@ -597,11 +659,20 @@ async function saveFolders() {
 
     <UpdateBanner @update="openUpdate()" />
 
+    <nav class="page-tabs" role="tablist">
+      <button type="button" role="tab" class="page-tab" :class="{ on: tab === 'installed' }" :aria-selected="tab === 'installed'" @click="goTab('installed')">
+        <span class="i-lucide-package-check" />{{ t('market.tabInstalled') }}<span class="count">{{ items.length }}</span>
+      </button>
+      <button type="button" role="tab" class="page-tab" :class="{ on: tab === 'market' }" :aria-selected="tab === 'market'" @click="goTab('market')">
+        <span class="i-lucide-store" />{{ t('market.tabMarket') }}
+      </button>
+    </nav>
+
     <div class="toolbar">
-      <Input v-model:value="query" clearable :placeholder="t('plugins.search')" class="search">
+      <Input v-model:value="query" clearable :placeholder="t('market.search')" class="search">
         <template #prefix><span class="i-lucide-search" /></template>
       </Input>
-      <div class="chips" role="radiogroup" :aria-label="t('plugins.filterLabel')">
+      <div v-if="tab === 'installed'" class="chips" role="radiogroup" :aria-label="t('plugins.filterLabel')">
         <button
           v-for="key in filters"
           :key="key"
@@ -620,7 +691,16 @@ async function saveFolders() {
       </div>
     </div>
 
-    <Spin :show="loading">
+    <MarketGrid
+      v-if="tab === 'market'"
+      :query="query"
+      :enabled-of="(name: string) => itemOf(name)?.enabled"
+      @open="openMarketEntry"
+      @install="openInstall"
+      @enable="enableFromMarket"
+      @update="(entry) => openUpdate([entry.name])"
+    />
+    <Spin v-else :show="loading">
       <section v-for="group in groups" :key="group.key" class="group" :class="{ folded: !group.open }">
         <Tooltip :disabled="group.open" placement="bottom" :max-width="360" :show-arrow="false">
           <template #trigger>
@@ -726,7 +806,10 @@ async function saveFolders() {
         </ul>
         <p v-else-if="group.open && group.key === 'bot' && !group.all.length && !loading" class="faint none">{{ t('plugins.noBotPlugins') }}</p>
       </section>
-      <p v-if="!loading && !groups.length" class="faint none">{{ t('plugins.noMatch') }}</p>
+      <div v-if="!loading && !groups.length" class="none">
+        <p class="faint">{{ t('plugins.noMatch') }}</p>
+        <Button v-if="query.trim()" size="small" icon="i-lucide-store" @click="goTab('market')">{{ t('market.searchMarket', { query: query.trim() }) }}</Button>
+      </div>
     </Spin>
 
     <Drawer
@@ -761,10 +844,13 @@ async function saveFolders() {
         @enable-missing="enableMissing(openItem!)"
         @saved="refresh()"
         @update="(preset) => openUpdate(preset)"
+        @install="openItem.market && openInstall(openItem.market)"
+        @uninstalled="() => { close(); refresh(true) }"
       />
     </Drawer>
 
     <UpdateDialog v-model:show="updateOpen" :preset="updatePreset" />
+    <InstallDialog v-model:show="installOpen" :entry="installTarget" @installed="afterInstall" />
 
     <Modal :show="foldersOpen" :title="t('plugins.folders.title')" :width="600" @update:show="(value: boolean) => !value && (foldersOpen = false)">
       <p class="faint folders-lead">{{ t('plugins.folders.lead') }}</p>
@@ -795,6 +881,37 @@ async function saveFolders() {
 <style scoped>
 .page {
   transition: margin-right 0.2s;
+}
+
+.page-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.page-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 9px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  color: var(--fg2);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.page-tab:hover {
+  color: var(--fg);
+}
+
+.page-tab.on {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
 }
 
 .toolbar {
